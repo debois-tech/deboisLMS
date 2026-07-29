@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Users, Mail, ExternalLink } from 'lucide-react';
+import { Plus, Users } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
@@ -27,7 +27,7 @@ export default function StudentsPage() {
     <div className="page-section">
       <PageHeader
         title="Students"
-        action={<Link to="/students/new"><Button><Plus size={16} /> Add Student</Button></Link>}
+        action={<Link to="/students/new"><Button><Plus size={16} />Add Student</Button></Link>}
       />
 
       {students.length === 0 ? (
@@ -36,30 +36,9 @@ export default function StudentsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {students.map((s) => (
             <Link key={s.id} to={`/students/${s.id}`} className="block group">
-              <Card hover padding="sm">
-                <div className="flex items-center gap-3 mb-3 min-w-0">
-                  <Avatar name={s.name} />
-                  <div className="min-w-0">
-                    <h3 className="text-sm font-semibold text-[var(--text-primary)] truncate">{s.name}</h3>
-                    {s.email && (
-                      <p className="text-xs text-[var(--text-muted)] flex items-center gap-1 truncate"><Mail size={10} className="shrink-0" /> <span className="truncate">{s.email}</span></p>
-                    )}
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  {s.github_url && (
-                    <a href={s.github_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
-                       className="text-xs text-[var(--text-muted)] hover:text-[var(--primary)] flex items-center gap-1">
-                      GitHub <ExternalLink size={10} />
-                    </a>
-                  )}
-                  {s.linkedin_url && (
-                    <a href={s.linkedin_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
-                       className="text-xs text-[var(--text-muted)] hover:text-[var(--primary)] flex items-center gap-1">
-                      LinkedIn <ExternalLink size={10} />
-                    </a>
-                  )}
-                </div>
+              <Card hover padding="md" className="flex h-full min-h-[5rem] items-center gap-4">
+                <Avatar name={s.name} size="lg" />
+                <h3 className="min-w-0 text-base font-bold text-[var(--text-primary)] break-words">{s.name}</h3>
               </Card>
             </Link>
           ))}

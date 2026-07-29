@@ -5,7 +5,7 @@ type BadgeVariant = 'default' | 'success' | 'warning' | 'danger' | 'info' | 'pur
 interface BadgeProps {
   children: React.ReactNode;
   variant?: BadgeVariant;
-  size?: 'sm' | 'md';
+  size?: 'sm' | 'md' | 'lg';
   dot?: boolean;
 }
 
@@ -27,12 +27,12 @@ const dotColors: Record<BadgeVariant, string> = {
   purple:  'bg-purple-400',
 };
 
-export function Badge({ children, variant = 'default', size = 'sm', dot }: BadgeProps) {
+export function Badge({ children, variant = 'default', size = 'md', dot }: BadgeProps) {
   return (
     <span
       className={clsx(
         'inline-flex items-center gap-1.5 rounded-full font-medium',
-        size === 'sm' ? 'px-2 py-0.5 text-[10px]' : 'px-3 py-1 text-xs',
+        size === 'sm' ? 'px-2 py-1 text-[10px]' : size === 'md' ? 'px-4 py-2 text-xs' : 'px-6 py-2 text-sm',
         variants[variant]
       )}
     >
