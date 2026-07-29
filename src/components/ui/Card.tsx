@@ -4,14 +4,22 @@ import { clsx } from 'clsx';
 interface CardProps extends HTMLAttributes<HTMLDivElement> {
   glass?: boolean;
   hover?: boolean;
+  padding?: 'sm' | 'md' | 'lg';
   children: ReactNode;
 }
 
-export function Card({ glass, hover, children, className, ...rest }: CardProps) {
+const paddingMap = {
+  sm: 'ui-card-padding-sm',
+  md: 'ui-card-padding-md',
+  lg: 'ui-card-padding-lg',
+};
+
+export function Card({ glass, hover, padding = 'md', children, className, ...rest }: CardProps) {
   return (
     <div
       className={clsx(
-        'rounded-[14px] border border-[var(--border)] p-5',
+        'ui-card rounded-[var(--radius-lg)] border border-[var(--border)]',
+        paddingMap[padding],
         glass
           ? 'glass'
           : 'bg-[var(--bg-surface)] shadow-[var(--shadow-sm)]',
@@ -29,9 +37,9 @@ export function Card({ glass, hover, children, className, ...rest }: CardProps) 
 interface CardHeaderProps { title: string; subtitle?: string; action?: ReactNode }
 export function CardHeader({ title, subtitle, action }: CardHeaderProps) {
   return (
-    <div className="flex items-start justify-between gap-4 mb-4">
-      <div>
-        <h3 className="text-base font-semibold text-[var(--text-primary)]">{title}</h3>
+    <div className="flex items-start justify-between gap-4 mb-6">
+      <div className="min-w-0">
+        <h3 className="text-base font-bold text-[var(--text-primary)]">{title}</h3>
         {subtitle && <p className="text-xs text-[var(--text-muted)] mt-0.5">{subtitle}</p>}
       </div>
       {action && <div className="shrink-0">{action}</div>}

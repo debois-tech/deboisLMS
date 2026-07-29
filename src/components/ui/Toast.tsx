@@ -29,7 +29,7 @@ export function ToastContainer() {
           key={toast.id}
           className={clsx(
             'pointer-events-auto flex items-center gap-3 min-w-[280px] max-w-sm',
-            'bg-[var(--bg-elevated)] border border-[var(--border)] border-l-4 rounded-[12px]',
+            'bg-[var(--bg-elevated)] border border-[var(--border)] border-l-4 rounded-[var(--radius-lg)]',
             'px-4 py-3 shadow-[var(--shadow-lg)] animate-toast-in',
             borders[toast.variant]
           )}

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { getBatches } from '@/lib/supabase';
 import { getAssignmentsByBatch, createAssignment, getCompletionsByAssignment, markSubmission } from '@/lib/supabase';
 import { getBatchStudents } from '@/lib/supabase';
@@ -63,11 +64,8 @@ export default function AssignmentsPage() {
   if (loading) return <Spinner />;
 
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-[var(--text-primary)]">Assignments</h1>
-        <p className="text-sm text-[var(--text-muted)]">Track assignment submissions</p>
-      </div>
+    <div className="page-section">
+      <PageHeader title="Assignments" />
 
       <Card>
         <CardHeader title="Select Batch" />
@@ -92,7 +90,6 @@ export default function AssignmentsPage() {
         <Card>
           <CardHeader
             title="Assignments"
-            subtitle={`${assignments.length} total`}
             action={<Button size="sm" onClick={() => setShowNew(true)}><Plus size={14} /> New Assignment</Button>}
           />
           {assignments.length === 0 ? (
@@ -106,7 +103,7 @@ export default function AssignmentsPage() {
                   <div
                     key={a.id}
                     onClick={() => loadCompletions(a.id)}
-                    className={`p-3 rounded-[10px] cursor-pointer transition-colors ${
+                    className={`p-3 rounded-[var(--radius-md)] cursor-pointer transition-colors ${
                       selectedAsgn === a.id
                         ? 'bg-[var(--primary)]/10 border border-[var(--primary)]/20'
                         : 'hover:bg-[var(--bg-elevated)]'

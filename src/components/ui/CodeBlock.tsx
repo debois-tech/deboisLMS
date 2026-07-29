@@ -18,8 +18,8 @@ export function CodeBlock({ code, label }: CodeBlockProps) {
   return (
     <div className="flex flex-col gap-1">
       {label && <span className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider">{label}</span>}
-      <div className="flex items-center gap-3 bg-[var(--bg-elevated)] border border-[var(--border)] rounded-[12px] px-4 py-3">
-        <span className="flex-1 font-mono text-xl font-bold tracking-[0.25em] text-[var(--primary)] animate-pulse-glow">
+      <div className="flex items-center gap-3 bg-[var(--bg-elevated)] border border-[var(--border)] rounded-[var(--radius-lg)] px-4 py-3">
+        <span className="flex-1 min-w-0 font-mono text-lg font-bold tracking-[0.25em] text-[var(--primary)] animate-pulse-glow truncate">
           {code}
         </span>
         <button

@@ -24,10 +24,9 @@ export default function StudentsPage() {
   if (loading) return <Spinner />;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="page-section">
       <PageHeader
         title="Students"
-        subtitle={`${students.length} total`}
         action={<Link to="/students/new"><Button><Plus size={16} /> Add Student</Button></Link>}
       />
 
@@ -37,13 +36,13 @@ export default function StudentsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {students.map((s) => (
             <Link key={s.id} to={`/students/${s.id}`} className="block group">
-              <Card hover className="p-4">
-                <div className="flex items-center gap-3 mb-3">
+              <Card hover padding="sm">
+                <div className="flex items-center gap-3 mb-3 min-w-0">
                   <Avatar name={s.name} />
-                  <div>
-                    <h3 className="font-semibold text-[var(--text-primary)]">{s.name}</h3>
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-semibold text-[var(--text-primary)] truncate">{s.name}</h3>
                     {s.email && (
-                      <p className="text-xs text-[var(--text-muted)] flex items-center gap-1"><Mail size={10} /> {s.email}</p>
+                      <p className="text-xs text-[var(--text-muted)] flex items-center gap-1 truncate"><Mail size={10} className="shrink-0" /> <span className="truncate">{s.email}</span></p>
                     )}
                   </div>
                 </div>

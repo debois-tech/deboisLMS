@@ -6,8 +6,9 @@ import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { getLecturesByBatch, createLecture } from '@/lib/supabase';
-import { getAttendanceByLecture, insertUploadRows, processAttendance, approveAttendance, bulkApproveAttendance, getUnapprovedCount } from '@/lib/supabase';
+import { getAttendanceByLecture, insertUploadRows, processAttendance, approveAttendance, bulkApproveAttendance } from '@/lib/supabase';
 import { getBatches } from '@/lib/supabase';
 import type { Batch, Lecture, AttendanceRecord } from '@/lib/types';
 import { formatDate } from '@/lib/utils/format';
@@ -20,7 +21,6 @@ export default function AttendancePage() {
   const [lectures, setLectures] = useState<Lecture[]>([]);
   const [selectedLecture, setSelectedLecture] = useState<string | null>(null);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
-  const [pendingCount, setPendingCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [processing, setProcessing] = useState(false);
 
@@ -36,7 +36,6 @@ export default function AttendancePage() {
 
   useEffect(() => {
     getBatches().then(setBatches);
-    getUnapprovedCount().then(setPendingCount);
   }, []);
 
   useEffect(() => {
@@ -101,7 +100,6 @@ export default function AttendancePage() {
       setCsvFileName('');
       if (fileRef.current) fileRef.current.value = '';
       setStatusMessage({ type: 'success', text: `Converted — ${result.length} attendance records created` });
-      getUnapprovedCount().then(setPendingCount);
     } catch (err: any) {
       setStatusMessage({ type: 'error', text: err?.message ?? 'Conversion failed' });
     }
@@ -111,14 +109,12 @@ export default function AttendancePage() {
   const handleApprove = async (id: string) => {
     await approveAttendance(id);
     if (selectedLecture) loadRecords(selectedLecture);
-    getUnapprovedCount().then(setPendingCount);
   };
 
   const handleBulkApprove = async () => {
     if (!selectedLecture) return;
     await bulkApproveAttendance(selectedLecture);
     loadRecords(selectedLecture);
-    getUnapprovedCount().then(setPendingCount);
   };
 
   const handleCreateLecture = async () => {
@@ -141,17 +137,10 @@ export default function AttendancePage() {
   const showUploadAction = csvRows.length > 0 && selectedLecture && !uploading && !processing;
 
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-[var(--text-primary)]">Attendance</h1>
-        <p className="text-sm text-[var(--text-muted)]">
-          {pendingCount > 0 ? (
-            <span className="flex items-center gap-1 text-amber-400"><AlertCircle size={14} /> {pendingCount} records pending approval</span>
-          ) : (
-            'All attendance records approved'
-          )}
-        </p>
-      </div>
+    <div className="page-section">
+      <PageHeader
+        title="Attendance"
+      />
 
       <Card>
         <CardHeader title="1. Select Batch" />
@@ -204,25 +193,25 @@ export default function AttendancePage() {
       {selectedLecture && (
         <>
           <Card>
-            <CardHeader title="3. Upload CSV" subtitle="Google Meet attendance export" />
+            <CardHeader title="3. Upload CSV" />
             <div className="space-y-4">
               <input
                 ref={fileRef}
                 type="file"
                 accept=".csv"
                 onChange={handleFileChange}
-                className="block w-full text-sm text-[var(--text-muted)] file:mr-4 file:py-2 file:px-4 file:rounded-[10px] file:border-0 file:text-sm file:font-semibold file:bg-[var(--primary)] file:text-white hover:file:bg-[var(--primary-light)] file:cursor-pointer"
+                className="block w-full text-sm text-[var(--text-muted)] file:mr-4 file:py-2 file:px-4 file:rounded-[var(--radius-md)] file:border-0 file:text-sm file:font-semibold file:bg-[var(--primary)] file:text-white hover:file:bg-[var(--primary-light)] file:cursor-pointer"
               />
 
               {csvFileName && (
-                <div className="p-3 rounded-[10px] bg-[var(--bg-elevated)]/50 text-sm">
+                <div className="p-3 rounded-[var(--radius-md)] bg-[var(--bg-elevated)]/50 text-sm">
                   <span className="text-[var(--text-primary)] font-medium">{csvFileName}</span>
                   <span className="text-[var(--text-muted)] ml-2">— {csvRows.length} participants parsed</span>
                 </div>
               )}
 
               {statusMessage && (
-                <div className={`p-3 rounded-[10px] text-sm ${
+                <div className={`p-3 rounded-[var(--radius-md)] text-sm ${
                   statusMessage.type === 'success'
                     ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                     : 'bg-red-500/10 text-red-400 border border-red-500/20'
@@ -254,7 +243,6 @@ export default function AttendancePage() {
           <Card>
             <CardHeader
               title="4. Attendance Records"
-              subtitle={records.length > 0 ? `${records.length} records` : undefined}
               action={
                 records.some((r) => !r.approved) ? (
                   <Button size="sm" onClick={handleBulkApprove}>
@@ -270,7 +258,7 @@ export default function AttendancePage() {
             ) : (
               <div className="space-y-2">
                 {records.map((r) => (
-                  <div key={r.id} className="flex items-center justify-between p-3 rounded-[10px] bg-[var(--bg-elevated)]/50">
+                  <div key={r.id} className="flex items-center justify-between p-3 rounded-[var(--radius-md)] bg-[var(--bg-elevated)]/50">
                     <div className="flex items-center gap-3">
                       <Badge variant={r.status === 'present' ? 'success' : r.status === 'partial' ? 'warning' : 'danger'}>
                         {r.status}

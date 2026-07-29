@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { getBatchById, updateBatch } from '@/lib/supabase';
 import type { Batch } from '@/lib/types';
 
@@ -34,16 +35,13 @@ export default function EditBatchPage() {
   };
 
   if (loading) return <Spinner />;
-  if (!form) return <div className="p-6 text-[var(--text-muted)]">Batch not found</div>;
+  if (!form) return <div className="page-section text-[var(--text-muted)]">Batch not found</div>;
 
   return (
-    <div className="p-6 max-w-2xl">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[var(--text-primary)]">Edit Batch</h1>
-        <p className="text-sm text-[var(--text-muted)]">{form.name}</p>
-      </div>
+    <div className="page-section narrow">
+          <PageHeader title="Edit Batch" />
 
-      <Card className="p-6">
+      <Card padding="lg">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="field">
             <label className="text-sm font-medium text-[var(--text-primary)]">Batch Name *</label>

@@ -32,24 +32,24 @@ export default function StudentDetailPage() {
   }, [studentId]);
 
   if (loading) return <Spinner />;
-  if (!student) return <div className="p-6 text-[var(--text-muted)]">Student not found</div>;
+  if (!student) return <div className="page-section text-[var(--text-muted)]">Student not found</div>;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="page-section">
       <Link to="/students" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center gap-1 w-fit">
         <ArrowLeft size={14} /> Back to Students
       </Link>
 
-      <Card className="p-6">
+      <Card padding="lg">
         <div className="flex items-start gap-4">
           <div className="w-14 h-14 rounded-full bg-[var(--primary)]/10 flex items-center justify-center text-lg font-bold text-[var(--primary)]">
             {student.name.split(' ').map((n) => n[0]).slice(0, 2).join('')}
           </div>
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold text-[var(--text-primary)]">{student.name}</h1>
-            <div className="flex flex-wrap gap-4 mt-2 text-sm text-[var(--text-muted)]">
-              {student.email && <span className="flex items-center gap-1"><Mail size={14} /> {student.email}</span>}
-              {student.phone && <span className="flex items-center gap-1"><Phone size={14} /> {student.phone}</span>}
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl font-bold text-[var(--text-primary)] tracking-tight truncate">{student.name}</h1>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-[var(--text-muted)]">
+              {student.email && <span className="flex items-center gap-1 min-w-0"><Mail size={14} className="shrink-0" /> <span className="truncate">{student.email}</span></span>}
+              {student.phone && <span className="flex items-center gap-1"><Phone size={14} className="shrink-0" /> {student.phone}</span>}
             </div>
             <div className="flex gap-3 mt-3">
               {student.github_url && (
@@ -77,7 +77,7 @@ export default function StudentDetailPage() {
               <Link
                 key={m.id}
                 to={`/batches/${m.batch_id}`}
-                className="flex items-center justify-between p-3 rounded-[10px] hover:bg-[var(--bg-elevated)] transition-colors"
+                className="flex items-center justify-between gap-3 p-3 rounded-[var(--radius-md)] hover:bg-[var(--bg-elevated)] transition-colors"
               >
                 <div className="flex items-center gap-3">
                   <Layers size={16} className="text-[var(--text-muted)]" />

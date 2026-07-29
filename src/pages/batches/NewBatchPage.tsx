@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { createBatch } from '@/lib/supabase';
 
 export default function NewBatchPage() {
@@ -26,13 +27,10 @@ export default function NewBatchPage() {
   };
 
   return (
-    <div className="p-6 max-w-2xl">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[var(--text-primary)]">New Batch</h1>
-        <p className="text-sm text-[var(--text-muted)]">Create a new training batch</p>
-      </div>
+    <div className="page-section narrow">
+      <PageHeader title="New Batch" />
 
-      <Card className="p-6">
+      <Card padding="lg">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="field">
             <label className="text-sm font-medium text-[var(--text-primary)]">Batch Name *</label>

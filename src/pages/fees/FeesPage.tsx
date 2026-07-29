@@ -49,8 +49,8 @@ export default function FeesPage() {
   const getBatchSummary = (batchId: string) => summary.find((s) => s.batch_id === batchId);
 
   return (
-    <div className="p-6 space-y-6">
-      <PageHeader title="Finance" subtitle="Fee collection overview" />
+    <div className="page-section">
+      <PageHeader title="Finance" />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {batches.map((b) => {
@@ -59,13 +59,13 @@ export default function FeesPage() {
             <button
               key={b.id}
               onClick={() => loadBatchFees(b.id)}
-              className={`text-left p-4 rounded-[12px] border transition-all ${
+              className={`text-left p-4 rounded-[var(--radius-lg)] border transition-all ${
                 selectedBatch === b.id
                   ? 'border-[var(--primary)] bg-[var(--primary)]/5'
                   : 'border-[var(--border)] bg-[var(--bg-surface)] hover:border-[var(--primary)]/30'
               }`}
             >
-              <p className="font-semibold text-[var(--text-primary)]">{b.name}</p>
+              <p className="text-sm font-semibold text-[var(--text-primary)] truncate">{b.name}</p>
               {s && (
                 <div className="mt-2 space-y-1 text-xs">
                   <div className="flex justify-between"><span className="text-[var(--text-muted)]">Total:</span><span className="text-[var(--text-primary)]">₹{s.total_fees.toLocaleString()}</span></div>

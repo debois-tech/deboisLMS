@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { createStudent } from '@/lib/supabase';
 
 export default function NewStudentPage() {
@@ -23,12 +24,9 @@ export default function NewStudentPage() {
   };
 
   return (
-    <div className="p-6 max-w-2xl">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[var(--text-primary)]">Add Student</h1>
-        <p className="text-sm text-[var(--text-muted)]">Register a new student</p>
-      </div>
-      <Card className="p-6">
+    <div className="page-section narrow">
+      <PageHeader title="Add Student" />
+      <Card padding="lg">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="field">
             <label className="text-sm font-medium text-[var(--text-primary)]">Full Name *</label>

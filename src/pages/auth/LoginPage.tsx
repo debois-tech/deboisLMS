@@ -45,18 +45,18 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-base)] flex items-center justify-center p-4">
-      <Card className="w-full max-w-md p-8">
-        <div className="text-center mb-8">
-          <div className="w-12 h-12 rounded-xl bg-[var(--primary)] flex items-center justify-center mx-auto mb-4">
+      <Card padding="lg" className="w-full max-w-md">
+        <div className="text-center mb-6">
+          <div className="w-12 h-12 rounded-[var(--radius-lg)] bg-[var(--primary)] flex items-center justify-center mx-auto mb-4">
             <LogIn size={24} className="text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-[var(--text-primary)]">Deboistech ERP</h1>
+          <h1 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">Deboistech ERP</h1>
           <p className="text-sm text-[var(--text-muted)] mt-1">Admin dashboard login</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <div className="p-3 rounded-[10px] bg-red-500/10 border border-red-500/20 text-sm text-red-400">
+            <div className="p-3 rounded-[var(--radius-md)] bg-red-500/10 border border-red-500/20 text-sm text-red-400">
               {error}
             </div>
           )}

@@ -39,25 +39,25 @@ export function Modal({ open, onClose, title, description, children, footer, siz
 
       <div
         ref={panelRef}
-        className={`relative w-full ${sizes[size]} bg-[var(--bg-surface)] border border-[var(--border)] rounded-[20px] shadow-[var(--shadow-lg)] animate-fade-in`}
+        className={`modal-panel relative w-full ${sizes[size]} bg-[var(--bg-surface)] border border-[var(--border)] rounded-[var(--radius-xl)] shadow-[var(--shadow-lg)] animate-fade-in`}
       >
-        <div className="flex items-start justify-between p-6 border-b border-[var(--border)]">
-          <div>
-            <h2 className="text-lg font-semibold text-[var(--text-primary)]">{title}</h2>
+        <div className="modal-header flex items-start justify-between gap-4 border-b border-[var(--border)]">
+          <div className="min-w-0">
+            <h2 className="text-lg font-bold text-[var(--text-primary)]">{title}</h2>
             {description && <p className="text-sm text-[var(--text-muted)] mt-1">{description}</p>}
           </div>
           <button
             onClick={onClose}
-            className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-1 rounded-lg hover:bg-[var(--bg-elevated)]"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors"
           >
             <X size={18} />
           </button>
         </div>
 
-        {children && <div className="p-6">{children}</div>}
+        {children && <div className="modal-body">{children}</div>}
 
         {footer && (
-          <div className="flex items-center justify-end gap-3 px-6 pb-6 pt-0">
+          <div className="modal-footer flex items-center justify-end gap-3">
             {footer}
           </div>
         )}

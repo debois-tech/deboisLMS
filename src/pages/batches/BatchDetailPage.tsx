@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Edit3, Users, GraduationCap, Layers, ClipboardCheck, DollarSign, FileText, Plus, Trash2, CheckCircle, XCircle } from 'lucide-react';
+import { Edit3, Users, GraduationCap, Layers, ClipboardCheck, DollarSign, FileText, Plus, Trash2, CheckCircle, XCircle, ChevronRight, CalendarDays } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -34,22 +34,22 @@ export default function BatchDetailPage() {
   }, [batchId]);
 
   if (loading) return <Spinner />;
-  if (!batch) return <div className="p-6 text-[var(--text-muted)]">Batch not found</div>;
+  if (!batch) return <div className="page-section text-[var(--text-muted)]">Batch not found</div>;
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-[var(--text-primary)]">{batch.name}</h1>
+    <div className="page-section">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="text-xl font-bold text-[var(--text-primary)] tracking-tight truncate">{batch.name}</h1>
             <Badge variant={batch.status === 'ongoing' ? 'success' : batch.status === 'upcoming' ? 'warning' : 'info'}>{batch.status}</Badge>
           </div>
-          <p className="text-sm text-[var(--text-muted)]">
+          <p className="text-sm text-[var(--text-muted)] mt-0.5">
             {batch.track} • Started {batch.start_date ? formatDate(batch.start_date) : 'N/A'}
           </p>
         </div>
-        <Link to={`/batches/${batch.id}/edit`}>
-          <Button variant="outline"><Edit3 size={14} /> Edit</Button>
+        <Link to={`/batches/${batch.id}/edit`} className="shrink-0">
+          <Button variant="outline" className="min-w-[8rem]"><Edit3 size={14} /> Edit</Button>
         </Link>
       </div>
 
@@ -94,17 +94,17 @@ function OverviewTab({ batch }: { batch: Batch }) {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <Card className="p-4">
+      <Card padding="sm">
         <p className="text-xs text-[var(--text-muted)]">Total Students</p>
-        <p className="text-2xl font-bold text-[var(--text-primary)]">{students.filter((s) => s.mapping.status === 'active').length}</p>
+        <p className="text-lg font-bold text-[var(--text-primary)] mt-1">{students.filter((s) => s.mapping.status === 'active').length}</p>
       </Card>
-      <Card className="p-4">
+      <Card padding="sm">
         <p className="text-xs text-[var(--text-muted)]">Lectures Held</p>
-        <p className="text-2xl font-bold text-[var(--text-primary)]">{lectures.length}</p>
+        <p className="text-lg font-bold text-[var(--text-primary)] mt-1">{lectures.length}</p>
       </Card>
-      <Card className="p-4">
+      <Card padding="sm">
         <p className="text-xs text-[var(--text-muted)]">Track</p>
-        <p className="text-2xl font-bold text-[var(--text-primary)]">{batch.track ?? 'N/A'}</p>
+        <p className="text-lg font-bold text-[var(--text-primary)] mt-1 truncate">{batch.track ?? 'N/A'}</p>
       </Card>
     </div>
   );
@@ -142,15 +142,14 @@ function StudentsTab({ batchId }: { batchId: string }) {
     <Card>
       <CardHeader
         title="Enrolled Students"
-        subtitle={`${students.filter((s) => s.mapping.status === 'active').length} active`}
         action={<Button size="sm" onClick={() => setShowAdd(true)}><Plus size={14} /> Add Student</Button>}
       />
       {students.length === 0 ? (
         <EmptyState icon={<Users size={32} />} title="No students enrolled" />
       ) : (
-        <div className="space-y-1">
+        <div className="batch-list">
           {students.map((s) => (
-            <div key={s.id} className="flex items-center justify-between p-3 rounded-[10px] hover:bg-[var(--bg-elevated)]">
+            <div key={s.id} className="batch-list-item flex items-center justify-between gap-4 hover:bg-[var(--bg-elevated)]">
               <div>
                 <p className="text-sm font-medium text-[var(--text-primary)]">{s.name}</p>
                 <p className="text-xs text-[var(--text-muted)]">{s.email ?? s.phone ?? '—'}</p>
@@ -221,9 +220,9 @@ function TutorsTab({ batchId }: { batchId: string }) {
       {tutors.length === 0 ? (
         <EmptyState icon={<GraduationCap size={32} />} title="No tutors assigned" />
       ) : (
-        <div className="space-y-1">
+        <div className="batch-list">
           {tutors.map((t) => (
-            <div key={t.id} className="flex items-center justify-between p-3 rounded-[10px] hover:bg-[var(--bg-elevated)]">
+            <div key={t.id} className="batch-list-item flex items-center justify-between gap-4 hover:bg-[var(--bg-elevated)]">
               <div>
                 <p className="text-sm font-medium text-[var(--text-primary)]">{t.name}</p>
                 <p className="text-xs text-[var(--text-muted)]">{t.email ?? t.phone ?? '—'}</p>
@@ -271,13 +270,13 @@ function LecturesTab({ batchId }: { batchId: string }) {
 
   return (
     <Card>
-      <CardHeader title="Lectures" subtitle={`${lectures.length} sessions`} action={<Button size="sm" onClick={() => setShowNew(true)}><Plus size={14} /> Add Lecture</Button>} />
+      <CardHeader title="Lectures" action={<Button size="sm" onClick={() => setShowNew(true)}><Plus size={14} /> Add Lecture</Button>} />
       {lectures.length === 0 ? (
         <EmptyState icon={<Layers size={32} />} title="No lectures yet" />
       ) : (
-        <div className="space-y-2">
+        <div className="batch-list">
           {lectures.map((l) => (
-            <div key={l.id} className="flex items-center justify-between p-3 rounded-[10px] bg-[var(--bg-elevated)]/50">
+            <div key={l.id} className="batch-list-item flex items-center justify-between gap-4">
               <div>
                 <p className="text-sm font-medium text-[var(--text-primary)]">{formatDate(l.lecture_date)}</p>
                 <p className="text-xs text-[var(--text-muted)]">
@@ -340,47 +339,61 @@ function AttendanceTab({ batchId }: { batchId: string }) {
     loadAttendance(selectedLecture);
   };
 
+  const selectedLectureData = lectures.find((lecture) => lecture.id === selectedLecture);
+
   return (
     <div className="space-y-4">
       <Card>
         <CardHeader title="Select Lecture" />
-        <div className="flex flex-wrap gap-2">
+        <div className="batch-list">
           {lectures.map((l) => (
             <button
               key={l.id}
               onClick={() => loadAttendance(l.id)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              className={`batch-list-item flex w-full items-center justify-between gap-4 text-left transition-colors ${
                 selectedLecture === l.id
-                  ? 'bg-[var(--primary)] text-white'
-                  : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:bg-[var(--bg-overlay)]'
+                  ? 'border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--text-primary)]'
+                  : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]'
               }`}
             >
-              {formatDate(l.lecture_date)}
+              <span className="flex min-w-0 items-center gap-3">
+                <CalendarDays size={18} className="shrink-0 text-[var(--primary)]" />
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-[var(--text-primary)]">{formatDate(l.lecture_date)}</span>
+                  <span className="mt-1 block text-xs text-[var(--text-muted)]">
+                    {l.session_type ?? 'Lecture'}{l.meeting_code ? ` • ${l.meeting_code}` : ''}
+                  </span>
+                </span>
+              </span>
+              <ChevronRight size={18} className="shrink-0 text-[var(--text-muted)]" />
             </button>
           ))}
         </div>
       </Card>
 
-      {selectedLecture && (
-        <Card>
-          <CardHeader
-            title="Attendance Records"
-            action={
-              records.some((r) => !r.approved) ? (
-                <Button size="sm" onClick={handleBulkApprove}>
-                  <CheckCircle size={14} /> Approve All
-                </Button>
-              ) : undefined
-            }
-          />
+      <Modal
+        open={Boolean(selectedLecture)}
+        onClose={() => { setSelectedLecture(null); setRecords([]); }}
+        title="Attendance Records"
+        description={selectedLectureData ? `${formatDate(selectedLectureData.lecture_date)}${selectedLectureData.meeting_code ? ` • ${selectedLectureData.meeting_code}` : ''}` : undefined}
+        size="lg"
+      >
+        <div className="space-y-4">
+          {records.some((r) => !r.approved) && (
+            <div className="flex justify-end">
+              <Button size="sm" onClick={handleBulkApprove}>
+                <CheckCircle size={14} /> Approve All
+              </Button>
+            </div>
+          )}
           {loading ? (
             <Spinner />
           ) : records.length === 0 ? (
             <EmptyState icon={<ClipboardCheck size={32} />} title="No attendance records" description="Upload a CSV or add records manually" />
           ) : (
-            <div className="space-y-2">
+            <div className="batch-list">
               {records.map((r) => (
-                <div key={r.id} className="flex items-center justify-between p-3 rounded-[10px] bg-[var(--bg-elevated)]/50">
+                <div key={r.id} className="batch-list-item flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
                     <Badge variant={r.status === 'present' ? 'success' : r.status === 'partial' ? 'warning' : 'danger'}>
                       {r.status}
@@ -405,8 +418,8 @@ function AttendanceTab({ batchId }: { batchId: string }) {
               ))}
             </div>
           )}
-        </Card>
-      )}
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -440,9 +453,9 @@ function FinanceTab({ batchId }: { batchId: string }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-4">
-        <Card className="p-4"><p className="text-xs text-[var(--text-muted)]">Total Fees</p><p className="text-xl font-bold text-[var(--text-primary)]">₹{totalFee.toLocaleString()}</p></Card>
-        <Card className="p-4"><p className="text-xs text-[var(--text-muted)]">Collected</p><p className="text-xl font-bold text-emerald-400">₹{totalPaid.toLocaleString()}</p></Card>
-        <Card className="p-4"><p className="text-xs text-[var(--text-muted)]">Outstanding</p><p className="text-xl font-bold text-red-400">₹{(totalFee - totalPaid).toLocaleString()}</p></Card>
+        <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Total Fees</p><p className="text-lg font-bold text-[var(--text-primary)] mt-1">₹{totalFee.toLocaleString()}</p></Card>
+        <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Collected</p><p className="text-lg font-bold text-emerald-400 mt-1">₹{totalPaid.toLocaleString()}</p></Card>
+        <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Outstanding</p><p className="text-lg font-bold text-red-400 mt-1">₹{(totalFee - totalPaid).toLocaleString()}</p></Card>
       </div>
 
       <Card>
@@ -539,12 +552,12 @@ function AssignmentsTab({ batchId }: { batchId: string }) {
         {assignments.length === 0 ? (
           <EmptyState icon={<FileText size={32} />} title="No assignments" />
         ) : (
-          <div className="space-y-2">
+          <div className="batch-list">
             {assignments.map((a) => (
               <div
                 key={a.id}
                 onClick={() => loadCompletions(a.id)}
-                className={`p-3 rounded-[10px] cursor-pointer transition-colors ${
+                className={`batch-list-item cursor-pointer transition-colors ${
                   selectedAsgn === a.id ? 'bg-[var(--primary)]/10 border border-[var(--primary)]/20' : 'hover:bg-[var(--bg-elevated)]'
                 }`}
               >
@@ -561,7 +574,7 @@ function AssignmentsTab({ batchId }: { batchId: string }) {
       {selectedAsgn && (
         <Card>
           <CardHeader title="Submission Status" />
-          <div className="overflow-x-auto">
+          <div className="batch-list-content overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[var(--border)]">

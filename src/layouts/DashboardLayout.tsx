@@ -15,7 +15,7 @@ export default function DashboardLayout() {
   const handleSidebarToggle = () => {
     if (window.innerWidth < 1024) {
       setSidebarCollapsed(false);
-      setSidebarOpen(true);
+      setSidebarOpen((open) => !open);
       return;
     }
     setSidebarCollapsed((collapsed) => !collapsed);
@@ -23,7 +23,12 @@ export default function DashboardLayout() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-base)]">
-      <Navbar />
+      <Navbar
+        onMenuClick={() => {
+          setSidebarCollapsed(false);
+          setSidebarOpen(true);
+        }}
+      />
       <div className="app-shell">
         <Sidebar
           open={sidebarOpen}

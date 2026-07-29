@@ -19,34 +19,36 @@ export function Tabs({ tabs, defaultValue, onChange, children }: TabsProps) {
   };
 
   return (
-    <div>
-      <div className="flex items-center gap-1 p-1 bg-[var(--bg-elevated)] rounded-[12px] w-fit">
-        {tabs.map((tab) => (
-          <button
-            key={tab.value}
-            onClick={() => handleChange(tab.value)}
-            className={clsx(
-              'flex items-center gap-2 px-4 py-2 rounded-[9px] text-sm font-medium transition-all duration-200',
-              active === tab.value
-                ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-[var(--shadow-sm)]'
-                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-overlay)]'
-            )}
-          >
-            {tab.label}
-            {tab.badge !== undefined && (
-              <span className={clsx(
-                'text-[10px] font-semibold px-1.5 py-0.5 rounded-full',
+    <div className="flex flex-col gap-4">
+      <div className="overflow-x-auto -mx-1 px-1">
+        <div className="batch-tabs-bar flex items-center gap-2 border border-[var(--border)] bg-[var(--bg-surface)] rounded-[var(--radius-md)] shadow-[var(--shadow-sm)] w-max min-w-full sm:min-w-0 sm:w-fit">
+          {tabs.map((tab) => (
+            <button
+              key={tab.value}
+              onClick={() => handleChange(tab.value)}
+              className={clsx(
+                'batch-tab-button flex items-center gap-2 rounded-[var(--radius-sm)] text-sm font-semibold whitespace-nowrap transition-all duration-200',
                 active === tab.value
-                  ? 'bg-[var(--primary)] text-white'
-                  : 'bg-[var(--bg-overlay)] text-[var(--text-muted)]'
-              )}>
-                {tab.badge}
-              </span>
-            )}
-          </button>
-        ))}
+                  ? 'bg-[var(--primary)] text-white shadow-[0_2px_8px_rgba(79,70,229,0.3)]'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-overlay)]'
+              )}
+            >
+              {tab.label}
+              {tab.badge !== undefined && (
+                <span className={clsx(
+                  'text-[10px] font-semibold px-1.5 py-0.5 rounded-full',
+                  active === tab.value
+                    ? 'bg-[var(--primary)] text-white'
+                    : 'bg-[var(--bg-overlay)] text-[var(--text-muted)]'
+                )}>
+                  {tab.badge}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
       </div>
-      {children && <div className="mt-5 scroll-mt-24">{children(active)}</div>}
+      {children && <div className="scroll-mt-24">{children(active)}</div>}
     </div>
   );
 }
