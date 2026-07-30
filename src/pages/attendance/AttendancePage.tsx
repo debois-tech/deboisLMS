@@ -7,6 +7,8 @@ import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { BatchSelect } from '@/components/ui/BatchSelect';
+import { LectureSelect } from '@/components/ui/LectureSelect';
 import { getLecturesByBatch, createLecture } from '@/lib/supabase';
 import { getAttendanceByLecture, insertUploadRows, processAttendance, approveAttendance, bulkApproveAttendance } from '@/lib/supabase';
 import { getBatches } from '@/lib/supabase';
@@ -144,21 +146,7 @@ export default function AttendancePage() {
 
       <Card>
         <CardHeader title="1. Select Batch" />
-        <div className="flex flex-wrap gap-2">
-          {batches.map((b) => (
-            <button
-              key={b.id}
-              onClick={() => setSelectedBatch(b.id)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                selectedBatch === b.id
-                  ? 'bg-[var(--primary)] text-white'
-                  : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:bg-[var(--bg-overlay)]'
-              }`}
-            >
-              {b.name}
-            </button>
-          ))}
-        </div>
+        <BatchSelect batches={batches} value={selectedBatch} onChange={setSelectedBatch} />
       </Card>
 
       {selectedBatch && (
@@ -166,27 +154,18 @@ export default function AttendancePage() {
           <CardHeader
             title="2. Select Lecture"
             action={
-              <Button size="sm" variant="ghost" onClick={() => setShowNewLecture(true)}>
+              <Button size="sm" className="action-button" variant="ghost" onClick={() => setShowNewLecture(true)}>
                 + New Lecture
               </Button>
             }
           />
-          <div className="flex flex-wrap gap-2">
-            {lectures.map((l) => (
-              <button
-                key={l.id}
-                onClick={() => loadRecords(l.id)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  selectedLecture === l.id
-                    ? 'bg-[var(--primary)] text-white'
-                    : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:bg-[var(--bg-overlay)]'
-                }`}
-              >
-                {formatDate(l.lecture_date)}
-                {l.meeting_code && <span className="ml-1 opacity-60">({l.meeting_code})</span>}
-              </button>
-            ))}
-          </div>
+          {lectures.length === 0 ? (
+            <p className="rounded-[var(--radius-md)] bg-[var(--bg-elevated)] text-sm text-[var(--text-muted)]" style={{ padding: '1rem 1.25rem' }}>
+              No lectures available. Create a new lecture to continue.
+            </p>
+          ) : (
+            <LectureSelect lectures={lectures} value={selectedLecture} onChange={loadRecords} />
+          )}
         </Card>
       )}
 

@@ -6,6 +6,8 @@ export type AttendanceStatus = 'present' | 'partial' | 'absent';
 export type AttendanceSource = 'manual' | 'automated';
 export type MappingStatus = 'active' | 'dropped';
 export type SubmissionChannel = 'whatsapp' | 'other';
+export type FeeStatus = 'due' | 'paid';
+export type PaymentMethod = 'cash' | 'upi' | 'bank_transfer' | 'other';
 
 export interface Profile {
   id: string;
@@ -92,8 +94,21 @@ export interface StudentFee {
   batch_id: string;
   total_fee: number;
   paid_amount: number;
+  status: FeeStatus;
   updated_at: string;
   student?: Student;
+}
+
+export interface FeePaymentLog {
+  id: string;
+  student_fee_id: string;
+  student_id: string;
+  batch_id: string;
+  amount: number;
+  payment_date: string;
+  payment_method?: PaymentMethod;
+  notes?: string;
+  created_at: string;
 }
 
 export interface Assignment {

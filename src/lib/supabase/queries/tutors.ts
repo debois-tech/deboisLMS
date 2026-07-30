@@ -18,6 +18,14 @@ export async function getTutorById(id: string): Promise<Tutor | undefined> {
   return data as Tutor | undefined;
 }
 
+export async function getTutorBatches(tutorId: string): Promise<TutorBatchMapping[]> {
+  const { data } = await supabase
+    .from('tutor_batch_mapping')
+    .select('*')
+    .eq('tutor_id', tutorId);
+  return (data ?? []) as TutorBatchMapping[];
+}
+
 export async function createTutor(input: Omit<Tutor, 'id' | 'created_at'>): Promise<Tutor> {
   const { data } = await supabase
     .from('tutors')

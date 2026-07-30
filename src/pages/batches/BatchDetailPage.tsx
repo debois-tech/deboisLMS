@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Edit3, Users, GraduationCap, Layers, ClipboardCheck, DollarSign, FileText, Plus, Trash2, CheckCircle, XCircle, ChevronRight, CalendarDays } from 'lucide-react';
+import { ArrowLeft, Edit3, Users, GraduationCap, Layers, ClipboardCheck, DollarSign, FileText, Plus, Trash2, CheckCircle, XCircle, ChevronRight, CalendarDays, History } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -8,14 +8,15 @@ import { Tabs } from '@/components/ui/Tabs';
 import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
+import { StudentMultiSelect } from '@/components/ui/StudentMultiSelect';
 import { getBatchById } from '@/lib/supabase';
 import { getBatchStudents, getStudentById, addStudentToBatch, removeStudentFromBatch, getStudents } from '@/lib/supabase';
 import { getBatchTutors, assignTutorToBatch, removeTutorFromBatch, getTutors } from '@/lib/supabase';
 import { getLecturesByBatch, createLecture, deleteLecture } from '@/lib/supabase';
 import { getAttendanceByLecture, approveAttendance, bulkApproveAttendance } from '@/lib/supabase';
-import { getFeesByBatch, updateFeePayment } from '@/lib/supabase';
+import { getFeesByBatch, updateFeeTotal, getFeePaymentLogs, addFeePaymentLog } from '@/lib/supabase';
 import { getAssignmentsByBatch, getCompletionsByAssignment, markSubmission, createAssignment } from '@/lib/supabase';
-import type { Batch, Student, Tutor, Lecture, AttendanceRecord, StudentFee, Assignment, AssignmentCompletion, BatchStudentMapping, TutorBatchMapping } from '@/lib/types';
+import type { Batch, Student, Tutor, Lecture, AttendanceRecord, StudentFee, FeePaymentLog, Assignment, AssignmentCompletion, BatchStudentMapping, TutorBatchMapping, PaymentMethod } from '@/lib/types';
 import { formatDate } from '@/lib/utils/format';
 
 export default function BatchDetailPage() {
@@ -33,11 +34,14 @@ export default function BatchDetailPage() {
     });
   }, [batchId]);
 
-  if (loading) return <Spinner />;
+  if (loading) return <Spinner centered />;
   if (!batch) return <div className="page-section text-[var(--text-muted)]">Batch not found</div>;
 
   return (
     <div className="page-section">
+      <Link to="/batches" className="mb-4 flex w-fit items-center gap-1 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+        <ArrowLeft size={14} /> Back to Batches
+      </Link>
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-3 flex-wrap">
@@ -114,7 +118,8 @@ function StudentsTab({ batchId }: { batchId: string }) {
   const [students, setStudents] = useState<(Student & { mapping: BatchStudentMapping })[]>([]);
   const [allStudents, setAllStudents] = useState<Student[]>([]);
   const [showAdd, setShowAdd] = useState(false);
-  const [selectedStudent, setSelectedStudent] = useState('');
+  const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
+  const [totalFee, setTotalFee] = useState('');
 
   const fetchStudents = () => {
     getBatchStudents(batchId).then(setStudents);
@@ -124,9 +129,10 @@ function StudentsTab({ batchId }: { batchId: string }) {
   useEffect(() => { fetchStudents(); }, [batchId]);
 
   const handleAdd = async () => {
-    if (!selectedStudent) return;
-    await addStudentToBatch(selectedStudent, batchId);
-    setSelectedStudent('');
+    if (!selectedStudents.length) return;
+    await Promise.all(selectedStudents.map((studentId) => addStudentToBatch(studentId, batchId, Number(totalFee) || 0)));
+    setSelectedStudents([]);
+    setTotalFee('');
     setShowAdd(false);
     fetchStudents();
   };
@@ -142,7 +148,7 @@ function StudentsTab({ batchId }: { batchId: string }) {
     <Card>
       <CardHeader
         title="Enrolled Students"
-        action={<Button size="sm" onClick={() => setShowAdd(true)}><Plus size={14} /> Add Student</Button>}
+        action={<Button size="sm" className="action-button" onClick={() => setShowAdd(true)}><Plus size={14} /> Add Students</Button>}
       />
       {students.length === 0 ? (
         <EmptyState icon={<Users size={32} />} title="No students enrolled" />
@@ -168,15 +174,14 @@ function StudentsTab({ batchId }: { batchId: string }) {
       <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Add Student">
         <div className="space-y-4">
           <div className="field">
-            <label className="text-sm font-medium text-[var(--text-primary)]">Select Student</label>
-            <select value={selectedStudent} onChange={(e) => setSelectedStudent(e.target.value)}>
-              <option value="">Choose a student...</option>
-              {available.map((s) => (
-                <option key={s.id} value={s.id}>{s.name} ({s.email})</option>
-              ))}
-            </select>
+            <label className="text-sm font-medium text-[var(--text-primary)]">Select Students</label>
+            <StudentMultiSelect students={available} value={selectedStudents} onChange={setSelectedStudents} />
           </div>
-          <Button onClick={handleAdd} disabled={!selectedStudent}>Add to Batch</Button>
+          <div className="field">
+            <label className="text-sm font-medium text-[var(--text-primary)]">Total Fee per Student (₹)</label>
+            <input type="number" min="0" value={totalFee} onChange={(event) => setTotalFee(event.target.value)} placeholder="0" />
+          </div>
+          <Button className="action-button-wide" onClick={handleAdd} disabled={!selectedStudents.length}>Add Selected to Batch</Button>
         </div>
       </Modal>
     </Card>
@@ -215,7 +220,7 @@ function TutorsTab({ batchId }: { batchId: string }) {
     <Card>
       <CardHeader
         title="Assigned Tutors"
-        action={<Button size="sm" onClick={() => setShowAdd(true)}><Plus size={14} /> Assign Tutor</Button>}
+        action={<Button size="sm" className="action-button" onClick={() => setShowAdd(true)}><Plus size={14} /> Assign Tutor</Button>}
       />
       {tutors.length === 0 ? (
         <EmptyState icon={<GraduationCap size={32} />} title="No tutors assigned" />
@@ -246,7 +251,7 @@ function TutorsTab({ batchId }: { batchId: string }) {
               ))}
             </select>
           </div>
-          <Button onClick={handleAdd} disabled={!selectedTutor}>Assign</Button>
+          <Button className="action-button" onClick={handleAdd} disabled={!selectedTutor}>Assign</Button>
         </div>
       </Modal>
     </Card>
@@ -270,7 +275,7 @@ function LecturesTab({ batchId }: { batchId: string }) {
 
   return (
     <Card>
-      <CardHeader title="Lectures" action={<Button size="sm" onClick={() => setShowNew(true)}><Plus size={14} /> Add Lecture</Button>} />
+      <CardHeader title="Lectures" action={<Button size="sm" className="action-button" onClick={() => setShowNew(true)}><Plus size={14} /> Add Lecture</Button>} />
       {lectures.length === 0 ? (
         <EmptyState icon={<Layers size={32} />} title="No lectures yet" />
       ) : (
@@ -429,6 +434,9 @@ function FinanceTab({ batchId }: { batchId: string }) {
   const [students, setStudents] = useState<(Student & { mapping: BatchStudentMapping })[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
+  const [loggingFee, setLoggingFee] = useState<StudentFee | null>(null);
+  const [paymentLogs, setPaymentLogs] = useState<FeePaymentLog[]>([]);
+  const [logForm, setLogForm] = useState({ amount: '', payment_date: new Date().toISOString().slice(0, 10), payment_method: 'other' as PaymentMethod, notes: '' });
 
   const fetchFees = () => {
     Promise.all([getFeesByBatch(batchId), getBatchStudents(batchId)]).then(([f, s]) => {
@@ -442,8 +450,27 @@ function FinanceTab({ batchId }: { batchId: string }) {
   const handleSavePayment = async (feeId: string) => {
     const val = Number(editValue);
     if (isNaN(val)) return;
-    await updateFeePayment(feeId, val);
+    await updateFeeTotal(feeId, val);
     setEditingId(null);
+    fetchFees();
+  };
+
+  const openPaymentLogs = async (fee: StudentFee) => {
+    setLoggingFee(fee);
+    setLogForm({ amount: '', payment_date: new Date().toISOString().slice(0, 10), payment_method: 'other', notes: '' });
+    setPaymentLogs(await getFeePaymentLogs(fee.id));
+  };
+
+  const handleAddPaymentLog = async () => {
+    if (!loggingFee || !logForm.amount || Number(logForm.amount) <= 0 || !logForm.payment_date) return;
+    await addFeePaymentLog({
+      student_fee_id: loggingFee.id,
+      amount: Number(logForm.amount),
+      payment_date: logForm.payment_date,
+      payment_method: logForm.payment_method,
+      notes: logForm.notes,
+    });
+    setLoggingFee(null);
     fetchFees();
   };
 
@@ -496,9 +523,14 @@ function FinanceTab({ batchId }: { batchId: string }) {
                       </span>
                     </td>
                     <td className="p-3">
-                      <Button size="sm" variant="ghost" onClick={() => { setEditingId(fee.id); setEditValue(String(fee.paid_amount)); }}>
-                        Update
-                      </Button>
+                      <div className="flex flex-wrap gap-2">
+                        <Button size="sm" className="action-button" onClick={() => openPaymentLogs(fee)}>
+                          <Plus size={14} /> Log Payment
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => { setEditingId(fee.id); setEditValue(String(fee.total_fee)); }}>
+                          Update Total
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -507,6 +539,59 @@ function FinanceTab({ batchId }: { batchId: string }) {
           </table>
         </div>
       </Card>
+
+      <Modal open={!!loggingFee} onClose={() => setLoggingFee(null)} title="Payment Log" size="lg">
+        {loggingFee && (
+          <div className="space-y-5">
+            <div className="rounded-[var(--radius-md)] bg-[var(--bg-elevated)] text-sm text-[var(--text-secondary)]" style={{ padding: '1rem 1.25rem' }}>
+              <p className="font-semibold text-[var(--text-primary)]">{students.find((student) => student.id === loggingFee.student_id)?.name ?? 'Student'}</p>
+              <p className="mt-1">Current paid total: ₹{loggingFee.paid_amount.toLocaleString()}</p>
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="field">
+                <label className="text-sm font-medium text-[var(--text-primary)]">Amount (₹) *</label>
+                <input type="number" min="1" value={logForm.amount} onChange={(event) => setLogForm({ ...logForm, amount: event.target.value })} />
+              </div>
+              <div className="field">
+                <label className="text-sm font-medium text-[var(--text-primary)]">Payment Date *</label>
+                <input type="date" value={logForm.payment_date} onChange={(event) => setLogForm({ ...logForm, payment_date: event.target.value })} />
+              </div>
+            </div>
+            <div className="field">
+              <label className="text-sm font-medium text-[var(--text-primary)]">Payment Method</label>
+              <select value={logForm.payment_method} onChange={(event) => setLogForm({ ...logForm, payment_method: event.target.value as PaymentMethod })}><option value="cash">Cash</option><option value="upi">UPI</option><option value="bank_transfer">Bank transfer</option><option value="other">Other</option></select>
+            </div>
+            <div className="field">
+              <label className="text-sm font-medium text-[var(--text-primary)]">Notes</label>
+              <textarea value={logForm.notes} onChange={(event) => setLogForm({ ...logForm, notes: event.target.value })} placeholder="Optional note" />
+            </div>
+            <div className="flex justify-end">
+              <Button className="action-button" onClick={handleAddPaymentLog} disabled={!logForm.amount || Number(logForm.amount) <= 0}>
+                <Plus size={14} /> Add Log
+              </Button>
+            </div>
+            <div>
+              <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
+                <History size={15} /> Previous Payments
+              </div>
+              {paymentLogs.length === 0 ? (
+                <p className="text-sm text-[var(--text-muted)]">No payment logs yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {paymentLogs.map((log) => (
+                    <div key={log.id} className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-md)] bg-[var(--bg-elevated)] text-sm" style={{ padding: '0.75rem 1rem' }}>
+                      <span className="font-semibold text-emerald-400">₹{Number(log.amount).toLocaleString()}</span>
+                      <span className="text-[var(--text-secondary)]">{log.payment_date}</span>
+                      <span className="text-[var(--text-muted)]">{log.payment_method || '—'}</span>
+                      <span className="text-[var(--text-muted)]">{log.notes || ''}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
@@ -548,7 +633,7 @@ function AssignmentsTab({ batchId }: { batchId: string }) {
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader title="Assignments" action={<Button size="sm" onClick={() => setShowNew(true)}><Plus size={14} /> New Assignment</Button>} />
+        <CardHeader title="Assignments" action={<Button size="sm" className="action-button" onClick={() => setShowNew(true)}><Plus size={14} /> New Assignment</Button>} />
         {assignments.length === 0 ? (
           <EmptyState icon={<FileText size={32} />} title="No assignments" />
         ) : (
@@ -619,7 +704,7 @@ function AssignmentsTab({ batchId }: { batchId: string }) {
             <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} />
           </div>
           <div className="field">
-            <label className="text-sm font-medium text-[var(--text-primary)]">Assigned Date</label>
+            <label className="text-sm font-medium text-[var(--text-primary)]">Due Date</label>
             <input type="date" value={form.assigned_date} onChange={(e) => setForm({ ...form, assigned_date: e.target.value })} />
           </div>
           <Button onClick={handleCreate}>Create Assignment</Button>

@@ -51,7 +51,7 @@ export default function NewStudentPage() {
             <input value={form.linkedin_url} onChange={(e) => setForm({ ...form, linkedin_url: e.target.value })} placeholder="https://linkedin.com/in/username" />
           </div>
           <div className="flex gap-3 pt-2">
-            <Button type="submit" loading={loading}>Add Student</Button>
+            <Button className="action-button" type="submit" loading={loading}>Add Student</Button>
             <Button variant="ghost" onClick={() => navigate('/students')}>Cancel</Button>
           </div>
         </form>

@@ -5,7 +5,7 @@ import { Spinner } from '@/components/ui/Spinner';
 export default function ProtectedRoute() {
   const { user, loading } = useAuth();
 
-  if (loading) return <Spinner />;
+  if (loading) return <Spinner centered />;
   if (!user) return <Navigate to="/auth/login" replace />;
 
   return <Outlet />;

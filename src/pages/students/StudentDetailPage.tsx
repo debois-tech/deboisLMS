@@ -31,7 +31,7 @@ export default function StudentDetailPage() {
     });
   }, [studentId]);
 
-  if (loading) return <Spinner />;
+  if (loading) return <Spinner centered />;
   if (!student) return <div className="page-section text-[var(--text-muted)]">Student not found</div>;
 
   return (

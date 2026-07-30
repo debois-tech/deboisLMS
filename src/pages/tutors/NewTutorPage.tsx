@@ -14,8 +14,8 @@ export default function NewTutorPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      await createTutor(form);
-      navigate('/tutors');
+      const tutor = await createTutor(form);
+      navigate(`/tutors/${tutor.id}`);
     } finally {
       setLoading(false);
     }
@@ -41,7 +41,7 @@ export default function NewTutorPage() {
             </div>
           </div>
           <div className="flex gap-3 pt-2">
-            <Button type="submit" loading={loading}>Add Tutor</Button>
+            <Button className="action-button" type="submit" loading={loading}>Add Tutor</Button>
             <Button variant="ghost" onClick={() => navigate('/tutors')}>Cancel</Button>
           </div>
         </form>

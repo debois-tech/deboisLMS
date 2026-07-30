@@ -34,7 +34,7 @@ export default function EditBatchPage() {
     }
   };
 
-  if (loading) return <Spinner />;
+  if (loading) return <Spinner centered />;
   if (!form) return <div className="page-section text-[var(--text-muted)]">Batch not found</div>;
 
   return (

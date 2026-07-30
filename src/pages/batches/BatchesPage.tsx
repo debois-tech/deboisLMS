@@ -21,13 +21,13 @@ export default function BatchesPage() {
     });
   }, []);
 
-  if (loading) return <Spinner />;
+  if (loading) return <Spinner centered />;
 
   return (
     <div className="page-section">
       <PageHeader
         title="Batches"
-        action={<Link to="/batches/new"><Button><Plus size={16} /> New Batch</Button></Link>}
+        action={<Link to="/batches/new"><Button className="action-button"><Plus size={16} /> New Batch</Button></Link>}
       />
 
       {batches.length === 0 ? (

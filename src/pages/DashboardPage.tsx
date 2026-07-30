@@ -28,7 +28,7 @@ export default function DashboardPage() {
     );
   }, []);
 
-  if (loading) return <Spinner />;
+  if (loading) return <Spinner centered />;
 
   const ongoingBatches = batches.filter((b) => b.status === 'ongoing');
 

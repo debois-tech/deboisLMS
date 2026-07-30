@@ -6,6 +6,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { BatchSelect } from '@/components/ui/BatchSelect';
 import { getBatches } from '@/lib/supabase';
 import { getAssignmentsByBatch, createAssignment, getCompletionsByAssignment, markSubmission } from '@/lib/supabase';
 import { getBatchStudents } from '@/lib/supabase';
@@ -61,7 +62,7 @@ export default function AssignmentsPage() {
     loadCompletions(assignmentId);
   };
 
-  if (loading) return <Spinner />;
+  if (loading) return <Spinner centered />;
 
   return (
     <div className="page-section">
@@ -69,28 +70,14 @@ export default function AssignmentsPage() {
 
       <Card>
         <CardHeader title="Select Batch" />
-        <div className="flex flex-wrap gap-2">
-          {batches.map((b) => (
-            <button
-              key={b.id}
-              onClick={() => fetchBatchData(b.id)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                selectedBatch === b.id
-                  ? 'bg-[var(--primary)] text-white'
-                  : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:bg-[var(--bg-overlay)]'
-              }`}
-            >
-              {b.name}
-            </button>
-          ))}
-        </div>
+        <BatchSelect batches={batches} value={selectedBatch} onChange={fetchBatchData} />
       </Card>
 
       {selectedBatch && (
         <Card>
           <CardHeader
             title="Assignments"
-            action={<Button size="sm" onClick={() => setShowNew(true)}><Plus size={14} /> New Assignment</Button>}
+            action={<Button size="sm" className="action-button" onClick={() => setShowNew(true)}><Plus size={14} /> New Assignment</Button>}
           />
           {assignments.length === 0 ? (
             <EmptyState icon={<FileText size={32} />} title="No assignments" />
@@ -185,7 +172,7 @@ export default function AssignmentsPage() {
             <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} />
           </div>
           <div className="field">
-            <label className="text-sm font-medium text-[var(--text-primary)]">Assigned Date</label>
+            <label className="text-sm font-medium text-[var(--text-primary)]">Due Date</label>
             <input type="date" value={form.assigned_date} onChange={(e) => setForm({ ...form, assigned_date: e.target.value })} />
           </div>
           <Button onClick={handleCreate}>Create Assignment</Button>

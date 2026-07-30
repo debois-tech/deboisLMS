@@ -58,12 +58,15 @@ export async function getBatchStudents(batchId: string): Promise<(Student & { ma
   }));
 }
 
-export async function addStudentToBatch(studentId: string, batchId: string): Promise<BatchStudentMapping> {
+export async function addStudentToBatch(studentId: string, batchId: string, totalFee = 0): Promise<BatchStudentMapping> {
   const { data } = await supabase
     .from('batch_student_mapping')
     .insert({ student_id: studentId, batch_id: batchId })
     .select()
     .single();
+  await supabase
+    .from('student_fees')
+    .upsert({ student_id: studentId, batch_id: batchId, total_fee: totalFee, paid_amount: 0 }, { onConflict: 'student_id,batch_id', ignoreDuplicates: true });
   return data as BatchStudentMapping;
 }
 

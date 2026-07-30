@@ -11,6 +11,7 @@ import NewStudentPage from '@/pages/students/NewStudentPage';
 import StudentDetailPage from '@/pages/students/StudentDetailPage';
 import TutorsPage from '@/pages/tutors/TutorsPage';
 import NewTutorPage from '@/pages/tutors/NewTutorPage';
+import TutorDetailPage from '@/pages/tutors/TutorDetailPage';
 import AttendancePage from '@/pages/attendance/AttendancePage';
 import FeesPage from '@/pages/fees/FeesPage';
 import AssignmentsPage from '@/pages/assignments/AssignmentsPage';
@@ -32,6 +33,7 @@ export default function App() {
         <Route path="students/:studentId" element={<StudentDetailPage />} />
         <Route path="tutors" element={<TutorsPage />} />
         <Route path="tutors/new" element={<NewTutorPage />} />
+        <Route path="tutors/:tutorId" element={<TutorDetailPage />} />
         <Route path="attendance" element={<AttendancePage />} />
         <Route path="fees" element={<FeesPage />} />
         <Route path="assignments" element={<AssignmentsPage />} />

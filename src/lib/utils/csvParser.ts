@@ -7,6 +7,50 @@ export interface CsvRow {
   attended_minutes?: number;
 }
 
+export interface CsvTable {
+  headers: string[];
+  rows: Record<string, string>[];
+}
+
+function parseCsvLine(line: string): string[] {
+  const values: string[] = [];
+  let value = '';
+  let quoted = false;
+
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+    if (char === '"' && line[i + 1] === '"' && quoted) {
+      value += '"';
+      i += 1;
+    } else if (char === '"') {
+      quoted = !quoted;
+    } else if (char === ',' && !quoted) {
+      values.push(value.trim());
+      value = '';
+    } else {
+      value += char;
+    }
+  }
+  values.push(value.trim());
+  return values;
+}
+
+export function parseCsvTable(text: string): CsvTable {
+  const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/).filter((line) => line.trim());
+  if (lines.length === 0) return { headers: [], rows: [] };
+
+  const headers = parseCsvLine(lines[0]).map((header) => header.trim());
+  const rows = lines.slice(1).map((line) => {
+    const values = parseCsvLine(line);
+    return headers.reduce<Record<string, string>>((row, header, index) => {
+      row[header] = values[index] ?? '';
+      return row;
+    }, {});
+  });
+
+  return { headers, rows };
+}
+
 function parseDuration(raw: string): number {
   if (!raw) return 0;
   let total = 0;

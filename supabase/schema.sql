@@ -19,6 +19,8 @@ create type attendance_status as enum ('present', 'partial', 'absent');
 create type attendance_source as enum ('manual', 'automated');
 create type mapping_status as enum ('active', 'dropped');
 create type submission_channel as enum ('whatsapp', 'other');
+create type fee_status as enum ('due', 'paid');
+create type payment_method as enum ('cash', 'upi', 'bank_transfer', 'other');
 
 -- -----------------------------------------------------------
 -- 2. TUTORS
@@ -154,12 +156,31 @@ create table student_fees (
   batch_id    uuid references batches(id) on delete cascade not null,
   total_fee   numeric not null,
   paid_amount numeric not null default 0,
+  status      fee_status generated always as (
+    case when paid_amount >= total_fee then 'paid'::fee_status else 'due'::fee_status end
+  ) stored,
   updated_at  timestamptz default now(),
   unique (student_id, batch_id)
 );
 
 create index idx_fees_student on student_fees(student_id);
 create index idx_fees_batch   on student_fees(batch_id);
+
+-- Individual payment history. student_fees.paid_amount remains the current total.
+create table fee_payment_logs (
+  id             uuid primary key default gen_random_uuid(),
+  student_fee_id uuid references student_fees(id) on delete cascade not null,
+  student_id     uuid references students(id) on delete cascade not null,
+  batch_id       uuid references batches(id) on delete cascade not null,
+  amount         numeric not null check (amount > 0),
+  payment_date   date not null default current_date,
+  payment_method payment_method default 'other',
+  notes          text,
+  created_at     timestamptz default now()
+);
+
+create index idx_fee_logs_fee on fee_payment_logs(student_fee_id);
+create index idx_fee_logs_batch on fee_payment_logs(batch_id);
 
 -- -----------------------------------------------------------
 -- 11. ASSIGNMENTS (the assignment definition, per batch)

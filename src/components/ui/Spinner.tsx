@@ -1,5 +1,5 @@
-export function Spinner({ size = 20 }: { size?: number }) {
-  return (
+export function Spinner({ size = 20, centered = false }: { size?: number; centered?: boolean }) {
+  const spinner = (
     <svg
       width={size}
       height={size}
@@ -15,6 +15,14 @@ export function Spinner({ size = 20 }: { size?: number }) {
         strokeLinecap="round"
       />
     </svg>
+  );
+
+  if (!centered) return spinner;
+
+  return (
+    <div className="flex min-h-[60vh] items-center justify-center">
+      {spinner}
+    </div>
   );
 }
 
