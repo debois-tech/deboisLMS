@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { NotFound } from '@/components/ui/NotFound';
+import { FormField } from '@/components/ui/FormField';
 import { getBatchById, updateBatch } from '@/lib/supabase';
 import type { Batch } from '@/lib/types';
 
@@ -35,7 +37,7 @@ export default function EditBatchPage() {
   };
 
   if (loading) return <Spinner centered />;
-  if (!form) return <div className="page-section text-[var(--text-muted)]">Batch not found</div>;
+  if (!form) return <NotFound label="Batch" />;
 
   return (
     <div className="page-section narrow">
@@ -43,16 +45,14 @@ export default function EditBatchPage() {
 
       <Card padding="lg">
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="field">
-            <label className="text-sm font-medium text-[var(--text-primary)]">Batch Name *</label>
+          <FormField label="Batch Name" required>
             <input
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               required
             />
-          </div>
-          <div className="field">
-            <label className="text-sm font-medium text-[var(--text-primary)]">Track</label>
+          </FormField>
+          <FormField label="Track">
             <select
               value={form.track ?? ''}
               onChange={(e) => setForm({ ...form, track: e.target.value })}
@@ -61,9 +61,8 @@ export default function EditBatchPage() {
               <option value="DevOps">DevOps</option>
               <option value="AI/ML">AI/ML</option>
             </select>
-          </div>
-          <div className="field">
-            <label className="text-sm font-medium text-[var(--text-primary)]">Status</label>
+          </FormField>
+          <FormField label="Status">
             <select
               value={form.status}
               onChange={(e) => setForm({ ...form, status: e.target.value as Batch['status'] })}
@@ -72,15 +71,14 @@ export default function EditBatchPage() {
               <option value="ongoing">Ongoing</option>
               <option value="completed">Completed</option>
             </select>
-          </div>
-          <div className="field">
-            <label className="text-sm font-medium text-[var(--text-primary)]">Start Date</label>
+          </FormField>
+          <FormField label="Start Date">
             <input
               type="date"
               value={form.start_date ?? ''}
               onChange={(e) => setForm({ ...form, start_date: e.target.value })}
             />
-          </div>
+          </FormField>
           <div className="flex gap-3 pt-2">
             <Button type="submit" loading={saving}>Save Changes</Button>
             <Button variant="ghost" onClick={() => navigate(`/batches/${form.id}`)}>Cancel</Button>

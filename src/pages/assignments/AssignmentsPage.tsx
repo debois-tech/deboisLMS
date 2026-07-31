@@ -7,6 +7,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { BatchSelect } from '@/components/ui/BatchSelect';
+import { FormField } from '@/components/ui/FormField';
 import { getBatches } from '@/lib/supabase';
 import { getAssignmentsByBatch, createAssignment, getCompletionsByAssignment, markSubmission } from '@/lib/supabase';
 import { getBatchStudents } from '@/lib/supabase';
@@ -163,18 +164,15 @@ export default function AssignmentsPage() {
 
       <Modal open={showNew} onClose={() => setShowNew(false)} title="New Assignment">
         <div className="space-y-4">
-          <div className="field">
-            <label className="text-sm font-medium text-[var(--text-primary)]">Title *</label>
+          <FormField label="Title" required>
             <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
-          </div>
-          <div className="field">
-            <label className="text-sm font-medium text-[var(--text-primary)]">Description</label>
+          </FormField>
+          <FormField label="Description">
             <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} />
-          </div>
-          <div className="field">
-            <label className="text-sm font-medium text-[var(--text-primary)]">Due Date</label>
+          </FormField>
+          <FormField label="Due Date">
             <input type="date" value={form.assigned_date} onChange={(e) => setForm({ ...form, assigned_date: e.target.value })} />
-          </div>
+          </FormField>
           <Button onClick={handleCreate}>Create Assignment</Button>
         </div>
       </Modal>

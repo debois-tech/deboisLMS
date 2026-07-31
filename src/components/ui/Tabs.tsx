@@ -29,7 +29,7 @@ export function Tabs({ tabs, defaultValue, onChange, children }: TabsProps) {
               className={clsx(
                 'batch-tab-button flex items-center gap-2 rounded-[var(--radius-sm)] text-sm font-semibold whitespace-nowrap transition-all duration-200',
                 active === tab.value
-                  ? 'bg-[var(--primary)] text-white shadow-[0_2px_8px_rgba(79,70,229,0.3)]'
+                  ? 'bg-[var(--primary)] text-white shadow-[var(--primary-glow-soft)]'
                   : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-overlay)]'
               )}
             >

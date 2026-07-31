@@ -5,6 +5,7 @@ import { Card, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { NotFound } from '@/components/ui/NotFound';
 import { getStudentById, getStudentBatches } from '@/lib/supabase';
 import { getBatchById } from '@/lib/supabase';
 import type { Student, BatchStudentMapping, Batch } from '@/lib/types';
@@ -32,7 +33,7 @@ export default function StudentDetailPage() {
   }, [studentId]);
 
   if (loading) return <Spinner centered />;
-  if (!student) return <div className="page-section text-[var(--text-muted)]">Student not found</div>;
+  if (!student) return <NotFound label="Student" />;
 
   return (
     <div className="page-section">

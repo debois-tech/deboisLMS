@@ -110,9 +110,11 @@ create table uploads (
   lecture_id           uuid references lectures(id) on delete set null,
   sno                  int,
   participant_name_raw text not null,
-  attendance_started   timestamptz,
-  joined_at            timestamptz,
-  attendance_stopped   timestamptz,
+  -- naive wall-clock times (Meet CSV exports "9:30:00 AM"); the calendar date
+  -- always comes from the lecture, so no time zone is stored.
+  attendance_started   timestamp,
+  joined_at            timestamp,
+  attendance_stopped   timestamp,
   attended_duration_raw text,
   attended_minutes     numeric,
   meeting_code         text,

@@ -1,6 +1,7 @@
 export interface CsvRow {
   sno: number;
   participant_name_raw: string;
+  attendance_started?: string;
   joined_at?: string;
   attendance_stopped?: string;
   attended_duration_raw?: string;
@@ -63,6 +64,56 @@ function parseDuration(raw: string): number {
   return total;
 }
 
+/**
+ * Convert a CSV time cell into a value Postgres accepts for a `timestamp`
+ * (without time zone) column, or `null` when it cannot be parsed.
+ *
+ * The Google Meet extension exports time-only values ("9:00:00 AM") which
+ * Postgres rejects outright. When a full date/time is present its wall-clock
+ * components are preserved; otherwise the value is combined with the lecture's
+ * date to form a complete timestamp. The result is always a naive local
+ * `YYYY-MM-DDTHH:MM:SS` (no time zone suffix), safe for both `timestamp` and
+ * `timestamptz` columns.
+ *
+ * @param value  Raw CSV cell (joined/left time).
+ * @param fallbackDate  Lecture date as `YYYY-MM-DD`, used for time-only cells.
+ */
+export function normalizeTimestampForDb(
+  value: string | undefined,
+  fallbackDate?: string,
+): string | null {
+  if (!value || !value.trim()) return null;
+  const trimmed = value.trim();
+
+  const parsed = Date.parse(trimmed);
+  if (!Number.isNaN(parsed)) return toNaiveLocal(new Date(parsed));
+
+  if (fallbackDate) {
+    const match = trimmed.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i);
+    if (match) {
+      let hours = Number(match[1]);
+      const minutes = Number(match[2]);
+      const seconds = match[3] ? Number(match[3]) : 0;
+      const meridiem = match[4]?.toUpperCase();
+      if (meridiem === 'AM' && hours === 12) hours = 0;
+      if (meridiem === 'PM' && hours < 12) hours += 12;
+      const pad = (n: number) => String(n).padStart(2, '0');
+      return `${fallbackDate}T${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+    }
+  }
+
+  return null;
+}
+
+/** Format a Date as naive wall-clock `YYYY-MM-DDTHH:MM:SS` (no time zone). */
+function toNaiveLocal(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return (
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
+    `T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+  );
+}
+
 export function parseCsv(text: string): CsvRow[] {
   const lines = text.trim().split('\n');
   if (lines.length < 2) return [];
@@ -73,6 +124,7 @@ export function parseCsv(text: string): CsvRow[] {
     const c = col.trim().replace(/[()]/g, '').replace(/\s+/g, '_');
     if (c.includes('s_no') || c === 'sno' || c === 's.no' || c === 'sno' || c.includes('serial')) colMap.sno = i;
     if (c.includes('participant') || c.includes('name')) colMap.name = i;
+    if (c.includes('started') || c.includes('start')) colMap.started = i;
     if (c.includes('joined') || c.includes('join')) colMap.joined = i;
     if (c.includes('stopped') || c.includes('stop')) colMap.stopped = i;
     if (c.includes('duration')) colMap.duration = i;
@@ -87,6 +139,7 @@ export function parseCsv(text: string): CsvRow[] {
     rows.push({
       sno: i,
       participant_name_raw: name,
+      attendance_started: cols[colMap.started]?.trim() ?? undefined,
       joined_at: cols[colMap.joined]?.trim() ?? undefined,
       attendance_stopped: cols[colMap.stopped]?.trim() ?? undefined,
       attended_duration_raw: cols[colMap.duration]?.trim() ?? undefined,

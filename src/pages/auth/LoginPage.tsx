@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { InlineAlert } from '@/components/ui/InlineAlert';
+import { FormField } from '@/components/ui/FormField';
 import { useAuth } from '@/lib/context/AuthContext';
 import { supabase } from '@/lib/supabase/client';
 
@@ -55,13 +57,8 @@ export default function LoginPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {error && (
-            <div className="p-3 rounded-[var(--radius-md)] bg-red-500/10 border border-red-500/20 text-sm text-red-400">
-              {error}
-            </div>
-          )}
-          <div className="field">
-            <label className="text-sm font-medium text-[var(--text-primary)]">Email</label>
+          {error && <InlineAlert>{error}</InlineAlert>}
+          <FormField label="Email">
             <input
               type="email"
               value={email}
@@ -69,9 +66,8 @@ export default function LoginPage() {
               placeholder="admin@deboistech.com"
               required
             />
-          </div>
-          <div className="field">
-            <label className="text-sm font-medium text-[var(--text-primary)]">Password</label>
+          </FormField>
+          <FormField label="Password">
             <input
               type="password"
               value={password}
@@ -79,7 +75,7 @@ export default function LoginPage() {
               placeholder="Enter password"
               required
             />
-          </div>
+          </FormField>
           <Button type="submit" loading={loading} className="w-full">
             Sign In
           </Button>

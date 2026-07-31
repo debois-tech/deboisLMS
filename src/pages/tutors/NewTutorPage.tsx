@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { FormField } from '@/components/ui/FormField';
 import { createTutor } from '@/lib/supabase';
 
 export default function NewTutorPage() {
@@ -26,19 +27,16 @@ export default function NewTutorPage() {
       <PageHeader title="Add Tutor" />
       <Card padding="lg">
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="field">
-            <label className="text-sm font-medium text-[var(--text-primary)]">Full Name *</label>
+          <FormField label="Full Name" required>
             <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-          </div>
+          </FormField>
           <div className="grid grid-cols-2 gap-4">
-            <div className="field">
-              <label className="text-sm font-medium text-[var(--text-primary)]">Email</label>
+            <FormField label="Email">
               <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-            </div>
-            <div className="field">
-              <label className="text-sm font-medium text-[var(--text-primary)]">Phone</label>
+            </FormField>
+            <FormField label="Phone">
               <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-            </div>
+            </FormField>
           </div>
           <div className="flex gap-3 pt-2">
             <Button className="action-button" type="submit" loading={loading}>Add Tutor</Button>

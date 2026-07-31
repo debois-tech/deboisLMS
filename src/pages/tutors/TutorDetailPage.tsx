@@ -5,6 +5,7 @@ import { Card, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { NotFound } from '@/components/ui/NotFound';
 import { getTutorById, getTutorBatches, getBatchById } from '@/lib/supabase';
 import type { Tutor, TutorBatchMapping, Batch } from '@/lib/types';
 import { formatDate } from '@/lib/utils/format';
@@ -31,7 +32,7 @@ export default function TutorDetailPage() {
   }, [tutorId]);
 
   if (loading) return <Spinner centered />;
-  if (!tutor) return <div className="page-section text-[var(--text-muted)]">Tutor not found</div>;
+  if (!tutor) return <NotFound label="Tutor" />;
 
   return (
     <div className="page-section">

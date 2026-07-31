@@ -9,7 +9,7 @@ import { StatCard } from '@/components/ui/StatCard';
 import { getDashboardStats, getRecentActivity, type DashboardStats, type RecentActivity } from '@/lib/supabase';
 import { getBatches } from '@/lib/supabase';
 import type { Batch } from '@/lib/types';
-import { timeAgo } from '@/lib/utils/format';
+import { timeAgo, formatCurrency } from '@/lib/utils/format';
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -41,8 +41,8 @@ export default function DashboardPage() {
         <StatCard label="Active Batches" value={stats?.active_batches ?? 0} icon={Layers} color="#10b981" />
         <StatCard label="Total Students" value={stats?.total_students ?? 0} icon={Users} color="#8b5cf6" />
         <StatCard label="Pending Approval" value={stats?.pending_attendance ?? 0} icon={ClipboardCheck} color="#f59e0b" />
-        <StatCard label="Fees Collected" value={`₹${(stats?.total_fees_collected ?? 0).toLocaleString()}`} icon={DollarSign} color="#10b981" />
-        <StatCard label="Outstanding" value={`₹${(stats?.total_fees_outstanding ?? 0).toLocaleString()}`} icon={DollarSign} color="#ef4444" />
+        <StatCard label="Fees Collected" value={formatCurrency(stats?.total_fees_collected ?? 0)} icon={DollarSign} color="#10b981" />
+        <StatCard label="Outstanding" value={formatCurrency(stats?.total_fees_outstanding ?? 0)} icon={DollarSign} color="#ef4444" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

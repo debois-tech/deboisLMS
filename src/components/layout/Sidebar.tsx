@@ -92,7 +92,7 @@ export function Sidebar({ open, collapsed, onClose, onToggle }: SidebarProps) {
                    'flex items-center rounded-[var(--radius-md)] text-sm font-medium transition-all duration-200 h-10 w-full',
           collapsed ? 'justify-center' : 'gap-2.5 pl-2',
                   active
-                    ? 'bg-[var(--primary)] text-white shadow-[0_0_16px_rgba(79,70,229,0.35)]'
+                    ? 'bg-[var(--primary)] text-white shadow-[var(--primary-glow)]'
                     : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]'
                 )}
               >
@@ -111,7 +111,7 @@ export function Sidebar({ open, collapsed, onClose, onToggle }: SidebarProps) {
             onClick={onClose}
             title={collapsed ? 'New Batch' : undefined}
             className={clsx(
-              'flex items-center rounded-[var(--radius-md)] bg-[var(--primary)] hover:bg-[var(--primary-light)] text-white text-sm font-semibold transition-all duration-200 shadow-[0_0_16px_rgba(79,70,229,0.3)] h-10 w-full',
+              'flex items-center rounded-[var(--radius-md)] bg-[var(--primary)] hover:bg-[var(--primary-light)] text-white text-sm font-semibold transition-all duration-200 shadow-[var(--primary-glow)] h-10 w-full',
               collapsed ? 'justify-center' : 'gap-2.5 pl-2'
             )}
           >

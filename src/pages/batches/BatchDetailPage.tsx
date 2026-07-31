@@ -1,23 +1,44 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Edit3, Users, GraduationCap, Layers, ClipboardCheck, DollarSign, FileText, Plus, Trash2, CheckCircle, XCircle, ChevronRight, CalendarDays, History } from 'lucide-react';
+import { ArrowLeft, Edit3, Users, GraduationCap, Layers, ClipboardCheck, FileText, Plus, Trash2, CheckCircle, XCircle, ChevronRight, CalendarDays, History, Upload, FileSpreadsheet } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Tabs } from '@/components/ui/Tabs';
 import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { InlineAlert } from '@/components/ui/InlineAlert';
+import { NotFound } from '@/components/ui/NotFound';
 import { Modal } from '@/components/ui/Modal';
+import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import { StudentMultiSelect } from '@/components/ui/StudentMultiSelect';
+import { FormField } from '@/components/ui/FormField';
+import { AttendanceRecordsTable } from '@/components/attendance/AttendanceRecordsTable';
 import { getBatchById } from '@/lib/supabase';
-import { getBatchStudents, getStudentById, addStudentToBatch, removeStudentFromBatch, getStudents } from '@/lib/supabase';
+import { getBatchStudents, addStudentToBatch, removeStudentFromBatch, getStudents, createOrReuseStudent } from '@/lib/supabase';
 import { getBatchTutors, assignTutorToBatch, removeTutorFromBatch, getTutors } from '@/lib/supabase';
 import { getLecturesByBatch, createLecture, deleteLecture } from '@/lib/supabase';
-import { getAttendanceByLecture, approveAttendance, bulkApproveAttendance } from '@/lib/supabase';
+import { getAttendanceByLecture, setAttendanceApproved, bulkApproveAttendance } from '@/lib/supabase';
 import { getFeesByBatch, updateFeeTotal, getFeePaymentLogs, addFeePaymentLog } from '@/lib/supabase';
 import { getAssignmentsByBatch, getCompletionsByAssignment, markSubmission, createAssignment } from '@/lib/supabase';
 import type { Batch, Student, Tutor, Lecture, AttendanceRecord, StudentFee, FeePaymentLog, Assignment, AssignmentCompletion, BatchStudentMapping, TutorBatchMapping, PaymentMethod } from '@/lib/types';
-import { formatDate } from '@/lib/utils/format';
+import { formatDate, formatCurrency } from '@/lib/utils/format';
+import { parseCsvTable } from '@/lib/utils/csvParser';
+
+// Add future student fields here. Matching uses headers, not column positions.
+const STUDENT_IMPORT_FIELDS = [
+  { key: 'name', aliases: ['name', 'full name', 'student name'] },
+  { key: 'phone', aliases: ['phone', 'ph no', 'phone number', 'mobile'] },
+  { key: 'email', aliases: ['email', 'email address'] },
+  { key: 'github_url', aliases: ['github', 'github link', 'github url', 'githublink'] },
+  { key: 'linkedin_url', aliases: ['linkedin', 'linkedin link', 'linkedin url', 'linkedinlink'] },
+] as const;
+
+const normalizeCsvHeader = (header: string) => header.toLowerCase().replace(/[^a-z0-9]/g, '');
+const getImportValue = (row: Record<string, string>, aliases: readonly string[]) => {
+  const entry = Object.entries(row).find(([header]) => aliases.some((alias) => normalizeCsvHeader(header) === normalizeCsvHeader(alias)));
+  return entry?.[1]?.trim() || undefined;
+};
 
 export default function BatchDetailPage() {
   const { batchId } = useParams();
@@ -35,7 +56,7 @@ export default function BatchDetailPage() {
   }, [batchId]);
 
   if (loading) return <Spinner centered />;
-  if (!batch) return <div className="page-section text-[var(--text-muted)]">Batch not found</div>;
+  if (!batch) return <NotFound label="Batch" />;
 
   return (
     <div className="page-section">
@@ -120,6 +141,13 @@ function StudentsTab({ batchId }: { batchId: string }) {
   const [showAdd, setShowAdd] = useState(false);
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
   const [totalFee, setTotalFee] = useState('');
+  const [showImport, setShowImport] = useState(false);
+  const [importRows, setImportRows] = useState<Record<string, string>[]>([]);
+  const [importHeaders, setImportHeaders] = useState<string[]>([]);
+  const [importError, setImportError] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [importFee, setImportFee] = useState('');
+  const importFileRef = useRef<HTMLInputElement>(null);
 
   const fetchStudents = () => {
     getBatchStudents(batchId).then(setStudents);
@@ -144,11 +172,67 @@ function StudentsTab({ batchId }: { batchId: string }) {
 
   const available = allStudents.filter((s) => !students.some((e) => e.id === s.id));
 
+  const resetImport = () => {
+    setShowImport(false);
+    setImportRows([]);
+    setImportHeaders([]);
+    setImportError('');
+    setImporting(false);
+    setImportFee('');
+    if (importFileRef.current) importFileRef.current.value = '';
+  };
+
+  const handleImportFile = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const table = parseCsvTable(String(reader.result ?? ''));
+      const rows = table.rows.filter((row) => getImportValue(row, ['name']));
+      setImportHeaders(table.headers);
+      setImportRows(rows);
+      setImportError(!table.headers.length || !rows.length ? 'CSV must include a Name column and at least one student row.' : '');
+    };
+    reader.readAsText(file);
+  };
+
+  const handleImport = async () => {
+    if (!importRows.length) return;
+    setImporting(true);
+    setImportError('');
+    const fee = Number(importFee) || 0;
+    try {
+      const [enrolledStudents] = await Promise.all([getBatchStudents(batchId)]);
+      await Promise.all(importRows.map(async (row) => {
+        const input = STUDENT_IMPORT_FIELDS.reduce<Record<string, string>>((student, field) => {
+          const value = getImportValue(row, field.aliases);
+          if (value) student[field.key] = value;
+          return student;
+        }, {});
+        const student = await createOrReuseStudent(input as Omit<Student, 'id' | 'created_at'>);
+        const alreadyEnrolled = enrolledStudents.some((e) => e.id === student.id);
+        if (!alreadyEnrolled) {
+          await addStudentToBatch(student.id, batchId, fee);
+        }
+      }));
+      fetchStudents();
+      resetImport();
+    } catch (error: any) {
+      setImportError(error?.message ?? 'Import failed. Some rows may already have been imported.');
+      setImporting(false);
+    }
+  };
+
   return (
     <Card>
       <CardHeader
         title="Enrolled Students"
-        action={<Button size="sm" className="action-button" onClick={() => setShowAdd(true)}><Plus size={14} /> Add Students</Button>}
+        action={
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button size="sm" className="action-button-import" variant="secondary" onClick={() => setShowImport(true)}><Upload size={14} />Import</Button>
+            <Button size="sm" className="action-button" onClick={() => setShowAdd(true)}><Plus size={14} /> Add Students</Button>
+          </div>
+        }
       />
       {students.length === 0 ? (
         <EmptyState icon={<Users size={32} />} title="No students enrolled" />
@@ -173,15 +257,45 @@ function StudentsTab({ batchId }: { batchId: string }) {
 
       <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Add Student">
         <div className="space-y-4">
-          <div className="field">
-            <label className="text-sm font-medium text-[var(--text-primary)]">Select Students</label>
+          <FormField label="Select Students">
             <StudentMultiSelect students={available} value={selectedStudents} onChange={setSelectedStudents} />
-          </div>
-          <div className="field">
-            <label className="text-sm font-medium text-[var(--text-primary)]">Total Fee per Student (₹)</label>
+          </FormField>
+          <FormField label="Total Fee per Student (₹)">
             <input type="number" min="0" value={totalFee} onChange={(event) => setTotalFee(event.target.value)} placeholder="0" />
-          </div>
+          </FormField>
           <Button className="action-button-wide" onClick={handleAdd} disabled={!selectedStudents.length}>Add Selected to Batch</Button>
+        </div>
+      </Modal>
+
+      <Modal open={showImport} onClose={resetImport} title="Import Students" size="lg">
+        <div className="space-y-4">
+          <div className="rounded-[var(--radius-md)] bg-[var(--bg-elevated)] text-sm text-[var(--text-secondary)]" style={{ padding: '1rem 1.25rem' }}>
+            <p className="font-semibold text-[var(--text-primary)]">Upload CSV!</p>
+          </div>
+          <label className="flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-[var(--radius-md)] border border-dashed border-[var(--border-strong)] bg-[var(--bg-elevated)] text-sm font-semibold text-[var(--text-secondary)] hover:border-[var(--primary)] hover:text-[var(--text-primary)]" style={{ padding: '0.75rem 1rem' }}>
+            <FileSpreadsheet size={16} /> Choose CSV file
+            <input ref={importFileRef} type="file" accept=".csv,text/csv" onChange={handleImportFile} className="hidden" />
+          </label>
+          {importHeaders.length > 0 && importRows.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-[var(--text-primary)]">Preview ({importRows.length} students)</p>
+              <div className="overflow-x-auto rounded-[var(--radius-md)] border border-[var(--border)]">
+                <table className="w-full min-w-[36rem] text-sm">
+                  <thead><tr className="border-b border-[var(--border)] bg-[var(--bg-elevated)]">{importHeaders.map((header) => <th key={header} className="whitespace-nowrap text-left font-medium text-[var(--text-muted)]" style={{ padding: '0.75rem 1rem' }}>{header}</th>)}</tr></thead>
+                  <tbody>{importRows.slice(0, 5).map((row, index) => <tr key={index} className="border-b border-[var(--border)] last:border-0">{importHeaders.map((header) => <td key={header} className="max-w-[14rem] truncate text-[var(--text-secondary)]" style={{ padding: '0.75rem 1rem' }}>{row[header] || '—'}</td>)}</tr>)}</tbody>
+                </table>
+              </div>
+              {importRows.length > 5 && <p className="text-xs text-[var(--text-muted)]">Showing first 5 rows. All {importRows.length} valid rows will be imported.</p>}
+            </div>
+          )}
+          <FormField label="Total Fee per Student (₹)">
+            <input type="number" min="0" value={importFee} onChange={(event) => setImportFee(event.target.value)} placeholder="0" />
+          </FormField>
+          {importError && <InlineAlert>{importError}</InlineAlert>}
+          <div className="flex justify-end gap-3">
+            <Button variant="ghost" onClick={resetImport} disabled={importing}>Cancel</Button>
+            <Button className="action-button-import" onClick={handleImport} loading={importing} disabled={!importRows.length}>Import</Button>
+          </div>
         </div>
       </Modal>
     </Card>
@@ -242,15 +356,14 @@ function TutorsTab({ batchId }: { batchId: string }) {
 
       <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Assign Tutor">
         <div className="space-y-4">
-          <div className="field">
-            <label className="text-sm font-medium text-[var(--text-primary)]">Select Tutor</label>
+          <FormField label="Select Tutor">
             <select value={selectedTutor} onChange={(e) => setSelectedTutor(e.target.value)}>
               <option value="">Choose a tutor...</option>
               {available.map((t) => (
                 <option key={t.id} value={t.id}>{t.name}</option>
               ))}
             </select>
-          </div>
+          </FormField>
           <Button className="action-button" onClick={handleAdd} disabled={!selectedTutor}>Assign</Button>
         </div>
       </Modal>
@@ -298,18 +411,15 @@ function LecturesTab({ batchId }: { batchId: string }) {
 
       <Modal open={showNew} onClose={() => setShowNew(false)} title="New Lecture">
         <div className="space-y-4">
-          <div className="field">
-            <label className="text-sm font-medium text-[var(--text-primary)]">Date *</label>
+          <FormField label="Date" required>
             <input type="date" value={form.lecture_date} onChange={(e) => setForm({ ...form, lecture_date: e.target.value })} required />
-          </div>
-          <div className="field">
-            <label className="text-sm font-medium text-[var(--text-primary)]">Meeting Code</label>
+          </FormField>
+          <FormField label="Meeting Code">
             <input value={form.meeting_code} onChange={(e) => setForm({ ...form, meeting_code: e.target.value })} placeholder="e.g. meet-xyz" />
-          </div>
-          <div className="field">
-            <label className="text-sm font-medium text-[var(--text-primary)]">Duration (minutes)</label>
+          </FormField>
+          <FormField label="Duration (minutes)">
             <input type="number" value={form.scheduled_duration_minutes} onChange={(e) => setForm({ ...form, scheduled_duration_minutes: Number(e.target.value) })} />
-          </div>
+          </FormField>
           <Button onClick={handleCreate}>Create Lecture</Button>
         </div>
       </Modal>
@@ -333,9 +443,16 @@ function AttendanceTab({ batchId }: { batchId: string }) {
     setLoading(false);
   };
 
-  const handleApprove = async (id: string) => {
-    await approveAttendance(id);
-    if (selectedLecture) loadAttendance(selectedLecture);
+  const handleToggleApproved = async (id: string, approved: boolean) => {
+    setRecords((prev) => prev.map((r) => (r.id === id ? { ...r, approved } : r)));
+    try {
+      const updated = await setAttendanceApproved(id, approved);
+      if (updated) {
+        setRecords((prev) => prev.map((r) => (r.id === id ? updated : r)));
+      }
+    } catch {
+      setRecords((prev) => prev.map((r) => (r.id === id ? { ...r, approved: !approved } : r)));
+    }
   };
 
   const handleBulkApprove = async () => {
@@ -350,30 +467,34 @@ function AttendanceTab({ batchId }: { batchId: string }) {
     <div className="space-y-4">
       <Card>
         <CardHeader title="Select Lecture" />
-        <div className="batch-list">
-          {lectures.map((l) => (
-            <button
-              key={l.id}
-              onClick={() => loadAttendance(l.id)}
-              className={`batch-list-item flex w-full items-center justify-between gap-4 text-left transition-colors ${
-                selectedLecture === l.id
-                  ? 'border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--text-primary)]'
-                  : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]'
-              }`}
-            >
-              <span className="flex min-w-0 items-center gap-3">
-                <CalendarDays size={18} className="shrink-0 text-[var(--primary)]" />
-                <span className="min-w-0">
-                  <span className="block text-sm font-semibold text-[var(--text-primary)]">{formatDate(l.lecture_date)}</span>
-                  <span className="mt-1 block text-xs text-[var(--text-muted)]">
-                    {l.session_type ?? 'Lecture'}{l.meeting_code ? ` • ${l.meeting_code}` : ''}
+        {lectures.length === 0 ? (
+          <EmptyState icon={<Layers size={32} />} title="No lectures yet" />
+        ) : (
+          <div className="batch-list">
+            {lectures.map((l) => (
+              <button
+                key={l.id}
+                onClick={() => loadAttendance(l.id)}
+                className={`batch-list-item flex w-full items-center justify-between gap-4 text-left transition-colors ${
+                  selectedLecture === l.id
+                    ? 'border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--text-primary)]'
+                    : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]'
+                }`}
+              >
+                <span className="flex min-w-0 items-center gap-3">
+                  <CalendarDays size={18} className="shrink-0 text-[var(--primary)]" />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-[var(--text-primary)]">{formatDate(l.lecture_date)}</span>
+                    <span className="mt-1 block text-xs text-[var(--text-muted)]">
+                      {l.session_type ?? 'Lecture'}{l.meeting_code ? ` • ${l.meeting_code}` : ''}
+                    </span>
                   </span>
                 </span>
-              </span>
-              <ChevronRight size={18} className="shrink-0 text-[var(--text-muted)]" />
-            </button>
-          ))}
-        </div>
+                <ChevronRight size={18} className="shrink-0 text-[var(--text-muted)]" />
+              </button>
+            ))}
+          </div>
+        )}
       </Card>
 
       <Modal
@@ -381,7 +502,7 @@ function AttendanceTab({ batchId }: { batchId: string }) {
         onClose={() => { setSelectedLecture(null); setRecords([]); }}
         title="Attendance Records"
         description={selectedLectureData ? `${formatDate(selectedLectureData.lecture_date)}${selectedLectureData.meeting_code ? ` • ${selectedLectureData.meeting_code}` : ''}` : undefined}
-        size="lg"
+        size="xl"
       >
         <div className="space-y-4">
           {records.some((r) => !r.approved) && (
@@ -396,32 +517,7 @@ function AttendanceTab({ batchId }: { batchId: string }) {
           ) : records.length === 0 ? (
             <EmptyState icon={<ClipboardCheck size={32} />} title="No attendance records" description="Upload a CSV or add records manually" />
           ) : (
-            <div className="batch-list">
-              {records.map((r) => (
-                <div key={r.id} className="batch-list-item flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <Badge variant={r.status === 'present' ? 'success' : r.status === 'partial' ? 'warning' : 'danger'}>
-                      {r.status}
-                    </Badge>
-                    <div>
-                      <p className="text-sm font-medium text-[var(--text-primary)]">Student #{r.student_id.slice(-4)}</p>
-                      <p className="text-xs text-[var(--text-muted)]">
-                        {r.total_attended_minutes != null ? `${r.total_attended_minutes} min` : '—'} • {r.source}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {!r.approved ? (
-                      <button onClick={() => handleApprove(r.id)} className="text-emerald-400 hover:text-emerald-300 p-1" title="Approve">
-                        <CheckCircle size={16} />
-                      </button>
-                    ) : (
-                      <span className="text-xs text-emerald-400 flex items-center gap-1"><CheckCircle size={12} /> Approved</span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+            <AttendanceRecordsTable records={records} onToggleApproved={handleToggleApproved} maxHeight="28rem" />
           )}
         </div>
       </Modal>
@@ -437,6 +533,7 @@ function FinanceTab({ batchId }: { batchId: string }) {
   const [loggingFee, setLoggingFee] = useState<StudentFee | null>(null);
   const [paymentLogs, setPaymentLogs] = useState<FeePaymentLog[]>([]);
   const [logForm, setLogForm] = useState({ amount: '', payment_date: new Date().toISOString().slice(0, 10), payment_method: 'other' as PaymentMethod, notes: '' });
+  const [logging, setLogging] = useState(false);
 
   const fetchFees = () => {
     Promise.all([getFeesByBatch(batchId), getBatchStudents(batchId)]).then(([f, s]) => {
@@ -463,66 +560,79 @@ function FinanceTab({ batchId }: { batchId: string }) {
 
   const handleAddPaymentLog = async () => {
     if (!loggingFee || !logForm.amount || Number(logForm.amount) <= 0 || !logForm.payment_date) return;
-    await addFeePaymentLog({
+    setLogging(true);
+    const result = await addFeePaymentLog({
       student_fee_id: loggingFee.id,
       amount: Number(logForm.amount),
       payment_date: logForm.payment_date,
       payment_method: logForm.payment_method,
       notes: logForm.notes,
     });
-    setLoggingFee(null);
-    fetchFees();
+    if (result) {
+      setLoggingFee(result.fee);
+      setPaymentLogs((prev) => [result.log, ...prev]);
+      setFees((prev) => prev.map((f) => (f.id === result.fee.id ? result.fee : f)));
+      setLogForm({ amount: '', payment_date: new Date().toISOString().slice(0, 10), payment_method: 'other', notes: '' });
+    }
+    setLogging(false);
   };
 
   const totalFee = fees.reduce((s, f) => s + f.total_fee, 0);
   const totalPaid = fees.reduce((s, f) => s + f.paid_amount, 0);
+  const loggingRemaining = loggingFee ? Math.max(0, loggingFee.total_fee - loggingFee.paid_amount) : 0;
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-4">
-        <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Total Fees</p><p className="text-lg font-bold text-[var(--text-primary)] mt-1">₹{totalFee.toLocaleString()}</p></Card>
-        <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Collected</p><p className="text-lg font-bold text-emerald-400 mt-1">₹{totalPaid.toLocaleString()}</p></Card>
-        <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Outstanding</p><p className="text-lg font-bold text-red-400 mt-1">₹{(totalFee - totalPaid).toLocaleString()}</p></Card>
+        <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Total Fees</p><p className="text-lg font-bold text-[var(--text-primary)] mt-1">{formatCurrency(totalFee)}</p></Card>
+        <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Collected</p><p className="text-lg font-bold text-emerald-400 mt-1">{formatCurrency(totalPaid)}</p></Card>
+        <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Outstanding</p><p className="text-lg font-bold text-red-400 mt-1">{formatCurrency(totalFee - totalPaid)}</p></Card>
       </div>
 
       <Card>
         <CardHeader title="Per-Student Fees" />
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--border)]">
-                <th className="text-left p-3 text-[var(--text-muted)] font-medium">Student</th>
-                <th className="text-left p-3 text-[var(--text-muted)] font-medium">Total Fee</th>
-                <th className="text-left p-3 text-[var(--text-muted)] font-medium">Paid</th>
-                <th className="text-left p-3 text-[var(--text-muted)] font-medium">Remaining</th>
-                <th className="text-left p-3 text-[var(--text-muted)] font-medium">Action</th>
-              </tr>
-            </thead>
-            <tbody>
+        {fees.length === 0 ? (
+          <EmptyState icon={<ClipboardCheck size={32} />} title="No fee records" />
+        ) : (
+          <Table maxHeight="28rem">
+            <THead>
+              <TR>
+                <TH>Student</TH>
+                <TH>Total Fee</TH>
+                <TH>Paid</TH>
+                <TH>Remaining</TH>
+                <TH>Status</TH>
+                <TH>Action</TH>
+              </TR>
+            </THead>
+            <TBody>
               {fees.map((fee) => {
                 const student = students.find((s) => s.id === fee.student_id);
                 const remaining = fee.total_fee - fee.paid_amount;
                 return (
-                  <tr key={fee.id} className="border-b border-[var(--border)] hover:bg-[var(--bg-elevated)]/50">
-                    <td className="p-3 text-[var(--text-primary)]">{student?.name ?? 'Unknown'}</td>
-                    <td className="p-3 text-[var(--text-primary)]">₹{fee.total_fee.toLocaleString()}</td>
-                    <td className="p-3">
+                  <TR key={fee.id}>
+                    <TD className="font-medium">{student?.name ?? 'Unknown'}</TD>
+                    <TD>
                       {editingId === fee.id ? (
-                        <div className="flex gap-2">
+                        <div className="flex items-center gap-2">
                           <input type="number" value={editValue} onChange={(e) => setEditValue(e.target.value)} className="w-24" autoFocus />
                           <button onClick={() => handleSavePayment(fee.id)} className="text-emerald-400 hover:text-emerald-300"><CheckCircle size={16} /></button>
                           <button onClick={() => setEditingId(null)} className="text-[var(--text-muted)] hover:text-red-400"><XCircle size={16} /></button>
                         </div>
                       ) : (
-                        <span className="text-[var(--text-primary)]">₹{fee.paid_amount.toLocaleString()}</span>
+                        formatCurrency(fee.total_fee)
                       )}
-                    </td>
-                    <td className="p-3">
+                    </TD>
+                    <TD>{formatCurrency(fee.paid_amount)}</TD>
+                    <TD>
                       <span className={remaining > 0 ? 'text-red-400' : 'text-emerald-400'}>
-                        {remaining > 0 ? `₹${remaining.toLocaleString()}` : 'Paid'}
+                        {remaining > 0 ? formatCurrency(remaining) : '—'}
                       </span>
-                    </td>
-                    <td className="p-3">
+                    </TD>
+                    <TD>
+                      {remaining > 0 ? <Badge variant="warning">Due</Badge> : <Badge variant="success">Paid</Badge>}
+                    </TD>
+                    <TD>
                       <div className="flex flex-wrap gap-2">
                         <Button size="sm" className="action-button" onClick={() => openPaymentLogs(fee)}>
                           <Plus size={14} /> Log Payment
@@ -531,42 +641,55 @@ function FinanceTab({ batchId }: { batchId: string }) {
                           Update Total
                         </Button>
                       </div>
-                    </td>
-                  </tr>
+                    </TD>
+                  </TR>
                 );
               })}
-            </tbody>
-          </table>
-        </div>
+            </TBody>
+          </Table>
+        )}
       </Card>
 
-      <Modal open={!!loggingFee} onClose={() => setLoggingFee(null)} title="Payment Log" size="lg">
+      <Modal open={!!loggingFee} onClose={() => setLoggingFee(null)} title="Payment Log" size="xl">
         {loggingFee && (
           <div className="space-y-5">
-            <div className="rounded-[var(--radius-md)] bg-[var(--bg-elevated)] text-sm text-[var(--text-secondary)]" style={{ padding: '1rem 1.25rem' }}>
-              <p className="font-semibold text-[var(--text-primary)]">{students.find((student) => student.id === loggingFee.student_id)?.name ?? 'Student'}</p>
-              <p className="mt-1">Current paid total: ₹{loggingFee.paid_amount.toLocaleString()}</p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="rounded-[var(--radius-md)] bg-[var(--bg-elevated)] p-4">
+                <p className="text-xs text-[var(--text-muted)]">Student</p>
+                <p className="mt-1 font-semibold text-[var(--text-primary)]">{students.find((s) => s.id === loggingFee.student_id)?.name ?? 'Student'}</p>
+              </div>
+              <div className="rounded-[var(--radius-md)] bg-[var(--bg-elevated)] p-4">
+                <p className="text-xs text-[var(--text-muted)]">Paid</p>
+                <p className="mt-1 font-semibold text-emerald-400">{formatCurrency(loggingFee.paid_amount)}</p>
+              </div>
+              <div className="rounded-[var(--radius-md)] bg-[var(--bg-elevated)] p-4">
+                <p className="text-xs text-[var(--text-muted)]">Remaining</p>
+                <p className={`mt-1 font-semibold ${loggingRemaining > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                  {loggingRemaining > 0 ? formatCurrency(loggingRemaining) : 'Paid in full'}
+                </p>
+              </div>
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="field">
-                <label className="text-sm font-medium text-[var(--text-primary)]">Amount (₹) *</label>
+              <FormField label="Amount (₹)" required>
                 <input type="number" min="1" value={logForm.amount} onChange={(event) => setLogForm({ ...logForm, amount: event.target.value })} />
-              </div>
-              <div className="field">
-                <label className="text-sm font-medium text-[var(--text-primary)]">Payment Date *</label>
+              </FormField>
+              <FormField label="Payment Date" required>
                 <input type="date" value={logForm.payment_date} onChange={(event) => setLogForm({ ...logForm, payment_date: event.target.value })} />
-              </div>
+              </FormField>
             </div>
-            <div className="field">
-              <label className="text-sm font-medium text-[var(--text-primary)]">Payment Method</label>
-              <select value={logForm.payment_method} onChange={(event) => setLogForm({ ...logForm, payment_method: event.target.value as PaymentMethod })}><option value="cash">Cash</option><option value="upi">UPI</option><option value="bank_transfer">Bank transfer</option><option value="other">Other</option></select>
-            </div>
-            <div className="field">
-              <label className="text-sm font-medium text-[var(--text-primary)]">Notes</label>
+            <FormField label="Payment Method">
+              <select value={logForm.payment_method} onChange={(event) => setLogForm({ ...logForm, payment_method: event.target.value as PaymentMethod })}>
+                <option value="cash">Cash</option>
+                <option value="upi">UPI</option>
+                <option value="bank_transfer">Bank transfer</option>
+                <option value="other">Other</option>
+              </select>
+            </FormField>
+            <FormField label="Notes">
               <textarea value={logForm.notes} onChange={(event) => setLogForm({ ...logForm, notes: event.target.value })} placeholder="Optional note" />
-            </div>
+            </FormField>
             <div className="flex justify-end">
-              <Button className="action-button" onClick={handleAddPaymentLog} disabled={!logForm.amount || Number(logForm.amount) <= 0}>
+              <Button className="action-button" onClick={handleAddPaymentLog} loading={logging} disabled={!logForm.amount || Number(logForm.amount) <= 0}>
                 <Plus size={14} /> Add Log
               </Button>
             </div>
@@ -577,16 +700,26 @@ function FinanceTab({ batchId }: { batchId: string }) {
               {paymentLogs.length === 0 ? (
                 <p className="text-sm text-[var(--text-muted)]">No payment logs yet.</p>
               ) : (
-                <div className="space-y-2">
-                  {paymentLogs.map((log) => (
-                    <div key={log.id} className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-md)] bg-[var(--bg-elevated)] text-sm" style={{ padding: '0.75rem 1rem' }}>
-                      <span className="font-semibold text-emerald-400">₹{Number(log.amount).toLocaleString()}</span>
-                      <span className="text-[var(--text-secondary)]">{log.payment_date}</span>
-                      <span className="text-[var(--text-muted)]">{log.payment_method || '—'}</span>
-                      <span className="text-[var(--text-muted)]">{log.notes || ''}</span>
-                    </div>
-                  ))}
-                </div>
+                <Table maxHeight="16rem">
+                  <THead>
+                    <TR>
+                      <TH>Amount</TH>
+                      <TH>Date</TH>
+                      <TH>Method</TH>
+                      <TH>Notes</TH>
+                    </TR>
+                  </THead>
+                  <TBody>
+                    {paymentLogs.map((log) => (
+                      <TR key={log.id}>
+                        <TD className="font-semibold text-emerald-400">{formatCurrency(Number(log.amount))}</TD>
+                        <TD className="cell-secondary">{log.payment_date}</TD>
+                        <TD className="cell-muted capitalize">{(log.payment_method ?? '—').replace('_', ' ')}</TD>
+                        <TD className="cell-muted">{log.notes || '—'}</TD>
+                      </TR>
+                    ))}
+                  </TBody>
+                </Table>
               )}
             </div>
           </div>
@@ -695,18 +828,15 @@ function AssignmentsTab({ batchId }: { batchId: string }) {
 
       <Modal open={showNew} onClose={() => setShowNew(false)} title="New Assignment">
         <div className="space-y-4">
-          <div className="field">
-            <label className="text-sm font-medium text-[var(--text-primary)]">Title *</label>
+          <FormField label="Title" required>
             <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
-          </div>
-          <div className="field">
-            <label className="text-sm font-medium text-[var(--text-primary)]">Description</label>
+          </FormField>
+          <FormField label="Description">
             <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} />
-          </div>
-          <div className="field">
-            <label className="text-sm font-medium text-[var(--text-primary)]">Due Date</label>
+          </FormField>
+          <FormField label="Due Date">
             <input type="date" value={form.assigned_date} onChange={(e) => setForm({ ...form, assigned_date: e.target.value })} />
-          </div>
+          </FormField>
           <Button onClick={handleCreate}>Create Assignment</Button>
         </div>
       </Modal>

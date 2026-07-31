@@ -32,7 +32,7 @@ export function Badge({ children, variant = 'default', size = 'md', dot }: Badge
     <span
       className={clsx(
         'inline-flex items-center gap-1.5 rounded-full font-medium',
-        size === 'sm' ? 'px-2.5 py-1.5 text-[11px]' : size === 'md' ? 'px-3.5 py-2 text-xs' : 'px-4 py-2.5 text-sm',
+        size === 'sm' ? 'px-2.5 py-1 text-[11px]' : size === 'md' ? 'px-3 py-1.5 text-xs' : 'px-3.5 py-2 text-sm',
         variants[variant]
       )}
     >

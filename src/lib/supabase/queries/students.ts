@@ -27,6 +27,28 @@ export async function createStudent(input: Omit<Student, 'id' | 'created_at'>): 
   return data as Student;
 }
 
+const normalizePhone = (phone: string | undefined | null) => (phone ?? '').replace(/\D/g, '');
+
+export async function findExistingStudent(input: { name?: string; phone?: string; email?: string }): Promise<Student | undefined> {
+  const { data } = await supabase.from('students').select('*');
+  const students = (data ?? []) as Student[];
+  const phone = normalizePhone(input.phone);
+  const email = input.email?.trim().toLowerCase();
+  const name = input.name?.trim().toLowerCase();
+  return students.find((s) => {
+    if (phone && s.phone && normalizePhone(s.phone) === phone) return true;
+    if (email && s.email && s.email.trim().toLowerCase() === email) return true;
+    if (name && s.name && s.name.trim().toLowerCase() === name) return true;
+    return false;
+  });
+}
+
+export async function createOrReuseStudent(input: Omit<Student, 'id' | 'created_at'>): Promise<Student> {
+  const existing = await findExistingStudent(input);
+  if (existing) return existing;
+  return createStudent(input);
+}
+
 export async function updateStudent(id: string, input: Partial<Student>): Promise<Student | undefined> {
   const { data } = await supabase
     .from('students')

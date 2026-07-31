@@ -14,7 +14,7 @@ const base =
 
 const variants = {
   primary:
-    'bg-[var(--primary)] hover:bg-[var(--primary-light)] text-white shadow-[0_0_20px_rgba(79,70,229,0.35)] hover:shadow-[0_0_28px_rgba(99,102,241,0.5)] active:scale-[0.98]',
+    'bg-[var(--primary)] hover:bg-[var(--primary-light)] text-white shadow-[var(--primary-glow)] hover:shadow-[var(--primary-glow-strong)] active:scale-[0.98]',
   secondary:
     'bg-[var(--bg-elevated)] hover:bg-[var(--bg-overlay)] text-[var(--text-primary)] border border-[var(--border)] hover:border-[var(--border-strong)] active:scale-[0.98]',
   danger:

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { FormField } from '@/components/ui/FormField';
 import { createBatch } from '@/lib/supabase';
 
 export default function NewBatchPage() {
@@ -32,17 +33,15 @@ export default function NewBatchPage() {
 
       <Card padding="lg">
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="field">
-            <label className="text-sm font-medium text-[var(--text-primary)]">Batch Name *</label>
+          <FormField label="Batch Name" required>
             <input
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               placeholder="e.g. DevOps Batch 4"
               required
             />
-          </div>
-          <div className="field">
-            <label className="text-sm font-medium text-[var(--text-primary)]">Track</label>
+          </FormField>
+          <FormField label="Track">
             <select
               value={form.track}
               onChange={(e) => setForm({ ...form, track: e.target.value })}
@@ -53,9 +52,8 @@ export default function NewBatchPage() {
               <option value="Full Stack">Full Stack</option>
               <option value="Cloud">Cloud</option>
             </select>
-          </div>
-          <div className="field">
-            <label className="text-sm font-medium text-[var(--text-primary)]">Status</label>
+          </FormField>
+          <FormField label="Status">
             <select
               value={form.status}
               onChange={(e) => setForm({ ...form, status: e.target.value as typeof form.status })}
@@ -64,15 +62,14 @@ export default function NewBatchPage() {
               <option value="ongoing">Ongoing</option>
               <option value="completed">Completed</option>
             </select>
-          </div>
-          <div className="field">
-            <label className="text-sm font-medium text-[var(--text-primary)]">Start Date</label>
+          </FormField>
+          <FormField label="Start Date">
             <input
               type="date"
               value={form.start_date}
               onChange={(e) => setForm({ ...form, start_date: e.target.value })}
             />
-          </div>
+          </FormField>
           <div className="flex gap-3 pt-2">
             <Button type="submit" loading={loading}>Create Batch</Button>
             <Button variant="ghost" onClick={() => navigate('/batches')}>Cancel</Button>

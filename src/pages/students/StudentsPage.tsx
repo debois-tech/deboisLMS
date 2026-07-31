@@ -5,10 +5,11 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { InlineAlert } from '@/components/ui/InlineAlert';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Avatar } from '@/components/ui/Avatar';
 import { Modal } from '@/components/ui/Modal';
-import { getStudents, createStudent } from '@/lib/supabase';
+import { getStudents, createOrReuseStudent } from '@/lib/supabase';
 import type { Student } from '@/lib/types';
 import { parseCsvTable } from '@/lib/utils/csvParser';
 
@@ -78,7 +79,7 @@ export default function StudentsPage() {
           if (value) student[field.key] = value;
           return student;
         }, {});
-        return createStudent(input as Omit<Student, 'id' | 'created_at'>);
+        return createOrReuseStudent(input as Omit<Student, 'id' | 'created_at'>);
       }));
       const updated = await getStudents();
       setStudents(updated);
@@ -138,7 +139,7 @@ export default function StudentsPage() {
               {importRows.length > 5 && <p className="text-xs text-[var(--text-muted)]">Showing first 5 rows. All {importRows.length} valid rows will be imported.</p>}
             </div>
           )}
-          {importError && <p className="rounded-[var(--radius-md)] border border-red-500/20 bg-red-500/10 text-sm text-red-400" style={{ padding: '0.75rem 1rem' }}>{importError}</p>}
+          {importError && <InlineAlert>{importError}</InlineAlert>}
           <div className="flex justify-end gap-3">
             <Button variant="ghost" onClick={resetImport} disabled={importing}>Cancel</Button>
             <Button className="action-button-import" onClick={handleImport} loading={importing} disabled={!importRows.length}>Import</Button>

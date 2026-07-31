@@ -68,7 +68,7 @@ export async function addFeePaymentLog(input: {
   payment_date: string;
   payment_method?: PaymentMethod;
   notes?: string;
-}): Promise<FeePaymentLog | undefined> {
+}): Promise<{ log: FeePaymentLog; fee: StudentFee } | undefined> {
   const { data: fee } = await supabase
     .from('student_fees')
     .select('student_id, batch_id, paid_amount')
@@ -83,11 +83,19 @@ export async function addFeePaymentLog(input: {
     .single();
   if (!log) return undefined;
 
-  await supabase
+  const nextPaid = Number(fee.paid_amount) + input.amount;
+  const { data: updatedFee } = await supabase
     .from('student_fees')
-    .update({ paid_amount: Number(fee.paid_amount) + input.amount, updated_at: new Date().toISOString() })
-    .eq('id', input.student_fee_id);
-  return log as FeePaymentLog;
+    .update({ paid_amount: nextPaid, updated_at: new Date().toISOString() })
+    .eq('id', input.student_fee_id)
+    .select()
+    .single();
+  if (!updatedFee) return undefined;
+
+  return {
+    log: log as FeePaymentLog,
+    fee: updatedFee as StudentFee,
+  };
 }
 
 export async function getBatchFeeSummary(): Promise<BatchFeeSummary[]> {

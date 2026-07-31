@@ -1,19 +1,20 @@
 import { useState, useEffect, useRef } from 'react';
-import { ClipboardCheck, Upload, CheckCircle, AlertCircle, FileText, Loader2 } from 'lucide-react';
+import { ClipboardCheck, Upload, CheckCircle, Loader2 } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { BatchSelect } from '@/components/ui/BatchSelect';
 import { LectureSelect } from '@/components/ui/LectureSelect';
+import { FormField } from '@/components/ui/FormField';
+import { AttendanceRecordsTable } from '@/components/attendance/AttendanceRecordsTable';
 import { getLecturesByBatch, createLecture } from '@/lib/supabase';
-import { getAttendanceByLecture, insertUploadRows, processAttendance, approveAttendance, bulkApproveAttendance } from '@/lib/supabase';
+import { getAttendanceByLecture, insertUploadRows, processAttendance, setAttendanceApproved, bulkApproveAttendance } from '@/lib/supabase';
+import type { ProcessingReport } from '@/lib/supabase';
 import { getBatches } from '@/lib/supabase';
 import type { Batch, Lecture, AttendanceRecord } from '@/lib/types';
-import { formatDate } from '@/lib/utils/format';
 import { parseCsv } from '@/lib/utils/csvParser';
 import type { CsvRow } from '@/lib/utils/csvParser';
 
@@ -35,6 +36,7 @@ export default function AttendancePage() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [lastReport, setLastReport] = useState<ProcessingReport | null>(null);
 
   useEffect(() => {
     getBatches().then(setBatches);
@@ -82,7 +84,7 @@ export default function AttendancePage() {
 
     try {
       const lecture = lectures.find((l) => l.id === selectedLecture);
-      await insertUploadRows(selectedLecture, lecture?.meeting_code ?? '', csvRows);
+      await insertUploadRows(selectedLecture, lecture?.meeting_code ?? '', lecture?.lecture_date, csvRows);
       setStatusMessage({ type: 'success', text: `${csvRows.length} rows uploaded successfully` });
     } catch (err: any) {
       setStatusMessage({ type: 'error', text: err?.message ?? 'Upload failed' });
@@ -91,26 +93,40 @@ export default function AttendancePage() {
   };
 
   const handleConvert = async () => {
-    if (!selectedLecture || !selectedBatch) return;
+    if (!selectedLecture) return;
     setProcessing(true);
     setStatusMessage(null);
+    setLastReport(null);
 
     try {
-      const result = await processAttendance(selectedLecture, selectedBatch);
-      setRecords(result);
+      const report = await processAttendance(selectedLecture);
+      setLastReport(report);
+      loadRecords(selectedLecture);
       setCsvRows([]);
       setCsvFileName('');
       if (fileRef.current) fileRef.current.value = '';
-      setStatusMessage({ type: 'success', text: `Converted — ${result.length} attendance records created` });
+
+      const parts = [`Converted — ${report.attendanceInserted} attendance records created`];
+      if (report.tutorsDetected.length > 0) parts.push(`${report.tutorsDetected.length} tutor(s) detected`);
+      if (report.duplicateRowsIgnored > 0) parts.push(`${report.duplicateRowsIgnored} duplicate rows merged`);
+      if (report.unmatched.length > 0) parts.push(`${report.unmatched.length} participant(s) need review`);
+      setStatusMessage({ type: 'success', text: parts.join(' · ') });
     } catch (err: any) {
       setStatusMessage({ type: 'error', text: err?.message ?? 'Conversion failed' });
     }
     setProcessing(false);
   };
 
-  const handleApprove = async (id: string) => {
-    await approveAttendance(id);
-    if (selectedLecture) loadRecords(selectedLecture);
+  const handleToggleApproved = async (id: string, approved: boolean) => {
+    setRecords((prev) => prev.map((r) => (r.id === id ? { ...r, approved } : r)));
+    try {
+      const updated = await setAttendanceApproved(id, approved);
+      if (updated) {
+        setRecords((prev) => prev.map((r) => (r.id === id ? updated : r)));
+      }
+    } catch {
+      setRecords((prev) => prev.map((r) => (r.id === id ? { ...r, approved: !approved } : r)));
+    }
   };
 
   const handleBulkApprove = async () => {
@@ -134,15 +150,11 @@ export default function AttendancePage() {
     getLecturesByBatch(selectedBatch).then(setLectures);
   };
 
-  const hasUploaded = csvRows.length === 0 && selectedLecture && records.length === 0;
-  const hasConverted = records.length > 0;
   const showUploadAction = csvRows.length > 0 && selectedLecture && !uploading && !processing;
 
   return (
     <div className="page-section">
-      <PageHeader
-        title="Attendance"
-      />
+      <PageHeader title="Attendance" />
 
       <Card>
         <CardHeader title="1. Select Batch" />
@@ -199,6 +211,32 @@ export default function AttendancePage() {
                 </div>
               )}
 
+              {lastReport && (lastReport.unmatched.length > 0 || lastReport.tutorsDetected.length > 0 || lastReport.geminiUnavailableReason) && (
+                <div className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-elevated)]/50 border border-[var(--border)] text-sm">
+                  {lastReport.geminiUnavailableReason && (
+                    <p className="mb-2 text-xs text-amber-500">
+                      AI name matching unavailable — {lastReport.geminiUnavailableReason}
+                    </p>
+                  )}
+                  {lastReport.unmatched.length > 0 && (
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-bold uppercase tracking-widest text-amber-500">Needs manual review</p>
+                      {lastReport.unmatched.map((u) => (
+                        <p key={u.name} className="text-[var(--text-secondary)]">
+                          <span className="font-semibold text-[var(--text-primary)]">{u.name}</span>
+                          <span className="text-[var(--text-muted)]"> — {u.reason}</span>
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                  {lastReport.tutorsDetected.length > 0 && (
+                    <p className="mt-2 text-xs text-[var(--text-muted)]">
+                      Tutor(s) detected (excluded from attendance): {lastReport.tutorsDetected.join(', ')}
+                    </p>
+                  )}
+                </div>
+              )}
+
               {showUploadAction && (
                 <div className="flex gap-3">
                   <Button onClick={handleUpload} loading={uploading}>
@@ -235,32 +273,7 @@ export default function AttendancePage() {
             ) : records.length === 0 ? (
               <EmptyState icon={<ClipboardCheck size={32} />} title="No attendance records" description="Upload a CSV and click Convert & Show to generate records" />
             ) : (
-              <div className="space-y-2">
-                {records.map((r) => (
-                  <div key={r.id} className="flex items-center justify-between p-3 rounded-[var(--radius-md)] bg-[var(--bg-elevated)]/50">
-                    <div className="flex items-center gap-3">
-                      <Badge variant={r.status === 'present' ? 'success' : r.status === 'partial' ? 'warning' : 'danger'}>
-                        {r.status}
-                      </Badge>
-                      <div>
-                        <p className="text-sm font-medium text-[var(--text-primary)]">Student #{r.student_id.slice(-4)}</p>
-                        <p className="text-xs text-[var(--text-muted)]">
-                          {r.total_attended_minutes != null ? `${r.total_attended_minutes} min` : '—'} • {r.source}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {!r.approved ? (
-                        <button onClick={() => handleApprove(r.id)} className="text-emerald-400 hover:text-emerald-300 p-1" title="Approve">
-                          <CheckCircle size={18} />
-                        </button>
-                      ) : (
-                        <span className="text-xs text-emerald-400 flex items-center gap-1"><CheckCircle size={14} /> Approved</span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <AttendanceRecordsTable records={records} onToggleApproved={handleToggleApproved} maxHeight="28rem" />
             )}
           </Card>
         </>
@@ -268,14 +281,12 @@ export default function AttendancePage() {
 
       <Modal open={showNewLecture} onClose={() => setShowNewLecture(false)} title="New Lecture">
         <div className="space-y-4">
-          <div className="field">
-            <label className="text-sm font-medium text-[var(--text-primary)]">Date *</label>
+          <FormField label="Date" required>
             <input type="date" value={newLectureDate} onChange={(e) => setNewLectureDate(e.target.value)} required />
-          </div>
-          <div className="field">
-            <label className="text-sm font-medium text-[var(--text-primary)]">Meeting Code</label>
+          </FormField>
+          <FormField label="Meeting Code">
             <input value={newLectureMeeting} onChange={(e) => setNewLectureMeeting(e.target.value)} placeholder="e.g. meet-xyz" />
-          </div>
+          </FormField>
           <Button onClick={handleCreateLecture}>Create Lecture</Button>
         </div>
       </Modal>
