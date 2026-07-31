@@ -190,6 +190,10 @@ select option {
   color: var(--text-secondary);
 }
 
+.payment-log-form .field {
+  gap: 0.5rem;
+}
+
 .field-hint {
   font-size: 0.75rem;
   color: var(--text-muted);

@@ -80,15 +80,17 @@ export async function getBatchStudents(batchId: string): Promise<(Student & { ma
   }));
 }
 
-export async function addStudentToBatch(studentId: string, batchId: string, totalFee = 0): Promise<BatchStudentMapping> {
+export async function addStudentToBatch(studentId: string, batchId: string, totalFee: number): Promise<BatchStudentMapping> {
   const { data } = await supabase
     .from('batch_student_mapping')
     .insert({ student_id: studentId, batch_id: batchId })
     .select()
     .single();
+  // Re-adding a previously removed student leaves a stale student_fees row behind (removeStudentFromBatch
+  // only deletes the mapping) — upsert without ignoreDuplicates so the fee just entered always overwrites it.
   await supabase
     .from('student_fees')
-    .upsert({ student_id: studentId, batch_id: batchId, total_fee: totalFee, paid_amount: 0 }, { onConflict: 'student_id,batch_id', ignoreDuplicates: true });
+    .upsert({ student_id: studentId, batch_id: batchId, total_fee: totalFee, paid_amount: 0 }, { onConflict: 'student_id,batch_id' });
   return data as BatchStudentMapping;
 }
 

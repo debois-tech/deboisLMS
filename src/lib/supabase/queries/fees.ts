@@ -43,16 +43,6 @@ export async function updateFeePayment(id: string, paidAmount: number): Promise<
   return data as StudentFee | undefined;
 }
 
-export async function updateFeeTotal(id: string, totalFee: number): Promise<StudentFee | undefined> {
-  const { data } = await supabase
-    .from('student_fees')
-    .update({ total_fee: totalFee, updated_at: new Date().toISOString() })
-    .eq('id', id)
-    .select()
-    .single();
-  return data as StudentFee | undefined;
-}
-
 export async function getFeePaymentLogs(studentFeeId: string): Promise<FeePaymentLog[]> {
   const { data } = await supabase
     .from('fee_payment_logs')
@@ -103,4 +93,22 @@ export async function getBatchFeeSummary(): Promise<BatchFeeSummary[]> {
     .from('batch_fee_summary')
     .select('*');
   return (data ?? []) as BatchFeeSummary[];
+}
+
+export async function getFeesByStudent(studentId: string): Promise<StudentFee[]> {
+  const { data } = await supabase
+    .from('student_fees')
+    .select('*')
+    .eq('student_id', studentId)
+    .order('updated_at', { ascending: false });
+  return (data ?? []) as StudentFee[];
+}
+
+export async function getFeePaymentLogsByStudent(studentId: string): Promise<FeePaymentLog[]> {
+  const { data } = await supabase
+    .from('fee_payment_logs')
+    .select('*')
+    .eq('student_id', studentId)
+    .order('payment_date', { ascending: false });
+  return (data ?? []) as FeePaymentLog[];
 }

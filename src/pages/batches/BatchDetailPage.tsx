@@ -19,7 +19,7 @@ import { getBatchStudents, addStudentToBatch, removeStudentFromBatch, getStudent
 import { getBatchTutors, assignTutorToBatch, removeTutorFromBatch, getTutors } from '@/lib/supabase';
 import { getLecturesByBatch, createLecture, deleteLecture } from '@/lib/supabase';
 import { getAttendanceByLecture, setAttendanceApproved, bulkApproveAttendance } from '@/lib/supabase';
-import { getFeesByBatch, updateFeeTotal, getFeePaymentLogs, addFeePaymentLog } from '@/lib/supabase';
+import { getFeesByBatch, getFeePaymentLogs, addFeePaymentLog } from '@/lib/supabase';
 import { getAssignmentsByBatch, getCompletionsByAssignment, markSubmission, createAssignment } from '@/lib/supabase';
 import type { Batch, Student, Tutor, Lecture, AttendanceRecord, StudentFee, FeePaymentLog, Assignment, AssignmentCompletion, BatchStudentMapping, TutorBatchMapping, PaymentMethod } from '@/lib/types';
 import { formatDate, formatCurrency } from '@/lib/utils/format';
@@ -157,8 +157,8 @@ function StudentsTab({ batchId }: { batchId: string }) {
   useEffect(() => { fetchStudents(); }, [batchId]);
 
   const handleAdd = async () => {
-    if (!selectedStudents.length) return;
-    await Promise.all(selectedStudents.map((studentId) => addStudentToBatch(studentId, batchId, Number(totalFee) || 0)));
+    if (!selectedStudents.length || !totalFee || Number(totalFee) <= 0) return;
+    await Promise.all(selectedStudents.map((studentId) => addStudentToBatch(studentId, batchId, Number(totalFee))));
     setSelectedStudents([]);
     setTotalFee('');
     setShowAdd(false);
@@ -200,7 +200,12 @@ function StudentsTab({ batchId }: { batchId: string }) {
     if (!importRows.length) return;
     setImporting(true);
     setImportError('');
-    const fee = Number(importFee) || 0;
+    if (!importFee || Number(importFee) <= 0) {
+      setImportError('Total Fee per Student is required to import.');
+      setImporting(false);
+      return;
+    }
+    const fee = Number(importFee);
     try {
       const [enrolledStudents] = await Promise.all([getBatchStudents(batchId)]);
       await Promise.all(importRows.map(async (row) => {
@@ -260,10 +265,10 @@ function StudentsTab({ batchId }: { batchId: string }) {
           <FormField label="Select Students">
             <StudentMultiSelect students={available} value={selectedStudents} onChange={setSelectedStudents} />
           </FormField>
-          <FormField label="Total Fee per Student (₹)">
-            <input type="number" min="0" value={totalFee} onChange={(event) => setTotalFee(event.target.value)} placeholder="0" />
+          <FormField label="Total Fee per Student (₹)" required>
+            <input type="number" min="1" value={totalFee} onChange={(event) => setTotalFee(event.target.value)} placeholder="e.g. 15000" required />
           </FormField>
-          <Button className="action-button-wide" onClick={handleAdd} disabled={!selectedStudents.length}>Add Selected to Batch</Button>
+          <Button className="action-button-wide" onClick={handleAdd} disabled={!selectedStudents.length || !totalFee || Number(totalFee) <= 0}>Add Selected to Batch</Button>
         </div>
       </Modal>
 
@@ -288,13 +293,13 @@ function StudentsTab({ batchId }: { batchId: string }) {
               {importRows.length > 5 && <p className="text-xs text-[var(--text-muted)]">Showing first 5 rows. All {importRows.length} valid rows will be imported.</p>}
             </div>
           )}
-          <FormField label="Total Fee per Student (₹)">
-            <input type="number" min="0" value={importFee} onChange={(event) => setImportFee(event.target.value)} placeholder="0" />
+          <FormField label="Total Fee per Student (₹)" required>
+            <input type="number" min="1" value={importFee} onChange={(event) => setImportFee(event.target.value)} placeholder="e.g. 15000" required />
           </FormField>
           {importError && <InlineAlert>{importError}</InlineAlert>}
           <div className="flex justify-end gap-3">
             <Button variant="ghost" onClick={resetImport} disabled={importing}>Cancel</Button>
-            <Button className="action-button-import" onClick={handleImport} loading={importing} disabled={!importRows.length}>Import</Button>
+            <Button className="action-button-import" onClick={handleImport} loading={importing} disabled={!importRows.length || !importFee || Number(importFee) <= 0}>Import</Button>
           </div>
         </div>
       </Modal>
@@ -528,8 +533,6 @@ function AttendanceTab({ batchId }: { batchId: string }) {
 function FinanceTab({ batchId }: { batchId: string }) {
   const [fees, setFees] = useState<StudentFee[]>([]);
   const [students, setStudents] = useState<(Student & { mapping: BatchStudentMapping })[]>([]);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState('');
   const [loggingFee, setLoggingFee] = useState<StudentFee | null>(null);
   const [paymentLogs, setPaymentLogs] = useState<FeePaymentLog[]>([]);
   const [logForm, setLogForm] = useState({ amount: '', payment_date: new Date().toISOString().slice(0, 10), payment_method: 'other' as PaymentMethod, notes: '' });
@@ -543,14 +546,6 @@ function FinanceTab({ batchId }: { batchId: string }) {
   };
 
   useEffect(() => { fetchFees(); }, [batchId]);
-
-  const handleSavePayment = async (feeId: string) => {
-    const val = Number(editValue);
-    if (isNaN(val)) return;
-    await updateFeeTotal(feeId, val);
-    setEditingId(null);
-    fetchFees();
-  };
 
   const openPaymentLogs = async (fee: StudentFee) => {
     setLoggingFee(fee);
@@ -611,18 +606,12 @@ function FinanceTab({ batchId }: { batchId: string }) {
                 const remaining = fee.total_fee - fee.paid_amount;
                 return (
                   <TR key={fee.id}>
-                    <TD className="font-medium">{student?.name ?? 'Unknown'}</TD>
-                    <TD>
-                      {editingId === fee.id ? (
-                        <div className="flex items-center gap-2">
-                          <input type="number" value={editValue} onChange={(e) => setEditValue(e.target.value)} className="w-24" autoFocus />
-                          <button onClick={() => handleSavePayment(fee.id)} className="text-emerald-400 hover:text-emerald-300"><CheckCircle size={16} /></button>
-                          <button onClick={() => setEditingId(null)} className="text-[var(--text-muted)] hover:text-red-400"><XCircle size={16} /></button>
-                        </div>
-                      ) : (
-                        formatCurrency(fee.total_fee)
-                      )}
+                    <TD className="font-medium">
+                      <Link to={`/students/${fee.student_id}`} className="text-[var(--text-primary)] hover:underline">
+                        {student?.name ?? 'Unknown'}
+                      </Link>
                     </TD>
+                    <TD>{formatCurrency(fee.total_fee)}</TD>
                     <TD>{formatCurrency(fee.paid_amount)}</TD>
                     <TD>
                       <span className={remaining > 0 ? 'text-red-400' : 'text-emerald-400'}>
@@ -633,14 +622,9 @@ function FinanceTab({ batchId }: { batchId: string }) {
                       {remaining > 0 ? <Badge variant="warning">Due</Badge> : <Badge variant="success">Paid</Badge>}
                     </TD>
                     <TD>
-                      <div className="flex flex-wrap gap-2">
-                        <Button size="sm" className="action-button" onClick={() => openPaymentLogs(fee)}>
-                          <Plus size={14} /> Log Payment
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={() => { setEditingId(fee.id); setEditValue(String(fee.total_fee)); }}>
-                          Update Total
-                        </Button>
-                      </div>
+                      <Button size="sm" className="action-button" onClick={() => openPaymentLogs(fee)}>
+                        <Plus size={14} /> Log Payment
+                      </Button>
                     </TD>
                   </TR>
                 );
@@ -652,49 +636,55 @@ function FinanceTab({ batchId }: { batchId: string }) {
 
       <Modal open={!!loggingFee} onClose={() => setLoggingFee(null)} title="Payment Log" size="xl">
         {loggingFee && (
-          <div className="space-y-5">
+          <div className="space-y-6">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div className="rounded-[var(--radius-md)] bg-[var(--bg-elevated)] p-4">
                 <p className="text-xs text-[var(--text-muted)]">Student</p>
-                <p className="mt-1 font-semibold text-[var(--text-primary)]">{students.find((s) => s.id === loggingFee.student_id)?.name ?? 'Student'}</p>
+                <p className="mt-1.5 font-semibold text-[var(--text-primary)]">{students.find((s) => s.id === loggingFee.student_id)?.name ?? 'Student'}</p>
               </div>
               <div className="rounded-[var(--radius-md)] bg-[var(--bg-elevated)] p-4">
                 <p className="text-xs text-[var(--text-muted)]">Paid</p>
-                <p className="mt-1 font-semibold text-emerald-400">{formatCurrency(loggingFee.paid_amount)}</p>
+                <p className="mt-1.5 font-semibold text-emerald-400">{formatCurrency(loggingFee.paid_amount)}</p>
               </div>
               <div className="rounded-[var(--radius-md)] bg-[var(--bg-elevated)] p-4">
                 <p className="text-xs text-[var(--text-muted)]">Remaining</p>
-                <p className={`mt-1 font-semibold ${loggingRemaining > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                <p className={`mt-1.5 font-semibold ${loggingRemaining > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
                   {loggingRemaining > 0 ? formatCurrency(loggingRemaining) : 'Paid in full'}
                 </p>
               </div>
             </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <FormField label="Amount (₹)" required>
-                <input type="number" min="1" value={logForm.amount} onChange={(event) => setLogForm({ ...logForm, amount: event.target.value })} />
+
+            <div className="payment-log-form space-y-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <FormField label="Amount (₹)" required>
+                  <input type="number" min="1" value={logForm.amount} onChange={(event) => setLogForm({ ...logForm, amount: event.target.value })} />
+                </FormField>
+                <FormField label="Payment Date" required>
+                  <input type="date" value={logForm.payment_date} onChange={(event) => setLogForm({ ...logForm, payment_date: event.target.value })} />
+                </FormField>
+              </div>
+              <FormField label="Payment Method">
+                <select value={logForm.payment_method} onChange={(event) => setLogForm({ ...logForm, payment_method: event.target.value as PaymentMethod })}>
+                  <option value="cash">Cash</option>
+                  <option value="upi">UPI</option>
+                  <option value="bank_transfer">Bank transfer</option>
+                  <option value="other">Other</option>
+                </select>
               </FormField>
-              <FormField label="Payment Date" required>
-                <input type="date" value={logForm.payment_date} onChange={(event) => setLogForm({ ...logForm, payment_date: event.target.value })} />
+              <FormField label="Notes">
+                <textarea value={logForm.notes} onChange={(event) => setLogForm({ ...logForm, notes: event.target.value })} placeholder="Optional note" />
               </FormField>
+              <div className="flex justify-end">
+                <Button className="action-button" onClick={handleAddPaymentLog} loading={logging} disabled={!logForm.amount || Number(logForm.amount) <= 0}>
+                  <Plus size={14} /> Add Log
+                </Button>
+              </div>
             </div>
-            <FormField label="Payment Method">
-              <select value={logForm.payment_method} onChange={(event) => setLogForm({ ...logForm, payment_method: event.target.value as PaymentMethod })}>
-                <option value="cash">Cash</option>
-                <option value="upi">UPI</option>
-                <option value="bank_transfer">Bank transfer</option>
-                <option value="other">Other</option>
-              </select>
-            </FormField>
-            <FormField label="Notes">
-              <textarea value={logForm.notes} onChange={(event) => setLogForm({ ...logForm, notes: event.target.value })} placeholder="Optional note" />
-            </FormField>
-            <div className="flex justify-end">
-              <Button className="action-button" onClick={handleAddPaymentLog} loading={logging} disabled={!logForm.amount || Number(logForm.amount) <= 0}>
-                <Plus size={14} /> Add Log
-              </Button>
-            </div>
+
+            <hr className="divider m-0" />
+
             <div>
-              <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
+              <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
                 <History size={15} /> Previous Payments
               </div>
               {paymentLogs.length === 0 ? (

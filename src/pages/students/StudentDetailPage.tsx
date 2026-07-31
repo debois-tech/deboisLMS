@@ -1,39 +1,73 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Mail, Phone, Layers, CalendarDays } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, Layers, CalendarDays, Wallet, Clock, History } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NotFound } from '@/components/ui/NotFound';
-import { getStudentById, getStudentBatches } from '@/lib/supabase';
-import { getBatchById } from '@/lib/supabase';
-import type { Student, BatchStudentMapping, Batch } from '@/lib/types';
-import { formatDate } from '@/lib/utils/format';
+import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
+import { getStudentById, getStudentBatches, getBatchById, getFeesByStudent, getLecturesByBatch, getFeePaymentLogsByStudent } from '@/lib/supabase';
+import type { Student, BatchStudentMapping, Batch, StudentFee, Lecture, FeePaymentLog } from '@/lib/types';
+import { formatDate, formatCurrency } from '@/lib/utils/format';
 
 export default function StudentDetailPage() {
   const { studentId } = useParams();
   const [student, setStudent] = useState<Student | null>(null);
   const [batchMappings, setBatchMappings] = useState<(BatchStudentMapping & { batch?: Batch })[]>([]);
+  const [currentFee, setCurrentFee] = useState<StudentFee | null>(null);
+  const [nextLecture, setNextLecture] = useState<Lecture | null>(null);
+  const [paymentLogs, setPaymentLogs] = useState<FeePaymentLog[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!studentId) return;
-    Promise.all([getStudentById(studentId), getStudentBatches(studentId)]).then(async ([s, mappings]) => {
-      setStudent(s ?? null);
-      const withBatches = await Promise.all(
-        mappings.map(async (m) => {
-          const batch = await getBatchById(m.batch_id);
-          return { ...m, batch };
-        })
-      );
-      setBatchMappings(withBatches);
-      setLoading(false);
-    });
+    Promise.all([getStudentById(studentId), getStudentBatches(studentId), getFeePaymentLogsByStudent(studentId)]).then(
+      async ([s, mappings, logs]) => {
+        setStudent(s ?? null);
+        setPaymentLogs(logs);
+        const withBatches = await Promise.all(
+          mappings.map(async (m) => {
+            const batch = await getBatchById(m.batch_id);
+            return { ...m, batch };
+          })
+        );
+        setBatchMappings(withBatches);
+
+        // Multiple active batches are possible; the most recently joined one is treated as "current".
+        const activeMappings = withBatches.filter((m) => m.status === 'active');
+        const currentMapping = activeMappings.sort(
+          (a, b) => new Date(b.joined_at).getTime() - new Date(a.joined_at).getTime()
+        )[0];
+
+        if (currentMapping) {
+          const [fees, lectures] = await Promise.all([
+            getFeesByStudent(studentId),
+            getLecturesByBatch(currentMapping.batch_id),
+          ]);
+          setCurrentFee(fees.find((f) => f.batch_id === currentMapping.batch_id) ?? null);
+
+          const today = new Date().toISOString().slice(0, 10);
+          const upcoming = lectures
+            .filter((l) => l.lecture_date.slice(0, 10) >= today)
+            .sort((a, b) => a.lecture_date.localeCompare(b.lecture_date))[0];
+          setNextLecture(upcoming ?? null);
+        }
+
+        setLoading(false);
+      }
+    );
   }, [studentId]);
 
   if (loading) return <Spinner centered />;
   if (!student) return <NotFound label="Student" />;
+
+  const activeMappings = batchMappings.filter((m) => m.status === 'active');
+  const currentBatch = activeMappings.sort(
+    (a, b) => new Date(b.joined_at).getTime() - new Date(a.joined_at).getTime()
+  )[0]?.batch;
+
+  const batchNameById = new Map(batchMappings.map((m) => [m.batch_id, m.batch?.name ?? m.batch_id]));
 
   return (
     <div className="page-section">
@@ -69,6 +103,45 @@ export default function StudentDetailPage() {
         </div>
       </Card>
 
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <Card padding="sm">
+          <p className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><Layers size={13} /> Current Batch</p>
+          {currentBatch ? (
+            <Link to={`/batches/${currentBatch.id}`} className="mt-1.5 flex items-center gap-2 text-lg font-bold text-[var(--text-primary)] hover:underline">
+              {currentBatch.name}
+            </Link>
+          ) : (
+            <p className="mt-1.5 text-sm text-[var(--text-muted)]">Not enrolled in any batch</p>
+          )}
+        </Card>
+        <Card padding="sm">
+          <p className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><Wallet size={13} /> Total Payment</p>
+          {currentBatch && currentFee ? (
+            <div className="mt-1.5">
+              <p className="text-lg font-bold text-[var(--text-primary)]">{formatCurrency(currentFee.paid_amount)} <span className="text-sm font-normal text-[var(--text-muted)]">/ {formatCurrency(currentFee.total_fee)}</span></p>
+              <p className={`mt-0.5 text-xs ${currentFee.total_fee - currentFee.paid_amount > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                {currentFee.total_fee - currentFee.paid_amount > 0 ? `${formatCurrency(currentFee.total_fee - currentFee.paid_amount)} due` : 'Paid in full'}
+              </p>
+            </div>
+          ) : (
+            <p className="mt-1.5 text-sm text-[var(--text-muted)]">—</p>
+          )}
+        </Card>
+        <Card padding="sm">
+          <p className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><Clock size={13} /> Next Lecture</p>
+          {currentBatch && nextLecture ? (
+            <div className="mt-1.5">
+              <p className="text-lg font-bold text-[var(--text-primary)]">{formatDate(nextLecture.lecture_date)}</p>
+              <p className="mt-0.5 text-xs text-[var(--text-muted)]">
+                {nextLecture.session_type}{nextLecture.meeting_code ? ` • ${nextLecture.meeting_code}` : ''}
+              </p>
+            </div>
+          ) : (
+            <p className="mt-1.5 text-sm text-[var(--text-muted)]">{currentBatch ? 'Caught up with all lectures' : '—'}</p>
+          )}
+        </Card>
+      </div>
+
       <Card>
         <CardHeader title="Batch History" />
         {batchMappings.length === 0 ? (
@@ -92,6 +165,36 @@ export default function StudentDetailPage() {
               </Link>
             ))}
           </div>
+        )}
+      </Card>
+
+      <Card>
+        <CardHeader title="Payment Logs" />
+        {paymentLogs.length === 0 ? (
+          <EmptyState icon={<History size={32} />} title="No payment logs yet" />
+        ) : (
+          <Table maxHeight="24rem">
+            <THead>
+              <TR>
+                <TH>Amount</TH>
+                <TH>Date</TH>
+                <TH>Batch</TH>
+                <TH>Method</TH>
+                <TH>Notes</TH>
+              </TR>
+            </THead>
+            <TBody>
+              {paymentLogs.map((log) => (
+                <TR key={log.id}>
+                  <TD className="font-semibold text-emerald-400">{formatCurrency(Number(log.amount))}</TD>
+                  <TD className="cell-secondary">{log.payment_date}</TD>
+                  <TD className="cell-secondary">{batchNameById.get(log.batch_id) ?? log.batch_id}</TD>
+                  <TD className="cell-muted capitalize">{(log.payment_method ?? '—').replace('_', ' ')}</TD>
+                  <TD className="cell-muted">{log.notes || '—'}</TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
         )}
       </Card>
     </div>

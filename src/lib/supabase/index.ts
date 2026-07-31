@@ -5,7 +5,7 @@ export { getLecturesByBatch, getLectureById, createLecture, deleteLecture } from
 export { getUploadsByLecture, getAttendanceByLecture, insertUploadRows, approveAttendance, setAttendanceApproved, bulkApproveAttendance, getUnapprovedCount } from './queries/attendance';
 export { processAttendance, computeStatus } from '@/lib/attendance/process';
 export type { ProcessingReport, ProcessOptions } from '@/lib/attendance/process';
-export { getFeesByBatch, updateFeePayment, updateFeeTotal, getFeePaymentLogs, addFeePaymentLog, getBatchFeeSummary } from './queries/fees';
+export { getFeesByBatch, updateFeePayment, getFeePaymentLogs, addFeePaymentLog, getBatchFeeSummary, getFeesByStudent, getFeePaymentLogsByStudent } from './queries/fees';
 export { getAssignmentsByBatch, createAssignment, getCompletionsByAssignment, markSubmission } from './queries/assignments';
 export { getDashboardStats, getRecentActivity } from './queries/dashboard';
 export type { DashboardStats, RecentActivity } from './queries/dashboard';

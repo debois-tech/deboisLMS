@@ -1,4 +1,5 @@
 import { ReactNode, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { Button } from './Button';
 
@@ -30,7 +31,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
@@ -62,7 +63,8 @@ export function Modal({ open, onClose, title, description, children, footer, siz
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

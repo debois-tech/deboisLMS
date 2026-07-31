@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { History, Plus } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -9,7 +10,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { BatchSelect } from '@/components/ui/BatchSelect';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import { FormField } from '@/components/ui/FormField';
-import { getBatches, getFeesByBatch, updateFeeTotal, getFeePaymentLogs, addFeePaymentLog, getBatchFeeSummary, getBatchStudents } from '@/lib/supabase';
+import { getBatches, getFeesByBatch, getFeePaymentLogs, addFeePaymentLog, getBatchFeeSummary, getBatchStudents } from '@/lib/supabase';
 import type { Batch, StudentFee, Student, BatchStudentMapping, BatchFeeSummary, FeePaymentLog, PaymentMethod } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils/format';
 
@@ -20,7 +21,6 @@ export default function FeesPage() {
   const [students, setStudents] = useState<(Student & { mapping: BatchStudentMapping })[]>([]);
   const [summary, setSummary] = useState<BatchFeeSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editingFee, setEditingFee] = useState<{ id: string; total: number } | null>(null);
   const [loggingFee, setLoggingFee] = useState<StudentFee | null>(null);
   const [paymentLogs, setPaymentLogs] = useState<FeePaymentLog[]>([]);
   const [logForm, setLogForm] = useState({ amount: '', payment_date: new Date().toISOString().slice(0, 10), payment_method: 'other' as PaymentMethod, notes: '' });
@@ -40,14 +40,6 @@ export default function FeesPage() {
       setFees(f);
       setStudents(s);
     });
-  };
-
-  const handleSavePayment = async () => {
-    if (!editingFee) return;
-    await updateFeeTotal(editingFee.id, editingFee.total);
-    setEditingFee(null);
-    if (selectedBatch) loadBatchFees(selectedBatch);
-    getBatchFeeSummary().then(setSummary);
   };
 
   const openPaymentLogs = async (fee: StudentFee) => {
@@ -122,7 +114,11 @@ export default function FeesPage() {
                   const isPaid = fee.status === 'paid' || remaining <= 0;
                   return (
                     <TR key={fee.id}>
-                      <TD className="font-medium">{student?.name ?? 'Unknown'}</TD>
+                      <TD className="font-medium">
+                        <Link to={`/students/${fee.student_id}`} className="text-[var(--text-primary)] hover:underline">
+                          {student?.name ?? 'Unknown'}
+                        </Link>
+                      </TD>
                       <TD>{formatCurrency(fee.total_fee)}</TD>
                       <TD>{formatCurrency(fee.paid_amount)}</TD>
                       <TD>
@@ -132,14 +128,9 @@ export default function FeesPage() {
                       </TD>
                       <TD>{isPaid ? <Badge size="lg" variant="success">Paid</Badge> : <Badge size="lg" variant="warning">Due</Badge>}</TD>
                       <TD>
-                        <div className="flex flex-wrap gap-2">
-                          <Button size="sm" className="action-button" onClick={() => openPaymentLogs(fee)}>
-                            <Plus size={14} /> Log Payment
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={() => setEditingFee({ id: fee.id, total: fee.total_fee })}>
-                            Update Total
-                          </Button>
-                        </div>
+                        <Button size="sm" className="action-button" onClick={() => openPaymentLogs(fee)}>
+                          <Plus size={14} /> Log Payment
+                        </Button>
                       </TD>
                     </TR>
                   );
@@ -150,62 +141,57 @@ export default function FeesPage() {
         </Card>
       )}
 
-      <Modal open={!!editingFee} onClose={() => setEditingFee(null)} title="Update Payment">
-        {editingFee && (
-          <div className="space-y-4">
-            <FormField label="Total Fee (₹)">
-              <input type="number" min="0" value={editingFee.total} onChange={(event) => setEditingFee({ ...editingFee, total: Number(event.target.value) })} />
-            </FormField>
-            <Button className="action-button" onClick={handleSavePayment}>Save</Button>
-          </div>
-        )}
-      </Modal>
-
       <Modal open={!!loggingFee} onClose={() => setLoggingFee(null)} title="Payment Log" size="xl">
         {loggingFee && (
-          <div className="space-y-5">
+          <div className="space-y-6">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div className="rounded-[var(--radius-md)] bg-[var(--bg-elevated)] p-4">
                 <p className="text-xs text-[var(--text-muted)]">Student</p>
-                <p className="mt-1 font-semibold text-[var(--text-primary)]">{students.find((s) => s.id === loggingFee.student_id)?.name ?? 'Student'}</p>
+                <p className="mt-1.5 font-semibold text-[var(--text-primary)]">{students.find((s) => s.id === loggingFee.student_id)?.name ?? 'Student'}</p>
               </div>
               <div className="rounded-[var(--radius-md)] bg-[var(--bg-elevated)] p-4">
                 <p className="text-xs text-[var(--text-muted)]">Paid</p>
-                <p className="mt-1 font-semibold text-emerald-400">{formatCurrency(loggingFee.paid_amount)}</p>
+                <p className="mt-1.5 font-semibold text-emerald-400">{formatCurrency(loggingFee.paid_amount)}</p>
               </div>
               <div className="rounded-[var(--radius-md)] bg-[var(--bg-elevated)] p-4">
                 <p className="text-xs text-[var(--text-muted)]">Remaining</p>
-                <p className={`mt-1 font-semibold ${loggingRemaining > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                <p className={`mt-1.5 font-semibold ${loggingRemaining > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
                   {loggingRemaining > 0 ? formatCurrency(loggingRemaining) : 'Paid in full'}
                 </p>
               </div>
             </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <FormField label="Amount (₹)" required>
-                <input type="number" min="1" value={logForm.amount} onChange={(event) => setLogForm({ ...logForm, amount: event.target.value })} />
+
+            <div className="payment-log-form space-y-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <FormField label="Amount (₹)" required>
+                  <input type="number" min="1" value={logForm.amount} onChange={(event) => setLogForm({ ...logForm, amount: event.target.value })} />
+                </FormField>
+                <FormField label="Payment Date" required>
+                  <input type="date" value={logForm.payment_date} onChange={(event) => setLogForm({ ...logForm, payment_date: event.target.value })} />
+                </FormField>
+              </div>
+              <FormField label="Payment Method">
+                <select value={logForm.payment_method} onChange={(event) => setLogForm({ ...logForm, payment_method: event.target.value as PaymentMethod })}>
+                  <option value="cash">Cash</option>
+                  <option value="upi">UPI</option>
+                  <option value="bank_transfer">Bank transfer</option>
+                  <option value="other">Other</option>
+                </select>
               </FormField>
-              <FormField label="Payment Date" required>
-                <input type="date" value={logForm.payment_date} onChange={(event) => setLogForm({ ...logForm, payment_date: event.target.value })} />
+              <FormField label="Notes">
+                <textarea value={logForm.notes} onChange={(event) => setLogForm({ ...logForm, notes: event.target.value })} placeholder="Optional note" />
               </FormField>
+              <div className="flex justify-end">
+                <Button className="action-button" onClick={handleAddPaymentLog} loading={logging} disabled={!logForm.amount || Number(logForm.amount) <= 0}>
+                  <Plus size={14} /> Add Log
+                </Button>
+              </div>
             </div>
-            <FormField label="Payment Method">
-              <select value={logForm.payment_method} onChange={(event) => setLogForm({ ...logForm, payment_method: event.target.value as PaymentMethod })}>
-                <option value="cash">Cash</option>
-                <option value="upi">UPI</option>
-                <option value="bank_transfer">Bank transfer</option>
-                <option value="other">Other</option>
-              </select>
-            </FormField>
-            <FormField label="Notes">
-              <textarea value={logForm.notes} onChange={(event) => setLogForm({ ...logForm, notes: event.target.value })} placeholder="Optional note" />
-            </FormField>
-            <div className="flex justify-end">
-              <Button className="action-button" onClick={handleAddPaymentLog} loading={logging} disabled={!logForm.amount || Number(logForm.amount) <= 0}>
-                <Plus size={14} /> Add Log
-              </Button>
-            </div>
+
+            <hr className="divider m-0" />
+
             <div>
-              <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
+              <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
                 <History size={15} /> Previous Payments
               </div>
               {paymentLogs.length === 0 ? (
