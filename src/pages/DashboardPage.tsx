@@ -41,8 +41,8 @@ export default function DashboardPage() {
         <StatCard label="Active Batches" value={stats?.active_batches ?? 0} icon={Layers} color="#10b981" />
         <StatCard label="Total Students" value={stats?.total_students ?? 0} icon={Users} color="#8b5cf6" />
         <StatCard label="Pending Approval" value={stats?.pending_attendance ?? 0} icon={ClipboardCheck} color="#f59e0b" />
-        <StatCard label="Fees Collected" value={formatCurrency(stats?.total_fees_collected ?? 0)} icon={DollarSign} color="#10b981" />
-        <StatCard label="Outstanding" value={formatCurrency(stats?.total_fees_outstanding ?? 0)} icon={DollarSign} color="#ef4444" />
+        <StatCard label="Fees Collected" value={formatCurrency(stats?.total_fees_collected ?? 0)} icon={DollarSign} color="#10b981" valueClassName="text-emerald-400" />
+        <StatCard label="Outstanding" value={formatCurrency(stats?.total_fees_outstanding ?? 0)} icon={DollarSign} color="#ef4444" valueClassName="text-red-400" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

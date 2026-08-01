@@ -5,18 +5,23 @@ import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { FormField } from '@/components/ui/FormField';
 import { createTutor } from '@/lib/supabase';
+import { useToast } from '@/lib/context/ToastContext';
 
 export default function NewTutorPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', phone: '' });
+  const { showToast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
       const tutor = await createTutor(form);
+      showToast('Tutor added successfully');
       navigate(`/tutors/${tutor.id}`);
+    } catch (error: any) {
+      showToast(error?.message ?? 'Failed to add tutor', 'error');
     } finally {
       setLoading(false);
     }

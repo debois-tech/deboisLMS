@@ -1,18 +1,21 @@
 import { useState, useEffect } from 'react';
-import { FileText, Plus, CheckCircle, XCircle } from 'lucide-react';
+import { ClipboardCheck, Plus, CheckCircle, XCircle } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
+import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { BatchSelect } from '@/components/ui/BatchSelect';
+import { AssignmentSelect } from '@/components/ui/AssignmentSelect';
 import { FormField } from '@/components/ui/FormField';
 import { getBatches } from '@/lib/supabase';
 import { getAssignmentsByBatch, createAssignment, getCompletionsByAssignment, markSubmission } from '@/lib/supabase';
 import { getBatchStudents } from '@/lib/supabase';
 import type { Batch, Assignment, AssignmentCompletion, Student, BatchStudentMapping } from '@/lib/types';
 import { formatDate } from '@/lib/utils/format';
+import { useToast } from '@/lib/context/ToastContext';
 
 export default function AssignmentsPage() {
   const [batches, setBatches] = useState<Batch[]>([]);
@@ -24,6 +27,7 @@ export default function AssignmentsPage() {
   const [showNew, setShowNew] = useState(false);
   const [form, setForm] = useState({ title: '', description: '', assigned_date: '' });
   const [loading, setLoading] = useState(true);
+  const { showToast } = useToast();
 
   useEffect(() => {
     getBatches().then((b) => {
@@ -52,15 +56,24 @@ export default function AssignmentsPage() {
 
   const handleCreate = async () => {
     if (!selectedBatch) return;
-    await createAssignment({ ...form, batch_id: selectedBatch });
-    setShowNew(false);
-    setForm({ title: '', description: '', assigned_date: '' });
-    fetchBatchData(selectedBatch);
+    try {
+      await createAssignment({ ...form, batch_id: selectedBatch });
+      setShowNew(false);
+      setForm({ title: '', description: '', assigned_date: '' });
+      fetchBatchData(selectedBatch);
+      showToast('Assignment created');
+    } catch (error: any) {
+      showToast(error?.message ?? 'Failed to create assignment', 'error');
+    }
   };
 
   const handleToggle = async (studentId: string, assignmentId: string, current: boolean) => {
-    await markSubmission(assignmentId, studentId, !current);
-    loadCompletions(assignmentId);
+    try {
+      await markSubmission(assignmentId, studentId, !current);
+      loadCompletions(assignmentId);
+    } catch (error: any) {
+      showToast(error?.message ?? 'Failed to update submission', 'error');
+    }
   };
 
   if (loading) return <Spinner centered />;
@@ -70,95 +83,58 @@ export default function AssignmentsPage() {
       <PageHeader title="Assignments" />
 
       <Card>
-        <CardHeader title="Select Batch" />
+        <CardHeader title="1. Select Batch" />
         <BatchSelect batches={batches} value={selectedBatch} onChange={fetchBatchData} />
       </Card>
 
       {selectedBatch && (
         <Card>
           <CardHeader
-            title="Assignments"
-            action={<Button size="sm" className="action-button" onClick={() => setShowNew(true)}><Plus size={14} /> New Assignment</Button>}
+            title="2. Select Assignment"
+            action={<Button size="sm" className="action-button-compact" onClick={() => setShowNew(true)}><Plus size={14} /> New Assignment</Button>}
           />
           {assignments.length === 0 ? (
-            <EmptyState icon={<FileText size={32} />} title="No assignments" />
+            <EmptyState icon={<ClipboardCheck size={32} />} title="No assignments" description="Create a new assignment to track student submissions" />
           ) : (
-            <div className="space-y-2">
-              {assignments.map((a) => {
-                const asgnCompletions = completions.filter((c) => c.assignment_id === a.id);
-                const submittedCount = asgnCompletions.filter((c) => c.submitted).length;
-                return (
-                  <div
-                    key={a.id}
-                    onClick={() => loadCompletions(a.id)}
-                    className={`p-3 rounded-[var(--radius-md)] cursor-pointer transition-colors ${
-                      selectedAsgn === a.id
-                        ? 'bg-[var(--primary)]/10 border border-[var(--primary)]/20'
-                        : 'hover:bg-[var(--bg-elevated)]'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-[var(--text-primary)]">{a.title}</p>
-                        <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                          {a.assigned_date ? formatDate(a.assigned_date) : '—'}
-                          {a.description ? ` • ${a.description.substring(0, 60)}${a.description.length > 60 ? '...' : ''}` : ''}
-                        </p>
-                      </div>
-                      {selectedAsgn === a.id && completions.length > 0 && (
-                        <span className="text-xs text-[var(--text-muted)]">
-                          {submittedCount}/{completions.length} submitted
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <AssignmentSelect assignments={assignments} value={selectedAsgn} onChange={loadCompletions} />
           )}
         </Card>
       )}
 
       {selectedAsgn && (
         <Card>
-          <CardHeader title="Submission Status" />
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[var(--border)]">
-                  <th className="text-left p-3 text-[var(--text-muted)] font-medium">Student</th>
-                  <th className="text-center p-3 text-[var(--text-muted)] font-medium">Submitted</th>
-                  <th className="text-left p-3 text-[var(--text-muted)] font-medium">Via</th>
-                  <th className="text-left p-3 text-[var(--text-muted)] font-medium">Submitted At</th>
-                </tr>
-              </thead>
-              <tbody>
-                {students.map((s) => {
-                  const comp = completions.find((c) => c.student_id === s.id);
-                  const submitted = comp?.submitted ?? false;
-                  return (
-                    <tr key={s.id} className="border-b border-[var(--border)] hover:bg-[var(--bg-elevated)]/50">
-                      <td className="p-3 text-[var(--text-primary)] font-medium">{s.name}</td>
-                      <td className="p-3 text-center">
-                        <button
-                          onClick={() => handleToggle(s.id, selectedAsgn, submitted)}
-                          className={submitted ? 'text-emerald-400' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}
-                        >
-                          {submitted ? <CheckCircle size={20} /> : <XCircle size={20} />}
-                        </button>
-                      </td>
-                      <td className="p-3 text-[var(--text-secondary)] text-xs">
-                        {comp?.submitted_via ?? '—'}
-                      </td>
-                      <td className="p-3 text-[var(--text-secondary)] text-xs">
-                        {comp?.submitted_at ? formatDate(comp.submitted_at) : '—'}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <CardHeader title="3. Submission Status" />
+          <Table maxHeight="24rem">
+            <THead>
+              <TR>
+                <TH>Student</TH>
+                <TH align="center">Submitted</TH>
+                <TH>Via</TH>
+                <TH>Submitted At</TH>
+              </TR>
+            </THead>
+            <TBody>
+              {students.map((s) => {
+                const comp = completions.find((c) => c.student_id === s.id);
+                const submitted = comp?.submitted ?? false;
+                return (
+                  <TR key={s.id}>
+                    <TD className="font-medium text-[var(--text-primary)]">{s.name}</TD>
+                    <TD align="center">
+                      <button
+                        onClick={() => handleToggle(s.id, selectedAsgn, submitted)}
+                        className={submitted ? 'text-emerald-400' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}
+                      >
+                        {submitted ? <CheckCircle size={20} /> : <XCircle size={20} />}
+                      </button>
+                    </TD>
+                    <TD className="cell-secondary text-xs">{comp?.submitted_via ?? '—'}</TD>
+                    <TD className="cell-secondary text-xs">{comp?.submitted_at ? formatDate(comp.submitted_at) : '—'}</TD>
+                  </TR>
+                );
+              })}
+            </TBody>
+          </Table>
         </Card>
       )}
 

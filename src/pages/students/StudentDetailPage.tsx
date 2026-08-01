@@ -107,37 +107,37 @@ export default function StudentDetailPage() {
         <Card padding="sm">
           <p className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><Layers size={13} /> Current Batch</p>
           {currentBatch ? (
-            <Link to={`/batches/${currentBatch.id}`} className="mt-1.5 flex items-center gap-2 text-lg font-bold text-[var(--text-primary)] hover:underline">
+            <Link to={`/batches/${currentBatch.id}`} className="mt-3 flex items-center gap-2 text-lg font-bold text-[var(--text-primary)] hover:underline">
               {currentBatch.name}
             </Link>
           ) : (
-            <p className="mt-1.5 text-sm text-[var(--text-muted)]">Not enrolled in any batch</p>
+            <p className="mt-3 text-sm text-[var(--text-muted)]">Not enrolled in any batch</p>
           )}
         </Card>
         <Card padding="sm">
           <p className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><Wallet size={13} /> Total Payment</p>
           {currentBatch && currentFee ? (
-            <div className="mt-1.5">
+            <div className="mt-3 flex items-center justify-between gap-3">
               <p className="text-lg font-bold text-[var(--text-primary)]">{formatCurrency(currentFee.paid_amount)} <span className="text-sm font-normal text-[var(--text-muted)]">/ {formatCurrency(currentFee.total_fee)}</span></p>
-              <p className={`mt-0.5 text-xs ${currentFee.total_fee - currentFee.paid_amount > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+              <p className={`shrink-0 text-xs font-semibold ${currentFee.total_fee - currentFee.paid_amount > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
                 {currentFee.total_fee - currentFee.paid_amount > 0 ? `${formatCurrency(currentFee.total_fee - currentFee.paid_amount)} due` : 'Paid in full'}
               </p>
             </div>
           ) : (
-            <p className="mt-1.5 text-sm text-[var(--text-muted)]">—</p>
+            <p className="mt-3 text-sm text-[var(--text-muted)]">—</p>
           )}
         </Card>
         <Card padding="sm">
           <p className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><Clock size={13} /> Next Lecture</p>
           {currentBatch && nextLecture ? (
-            <div className="mt-1.5">
+            <div className="mt-3">
               <p className="text-lg font-bold text-[var(--text-primary)]">{formatDate(nextLecture.lecture_date)}</p>
               <p className="mt-0.5 text-xs text-[var(--text-muted)]">
                 {nextLecture.session_type}{nextLecture.meeting_code ? ` • ${nextLecture.meeting_code}` : ''}
               </p>
             </div>
           ) : (
-            <p className="mt-1.5 text-sm text-[var(--text-muted)]">{currentBatch ? 'Caught up with all lectures' : '—'}</p>
+            <p className="mt-3 text-sm text-[var(--text-muted)]">{currentBatch ? 'Caught up with all lectures' : '—'}</p>
           )}
         </Card>
       </div>

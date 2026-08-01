@@ -8,6 +8,7 @@ import { NotFound } from '@/components/ui/NotFound';
 import { FormField } from '@/components/ui/FormField';
 import { getBatchById, updateBatch } from '@/lib/supabase';
 import type { Batch } from '@/lib/types';
+import { useToast } from '@/lib/context/ToastContext';
 
 export default function EditBatchPage() {
   const { batchId } = useParams();
@@ -15,6 +16,7 @@ export default function EditBatchPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<Batch | null>(null);
+  const { showToast } = useToast();
 
   useEffect(() => {
     if (!batchId) return;
@@ -30,7 +32,10 @@ export default function EditBatchPage() {
     setSaving(true);
     try {
       await updateBatch(form.id, form);
+      showToast('Batch updated successfully');
       navigate(`/batches/${form.id}`);
+    } catch (error: any) {
+      showToast(error?.message ?? 'Failed to update batch', 'error');
     } finally {
       setSaving(false);
     }

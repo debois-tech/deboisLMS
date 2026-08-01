@@ -199,9 +199,42 @@ select option {
   color: var(--text-muted);
 }
 
+/* Read-only display box styled like an input — shows a value under a label */
+.display-field {
+  display: flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
 .action-button { min-width: 10rem; }
 .action-button-wide { min-width: 12rem; }
 .action-button-import { min-width: 8.5rem; }
+.action-button-compact { min-width: 7.5rem; padding-left: 1.25rem; padding-right: 1.25rem; }
+
+/* Popup forms with multiple stacked fields — generous rhythm between
+   labels, inputs, and the trailing action button. */
+.popup-form-spaced {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Remove number input spinner arrows everywhere a numeric amount is edited. */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
 
 /* ── Scrollbar ───────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }

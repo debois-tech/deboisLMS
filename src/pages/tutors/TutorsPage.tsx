@@ -27,7 +27,7 @@ export default function TutorsPage() {
     <div className="page-section">
       <PageHeader
         title="Tutors"
-        action={<Link to="/tutors/new"><Button className="action-button"><Plus size={16} />Add Tutor</Button></Link>}
+        action={<Link to="/tutors/new"><Button className="action-button-compact"><Plus size={16} />Add Tutor</Button></Link>}
       />
 
       {tutors.length === 0 ? (

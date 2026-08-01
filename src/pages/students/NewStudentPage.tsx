@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { FormField } from '@/components/ui/FormField';
 import { createOrReuseStudent } from '@/lib/supabase';
+import { useToast } from '@/lib/context/ToastContext';
 
 export default function NewStudentPage() {
   const navigate = useNavigate();
@@ -12,13 +13,17 @@ export default function NewStudentPage() {
   const [form, setForm] = useState({
     name: '', phone: '', email: '', github_url: '', linkedin_url: '',
   });
+  const { showToast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
       const student = await createOrReuseStudent(form);
+      showToast('Student added successfully');
       navigate(`/students/${student.id}`);
+    } catch (error: any) {
+      showToast(error?.message ?? 'Failed to add student', 'error');
     } finally {
       setLoading(false);
     }

@@ -47,11 +47,8 @@ export function Navbar({ onMenuClick }: NavbarProps) {
         <Menu size={18} />
       </button>
 
-      <Link
-        to="/"
-        className="font-bold text-xl sm:text-2xl select-none gradient-text hover:opacity-80 transition-opacity"
-      >
-        deboistech
+      <Link to="/" className="flex items-center select-none hover:opacity-80 transition-opacity">
+        <img src={theme === 'dark' ? '/logo-dark.png' : '/logo.png'} alt="deboistech" className="h-9 w-auto" />
       </Link>
 
       <div className="relative" ref={dropdownRef}>

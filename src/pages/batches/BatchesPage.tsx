@@ -27,7 +27,7 @@ export default function BatchesPage() {
     <div className="page-section">
       <PageHeader
         title="Batches"
-        action={<Link to="/batches/new"><Button className="action-button"><Plus size={16} /> New Batch</Button></Link>}
+        action={<Link to="/batches/new"><Button className="action-button-compact"><Plus size={16} /> New Batch</Button></Link>}
       />
 
       {batches.length === 0 ? (

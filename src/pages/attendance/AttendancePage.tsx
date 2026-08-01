@@ -17,6 +17,7 @@ import { getBatches } from '@/lib/supabase';
 import type { Batch, Lecture, AttendanceRecord } from '@/lib/types';
 import { parseCsv } from '@/lib/utils/csvParser';
 import type { CsvRow } from '@/lib/utils/csvParser';
+import { useToast } from '@/lib/context/ToastContext';
 
 export default function AttendancePage() {
   const [batches, setBatches] = useState<Batch[]>([]);
@@ -29,13 +30,12 @@ export default function AttendancePage() {
 
   const [csvRows, setCsvRows] = useState<CsvRow[]>([]);
   const [csvFileName, setCsvFileName] = useState('');
-  const [uploading, setUploading] = useState(false);
   const [showNewLecture, setShowNewLecture] = useState(false);
   const [newLectureDate, setNewLectureDate] = useState('');
   const [newLectureMeeting, setNewLectureMeeting] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
+  const { showToast } = useToast();
 
-  const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [lastReport, setLastReport] = useState<ProcessingReport | null>(null);
 
   useEffect(() => {
@@ -49,7 +49,6 @@ export default function AttendancePage() {
     setRecords([]);
     setCsvRows([]);
     setCsvFileName('');
-    setStatusMessage(null);
   }, [selectedBatch]);
 
   const loadRecords = (lecId: string) => {
@@ -66,7 +65,6 @@ export default function AttendancePage() {
     if (!file) return;
 
     setCsvFileName(file.name);
-    setStatusMessage(null);
 
     const reader = new FileReader();
     reader.onload = (ev) => {
@@ -77,28 +75,16 @@ export default function AttendancePage() {
     reader.readAsText(file);
   };
 
-  const handleUpload = async () => {
+  // Uploads the CSV into the `uploads` table, then immediately processes it into
+  // attendance records and clears the uploads — one action end-to-end for the admin.
+  const handleUploadAndProcess = async () => {
     if (!selectedLecture || csvRows.length === 0) return;
-    setUploading(true);
-    setStatusMessage(null);
+    setProcessing(true);
+    setLastReport(null);
 
     try {
       const lecture = lectures.find((l) => l.id === selectedLecture);
       await insertUploadRows(selectedLecture, lecture?.meeting_code ?? '', lecture?.lecture_date, csvRows);
-      setStatusMessage({ type: 'success', text: `${csvRows.length} rows uploaded successfully` });
-    } catch (err: any) {
-      setStatusMessage({ type: 'error', text: err?.message ?? 'Upload failed' });
-    }
-    setUploading(false);
-  };
-
-  const handleConvert = async () => {
-    if (!selectedLecture) return;
-    setProcessing(true);
-    setStatusMessage(null);
-    setLastReport(null);
-
-    try {
       const report = await processAttendance(selectedLecture);
       setLastReport(report);
       loadRecords(selectedLecture);
@@ -106,13 +92,13 @@ export default function AttendancePage() {
       setCsvFileName('');
       if (fileRef.current) fileRef.current.value = '';
 
-      const parts = [`Converted — ${report.attendanceInserted} attendance records created`];
+      const parts = [`${report.attendanceInserted} attendance records created`];
       if (report.tutorsDetected.length > 0) parts.push(`${report.tutorsDetected.length} tutor(s) detected`);
       if (report.duplicateRowsIgnored > 0) parts.push(`${report.duplicateRowsIgnored} duplicate rows merged`);
       if (report.unmatched.length > 0) parts.push(`${report.unmatched.length} participant(s) need review`);
-      setStatusMessage({ type: 'success', text: parts.join(' · ') });
+      showToast(parts.join(' · '), report.unmatched.length > 0 ? 'warning' : 'success');
     } catch (err: any) {
-      setStatusMessage({ type: 'error', text: err?.message ?? 'Conversion failed' });
+      showToast(err?.message ?? 'Upload & processing failed', 'error');
     }
     setProcessing(false);
   };
@@ -131,26 +117,36 @@ export default function AttendancePage() {
 
   const handleBulkApprove = async () => {
     if (!selectedLecture) return;
-    await bulkApproveAttendance(selectedLecture);
-    loadRecords(selectedLecture);
+    try {
+      await bulkApproveAttendance(selectedLecture);
+      loadRecords(selectedLecture);
+      showToast('All records approved');
+    } catch (error: any) {
+      showToast(error?.message ?? 'Failed to approve records', 'error');
+    }
   };
 
   const handleCreateLecture = async () => {
     if (!selectedBatch || !newLectureDate) return;
-    await createLecture({
-      batch_id: selectedBatch,
-      lecture_date: newLectureDate,
-      meeting_code: newLectureMeeting || undefined,
-      session_type: 'online',
-      scheduled_duration_minutes: 90,
-    });
-    setShowNewLecture(false);
-    setNewLectureDate('');
-    setNewLectureMeeting('');
-    getLecturesByBatch(selectedBatch).then(setLectures);
+    try {
+      await createLecture({
+        batch_id: selectedBatch,
+        lecture_date: newLectureDate,
+        meeting_code: newLectureMeeting || undefined,
+        session_type: 'online',
+        scheduled_duration_minutes: 90,
+      });
+      setShowNewLecture(false);
+      setNewLectureDate('');
+      setNewLectureMeeting('');
+      getLecturesByBatch(selectedBatch).then(setLectures);
+      showToast('Lecture created');
+    } catch (error: any) {
+      showToast(error?.message ?? 'Failed to create lecture', 'error');
+    }
   };
 
-  const showUploadAction = csvRows.length > 0 && selectedLecture && !uploading && !processing;
+  const showUploadAction = csvRows.length > 0 && selectedLecture && !processing;
 
   return (
     <div className="page-section">
@@ -201,16 +197,6 @@ export default function AttendancePage() {
                 </div>
               )}
 
-              {statusMessage && (
-                <div className={`p-3 rounded-[var(--radius-md)] text-sm ${
-                  statusMessage.type === 'success'
-                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                    : 'bg-red-500/10 text-red-400 border border-red-500/20'
-                }`}>
-                  {statusMessage.text}
-                </div>
-              )}
-
               {lastReport && (lastReport.unmatched.length > 0 || lastReport.tutorsDetected.length > 0 || lastReport.geminiUnavailableReason) && (
                 <div className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-elevated)]/50 border border-[var(--border)] text-sm">
                   {lastReport.geminiUnavailableReason && (
@@ -238,20 +224,15 @@ export default function AttendancePage() {
               )}
 
               {showUploadAction && (
-                <div className="flex gap-3">
-                  <Button onClick={handleUpload} loading={uploading}>
-                    <Upload size={16} /> Upload to Database
-                  </Button>
-                  <Button onClick={handleConvert} loading={processing} variant="secondary">
-                    <Loader2 size={16} /> Convert & Show
-                  </Button>
-                </div>
+                <Button onClick={handleUploadAndProcess} loading={processing}>
+                  <Upload size={16} /> Upload &amp; Process Attendance
+                </Button>
               )}
 
-              {(uploading || processing) && (
+              {processing && (
                 <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
                   <Loader2 size={16} className="animate-spin" />
-                  {uploading ? 'Uploading CSV data...' : 'Processing attendance — matching students, calculating status...'}
+                  Uploading and processing attendance — matching students, calculating status...
                 </div>
               )}
             </div>
@@ -271,7 +252,7 @@ export default function AttendancePage() {
             {loading ? (
               <Spinner />
             ) : records.length === 0 ? (
-              <EmptyState icon={<ClipboardCheck size={32} />} title="No attendance records" description="Upload a CSV and click Convert & Show to generate records" />
+              <EmptyState icon={<ClipboardCheck size={32} />} title="No attendance records" description="Upload a CSV and click Upload & Process to generate records" />
             ) : (
               <AttendanceRecordsTable records={records} onToggleApproved={handleToggleApproved} maxHeight="28rem" />
             )}
@@ -280,7 +261,7 @@ export default function AttendancePage() {
       )}
 
       <Modal open={showNewLecture} onClose={() => setShowNewLecture(false)} title="New Lecture">
-        <div className="space-y-4">
+        <div className="popup-form-spaced">
           <FormField label="Date" required>
             <input type="date" value={newLectureDate} onChange={(e) => setNewLectureDate(e.target.value)} required />
           </FormField>

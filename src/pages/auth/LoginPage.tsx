@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { FormField } from '@/components/ui/FormField';
 import { useAuth } from '@/lib/context/AuthContext';
+import { useTheme } from '@/lib/context/ThemeContext';
 import { supabase } from '@/lib/supabase/client';
 
 export default function LoginPage() {
@@ -14,6 +14,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const { setUser } = useAuth();
+  const { theme } = useTheme();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -49,9 +50,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-[var(--bg-base)] flex items-center justify-center p-4">
       <Card padding="lg" className="w-full max-w-md">
         <div className="text-center mb-6">
-          <div className="w-12 h-12 rounded-[var(--radius-lg)] bg-[var(--primary)] flex items-center justify-center mx-auto mb-4">
-            <LogIn size={24} className="text-white" />
-          </div>
+          <img src={theme === 'dark' ? '/logo-dark.png' : '/logo.png'} alt="Deboistech" className="h-14 w-auto mx-auto mb-4" />
           <h1 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">Deboistech ERP</h1>
           <p className="text-sm text-[var(--text-muted)] mt-1">Admin dashboard login</p>
         </div>

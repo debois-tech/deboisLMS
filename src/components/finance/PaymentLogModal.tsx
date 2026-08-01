@@ -1,0 +1,112 @@
+import { History, Plus } from 'lucide-react';
+import { Modal } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/Button';
+import { FormField } from '@/components/ui/FormField';
+import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
+import type { StudentFee, FeePaymentLog, PaymentMethod } from '@/lib/types';
+import { formatCurrency } from '@/lib/utils/format';
+
+export interface PaymentLogFormState {
+  amount: string;
+  payment_date: string;
+  payment_method: PaymentMethod;
+  notes: string;
+}
+
+interface PaymentLogModalProps {
+  fee: StudentFee | null;
+  studentName: string;
+  paymentLogs: FeePaymentLog[];
+  form: PaymentLogFormState;
+  onFormChange: (form: PaymentLogFormState) => void;
+  onClose: () => void;
+  onSubmit: () => void;
+  submitting: boolean;
+}
+
+export function PaymentLogModal({
+  fee, studentName, paymentLogs, form, onFormChange, onClose, onSubmit, submitting,
+}: PaymentLogModalProps) {
+  const remaining = fee ? Math.max(0, fee.total_fee - fee.paid_amount) : 0;
+
+  return (
+    <Modal open={!!fee} onClose={onClose} title="Payment Log" size="xl">
+      {fee && (
+        <div className="space-y-6">
+          <div className="payment-log-form popup-form-spaced">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <FormField label="Student">
+                <div className="display-field">{studentName}</div>
+              </FormField>
+              <FormField label="Paid">
+                <div className="display-field text-emerald-400">{formatCurrency(fee.paid_amount)}</div>
+              </FormField>
+              <FormField label="Remaining">
+                <div className={`display-field ${remaining > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                  {remaining > 0 ? formatCurrency(remaining) : 'Paid in full'}
+                </div>
+              </FormField>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <FormField label="Amount (₹)" required>
+                <input type="number" min="1" value={form.amount} onChange={(event) => onFormChange({ ...form, amount: event.target.value })} />
+              </FormField>
+              <FormField label="Payment Date" required>
+                <input type="date" value={form.payment_date} onChange={(event) => onFormChange({ ...form, payment_date: event.target.value })} />
+              </FormField>
+            </div>
+            <FormField label="Payment Method">
+              <select value={form.payment_method} onChange={(event) => onFormChange({ ...form, payment_method: event.target.value as PaymentMethod })}>
+                <option value="cash">Cash</option>
+                <option value="upi">UPI</option>
+                <option value="bank_transfer">Bank transfer</option>
+                <option value="other">Other</option>
+              </select>
+            </FormField>
+            <FormField label="Notes">
+              <textarea value={form.notes} onChange={(event) => onFormChange({ ...form, notes: event.target.value })} placeholder="Optional note" />
+            </FormField>
+            <div className="flex justify-end">
+              <Button className="action-button-compact" onClick={onSubmit} loading={submitting} disabled={!form.amount || Number(form.amount) <= 0}>
+                <Plus size={14} /> Add Log
+              </Button>
+            </div>
+          </div>
+
+          <hr className="divider m-0" />
+
+          <div>
+            <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
+              <History size={15} /> Previous Payments
+            </div>
+            {paymentLogs.length === 0 ? (
+              <p className="text-sm text-[var(--text-muted)]">No payment logs yet.</p>
+            ) : (
+              <Table maxHeight="16rem">
+                <THead>
+                  <TR>
+                    <TH>Amount</TH>
+                    <TH>Date</TH>
+                    <TH>Method</TH>
+                    <TH>Notes</TH>
+                  </TR>
+                </THead>
+                <TBody>
+                  {paymentLogs.map((log) => (
+                    <TR key={log.id}>
+                      <TD className="font-semibold text-emerald-400">{formatCurrency(Number(log.amount))}</TD>
+                      <TD className="cell-secondary">{log.payment_date}</TD>
+                      <TD className="cell-muted capitalize">{(log.payment_method ?? '—').replace('_', ' ')}</TD>
+                      <TD className="cell-muted">{log.notes || '—'}</TD>
+                    </TR>
+                  ))}
+                </TBody>
+              </Table>
+            )}
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}

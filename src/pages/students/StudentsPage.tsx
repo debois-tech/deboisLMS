@@ -12,6 +12,7 @@ import { Modal } from '@/components/ui/Modal';
 import { getStudents, createOrReuseStudent } from '@/lib/supabase';
 import type { Student } from '@/lib/types';
 import { parseCsvTable } from '@/lib/utils/csvParser';
+import { useToast } from '@/lib/context/ToastContext';
 
 // Add future student fields here. Matching uses headers, not column positions.
 const STUDENT_IMPORT_FIELDS = [
@@ -37,6 +38,7 @@ export default function StudentsPage() {
   const [importError, setImportError] = useState('');
   const [importing, setImporting] = useState(false);
   const importFileRef = useRef<HTMLInputElement>(null);
+  const { showToast } = useToast();
 
   useEffect(() => {
     getStudents().then((data) => {
@@ -84,8 +86,10 @@ export default function StudentsPage() {
       const updated = await getStudents();
       setStudents(updated);
       resetImport();
+      showToast('Students imported successfully');
     } catch (error: any) {
       setImportError(error?.message ?? 'Import failed. Some rows may already have been imported.');
+      showToast(error?.message ?? 'Import failed', 'error');
       setImporting(false);
     }
   };
@@ -99,7 +103,7 @@ export default function StudentsPage() {
         action={
           <div className="flex flex-wrap justify-end gap-2">
             <Button className="action-button-import" variant="secondary" onClick={() => setShowImport(true)}><Upload size={16} />Import</Button>
-            <Link to="/students/new"><Button className="action-button"><Plus size={16} />Add Student</Button></Link>
+            <Link to="/students/new"><Button className="action-button-compact"><Plus size={16} />Add Student</Button></Link>
           </div>
         }
       />

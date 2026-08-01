@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { FormField } from '@/components/ui/FormField';
 import { createBatch } from '@/lib/supabase';
+import { useToast } from '@/lib/context/ToastContext';
 
 export default function NewBatchPage() {
   const navigate = useNavigate();
@@ -15,13 +16,17 @@ export default function NewBatchPage() {
     status: 'upcoming' as const,
     start_date: '',
   });
+  const { showToast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
       const batch = await createBatch(form);
+      showToast('Batch created successfully');
       navigate(`/batches/${batch.id}`);
+    } catch (error: any) {
+      showToast(error?.message ?? 'Failed to create batch', 'error');
     } finally {
       setLoading(false);
     }
