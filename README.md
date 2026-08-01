@@ -1,6 +1,6 @@
 # Deboistech LMS
 
-A full-stack Learning Management System built with **Next.js (App Router)** and **Supabase**.
+A full-stack Learning Management System built with **Vite + React** and **Supabase**.
 
 ## Overview
 
@@ -8,10 +8,11 @@ Deboistech LMS enables admins to create classes, upload study materials, create 
 
 ## Tech Stack
 
-- **Frontend:** Next.js (App Router), CSS Modules
+- **Frontend:** React 19, TypeScript, Tailwind CSS 4, React Router 7
 - **Backend:** Supabase (PostgreSQL, Auth, Storage, Edge Functions)
 - **Auth:** Supabase Auth (email/password)
 - **Storage:** Supabase Storage (study materials, submissions, avatars)
+- **Build Tool:** Vite 6
 
 ## User Roles
 
@@ -24,28 +25,33 @@ Deboistech LMS enables admins to create classes, upload study materials, create 
 # Install dependencies
 npm install
 
-# Set up environment variables (see env example below)
+# Copy environment variables
+cp .env.example .env   # or set up manually (see below)
+
 # Start development server
-pnpm run dev
+npm run dev
 ```
 
 ### Required Environment Variables
 
 ```
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
-ADMIN_SETUP_KEY=
-NEXT_PUBLIC_APP_URL=http://localhost:3000
+VITE_SUPABASE_URL=
+VITE_SUPABASE_ANON_KEY=
+VITE_SUPABASE_SERVICE_ROLE_KEY=
+VITE_ADMIN_SETUP_KEY=
 ```
 
 ## Project Structure
 
 ```
-app/          — Next.js App Router pages (public, student, admin routes)
-components/   — UI, layout, and feature components
-lib/          — Supabase clients, utilities, types
-styles/       — Global CSS, design tokens
+src/
+├── components/   — Reusable UI components
+├── layouts/      — Layout components
+├── lib/          — Supabase clients, utilities, types
+├── pages/        — Route pages (public, student, admin routes)
+├── App.tsx       — Root component with router
+├── main.tsx      — Entry point
+└── globals.css   — Global styles (Tailwind)
 ```
 
 ## Features (V1)
@@ -61,4 +67,4 @@ styles/       — Global CSS, design tokens
 
 ## Documentation
 
-See [`deboistech_lms_docs.md`](./deboistech_lms_docs.md) for the full product specification, database schema, RLS policies, and route map.
+See [`deboistech erp prd.md`](./deboistech%20erp%20prd.md) for the full product specification.

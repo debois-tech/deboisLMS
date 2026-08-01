@@ -1,0 +1,568 @@
+@import "tailwindcss";
+
+/* ── Design Tokens (deboistech brand — Emerald) ────────────── */
+:root {
+  --primary:        #10B981;
+  --primary-light:  #34D399;
+  --primary-dark:   #059669;
+  --accent:         #34D399;
+  --accent-light:   #6EE7B7;
+
+  --bg-base:        #0B100E;
+  --bg-surface:     #121916;
+  --bg-elevated:    #1B2320;
+  --bg-overlay:     #26302C;
+
+  --text-primary:   #EAF3EF;
+  --text-secondary: #A3B8AF;
+  --text-muted:     #6C7E76;
+  --text-inverse:   #FFFFFF;
+
+  --border:         rgba(255,255,255,0.07);
+  --border-strong:  rgba(255,255,255,0.14);
+
+  --primary-glow:        rgba(16,185,129,0.30);
+  --primary-glow-strong: rgba(16,185,129,0.50);
+  --primary-glow-soft:   rgba(16,185,129,0.18);
+
+  --success:        #10B981;
+  --warning:        #F59E0B;
+  --danger:         #EF4444;
+  --info:           #3B82F6;
+
+  --shadow-sm:  0 1px 3px rgba(0,0,0,0.5), 0 1px 2px rgba(0,0,0,0.4);
+  --shadow-md:  0 4px 16px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.4);
+  --shadow-lg:  0 12px 40px rgba(0,0,0,0.6), 0 6px 20px rgba(0,0,0,0.4);
+  --shadow-glow: 0 0 28px rgba(16,185,129,0.30);
+
+  --radius-sm:  6px;
+  --radius-md:  10px;
+  --radius-lg:  14px;
+  --radius-xl:  20px;
+
+  --sidebar-w: 15rem;
+  --navbar-h: 3.5rem;
+  --space-page: 1.5rem;
+  --space-section: 1.5rem;
+  --space-card: 1rem;
+}
+
+/* ── Light Mode ─────────────────────────────────────────────── */
+html.light {
+  --primary:        #059669;
+  --primary-light:  #047857;
+  --primary-dark:   #065F46;
+  --accent:         #10B981;
+  --accent-light:   #34D399;
+
+  --bg-base:        #F9FAFB;
+  --bg-surface:     #FFFFFF;
+  --bg-elevated:    #F3F4F6;
+  --bg-overlay:     #E5E7EB;
+
+  --text-primary:   #111827;
+  --text-secondary: #374151;
+  --text-muted:     #6B7280;
+  --text-inverse:   #FFFFFF;
+
+  --border:         rgba(17,24,39,0.08);
+  --border-strong:  rgba(17,24,39,0.14);
+
+  --primary-glow:        rgba(5,150,105,0.25);
+  --primary-glow-strong: rgba(5,150,105,0.40);
+  --primary-glow-soft:   rgba(5,150,105,0.12);
+
+  --shadow-sm:  0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-md:  0 4px 16px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.06);
+  --shadow-lg:  0 12px 40px rgba(0,0,0,0.12), 0 6px 20px rgba(0,0,0,0.08);
+  --shadow-glow: 0 0 28px rgba(5,150,105,0.18);
+}
+
+/* ── Tailwind Theme Bridge ────────────────────────────────── */
+@theme inline {
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --color-primary:        var(--primary);
+  --color-accent:         var(--accent);
+  --color-bg-base:        var(--bg-base);
+  --color-bg-surface:     var(--bg-surface);
+  --color-bg-elevated:    var(--bg-elevated);
+  --color-text-primary:   var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted:     var(--text-muted);
+  --color-border:         var(--border);
+  --color-success:        var(--success);
+  --color-warning:        var(--warning);
+  --color-danger:         var(--danger);
+}
+
+/* ── deboistech primary palette (emerald) ─────────────────── */
+@theme {
+  --color-primary-50:  #ecfdf5;
+  --color-primary-100: #d1fae5;
+  --color-primary-200: #a7f3d0;
+  --color-primary-300: #6ee7b7;
+  --color-primary-400: #34d399;
+  --color-primary-500: #10b981;
+  --color-primary-600: #059669;
+  --color-primary-700: #047857;
+  --color-primary-800: #065f46;
+  --color-primary-900: #064e3b;
+}
+
+/* ── Reset ──────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  line-height: 1.6;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Form Elements — Global Styles ──────────────────────────── */
+input,
+textarea,
+select {
+  font-family: inherit;
+  font-size: 0.875rem;
+  width: 100%;
+  background-color: var(--bg-elevated);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.625rem 1rem;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-muted);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-glow-soft);
+}
+
+textarea {
+  resize: vertical;
+  min-height: 6rem;
+  line-height: 1.6;
+  padding: 0.75rem 1rem;
+}
+
+select option {
+  background-color: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+/* Input with leading icon — add left padding class .input-icon */
+.input-icon {
+  padding-left: 2.5rem;
+}
+
+/* Labeled form group */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.field label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.payment-log-form .field {
+  gap: 0.5rem;
+}
+
+.field-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* Read-only display box styled like an input — shows a value under a label */
+.display-field {
+  display: flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.action-button { min-width: 10rem; }
+.action-button-wide { min-width: 12rem; }
+.action-button-import { min-width: 8.5rem; }
+.action-button-compact { min-width: 7.5rem; padding-left: 1.25rem; padding-right: 1.25rem; }
+
+/* Popup forms with multiple stacked fields — generous rhythm between
+   labels, inputs, and the trailing action button. */
+.popup-form-spaced {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Remove number input spinner arrows everywhere a numeric amount is edited. */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--bg-overlay);
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+
+/* ── Selection ───────────────────────────────────────────────── */
+::selection {
+  background: var(--primary-glow);
+  color: var(--text-primary);
+}
+
+/* ── Glass Effect ────────────────────────────────────────────── */
+.glass {
+  background: rgba(255,255,255,0.04);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border);
+}
+html.light .glass {
+  background: rgba(255,255,255,0.72);
+}
+
+/* ── Gradient Text ───────────────────────────────────────────── */
+.gradient-text {
+  background: linear-gradient(135deg, var(--primary-light), var(--accent-light));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Page Layout ─────────────────────────────────────────────── */
+
+.app-shell {
+  display: flex;
+  min-height: calc(100vh - var(--navbar-h));
+}
+
+.app-content {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-page);
+  max-width: 100%;
+}
+
+/* Pages use this frame inside the shell; shell owns the outer gutter. */
+.page-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-section);
+  width: 100%;
+  max-width: 80rem;
+}
+
+.page-section.narrow {
+  max-width: 42rem;
+}
+
+/* Legacy wrappers still used on some pages — strip double padding */
+.app-content > .p-6,
+.app-content > .p-6.max-w-2xl {
+  padding: 0;
+}
+
+.app-content .space-y-6 {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-section);
+}
+
+.app-content .space-y-6 > * + * {
+  margin-top: 0;
+}
+
+.app-content .space-y-4 {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.app-content .space-y-4 > * + * {
+  margin-top: 0;
+}
+
+.app-content .space-y-2 {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.app-content .space-y-2 > * + * {
+  margin-top: 0;
+}
+
+.app-content .grid {
+  gap: var(--space-card);
+}
+
+/* Shared surface spacing. Keep text away from every card edge, including
+   cards whose utility classes are overridden by page-specific styles. */
+.ui-card-padding-sm { padding: 1rem; }
+.ui-card-padding-md { padding: 1.25rem; }
+.ui-card-padding-lg { padding: 1.5rem; }
+
+.nav-user-dropdown {
+  padding: 0.375rem;
+}
+
+.nav-user-dropdown-header {
+  padding: 0.5rem 0.75rem 0.75rem;
+}
+
+.nav-user-dropdown-item {
+  padding: 0.625rem 0.75rem;
+  border-radius: var(--radius-sm);
+}
+
+.nav-user-dropdown-divider {
+  margin-top: 0.375rem;
+  padding-top: 0.375rem;
+}
+
+.dashboard-item {
+  padding: 1rem 1.125rem;
+}
+
+.dashboard-section-content {
+  margin-top: 1.25rem;
+}
+
+.batch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.batch-list-item {
+  padding: 1rem 1.125rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-elevated) 45%, transparent);
+}
+
+.batch-tabs-bar {
+  padding: 0.5rem 0.625rem;
+}
+
+.batch-tab-button {
+  min-height: 2.75rem;
+  padding: 0.5rem 1rem;
+}
+
+.modal-panel {
+  display: flex;
+  flex-direction: column;
+  max-height: min(90vh, 52rem);
+  overflow: hidden;
+}
+
+.modal-header {
+  flex-shrink: 0;
+  padding: 1.25rem 1.75rem 1rem;
+}
+
+.modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1rem 1.75rem 1.75rem;
+}
+
+.modal-footer {
+  flex-shrink: 0;
+  padding: 0 1.75rem 1.75rem;
+}
+
+/* ── Data tables ─────────────────────────────────────────────── */
+.data-table-wrap {
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-elevated) 35%, transparent);
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.data-table thead th {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.data-table-sticky thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.data-table tbody td {
+  padding: 0.75rem 1rem;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.data-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--bg-elevated) 55%, transparent);
+}
+
+.data-table .cell-muted {
+  color: var(--text-muted);
+}
+
+.data-table .cell-secondary {
+  color: var(--text-secondary);
+}
+
+.data-table-checkbox {
+  width: 1.125rem;
+  height: 1.125rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  accent-color: var(--primary);
+  cursor: pointer;
+  -webkit-appearance: checkbox;
+  appearance: auto;
+}
+
+@media (max-width: 640px) {
+  :root {
+    --space-page: 1rem;
+    --space-section: 1.25rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --space-page: 1.75rem 2rem 2.5rem;
+  }
+}
+
+/* ── Divider ─────────────────────────────────────────────────── */
+.divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1.25rem 0;
+}
+
+/* ── Animations ──────────────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes dropdown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeInFast {
+  from { opacity: 0; transform: translateY(5px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-14px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 8px var(--primary-glow-soft); }
+  50%       { box-shadow: 0 0 22px var(--primary-glow); }
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(18px) scale(0.94); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to   { background-position: 200% 0; }
+}
+
+.animate-fade-in      { animation: fadeIn 0.35s ease-out forwards; }
+.animate-fade-in-fast { animation: fadeInFast 0.2s ease-out forwards; }
+.animate-dropdown     { animation: dropdown 0.2s ease-out forwards; }
+.animate-slide-in     { animation: slideIn 0.3s ease-out forwards; }
+.animate-toast-in     { animation: toastIn 0.3s cubic-bezier(.175,.885,.32,1.275) forwards; }
+.animate-spin         { animation: spin 1s linear infinite; }
+.animate-pulse-glow   { animation: pulse-glow 2s ease-in-out infinite; }
+
+/* Stagger helpers */
+.stagger-1 { animation-delay: 0.05s; }
+.stagger-2 { animation-delay: 0.10s; }
+.stagger-3 { animation-delay: 0.15s; }
+.stagger-4 { animation-delay: 0.20s; }
+.stagger-5 { animation-delay: 0.25s; }
+
+/* Skeleton loading */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-elevated) 25%,
+    var(--bg-overlay) 50%,
+    var(--bg-elevated) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius-md);
+}
