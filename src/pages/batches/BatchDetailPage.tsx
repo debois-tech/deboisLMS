@@ -77,7 +77,7 @@ export default function BatchDetailPage() {
           </p>
         </div>
         <Link to={`/batches/${batch.id}/edit`} className="shrink-0">
-          <Button variant="outline" className="min-w-[8rem]"><Edit3 size={14} /> Edit</Button>
+          <Button variant="outline" className="action-button-compact"><Edit3 size={14} /> Edit</Button>
         </Link>
       </div>
 
