@@ -2,11 +2,11 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, GraduationCap } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Avatar } from '@/components/ui/Avatar';
+import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import { getTutors } from '@/lib/supabase';
 import type { Tutor } from '@/lib/types';
 
@@ -33,16 +33,29 @@ export default function TutorsPage() {
       {tutors.length === 0 ? (
         <EmptyState icon={<GraduationCap size={32} />} title="No tutors yet" />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {tutors.map((t) => (
-            <Link key={t.id} to={`/tutors/${t.id}`} className="block group">
-              <Card hover padding="md" className="flex h-full min-h-[5rem] items-center gap-4">
-                <Avatar name={t.name} size="lg" />
-                <h3 className="min-w-0 text-base font-bold text-[var(--text-primary)] break-words">{t.name}</h3>
-              </Card>
-            </Link>
-          ))}
-        </div>
+        <Table maxHeight="none">
+          <THead>
+            <TR>
+              <TH>Tutor</TH>
+              <TH>Email</TH>
+              <TH>Phone</TH>
+            </TR>
+          </THead>
+          <TBody>
+            {tutors.map((t) => (
+              <TR key={t.id}>
+                <TD>
+                  <Link to={`/tutors/${t.id}`} className="flex items-center gap-3 group">
+                    <Avatar name={t.name} size="md" />
+                    <span className="font-semibold text-[var(--text-primary)] group-hover:text-[var(--primary)]">{t.name}</span>
+                  </Link>
+                </TD>
+                <TD className="cell-secondary">{t.email || '—'}</TD>
+                <TD className="cell-muted">{t.phone || '—'}</TD>
+              </TR>
+            ))}
+          </TBody>
+        </Table>
       )}
     </div>
   );

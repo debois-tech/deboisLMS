@@ -1,5 +1,5 @@
 export { getBatches, getBatchById, createBatch, updateBatch, deleteBatch } from './queries/batches';
-export { getStudents, getStudentById, createStudent, createOrReuseStudent, findExistingStudent, updateStudent, getStudentBatches, getBatchStudents, addStudentToBatch, removeStudentFromBatch } from './queries/students';
+export { getStudents, getStudentById, createStudent, createOrReuseStudent, findExistingStudent, updateStudent, getStudentBatches, getAllBatchStudentMappings, getBatchStudents, addStudentToBatch, removeStudentFromBatch } from './queries/students';
 export { getTutors, getTutorById, createTutor, getTutorBatches, getBatchTutors, assignTutorToBatch, removeTutorFromBatch } from './queries/tutors';
 export { getLecturesByBatch, getLectureById, createLecture, deleteLecture } from './queries/lectures';
 export { getUploadsByLecture, getAttendanceByLecture, insertUploadRows, approveAttendance, setAttendanceApproved, bulkApproveAttendance, getUnapprovedCount } from './queries/attendance';

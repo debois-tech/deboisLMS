@@ -25,3 +25,14 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
+
+# AI tooling & local agent config
+/.claude/
+/.codex/
+/.cursor/
+/.impeccable/
+/.agents/
+/.opencode/
+/skills/
+CLAUDE.md
+AGENTS.md

@@ -67,6 +67,13 @@ export async function getStudentBatches(studentId: string): Promise<BatchStudent
   return (data ?? []) as BatchStudentMapping[];
 }
 
+export async function getAllBatchStudentMappings(): Promise<BatchStudentMapping[]> {
+  const { data } = await supabase
+    .from('batch_student_mapping')
+    .select('*');
+  return (data ?? []) as BatchStudentMapping[];
+}
+
 export async function getBatchStudents(batchId: string): Promise<(Student & { mapping: BatchStudentMapping })[]> {
   const { data: mappings } = await supabase
     .from('batch_student_mapping')
