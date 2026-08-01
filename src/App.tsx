@@ -19,6 +19,8 @@ const AttendancePage = lazy(() => import('@/pages/attendance/AttendancePage'));
 const FeesPage = lazy(() => import('@/pages/fees/FeesPage'));
 const AssignmentsPage = lazy(() => import('@/pages/assignments/AssignmentsPage'));
 const LoginPage = lazy(() => import('@/pages/auth/LoginPage'));
+const LoginChoicePage = lazy(() => import('@/pages/auth/LoginChoicePage'));
+const UserLoginPlaceholderPage = lazy(() => import('@/pages/auth/UserLoginPlaceholderPage'));
 
 function PageFallback() {
   return (
@@ -32,7 +34,9 @@ export default function App() {
   return (
     <Suspense fallback={<PageFallback />}>
       <Routes>
-        <Route path="/auth/login" element={<LoginPage />} />
+        <Route path="/auth/login" element={<LoginChoicePage />} />
+        <Route path="/auth/login/admin" element={<LoginPage />} />
+        <Route path="/auth/login/user" element={<UserLoginPlaceholderPage />} />
         <Route path="/" element={<ProtectedRoute />}>
           <Route element={<DashboardLayout />}>
             <Route index element={<DashboardPage />} />
