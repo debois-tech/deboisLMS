@@ -76,8 +76,8 @@ export default function NewBatchPage() {
             />
           </FormField>
           <div className="flex gap-3 pt-2">
-            <Button type="submit" loading={loading}>Create Batch</Button>
-            <Button variant="ghost" onClick={() => navigate('/batches')}>Cancel</Button>
+            <Button className="action-button-compact" type="submit" loading={loading}>Create Batch</Button>
+            <Button className="action-button-compact" variant="ghost" onClick={() => navigate('/batches')}>Cancel</Button>
           </div>
         </form>
       </Card>
