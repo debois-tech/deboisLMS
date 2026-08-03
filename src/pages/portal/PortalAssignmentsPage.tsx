@@ -1,8 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { FileText, SearchX } from 'lucide-react';
 import { SearchBar } from '@/components/ui/SearchBar';
-import { PortalEmpty, PortalPage, usePortalStudentId } from '@/components/portal/PortalPage';
-import { AssignmentModal, type StudentAssignment } from '@/components/portal/AssignmentModal';
+import {
+  AssignmentModal,
+  PortalEmpty,
+  PortalList,
+  PortalPage,
+  PortalRow,
+  PortalSection,
+  type StudentAssignment,
+  usePortalStudentId,
+} from '@/components/portal';
 import { getAssignmentsForStudent, getStudentRepo, submitAssignmentFromPortal } from '@/lib/supabase';
 import { formatDate } from '@/lib/utils/format';
 import { useToast } from '@/lib/context/ToastContext';
@@ -59,57 +67,51 @@ export default function PortalAssignmentsPage() {
     };
   }, [assignments, query]);
 
-  const renderSection = (label: string, items: StudentAssignment[]) =>
+  const renderSection = (label: string, items: StudentAssignment[], submitted: boolean) =>
     items.length > 0 && (
-      <section>
-        <h2 className="assignment-section-label">{label}</h2>
-        <div className="assignment-rows">
-          {items.map((assignment) => {
-            const submitted = assignment.completion?.submitted ?? false;
-            return (
-              <button
-                key={assignment.id}
-                type="button"
-                onClick={() => setOpen(assignment)}
-                aria-label={`${assignment.title} — ${submitted ? 'submitted' : 'pending'}`}
-                className={`assignment-row ${submitted ? 'is-submitted' : ''}`}
-              >
-                <span className="assignment-row-dot" />
-                <span className="assignment-row-title">{assignment.title}</span>
-                {assignment.assigned_date && (
-                  <span className="assignment-row-date">{formatDate(assignment.assigned_date)}</span>
-                )}
-                <ChevronRight size={15} className="assignment-row-chevron" />
-              </button>
-            );
-          })}
-        </div>
-      </section>
+      <PortalSection title={label}>
+        <PortalList>
+          {items.map((assignment) => (
+            <PortalRow
+              key={assignment.id}
+              primary={assignment.title}
+              secondary={assignment.assigned_date ? formatDate(assignment.assigned_date) : undefined}
+              state={submitted ? 'done' : 'todo'}
+              muted={submitted}
+              onClick={() => setOpen(assignment)}
+              label={`${assignment.title} — ${submitted ? 'submitted' : 'to hand in'}`}
+            />
+          ))}
+        </PortalList>
+      </PortalSection>
     );
 
   return (
-    <PortalPage title="Assignments" loading={loading}>
-      {assignments.length === 0 ? (
-        <PortalEmpty>No assignments yet.</PortalEmpty>
-      ) : (
-        <div className="assignment-board">
+    <PortalPage
+      title="Your assignments"
+      loading={loading}
+      shape="list"
+      action={
+        assignments.length > 0 ? (
           <SearchBar
             className="assignment-search"
             value={query}
             onChange={setQuery}
-            placeholder="Search"
+            placeholder="Search assignments"
             label="Search assignments"
           />
-
-          {matches === 0 ? (
-            <PortalEmpty>Nothing matches “{query.trim()}”.</PortalEmpty>
-          ) : (
-            <div className="assignment-scroll">
-              {renderSection('To do', todo)}
-              {renderSection('Submitted', done)}
-            </div>
-          )}
-        </div>
+        ) : undefined
+      }
+    >
+      {assignments.length === 0 ? (
+        <PortalEmpty icon={FileText}>No assignments yet.</PortalEmpty>
+      ) : matches === 0 ? (
+        <PortalEmpty icon={SearchX}>Nothing matches “{query.trim()}”.</PortalEmpty>
+      ) : (
+        <>
+          {renderSection('To do', todo, false)}
+          {renderSection('Done', done, true)}
+        </>
       )}
 
       <AssignmentModal

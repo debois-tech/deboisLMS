@@ -15,8 +15,18 @@
 
   --text-primary:   #EAF3EF;
   --text-secondary: #A3B8AF;
-  --text-muted:     #6C7E76;
+  /* Lifted off the old #6C7E76, which sat at 4.2:1 on --bg-surface — under the
+     4.5:1 floor for the small labels it is used on. */
+  --text-muted:     #7C9089;
   --text-inverse:   #FFFFFF;
+
+  /* Status colours legible as *text*. --success and --warning are tuned as fills
+     and drop to ~2.2:1 on a light surface, so anything set in them uses these. */
+  --success-text:   #34D399;
+  --warning-text:   #FBBF24;
+  --danger-text:    #F87171;
+  --info-text:      #60A5FA;
+  --purple-text:    #C084FC;
 
   --border:         rgba(255,255,255,0.07);
   --border-strong:  rgba(255,255,255,0.14);
@@ -71,6 +81,12 @@ html.light {
   --primary-glow:        rgba(5,150,105,0.25);
   --primary-glow-strong: rgba(5,150,105,0.40);
   --primary-glow-soft:   rgba(5,150,105,0.12);
+
+  --success-text:   #047857;
+  --warning-text:   #B45309;
+  --danger-text:    #B91C1C;
+  --info-text:      #1D4ED8;
+  --purple-text:    #7E22CE;
 
   --shadow-sm:  0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.05);
   --shadow-md:  0 4px 16px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.06);
@@ -441,59 +457,124 @@ html.light .glass {
 .portal-page {
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: 2.25rem;
   width: 100%;
   max-width: 56rem;
 }
 
-.portal-page-title {
-  font-size: 1.125rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--text-primary);
-}
-
-.portal-page-subtitle {
-  margin-top: 0.25rem;
-  font-size: 0.8125rem;
-  color: var(--text-muted);
-}
-
-.portal-identity {
+/* The page title row. One h1 per page, plus at most one control that acts on the
+   whole page (a search field, a filter) — anything narrower belongs to a section. */
+.portal-page-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 1.25rem;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
 }
 
-.portal-avatar {
-  display: grid;
-  place-items: center;
-  flex: 0 0 auto;
-  width: 3.5rem;
-  height: 3.5rem;
-  color: var(--primary);
-  font-size: 1.125rem;
+.portal-page-title {
+  font-size: 1.625rem;
   font-weight: 700;
-  border: 1px solid var(--primary-glow);
-  border-radius: var(--radius-lg);
-  background: var(--primary-glow-soft);
-}
-
-.portal-name {
-  font-size: 1.5rem;
-  font-weight: 700;
+  line-height: 1.2;
   letter-spacing: -0.03em;
   color: var(--text-primary);
 }
 
-.portal-meta {
+/* ── Portal section ──────────────────────────────────────────── */
+/* A section label is deliberately a step *down* from the page title rather than a
+   second heading competing with it: quiet, uppercase, small. A portal page then
+   reads as one title with labelled groups under it. */
+.portal-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.portal-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-left: 0.125rem;
+}
+
+.portal-section-title {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* ── Focus card ──────────────────────────────────────────────── */
+/* The single next thing a student should do, given more weight than any tile so
+   the answer to "what now?" is the first thing on the page. Its title is a whole
+   sentence; the detail line under it carries the facts (when, where, which code). */
+.portal-focus {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.375rem 0.875rem;
-  margin-top: 0.375rem;
+  gap: 1rem 1.25rem;
+  padding: 1.375rem 1.5rem;
+  border: 1px solid var(--primary-glow);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(135deg, var(--primary-glow-soft), transparent 60%),
+    var(--bg-surface);
+}
+
+.portal-focus-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 2.75rem;
+  height: 2.75rem;
+  color: var(--primary);
+  border-radius: var(--radius-md);
+  background: var(--primary-glow-soft);
+}
+
+.portal-focus-body {
+  flex: 1 1 15rem;
+  min-width: 0;
+}
+
+.portal-focus-title {
+  font-size: 1.0625rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.portal-focus-detail {
+  margin-top: 0.3rem;
   font-size: 0.8125rem;
-  color: var(--text-muted);
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.portal-focus-action {
+  flex: 0 0 auto;
+}
+
+.portal-focus-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.5rem 0.9375rem;
+  color: var(--text-inverse);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+  border-radius: var(--radius-md);
+  background: var(--primary);
+  transition: background-color 0.18s ease;
+}
+
+.portal-focus-link:hover { background: var(--primary-dark); }
+
+.portal-focus-link:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 .portal-stat-grid {
@@ -528,12 +609,24 @@ html.light .glass {
   color: var(--text-primary);
 }
 
+/* Tones come from the semantic tokens, never from a raw palette class, so a
+   number that means "good" or "needs attention" reads the same on every page. */
+.portal-stat-value.is-positive  { color: var(--success-text); }
+.portal-stat-value.is-attention { color: var(--warning-text); }
+
+/* The note is read, not glanced at — it carries the sentence that explains the
+   number — so it sits at body contrast rather than label contrast. */
 .portal-stat-note {
   margin-top: 0.25rem;
   font-size: 0.75rem;
-  color: var(--text-muted);
+  line-height: 1.55;
+  color: var(--text-secondary);
 }
 
+/* ── List ────────────────────────────────────────────────────── */
+/* One card per list, hairlines inside it: one border per boundary rather than a
+   box around every item. Rows can be static or interactive; the interactive ones
+   are real buttons or links, so they keep keyboard focus and hit targets. */
 .portal-list {
   display: flex;
   flex-direction: column;
@@ -548,22 +641,91 @@ html.light .glass {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  width: 100%;
   padding: 1rem 1.25rem;
+  text-align: left;
   border-bottom: 1px solid var(--border);
 }
 
 .portal-list-row:last-child { border-bottom: none; }
 
+.portal-list-row.is-interactive {
+  transition: background-color 0.18s ease;
+}
+
+.portal-list-row.is-interactive:hover {
+  background: color-mix(in srgb, var(--text-primary) 4%, transparent);
+}
+
+.portal-list-row.is-interactive:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.portal-list-lead {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 0.875rem;
+  min-width: 0;
+}
+
+/* A state the eye can catch before reading: amber for outstanding work, brand
+   green once it is done. */
+.portal-row-dot {
+  flex: 0 0 auto;
+  width: 0.4375rem;
+  height: 0.4375rem;
+  border-radius: 999px;
+  background: var(--warning-text);
+}
+
+.portal-row-dot.is-done { background: var(--primary); }
+
+.portal-row-chevron {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  transition: transform 0.18s ease, color 0.18s ease;
+}
+
+.portal-list-row.is-interactive:hover .portal-row-chevron {
+  color: var(--text-secondary);
+  transform: translateX(2px);
+}
+
 .portal-list-primary {
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
   font-weight: 600;
+  letter-spacing: -0.01em;
   color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portal-list-row.is-muted .portal-list-primary {
+  color: var(--text-secondary);
 }
 
 .portal-list-secondary {
   margin-top: 0.2rem;
   font-size: 0.75rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
+}
+
+.portal-list-trailing {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.875rem;
+}
+
+/* Quiet trailing fact — a payment method, a count — where a status pill would
+   overstate it. */
+.portal-row-meta {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
 }
 
 .portal-progress {
@@ -584,14 +746,64 @@ html.light .glass {
   transition: transform 0.4s ease-out;
 }
 
+/* ── Empty state ─────────────────────────────────────────────── */
+/* An empty portal screen explains itself: why there is nothing here and what
+   happens next, so a new student never reads a blank list as a broken page. */
 .portal-empty {
-  padding: 2.5rem 1.25rem;
-  color: var(--text-muted);
-  font-size: 0.8125rem;
-  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 2.75rem 1.5rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--bg-surface);
+}
+
+.portal-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  color: var(--text-muted);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+}
+
+.portal-empty-text {
+  max-width: 26rem;
+  font-size: 0.8125rem;
+  line-height: 1.65;
+  color: var(--text-secondary);
+  text-align: center;
+  text-wrap: balance;
+}
+
+/* ── Loading ─────────────────────────────────────────────────── */
+/* Placeholders in the shape of the content that is coming, rather than a spinner
+   that tells a student nothing about what to expect. */
+.portal-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.portal-skeleton-focus {
+  height: 5.5rem;
+}
+
+.portal-skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 0.875rem;
+}
+
+.portal-skeleton-tile {
+  height: 6.5rem;
+}
+
+.portal-skeleton-list {
+  height: 13rem;
 }
 
 .auth-hint {
@@ -631,7 +843,10 @@ html.light .glass {
 @media (max-width: 640px) {
   .portal-main { padding: 1.75rem 1rem 3rem; }
   .portal-topbar, .portal-nav { padding-left: 1rem; padding-right: 1rem; }
-  .portal-name { font-size: 1.25rem; }
+  .portal-page-title { font-size: 1.375rem; }
+  .portal-focus { padding: 1.25rem; }
+  .portal-list-row { padding: 0.9375rem 1rem; }
+  .portal-stat { padding: 1rem 1.125rem; }
 }
 
 /* Legacy wrappers still used on some pages — strip double padding */
@@ -1118,121 +1333,13 @@ html.light .glass {
 }
 
 /* ── Assignment list — student portal ────────────────────────── */
-/* Flat by construction: no card boxes, no shadows. A row is a title, a date and
-   a state dot on one line, divided from the next by a hairline. Everything else
-   about an assignment lives in the dialog you get by opening it. */
-.assignment-board {
-  display: flex;
-  flex-direction: column;
-  gap: 1.75rem;
-  width: 100%;
-}
+/* The list itself is built from the shared portal widgets (`portal-list`,
+   `portal-list-row`); only the search field above it is specific to this page. */
 
-/* Narrower than the rows it filters, and centred on the same axis. */
+/* Narrower than the rows it filters, and left-aligned on the same axis. */
 .assignment-search {
-  max-width: 24rem;
-  margin: 0 auto;
-}
-
-/* The list scrolls inside the page rather than growing it, so the search field
-   stays put while a long term's worth of assignments moves under it. */
-.assignment-scroll {
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-  max-height: 60vh;
-  padding-right: 0.5rem;
-  overflow-y: auto;
-  overscroll-behavior-y: contain;
-}
-
-.assignment-section-label {
-  display: block;
-  margin-bottom: 0.625rem;
-  padding-left: 0.125rem;
-  font-size: 0.6875rem;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-
-/* Each section is its own card; the label above it does the separating. Rows are
-   divided inside the card by hairlines, so there is one border per boundary
-   rather than a box around every assignment. */
-.assignment-rows {
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--bg-surface);
-}
-
-.assignment-row {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
   width: 100%;
-  padding: 1.0625rem 1.25rem;
-  text-align: left;
-  border-bottom: 1px solid var(--border);
-  transition: background-color 0.18s ease;
-}
-
-.assignment-row:last-child { border-bottom: none; }
-
-.assignment-row:hover {
-  background: color-mix(in srgb, var(--text-primary) 4%, transparent);
-}
-
-.assignment-row:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: -2px;
-}
-
-.assignment-row-dot {
-  flex: 0 0 auto;
-  width: 0.4375rem;
-  height: 0.4375rem;
-  border-radius: 999px;
-  background: var(--warning);
-}
-
-.assignment-row.is-submitted .assignment-row-dot {
-  background: var(--primary);
-}
-
-.assignment-row-title {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  font-size: 0.9375rem;
-  font-weight: 550;
-  letter-spacing: -0.01em;
-  color: var(--text-primary);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.assignment-row.is-submitted .assignment-row-title {
-  color: var(--text-secondary);
-}
-
-.assignment-row-date {
-  flex: 0 0 auto;
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-
-.assignment-row-chevron {
-  flex: 0 0 auto;
-  color: var(--text-muted);
-  transition: transform 0.18s ease, color 0.18s ease;
-}
-
-.assignment-row:hover .assignment-row-chevron {
-  color: var(--text-secondary);
-  transform: translateX(2px);
+  max-width: 18rem;
 }
 
 /* ── Assignment dialog ───────────────────────────────────────── */
@@ -1452,6 +1559,16 @@ html.light .glass {
 .stagger-3 { animation-delay: 0.15s; }
 .stagger-4 { animation-delay: 0.20s; }
 .stagger-5 { animation-delay: 0.25s; }
+
+/* Respect the OS setting: keep every state change, drop the travel. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 
 /* Skeleton loading */
 .skeleton {

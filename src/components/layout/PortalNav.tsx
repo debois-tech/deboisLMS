@@ -12,7 +12,7 @@ interface PortalNavItem {
 
 /** Single source of truth for portal sections — add a route in App.tsx and an entry here. */
 export const portalNavItems: PortalNavItem[] = [
-  { label: 'Overview', to: '/portal', icon: LayoutDashboard, end: true },
+  { label: 'Home', to: '/portal', icon: LayoutDashboard, end: true },
   { label: 'Attendance', to: '/portal/attendance', icon: CalendarCheck },
   { label: 'Assignments', to: '/portal/assignments', icon: FileText },
   { label: 'Fees', to: '/portal/fees', icon: Wallet },

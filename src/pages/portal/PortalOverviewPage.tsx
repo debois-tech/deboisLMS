@@ -1,20 +1,42 @@
 import { useEffect, useState } from 'react';
-import { CalendarDays, Clock, Layers, Mail, Phone, Wallet } from 'lucide-react';
-import { Badge } from '@/components/ui/Badge';
-import { PortalEmpty, PortalPage, PortalRow, PortalStat, usePortalStudentId } from '@/components/portal/PortalPage';
+import { Link } from 'react-router-dom';
+import { CalendarCheck, CalendarClock, FileText, PartyPopper, UserPlus, Wallet } from 'lucide-react';
+import {
+  PortalEmpty,
+  PortalFocus,
+  PortalList,
+  PortalPage,
+  PortalRow,
+  PortalSection,
+  PortalStat,
+  PortalStatGrid,
+  PortalStatus,
+  usePortalStudentId,
+} from '@/components/portal';
 import {
   getApprovedAttendanceByStudent,
+  getAssignmentsForStudent,
   getBatchById,
   getFeesByStudent,
   getLecturesByBatch,
   getStudentById,
   getStudentBatches,
 } from '@/lib/supabase';
-import type { AttendanceRecord, Batch, BatchStudentMapping, Lecture, Student, StudentFee } from '@/lib/types';
+import type {
+  Assignment,
+  AssignmentCompletion,
+  AttendanceRecord,
+  Batch,
+  BatchStudentMapping,
+  Lecture,
+  Student,
+  StudentFee,
+} from '@/lib/types';
 import { useAuth } from '@/lib/context/AuthContext';
-import { formatCurrency, formatDate } from '@/lib/utils/format';
+import { formatCurrency, formatDate, formatDayLabel } from '@/lib/utils/format';
 
 type Enrollment = BatchStudentMapping & { batch?: Batch };
+type StudentAssignment = Assignment & { completion?: AssignmentCompletion };
 
 export default function PortalOverviewPage() {
   const studentId = usePortalStudentId();
@@ -24,6 +46,7 @@ export default function PortalOverviewPage() {
   const [currentFee, setCurrentFee] = useState<StudentFee | null>(null);
   const [nextLecture, setNextLecture] = useState<Lecture | null>(null);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
+  const [assignments, setAssignments] = useState<StudentAssignment[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -35,10 +58,11 @@ export default function PortalOverviewPage() {
     let active = true;
 
     (async () => {
-      const [record, mappings, records] = await Promise.all([
+      const [record, mappings, records, work] = await Promise.all([
         getStudentById(studentId),
         getStudentBatches(studentId),
         getApprovedAttendanceByStudent(studentId),
+        getAssignmentsForStudent(studentId),
       ]);
 
       const withBatches = await Promise.all(
@@ -72,6 +96,7 @@ export default function PortalOverviewPage() {
       setCurrentFee(fee);
       setNextLecture(upcoming);
       setAttendance(records);
+      setAssignments(work);
       setLoading(false);
     })();
 
@@ -84,108 +109,156 @@ export default function PortalOverviewPage() {
 
   const attended = attendance.filter((record) => record.status !== 'absent').length;
   const attendanceRate = attendance.length > 0 ? Math.round((attended / attendance.length) * 100) : null;
+  const handedIn = assignments.filter((item) => item.completion?.submitted).length;
+  const pending = assignments.length - handedIn;
   const outstanding = currentFee ? Number(currentFee.total_fee) - Number(currentFee.paid_amount) : 0;
-  const name = student?.name ?? user?.full_name ?? 'Student';
+
+  const name = student?.name ?? user?.full_name ?? 'there';
+  const firstName = name.split(' ')[0];
 
   return (
-    <PortalPage title="Overview" loading={loading}>
+    <PortalPage title={`Hi, ${firstName}`} loading={loading}>
       {!studentId ? (
-        <PortalEmpty>
-          This login isn't linked to a student record yet. Ask your coordinator to set it up.
+        <PortalEmpty icon={UserPlus}>
+          This login isn't linked to your student record yet. Ask your coordinator.
         </PortalEmpty>
       ) : (
         <>
-          <div className="portal-identity">
-            <div className="portal-avatar">
-              {name.split(' ').map((part) => part[0]).slice(0, 2).join('')}
-            </div>
-            <div className="min-w-0">
-              <p className="portal-name">{name}</p>
-              <div className="portal-meta">
-                {student?.email && (
-                  <span className="flex min-w-0 items-center gap-1.5">
-                    <Mail size={13} className="shrink-0" />
-                    <span className="break-all">{student.email}</span>
-                  </span>
-                )}
-                {student?.phone && (
-                  <span className="flex items-center gap-1.5">
-                    <Phone size={13} className="shrink-0" />
-                    {student.phone}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
+          <NextUp
+            batchName={currentBatch?.name}
+            lecture={nextLecture}
+            pending={pending}
+            outstanding={outstanding}
+            enrolled={Boolean(currentBatch)}
+          />
 
-          <div className="portal-stat-grid">
+          <PortalStatGrid>
             <PortalStat
-              label="Current batch"
-              icon={Layers}
-              value={currentBatch?.name ?? '—'}
-              note={currentBatch?.track ?? 'Not enrolled in any batch'}
-            />
-            <PortalStat
-              label="Next lecture"
-              icon={Clock}
-              value={nextLecture ? formatDate(nextLecture.lecture_date) : '—'}
+              label="Classes"
+              icon={CalendarCheck}
+              value={attendanceRate === null ? 'Not started' : `${attendanceRate}%`}
+              tone={attendanceRate === null ? 'default' : attendanceRate >= 75 ? 'positive' : 'attention'}
+              progress={attendanceRate ?? undefined}
               note={
-                nextLecture
-                  ? `${nextLecture.session_type}${nextLecture.meeting_code ? ` · ${nextLecture.meeting_code}` : ''}`
-                  : currentBatch ? 'No lectures scheduled' : undefined
+                attendance.length > 0
+                  ? `${attended} of ${attendance.length} classes`
+                  : 'Counted once marked'
               }
             />
             <PortalStat
-              label="Attendance"
-              icon={CalendarDays}
-              value={attendanceRate === null ? '—' : `${attendanceRate}%`}
-              note={attendance.length > 0 ? `${attended} of ${attendance.length} lectures` : 'No records yet'}
-            >
-              {attendanceRate !== null && (
-                <div className="portal-progress">
-                  <div className="portal-progress-fill" style={{ transform: `scaleX(${attendanceRate / 100})` }} />
-                </div>
-              )}
-            </PortalStat>
+              label="Assignments"
+              icon={FileText}
+              value={assignments.length === 0 ? 'None yet' : `${handedIn} of ${assignments.length}`}
+              tone={assignments.length === 0 ? 'default' : pending > 0 ? 'attention' : 'positive'}
+              progress={assignments.length > 0 ? (handedIn / assignments.length) * 100 : undefined}
+              note={
+                assignments.length === 0
+                  ? 'Nothing set yet'
+                  : pending > 0
+                    ? `${pending} to hand in`
+                    : 'All handed in'
+              }
+            />
             <PortalStat
               label="Fees"
               icon={Wallet}
-              value={currentFee ? formatCurrency(Number(currentFee.paid_amount)) : '—'}
+              value={!currentFee ? 'Not set' : outstanding > 0 ? formatCurrency(outstanding) : 'All paid'}
+              tone={!currentFee ? 'default' : outstanding > 0 ? 'attention' : 'positive'}
               note={
-                currentFee
-                  ? outstanding > 0
-                    ? `${formatCurrency(outstanding)} due of ${formatCurrency(Number(currentFee.total_fee))}`
-                    : 'Paid in full'
-                  : 'No fee record'
+                !currentFee
+                  ? 'Not set yet'
+                  : outstanding > 0
+                    ? `of ${formatCurrency(Number(currentFee.total_fee))} total`
+                    : `${formatCurrency(Number(currentFee.total_fee))} paid`
               }
             />
-          </div>
+          </PortalStatGrid>
 
-          <section>
-            <h2 className="portal-page-title">Batches</h2>
-            <div className="mt-3">
-              {enrollments.length === 0 ? (
-                <PortalEmpty>You aren't enrolled in a batch yet.</PortalEmpty>
-              ) : (
-                <div className="portal-list">
-                  {enrollments.map((enrollment) => (
-                    <PortalRow
-                      key={enrollment.id}
-                      primary={enrollment.batch?.name ?? 'Batch'}
-                      secondary={`Joined ${formatDate(enrollment.joined_at)}`}
-                      trailing={
-                        <Badge variant={enrollment.status === 'active' ? 'success' : 'default'} dot>
-                          {enrollment.status}
-                        </Badge>
-                      }
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
+          <PortalSection title="Your batches">
+            {enrollments.length === 0 ? (
+              <PortalEmpty icon={UserPlus}>Not in a batch yet.</PortalEmpty>
+            ) : (
+              <PortalList>
+                {enrollments.map((enrollment) => (
+                  <PortalRow
+                    key={enrollment.id}
+                    primary={enrollment.batch?.name ?? 'Batch'}
+                    secondary={`Joined ${formatDate(enrollment.joined_at)}`}
+                    trailing={<PortalStatus kind="enrollment" value={enrollment.status} />}
+                  />
+                ))}
+              </PortalList>
+            )}
+          </PortalSection>
         </>
       )}
     </PortalPage>
   );
+}
+
+/**
+ * The one thing worth acting on, picked in the order a student would care about
+ * it: the next class, then work that is still due, then money owed. "Nothing to
+ * do" is a real answer and gets said out loud rather than leaving the slot blank.
+ */
+function NextUp({
+  batchName,
+  lecture,
+  pending,
+  outstanding,
+  enrolled,
+}: {
+  batchName?: string;
+  lecture: Lecture | null;
+  pending: number;
+  outstanding: number;
+  enrolled: boolean;
+}) {
+  if (!enrolled) {
+    return (
+      <PortalFocus
+        icon={UserPlus}
+        title="Not in a batch yet"
+        detail="Your coordinator will add you."
+      />
+    );
+  }
+
+  if (lecture) {
+    const day = formatDayLabel(lecture.lecture_date);
+    const relative = day === 'Today' || day === 'Tomorrow';
+    const where = lecture.session_type === 'online'
+      ? ['Online', lecture.meeting_code].filter(Boolean).join(' · ')
+      : 'In person';
+
+    return (
+      <PortalFocus
+        icon={CalendarClock}
+        title={`Next class ${relative ? day.toLowerCase() : day}`}
+        detail={[batchName, where].filter(Boolean).join(' · ')}
+      />
+    );
+  }
+
+  if (pending > 0) {
+    return (
+      <PortalFocus
+        icon={FileText}
+        title={`${pending} ${pending === 1 ? 'assignment' : 'assignments'} to hand in`}
+        action={<Link to="/portal/assignments" className="portal-focus-link">Open</Link>}
+      />
+    );
+  }
+
+  if (outstanding > 0) {
+    return (
+      <PortalFocus
+        icon={Wallet}
+        title={`${formatCurrency(outstanding)} fee still to pay`}
+        action={<Link to="/portal/fees" className="portal-focus-link">Details</Link>}
+      />
+    );
+  }
+
+  return <PortalFocus icon={PartyPopper} title="All caught up" />;
 }

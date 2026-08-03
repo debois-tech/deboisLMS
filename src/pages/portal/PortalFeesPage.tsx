@@ -1,9 +1,26 @@
 import { useEffect, useState } from 'react';
 import { ReceiptText, Wallet } from 'lucide-react';
-import { PortalEmpty, PortalPage, PortalRow, PortalStat, usePortalStudentId } from '@/components/portal/PortalPage';
+import {
+  PortalEmpty,
+  PortalList,
+  PortalPage,
+  PortalRow,
+  PortalSection,
+  PortalStat,
+  PortalStatGrid,
+  PortalStatus,
+  usePortalStudentId,
+} from '@/components/portal';
 import { getBatchById, getFeePaymentLogsByStudent, getFeesByStudent } from '@/lib/supabase';
 import type { FeePaymentLog, StudentFee } from '@/lib/types';
 import { formatCurrency, formatDate } from '@/lib/utils/format';
+
+/** The database stores `bank_transfer`; a receipt should read "Bank transfer". */
+function paymentMethodLabel(method?: string): string {
+  if (!method) return 'Other';
+  const words = method.replace(/_/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
 
 export default function PortalFeesPage() {
   const studentId = usePortalStudentId();
@@ -44,76 +61,69 @@ export default function PortalFeesPage() {
   const paidPercent = totalFee > 0 ? Math.min(100, Math.round((totalPaid / totalFee) * 100)) : 0;
 
   return (
-    <PortalPage title="Fees" subtitle="Your fee status and payment history" loading={loading}>
+    <PortalPage title="Your fees" loading={loading}>
       {fees.length === 0 && logs.length === 0 ? (
-        <PortalEmpty>No fee record yet.</PortalEmpty>
+        <PortalEmpty icon={Wallet}>No fee set yet.</PortalEmpty>
       ) : (
         <>
-          <div className="portal-stat-grid">
+          <PortalStatGrid>
             <PortalStat
-              label="Paid"
+              label="Still to pay"
+              icon={ReceiptText}
+              value={outstanding > 0 ? formatCurrency(outstanding) : 'Nothing'}
+              tone={outstanding > 0 ? 'attention' : 'positive'}
+              note={outstanding > 0 ? 'Pay your coordinator' : undefined}
+            />
+            <PortalStat
+              label="Paid so far"
               icon={Wallet}
               value={formatCurrency(totalPaid)}
-              note={`of ${formatCurrency(totalFee)} total`}
-            >
-              <div className="portal-progress">
-                <div className="portal-progress-fill" style={{ transform: `scaleX(${paidPercent / 100})` }} />
-              </div>
-            </PortalStat>
-            <PortalStat
-              label="Outstanding"
-              icon={ReceiptText}
-              value={outstanding > 0 ? formatCurrency(outstanding) : 'Nil'}
-              note={outstanding > 0 ? 'Due to be paid' : 'Paid in full'}
+              progress={paidPercent}
+              note={`of ${formatCurrency(totalFee)}`}
             />
-          </div>
+          </PortalStatGrid>
 
           {fees.length > 0 && (
-            <section>
-              <h2 className="portal-page-title">By batch</h2>
-              <div className="portal-list mt-3">
+            <PortalSection title="By batch">
+              <PortalList>
                 {fees.map((fee) => {
                   const due = Number(fee.total_fee) - Number(fee.paid_amount);
                   return (
                     <PortalRow
                       key={fee.id}
                       primary={batchNames.get(fee.batch_id) ?? 'Batch'}
-                      secondary={`${formatCurrency(Number(fee.paid_amount))} paid of ${formatCurrency(Number(fee.total_fee))}`}
-                      trailing={
-                        <span className={`text-xs font-semibold ${due > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
-                          {due > 0 ? `${formatCurrency(due)} due` : 'Paid'}
-                        </span>
+                      secondary={
+                        due > 0
+                          ? `${formatCurrency(due)} of ${formatCurrency(Number(fee.total_fee))} left`
+                          : `${formatCurrency(Number(fee.total_fee))} paid`
                       }
+                      muted={due <= 0}
+                      trailing={<PortalStatus kind="fee" value={due > 0 ? 'due' : 'paid'} />}
                     />
                   );
                 })}
-              </div>
-            </section>
+              </PortalList>
+            </PortalSection>
           )}
 
-          <section>
-            <h2 className="portal-page-title">Payment history</h2>
-            <div className="mt-3">
-              {logs.length === 0 ? (
-                <PortalEmpty>No payments recorded yet.</PortalEmpty>
-              ) : (
-                <div className="portal-list">
-                  {logs.map((log) => (
-                    <PortalRow
-                      key={log.id}
-                      primary={formatCurrency(Number(log.amount))}
-                      secondary={`${formatDate(log.payment_date)} · ${batchNames.get(log.batch_id) ?? 'Batch'}`}
-                      trailing={
-                        <span className="text-xs capitalize text-[var(--text-muted)]">
-                          {(log.payment_method ?? 'other').replace('_', ' ')}
-                        </span>
-                      }
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
+          <PortalSection title="Payments">
+            {logs.length === 0 ? (
+              <PortalEmpty icon={ReceiptText}>No payments recorded yet.</PortalEmpty>
+            ) : (
+              <PortalList>
+                {logs.map((log) => (
+                  <PortalRow
+                    key={log.id}
+                    primary={formatCurrency(Number(log.amount))}
+                    secondary={`${formatDate(log.payment_date)} · ${batchNames.get(log.batch_id) ?? 'Batch'}`}
+                    trailing={
+                      <span className="portal-row-meta">{paymentMethodLabel(log.payment_method)}</span>
+                    }
+                  />
+                ))}
+              </PortalList>
+            )}
+          </PortalSection>
         </>
       )}
     </PortalPage>

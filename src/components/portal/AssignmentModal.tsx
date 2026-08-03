@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { FormField } from '@/components/ui/FormField';
 import { InlineAlert } from '@/components/ui/InlineAlert';
+import { PortalStatus } from '@/components/portal/PortalStatus';
 import type { Assignment, AssignmentCompletion } from '@/lib/types';
 import { formatDate, formatDateTime } from '@/lib/utils/format';
 
@@ -118,8 +119,8 @@ export function AssignmentModal({ assignment, repoUrl, onClose, onSubmit }: Assi
       {view === 'info' ? (
         <div className="assignment-detail">
           <div className="assignment-detail-meta">
-            <span>{submitted ? 'Submitted' : 'Pending'}</span>
-            {assignment?.assigned_date && <span>Assigned {formatDate(assignment.assigned_date)}</span>}
+            <PortalStatus kind="submission" value={submitted ? 'submitted' : 'pending'} />
+            {assignment?.assigned_date && <span>Given on {formatDate(assignment.assigned_date)}</span>}
           </div>
 
           {assignment?.description && (

@@ -1,82 +1,57 @@
 import type { ReactNode } from 'react';
-import type { LucideIcon } from 'lucide-react';
-import { Spinner } from '@/components/ui/Spinner';
 import { useAuth } from '@/lib/context/AuthContext';
 
-/**
- * Frame for every portal section: resolves the logged-in student's id, holds the loading
- * state, and renders a section heading. A new section only needs `usePortalStudentId` and
- * this wrapper.
- */
+/** The logged-in student's id, or undefined when the login isn't linked to a student row. */
 export function usePortalStudentId(): string | undefined {
   return useAuth().user?.student_id;
 }
 
 interface PortalPageProps {
-  title: string;
-  subtitle?: string;
+  /** The one h1 on the page. A sentence, not a category name. */
+  title: ReactNode;
+  /** A single control that acts on the whole page, e.g. a search field. */
+  action?: ReactNode;
   loading?: boolean;
+  /** Shape of the loading placeholder — match it to what the page actually renders. */
+  shape?: 'dashboard' | 'list';
   children: ReactNode;
 }
 
-export function PortalPage({ title, subtitle, loading, children }: PortalPageProps) {
+/**
+ * Frame for every portal section: the page title, an optional page-level control,
+ * and the loading placeholder. A new portal page is this wrapper plus widgets from
+ * `@/components/portal` — see the README in this folder.
+ */
+export function PortalPage({ title, action, loading, shape = 'dashboard', children }: PortalPageProps) {
   return (
     <div className="portal-page">
-      <div>
+      <div className="portal-page-head">
         <h1 className="portal-page-title">{title}</h1>
-        {subtitle && <p className="portal-page-subtitle">{subtitle}</p>}
+        {action}
       </div>
-      {loading ? <Spinner centered /> : children}
+      {loading ? <PortalLoading shape={shape} /> : children}
     </div>
   );
 }
 
-export function PortalStat({
-  label,
-  icon: Icon,
-  value,
-  note,
-  children,
-}: {
-  label: string;
-  icon: LucideIcon;
-  value: ReactNode;
-  note?: ReactNode;
-  children?: ReactNode;
-}) {
+/**
+ * Placeholders shaped like the content that is loading, so the page doesn't jump
+ * when the data lands and a slow connection still shows the layout it is getting.
+ */
+export function PortalLoading({ shape = 'dashboard' }: { shape?: 'dashboard' | 'list' }) {
   return (
-    <div className="portal-stat">
-      <p className="portal-stat-label">
-        <Icon size={13} />
-        {label}
-      </p>
-      <p className="portal-stat-value">{value}</p>
-      {note && <p className="portal-stat-note">{note}</p>}
-      {children}
-    </div>
-  );
-}
-
-export function PortalEmpty({ children }: { children: ReactNode }) {
-  return <p className="portal-empty">{children}</p>;
-}
-
-export function PortalRow({
-  primary,
-  secondary,
-  trailing,
-}: {
-  primary: ReactNode;
-  secondary?: ReactNode;
-  trailing?: ReactNode;
-}) {
-  return (
-    <div className="portal-list-row">
-      <div className="min-w-0">
-        <p className="portal-list-primary">{primary}</p>
-        {secondary && <p className="portal-list-secondary">{secondary}</p>}
-      </div>
-      {trailing && <div className="shrink-0">{trailing}</div>}
+    <div className="portal-skeleton" aria-busy="true" aria-label="Loading">
+      {shape === 'dashboard' && (
+        <>
+          <div className="skeleton portal-skeleton-focus" />
+          <div className="portal-skeleton-grid">
+            <div className="skeleton portal-skeleton-tile" />
+            <div className="skeleton portal-skeleton-tile" />
+            <div className="skeleton portal-skeleton-tile" />
+          </div>
+        </>
+      )}
+      <div className="skeleton portal-skeleton-list" />
     </div>
   );
 }

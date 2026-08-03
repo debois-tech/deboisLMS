@@ -146,11 +146,6 @@ export default function StudentDetailPage() {
       <Card>
         <CardHeader
           title="Portal Login"
-          subtitle={
-            student.auth_user_id
-              ? 'This student can sign in to the student portal.'
-              : 'Create credentials so this student can sign in to the portal.'
-          }
           action={<KeyRound size={18} className="text-[var(--text-muted)]" />}
         />
         <StudentLoginCard

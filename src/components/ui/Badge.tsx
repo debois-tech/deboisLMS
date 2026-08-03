@@ -9,22 +9,24 @@ interface BadgeProps {
   dot?: boolean;
 }
 
+// Label colours come from the `*-text` tokens, which are tuned per theme: the
+// fill shades stay readable on a dark surface but drop to ~2:1 on a light one.
 const variants: Record<BadgeVariant, string> = {
   default:  'bg-[var(--bg-overlay)] text-[var(--text-secondary)] border border-[var(--border)]',
-  success:  'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25',
-  warning:  'bg-amber-500/15  text-amber-400  border border-amber-500/25',
-  danger:   'bg-red-500/15    text-red-400    border border-red-500/25',
-  info:     'bg-blue-500/15   text-blue-400   border border-blue-500/25',
-  purple:   'bg-purple-500/15 text-purple-400 border border-purple-500/25',
+  success:  'bg-emerald-500/15 text-[var(--success-text)] border border-emerald-500/25',
+  warning:  'bg-amber-500/15   text-[var(--warning-text)] border border-amber-500/25',
+  danger:   'bg-red-500/15     text-[var(--danger-text)]  border border-red-500/25',
+  info:     'bg-blue-500/15    text-[var(--info-text)]    border border-blue-500/25',
+  purple:   'bg-purple-500/15  text-[var(--purple-text)]  border border-purple-500/25',
 };
 
 const dotColors: Record<BadgeVariant, string> = {
   default: 'bg-[var(--text-muted)]',
-  success: 'bg-emerald-400',
-  warning: 'bg-amber-400',
-  danger:  'bg-red-400',
-  info:    'bg-blue-400',
-  purple:  'bg-purple-400',
+  success: 'bg-[var(--success-text)]',
+  warning: 'bg-[var(--warning-text)]',
+  danger:  'bg-[var(--danger-text)]',
+  info:    'bg-[var(--info-text)]',
+  purple:  'bg-[var(--purple-text)]',
 };
 
 export function Badge({ children, variant = 'default', size = 'md', dot }: BadgeProps) {
