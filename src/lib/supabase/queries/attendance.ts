@@ -20,6 +20,24 @@ export async function getAttendanceByLecture(lectureId: string): Promise<Attenda
   return (data ?? []) as AttendanceRecord[];
 }
 
+/**
+ * Attendance for one student across every lecture, newest first. Only approved rows
+ * are returned — unapproved records are still pending admin review and shouldn't be
+ * presented to the student as fact (RLS enforces the same rule server-side).
+ */
+export async function getApprovedAttendanceByStudent(studentId: string): Promise<AttendanceRecord[]> {
+  const { data } = await supabase
+    .from('attendance')
+    .select('*, lecture:lectures(*)')
+    .eq('student_id', studentId)
+    .eq('approved', true);
+
+  const records = (data ?? []) as AttendanceRecord[];
+  return records.sort((a, b) =>
+    (b.lecture?.lecture_date ?? '').localeCompare(a.lecture?.lecture_date ?? '')
+  );
+}
+
 export async function insertUploadRows(
   lectureId: string,
   meetingCode: string,

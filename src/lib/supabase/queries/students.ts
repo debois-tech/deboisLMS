@@ -1,5 +1,5 @@
 import { supabase } from '../client';
-import type { Student, BatchStudentMapping } from '@/lib/types';
+import type { Student, BatchStudentMapping, StudentCredentials } from '@/lib/types';
 
 export async function getStudents(): Promise<Student[]> {
   const { data } = await supabase
@@ -57,6 +57,40 @@ export async function updateStudent(id: string, input: Partial<Student>): Promis
     .select()
     .single();
   return data as Student | undefined;
+}
+
+export async function getStudentByAuthUserId(authUserId: string): Promise<Student | undefined> {
+  const { data } = await supabase
+    .from('students')
+    .select('*')
+    .eq('auth_user_id', authUserId)
+    .maybeSingle();
+  return (data ?? undefined) as Student | undefined;
+}
+
+/**
+ * Creates (or resets) the student's portal login. Runs in the `create-student-login`
+ * edge function because it needs the service role key — the returned password is
+ * shown to the admin once and never stored, so a lost password means a reset.
+ */
+export async function createStudentLogin(studentId: string): Promise<StudentCredentials> {
+  const { data, error } = await supabase.functions.invoke('create-student-login', {
+    body: { student_id: studentId },
+  });
+
+  if (error) {
+    // A non-2xx response surfaces as a generic message; the useful reason is in the body,
+    // which supabase-js hands back untouched on error.context.
+    let detail: string | undefined;
+    const response = (error as { context?: Response }).context;
+    if (response && typeof response.json === 'function') {
+      detail = await response.json().then((body: any) => body?.error).catch(() => undefined);
+    }
+    throw new Error(detail ?? error.message ?? 'Failed to create login');
+  }
+  if (data?.error) throw new Error(data.error);
+
+  return data as StudentCredentials;
 }
 
 export async function getStudentBatches(studentId: string): Promise<BatchStudentMapping[]> {

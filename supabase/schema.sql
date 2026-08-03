@@ -18,7 +18,7 @@ create type session_type as enum ('online', 'offline');
 create type attendance_status as enum ('present', 'partial', 'absent');
 create type attendance_source as enum ('manual', 'automated');
 create type mapping_status as enum ('active', 'dropped');
-create type submission_channel as enum ('whatsapp', 'other');
+create type submission_channel as enum ('whatsapp', 'other', 'portal');
 create type fee_status as enum ('due', 'paid');
 create type payment_method as enum ('cash', 'upi', 'bank_transfer', 'other');
 
@@ -214,6 +214,18 @@ create table assignment_completions (
 
 create index idx_ac_assignment on assignment_completions(assignment_id);
 create index idx_ac_student    on assignment_completions(student_id);
+
+-- -----------------------------------------------------------
+-- 12b. STUDENT REPO (one GitHub repo per student, all homework)
+-- -----------------------------------------------------------
+-- Stored per student rather than per submission: editing the link from any
+-- assignment's submit dialog re-points every past and future submission.
+create table student_repos (
+  student_id uuid primary key references students(id) on delete cascade,
+  repo_url   text not null,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
 
 -- -----------------------------------------------------------
 -- 13. COMPUTED VIEWS (convenience)

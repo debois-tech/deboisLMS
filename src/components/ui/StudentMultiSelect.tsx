@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, ChevronDown, Search, Users } from 'lucide-react';
+import { Check, ChevronDown, Users } from 'lucide-react';
+import { SearchBar } from '@/components/ui/SearchBar';
 import type { Student } from '@/lib/types';
 
 interface StudentMultiSelectProps {
@@ -44,10 +45,7 @@ export function StudentMultiSelect({ students, value, onChange }: StudentMultiSe
       {open && (
         <div className="absolute left-0 right-0 top-full z-20 mt-2 overflow-hidden rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-surface)] shadow-[var(--shadow-lg)]">
           <div className="border-b border-[var(--border)] p-2">
-            <div className="flex items-center gap-2 rounded-[var(--radius-md)] bg-[var(--bg-elevated)]" style={{ paddingLeft: '0.75rem', paddingRight: '0.75rem' }}>
-              <Search size={15} className="shrink-0 text-[var(--text-muted)]" />
-              <input autoFocus value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search students..." className="min-h-10 border-0 bg-transparent text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]" style={{ padding: '0.5rem 0.25rem' }} />
-            </div>
+            <SearchBar size="sm" autoFocus value={search} onChange={setSearch} placeholder="Search students" />
           </div>
           <div className="p-1" style={{ maxHeight: '16rem', overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
             {filtered.length === 0 ? (

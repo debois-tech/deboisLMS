@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Mail, Phone, Layers, CalendarDays, Wallet, Clock, History } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, Layers, CalendarDays, Wallet, Clock, History, KeyRound } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NotFound } from '@/components/ui/NotFound';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
+import { StudentLoginCard } from '@/components/students/StudentLoginCard';
 import { getStudentById, getStudentBatches, getBatchById, getFeesByStudent, getLecturesByBatch, getFeePaymentLogsByStudent } from '@/lib/supabase';
 import type { Student, BatchStudentMapping, Batch, StudentFee, Lecture, FeePaymentLog } from '@/lib/types';
 import { formatDate, formatCurrency } from '@/lib/utils/format';
@@ -141,6 +142,24 @@ export default function StudentDetailPage() {
           )}
         </Card>
       </div>
+
+      <Card>
+        <CardHeader
+          title="Portal Login"
+          subtitle={
+            student.auth_user_id
+              ? 'This student can sign in to the student portal.'
+              : 'Create credentials so this student can sign in to the portal.'
+          }
+          action={<KeyRound size={18} className="text-[var(--text-muted)]" />}
+        />
+        <StudentLoginCard
+          studentId={student.id}
+          hasEmail={Boolean(student.email)}
+          hasLogin={Boolean(student.auth_user_id)}
+          onCreated={() => getStudentById(student.id).then((s) => setStudent(s ?? student))}
+        />
+      </Card>
 
       <Card>
         <CardHeader title="Batch History" />

@@ -1,11 +1,11 @@
-export type Role = 'admin';
+export type Role = 'admin' | 'student';
 
 export type BatchStatus = 'upcoming' | 'ongoing' | 'completed';
 export type SessionType = 'online' | 'offline';
 export type AttendanceStatus = 'present' | 'partial' | 'absent';
 export type AttendanceSource = 'manual' | 'automated';
 export type MappingStatus = 'active' | 'dropped';
-export type SubmissionChannel = 'whatsapp' | 'other';
+export type SubmissionChannel = 'whatsapp' | 'other' | 'portal';
 export type FeeStatus = 'due' | 'paid';
 export type PaymentMethod = 'cash' | 'upi' | 'bank_transfer' | 'other';
 
@@ -16,6 +16,8 @@ export interface Profile {
   role: Role;
   avatar_url?: string;
   created_at: string;
+  /** Only set for role === 'student' — the students.id row this login belongs to. */
+  student_id?: string;
 }
 
 export interface Batch {
@@ -36,6 +38,13 @@ export interface Student {
   github_url?: string;
   linkedin_url?: string;
   created_at: string;
+  /** auth.users id once a portal login has been created for this student. */
+  auth_user_id?: string;
+}
+
+export interface StudentCredentials {
+  email: string;
+  password: string;
 }
 
 export interface Tutor {
@@ -130,6 +139,14 @@ export interface AssignmentCompletion {
   marked_by?: string;
   student?: Student;
   assignment?: Assignment;
+}
+
+/** One GitHub repo per student — every assignment submission points at it. */
+export interface StudentRepo {
+  student_id: string;
+  repo_url: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface BatchStudentMapping {

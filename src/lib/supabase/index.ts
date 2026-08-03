@@ -1,11 +1,12 @@
 export { getBatches, getBatchById, createBatch, updateBatch, deleteBatch } from './queries/batches';
-export { getStudents, getStudentById, createStudent, createOrReuseStudent, findExistingStudent, updateStudent, getStudentBatches, getAllBatchStudentMappings, getBatchStudents, addStudentToBatch, removeStudentFromBatch } from './queries/students';
+export { getStudents, getStudentById, createStudent, createOrReuseStudent, findExistingStudent, updateStudent, getStudentBatches, getAllBatchStudentMappings, getBatchStudents, addStudentToBatch, removeStudentFromBatch, getStudentByAuthUserId, createStudentLogin } from './queries/students';
 export { getTutors, getTutorById, createTutor, getTutorBatches, getBatchTutors, assignTutorToBatch, removeTutorFromBatch } from './queries/tutors';
 export { getLecturesByBatch, getLectureById, createLecture, deleteLecture } from './queries/lectures';
-export { getUploadsByLecture, getAttendanceByLecture, insertUploadRows, approveAttendance, setAttendanceApproved, bulkApproveAttendance, getUnapprovedCount } from './queries/attendance';
+export { getUploadsByLecture, getAttendanceByLecture, getApprovedAttendanceByStudent, insertUploadRows, approveAttendance, setAttendanceApproved, bulkApproveAttendance, getUnapprovedCount } from './queries/attendance';
 export { processAttendance, computeStatus } from '@/lib/attendance/process';
 export type { ProcessingReport, ProcessOptions } from '@/lib/attendance/process';
 export { getFeesByBatch, updateFeePayment, getFeePaymentLogs, addFeePaymentLog, getBatchFeeSummary, getFeesByStudent, getFeePaymentLogsByStudent } from './queries/fees';
-export { getAssignmentsByBatch, createAssignment, getCompletionsByAssignment, markSubmission } from './queries/assignments';
+export { getAssignmentsByBatch, getAssignmentsForStudent, createAssignment, getAssignmentSubmissions, getStudentRepo, saveStudentRepo, submitAssignmentFromPortal, markSubmission } from './queries/assignments';
+export type { AssignmentSubmissionRow } from './queries/assignments';
 export { getDashboardStats, getRecentActivity } from './queries/dashboard';
 export type { DashboardStats, RecentActivity } from './queries/dashboard';

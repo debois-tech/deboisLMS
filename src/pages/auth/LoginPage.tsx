@@ -5,10 +5,26 @@ import { Button } from '@/components/ui/Button';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { FormField } from '@/components/ui/FormField';
 import { useAuth } from '@/lib/context/AuthContext';
+import { profileFromUser } from '@/lib/context/AuthContext';
 import { useTheme } from '@/lib/context/ThemeContext';
 import { supabase } from '@/lib/supabase/client';
 
 export default function LoginPage() {
+  return <LoginPanel title="Admin login" emailPlaceholder="admin@deboistech.in" />;
+}
+
+interface LoginPanelProps {
+  title: string;
+  emailPlaceholder: string;
+  hint?: string;
+}
+
+/**
+ * Shared by the admin and student login routes. Which dashboard you land on comes from
+ * the role on the session, not from which page you logged in through — the two routes
+ * are a UX convenience, not a security boundary (RLS is).
+ */
+export function LoginPanel({ title, emailPlaceholder, hint }: LoginPanelProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -32,14 +48,9 @@ export default function LoginPage() {
     }
 
     if (data.user) {
-      setUser({
-        id: data.user.id,
-        full_name: data.user.user_metadata?.full_name ?? 'Admin',
-        email: data.user.email ?? '',
-        role: 'admin',
-        created_at: data.user.created_at,
-      });
-      navigate('/');
+      const profile = await profileFromUser(data.user);
+      setUser(profile);
+      navigate(profile.role === 'admin' ? '/' : '/portal');
     }
     setLoading(false);
   };
@@ -55,7 +66,7 @@ export default function LoginPage() {
         <div className="auth-brand-mark">
           <img src={theme === 'dark' ? '/logo-dark.png' : '/logo.png'} alt="Deboistech" />
         </div>
-        <h1 className="auth-title">Admin login</h1>
+        <h1 className="auth-title">{title}</h1>
 
         <form onSubmit={handleSubmit} className="auth-form">
           {error && <InlineAlert>{error}</InlineAlert>}
@@ -66,7 +77,7 @@ export default function LoginPage() {
                 type="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                placeholder="admin@deboistech.com"
+                placeholder={emailPlaceholder}
                 autoComplete="email"
                 required
               />
@@ -96,6 +107,7 @@ export default function LoginPage() {
           <Button type="submit" loading={loading} className="w-full">
             Log in
           </Button>
+          {hint && <p className="auth-hint">{hint}</p>}
         </form>
       </div>
     </AuthSurface>

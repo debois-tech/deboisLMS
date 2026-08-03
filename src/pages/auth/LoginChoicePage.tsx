@@ -23,7 +23,7 @@ export default function LoginChoicePage() {
           </button>
           <button type="button" className="auth-choice" onClick={() => navigate('/auth/login/user')}>
             <span className="auth-choice-icon"><UserRound size={21} /></span>
-            <span className="auth-choice-copy"><strong>User</strong><small>Coming soon</small></span>
+            <span className="auth-choice-copy"><strong>Student</strong><small>Your progress</small></span>
             <ArrowRight className="auth-choice-arrow" size={18} />
           </button>
         </div>

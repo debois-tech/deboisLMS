@@ -1,6 +1,7 @@
 import { Suspense, lazy } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import DashboardLayout from '@/layouts/DashboardLayout';
+import PortalLayout from '@/layouts/PortalLayout';
 import ProtectedRoute from '@/components/layout/ProtectedRoute';
 import { Loader2 } from 'lucide-react';
 
@@ -20,7 +21,12 @@ const FeesPage = lazy(() => import('@/pages/fees/FeesPage'));
 const AssignmentsPage = lazy(() => import('@/pages/assignments/AssignmentsPage'));
 const LoginPage = lazy(() => import('@/pages/auth/LoginPage'));
 const LoginChoicePage = lazy(() => import('@/pages/auth/LoginChoicePage'));
-const UserLoginPlaceholderPage = lazy(() => import('@/pages/auth/UserLoginPlaceholderPage'));
+const UserLoginPage = lazy(() => import('@/pages/auth/UserLoginPage'));
+
+const PortalOverviewPage = lazy(() => import('@/pages/portal/PortalOverviewPage'));
+const PortalAttendancePage = lazy(() => import('@/pages/portal/PortalAttendancePage'));
+const PortalAssignmentsPage = lazy(() => import('@/pages/portal/PortalAssignmentsPage'));
+const PortalFeesPage = lazy(() => import('@/pages/portal/PortalFeesPage'));
 
 function PageFallback() {
   return (
@@ -36,8 +42,9 @@ export default function App() {
       <Routes>
         <Route path="/auth/login" element={<LoginChoicePage />} />
         <Route path="/auth/login/admin" element={<LoginPage />} />
-        <Route path="/auth/login/user" element={<UserLoginPlaceholderPage />} />
-        <Route path="/" element={<ProtectedRoute />}>
+        <Route path="/auth/login/user" element={<UserLoginPage />} />
+
+        <Route path="/" element={<ProtectedRoute role="admin" />}>
           <Route element={<DashboardLayout />}>
             <Route index element={<DashboardPage />} />
             <Route path="batches" element={<BatchesPage />} />
@@ -53,6 +60,17 @@ export default function App() {
             <Route path="attendance" element={<AttendancePage />} />
             <Route path="fees" element={<FeesPage />} />
             <Route path="assignments" element={<AssignmentsPage />} />
+          </Route>
+        </Route>
+
+        {/* Student portal — read-only view of the student's own record. Adding a section
+            is a route here plus an entry in portalNavItems. */}
+        <Route path="/portal" element={<ProtectedRoute role="student" />}>
+          <Route element={<PortalLayout />}>
+            <Route index element={<PortalOverviewPage />} />
+            <Route path="attendance" element={<PortalAttendancePage />} />
+            <Route path="assignments" element={<PortalAssignmentsPage />} />
+            <Route path="fees" element={<PortalFeesPage />} />
           </Route>
         </Route>
       </Routes>

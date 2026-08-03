@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { ClipboardCheck, Check, ChevronDown, Search } from 'lucide-react';
+import { ClipboardCheck, Check, ChevronDown } from 'lucide-react';
+import { SearchBar } from '@/components/ui/SearchBar';
 import type { Assignment } from '@/lib/types';
 import { formatDate } from '@/lib/utils/format';
 
@@ -53,17 +54,7 @@ export function AssignmentSelect({ assignments, value, onChange }: AssignmentSel
       {open && (
         <div className="absolute left-0 right-0 top-full z-20 mt-2 overflow-hidden rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-surface)] shadow-[var(--shadow-lg)]">
           <div className="border-b border-[var(--border)] p-2">
-            <div className="flex items-center gap-2 rounded-[var(--radius-md)] bg-[var(--bg-elevated)]" style={{ paddingLeft: '1rem', paddingRight: '1rem' }}>
-              <Search size={15} className="shrink-0 text-[var(--text-muted)]" />
-              <input
-                autoFocus
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search assignments..."
-                className="min-h-10 w-full border-0 bg-transparent text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]"
-                style={{ paddingLeft: '0.25rem', paddingRight: '0.25rem' }}
-              />
-            </div>
+            <SearchBar size="sm" autoFocus value={search} onChange={setSearch} placeholder="Search assignments" />
           </div>
           <div className="max-h-64 overflow-y-auto p-1" role="listbox">
             {filtered.length === 0 ? (

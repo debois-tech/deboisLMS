@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ClipboardCheck, Upload, CheckCircle, Loader2 } from 'lucide-react';
+import { ClipboardCheck, Upload, Loader2, Plus } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
@@ -162,8 +162,8 @@ export default function AttendancePage() {
           <CardHeader
             title="2. Select Lecture"
             action={
-              <Button size="sm" className="action-button" variant="ghost" onClick={() => setShowNewLecture(true)}>
-                + New Lecture
+              <Button size="sm" className="action-button-compact" onClick={() => setShowNewLecture(true)}>
+                <Plus size={14} /> New Lecture
               </Button>
             }
           />
@@ -239,28 +239,36 @@ export default function AttendancePage() {
           </Card>
 
           <Card>
-            <CardHeader
-              title="4. Attendance Records"
-              action={
-                records.some((r) => !r.approved) ? (
-                  <Button size="sm" onClick={handleBulkApprove}>
-                    <CheckCircle size={14} /> Approve All
-                  </Button>
-                ) : undefined
-              }
-            />
+            <CardHeader title="4. Attendance Records" />
             {loading ? (
               <Spinner />
             ) : records.length === 0 ? (
-              <EmptyState icon={<ClipboardCheck size={32} />} title="No attendance records" description="Upload a CSV and click Upload & Process to generate records" />
+              <EmptyState icon={<ClipboardCheck size={32} />} title="No attendance records" />
             ) : (
-              <AttendanceRecordsTable records={records} onToggleApproved={handleToggleApproved} maxHeight="28rem" />
+              <AttendanceRecordsTable
+                records={records}
+                onToggleApproved={handleToggleApproved}
+                onApproveAll={handleBulkApprove}
+                maxHeight="28rem"
+              />
             )}
           </Card>
         </>
       )}
 
-      <Modal open={showNewLecture} onClose={() => setShowNewLecture(false)} title="New Lecture">
+      <Modal
+        open={showNewLecture}
+        onClose={() => setShowNewLecture(false)}
+        title="New Lecture"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setShowNewLecture(false)}>Cancel</Button>
+            <Button className="action-button-compact" onClick={handleCreateLecture} disabled={!newLectureDate}>
+              Create Lecture
+            </Button>
+          </>
+        }
+      >
         <div className="popup-form-spaced">
           <FormField label="Date" required>
             <input type="date" value={newLectureDate} onChange={(e) => setNewLectureDate(e.target.value)} required />
@@ -268,7 +276,6 @@ export default function AttendancePage() {
           <FormField label="Meeting Code">
             <input value={newLectureMeeting} onChange={(e) => setNewLectureMeeting(e.target.value)} placeholder="e.g. meet-xyz" />
           </FormField>
-          <Button onClick={handleCreateLecture}>Create Lecture</Button>
         </div>
       </Modal>
     </div>

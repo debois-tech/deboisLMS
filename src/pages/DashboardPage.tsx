@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Layers, Users, ClipboardCheck, DollarSign, ArrowUpRight } from 'lucide-react';
+import { Layers, Users, DollarSign, ArrowUpRight } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -40,9 +40,8 @@ export default function DashboardPage() {
         <StatCard label="Total Batches" value={stats?.total_batches ?? 0} icon={Layers} color="var(--primary)" />
         <StatCard label="Active Batches" value={stats?.active_batches ?? 0} icon={Layers} color="#10b981" />
         <StatCard label="Total Students" value={stats?.total_students ?? 0} icon={Users} color="#8b5cf6" />
-        <StatCard label="Pending Approval" value={stats?.pending_attendance ?? 0} icon={ClipboardCheck} color="#f59e0b" />
         <StatCard label="Fees Collected" value={formatCurrency(stats?.total_fees_collected ?? 0)} icon={DollarSign} color="#10b981" valueClassName="text-emerald-400" />
-        <StatCard label="Outstanding" value={formatCurrency(stats?.total_fees_outstanding ?? 0)} icon={DollarSign} color="#ef4444" valueClassName="text-red-400" />
+        <StatCard label="Pending Due" value={formatCurrency(stats?.total_fees_outstanding ?? 0)} icon={DollarSign} color="#ef4444" valueClassName="text-red-400" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

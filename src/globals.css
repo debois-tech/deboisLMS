@@ -381,6 +381,259 @@ html.light .glass {
   max-width: 42rem;
 }
 
+/* ── Student Portal ──────────────────────────────────────────── */
+
+.portal-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  height: var(--navbar-h);
+  padding: 0 1.5rem;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-surface) 82%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+.portal-nav {
+  display: flex;
+  gap: 0.25rem;
+  overflow-x: auto;
+  padding: 0 1.5rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-surface);
+  scrollbar-width: none;
+}
+
+.portal-nav::-webkit-scrollbar { display: none; }
+
+.portal-nav-link {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 0 0 auto;
+  padding: 0.875rem 0.875rem;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.portal-nav-link:hover { color: var(--text-primary); }
+
+.portal-nav-link.is-active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+.portal-main {
+  display: flex;
+  justify-content: center;
+  padding: 2.5rem 1.5rem 4rem;
+}
+
+.portal-page {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  width: 100%;
+  max-width: 56rem;
+}
+
+.portal-page-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.portal-page-subtitle {
+  margin-top: 0.25rem;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.portal-identity {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.portal-avatar {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 3.5rem;
+  height: 3.5rem;
+  color: var(--primary);
+  font-size: 1.125rem;
+  font-weight: 700;
+  border: 1px solid var(--primary-glow);
+  border-radius: var(--radius-lg);
+  background: var(--primary-glow-soft);
+}
+
+.portal-name {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--text-primary);
+}
+
+.portal-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem 0.875rem;
+  margin-top: 0.375rem;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.portal-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 0.875rem;
+}
+
+.portal-stat {
+  padding: 1.125rem 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+}
+
+.portal-stat-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.portal-stat-value {
+  margin-top: 0.75rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.portal-stat-note {
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.portal-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  overflow: hidden;
+}
+
+.portal-list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.portal-list-row:last-child { border-bottom: none; }
+
+.portal-list-primary {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.portal-list-secondary {
+  margin-top: 0.2rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.portal-progress {
+  height: 4px;
+  margin-top: 0.875rem;
+  border-radius: 999px;
+  background: var(--bg-overlay);
+  overflow: hidden;
+}
+
+/* Scales instead of animating width so the fill doesn't trigger layout on every frame. */
+.portal-progress-fill {
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--primary);
+  transform-origin: left center;
+  transition: transform 0.4s ease-out;
+}
+
+.portal-empty {
+  padding: 2.5rem 1.25rem;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  text-align: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+}
+
+.auth-hint {
+  margin-top: 0.25rem;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.credential-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+}
+
+.credential-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.credential-value {
+  margin-top: 0.25rem;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  word-break: break-all;
+}
+
+@media (max-width: 640px) {
+  .portal-main { padding: 1.75rem 1rem 3rem; }
+  .portal-topbar, .portal-nav { padding-left: 1rem; padding-right: 1rem; }
+  .portal-name { font-size: 1.25rem; }
+}
+
 /* Legacy wrappers still used on some pages — strip double padding */
 .app-content > .p-6,
 .app-content > .p-6.max-w-2xl {
@@ -569,6 +822,568 @@ html.light .glass {
   -webkit-appearance: checkbox;
   appearance: auto;
 }
+
+/* ── Table block — a toolbar sitting above a data table ──────── */
+/* Used wherever a table has controls of its own (approve-all, export, counts).
+   The gap is what keeps the controls from sitting flush on the table's edge. */
+.table-block {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.table-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 2.25rem;
+}
+
+/* Nothing on the left — keep the action on the right where it belongs. */
+.table-toolbar:only-child,
+.table-toolbar > :only-child {
+  margin-left: auto;
+}
+
+.submission-toggle {
+  display: inline-flex;
+  padding: 0.25rem;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  transition: color 0.18s, background-color 0.18s;
+}
+
+.submission-toggle:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--bg-overlay);
+}
+
+.submission-toggle.is-submitted { color: var(--primary-light); }
+.submission-toggle:disabled { opacity: 0.5; cursor: progress; }
+
+.submission-toggle:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Repo URLs are long and the column is narrow, so the cell scrolls sideways
+   rather than wrapping or truncating a link the admin needs to read in full. */
+.repo-field {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 11rem;
+  max-width: 20rem;
+  padding: 0.25rem 0.25rem 0.25rem 0.625rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+}
+
+.repo-field-scroll {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-bottom: 2px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+
+.repo-field-link {
+  display: inline-block;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  transition: color 0.18s;
+}
+
+.repo-field-link:hover {
+  color: var(--primary-light);
+  text-decoration: underline;
+}
+
+.repo-field-open {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 1.75rem;
+  height: 1.75rem;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  transition: color 0.18s, background-color 0.18s;
+}
+
+.repo-field-open:hover {
+  color: var(--primary-light);
+  background: var(--bg-overlay);
+}
+
+/* Stands in for the Avatar the people tables use, so the batch table's first
+   column keeps the same rhythm as the students and tutors tables. */
+.batch-chip {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 2.25rem;
+  height: 2.25rem;
+  color: var(--primary);
+  border-radius: var(--radius-md);
+  background: var(--primary-glow-soft);
+}
+
+/* ── CSV import dialog ───────────────────────────────────────── */
+.import-dropzone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 3rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  cursor: pointer;
+  transition: border-color 0.18s, color 0.18s;
+}
+
+.import-dropzone:hover {
+  color: var(--text-primary);
+  border-color: var(--primary);
+}
+
+.import-preview {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.import-preview table {
+  width: 100%;
+  min-width: 36rem;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.import-preview th {
+  padding: 0.75rem 1rem;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+  color: var(--text-muted);
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+}
+
+.import-preview td {
+  max-width: 14rem;
+  padding: 0.75rem 1rem;
+  overflow: hidden;
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+
+.import-preview tbody tr:last-child td { border-bottom: none; }
+
+/* ── Search bar ──────────────────────────────────────────────── */
+/* One field, three sizes. Height, gutter, icon and control size all scale
+   together — the app previously had six hand-rolled variants that disagreed
+   about every one of those. */
+.searchbar {
+  position: relative;
+  width: 100%;
+}
+
+.searchbar-field {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  transition: border-color 0.18s, box-shadow 0.18s;
+}
+
+.searchbar-field:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-glow-soft);
+}
+
+.searchbar-icon {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+}
+
+/* Beats the global `input` rule, which would otherwise re-add its own border,
+   background and padding inside the field. */
+.searchbar input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+  padding: 0;
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+}
+
+.searchbar input:focus {
+  border: none;
+  box-shadow: none;
+}
+
+.searchbar input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.searchbar-action {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  transition: color 0.18s, background-color 0.18s;
+}
+
+.searchbar-action:hover {
+  color: var(--text-primary);
+  background: var(--bg-overlay);
+}
+
+.searchbar-action.is-active { color: var(--primary); }
+
+.searchbar-action:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.searchbar-sm .searchbar-field { min-height: 2.25rem; gap: 0.5rem; padding: 0 0.375rem 0 0.75rem; }
+.searchbar-sm input { font-size: 0.8125rem; }
+.searchbar-sm .searchbar-action { width: 1.625rem; height: 1.625rem; }
+
+.searchbar-md .searchbar-field { min-height: 2.75rem; gap: 0.625rem; padding: 0 0.5rem 0 0.875rem; }
+.searchbar-md input { font-size: 0.875rem; }
+.searchbar-md .searchbar-action { width: 1.875rem; height: 1.875rem; }
+
+.searchbar-lg .searchbar-field { min-height: 3.25rem; gap: 0.75rem; padding: 0 0.625rem 0 1.0625rem; }
+.searchbar-lg input { font-size: 0.9375rem; }
+.searchbar-lg .searchbar-action { width: 2.25rem; height: 2.25rem; }
+
+.searchbar-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 0.5rem);
+  z-index: 30;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.searchbar-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0 1rem;
+  font-size: 0.875rem;
+  text-align: left;
+  color: var(--text-primary);
+  transition: background-color 0.15s;
+}
+
+.searchbar-option:hover { background: var(--bg-elevated); }
+
+.searchbar-panel-scroll {
+  max-height: 16rem;
+  overflow-y: auto;
+  padding: 0.25rem;
+}
+
+.searchbar-panel-empty {
+  padding: 1rem;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+/* ── Assignment list — student portal ────────────────────────── */
+/* Flat by construction: no card boxes, no shadows. A row is a title, a date and
+   a state dot on one line, divided from the next by a hairline. Everything else
+   about an assignment lives in the dialog you get by opening it. */
+.assignment-board {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+  width: 100%;
+}
+
+/* Narrower than the rows it filters, and centred on the same axis. */
+.assignment-search {
+  max-width: 24rem;
+  margin: 0 auto;
+}
+
+/* The list scrolls inside the page rather than growing it, so the search field
+   stays put while a long term's worth of assignments moves under it. */
+.assignment-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  max-height: 60vh;
+  padding-right: 0.5rem;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
+.assignment-section-label {
+  display: block;
+  margin-bottom: 0.625rem;
+  padding-left: 0.125rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* Each section is its own card; the label above it does the separating. Rows are
+   divided inside the card by hairlines, so there is one border per boundary
+   rather than a box around every assignment. */
+.assignment-rows {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+}
+
+.assignment-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+  padding: 1.0625rem 1.25rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  transition: background-color 0.18s ease;
+}
+
+.assignment-row:last-child { border-bottom: none; }
+
+.assignment-row:hover {
+  background: color-mix(in srgb, var(--text-primary) 4%, transparent);
+}
+
+.assignment-row:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.assignment-row-dot {
+  flex: 0 0 auto;
+  width: 0.4375rem;
+  height: 0.4375rem;
+  border-radius: 999px;
+  background: var(--warning);
+}
+
+.assignment-row.is-submitted .assignment-row-dot {
+  background: var(--primary);
+}
+
+.assignment-row-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.9375rem;
+  font-weight: 550;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assignment-row.is-submitted .assignment-row-title {
+  color: var(--text-secondary);
+}
+
+.assignment-row-date {
+  flex: 0 0 auto;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.assignment-row-chevron {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  transition: transform 0.18s ease, color 0.18s ease;
+}
+
+.assignment-row:hover .assignment-row-chevron {
+  color: var(--text-secondary);
+  transform: translateX(2px);
+}
+
+/* ── Assignment dialog ───────────────────────────────────────── */
+.assignment-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.assignment-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.assignment-detail-body {
+  font-size: 0.875rem;
+  line-height: 1.7;
+  color: var(--text-secondary);
+  white-space: pre-line;
+}
+
+.assignment-detail-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+
+.assignment-fact {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  font-size: 0.8125rem;
+}
+
+.assignment-fact dt {
+  flex: 0 0 5.5rem;
+  color: var(--text-muted);
+}
+
+.assignment-fact dd {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assignment-fact a {
+  color: var(--text-primary);
+  transition: color 0.18s;
+}
+
+.assignment-fact a:hover {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+/* ── Repo submit dialog ──────────────────────────────────────── */
+/* The link field and its confirmation tick sit side by side; the tick wraps
+   underneath once the field can no longer hold its 14rem basis. */
+.repo-submit-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.625rem;
+}
+
+.repo-submit-row > .field {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.repo-confirm {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s, background-color 0.2s;
+}
+
+.repo-confirm:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.repo-confirm.is-checked {
+  color: var(--primary-light);
+  border-color: var(--primary-glow);
+  background: var(--primary-glow-soft);
+}
+
+.repo-confirm:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-glow-soft);
+}
+
+.repo-confirm input {
+  width: 1.05rem;
+  height: 1.05rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  accent-color: var(--primary);
+  cursor: pointer;
+  -webkit-appearance: checkbox;
+  appearance: auto;
+}
+
+/* Changing the link re-points every submission, so the warning is part of the
+   field rather than a footnote the student can hand in without reading. */
+.repo-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.75rem 0.875rem;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+}
+
+/* The tinted surface and the amber icon carry the warning; the sentence itself
+   stays primary text, which holds its contrast in both themes. */
+.repo-notice.is-warning {
+  color: var(--text-primary);
+  border-color: color-mix(in srgb, var(--warning) 30%, transparent);
+  background: color-mix(in srgb, var(--warning) 10%, transparent);
+}
+
+.repo-notice.is-warning svg { color: var(--warning); }
+
+.repo-notice svg { flex: 0 0 auto; margin-top: 0.1rem; }
 
 @media (max-width: 640px) {
   :root {
