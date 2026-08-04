@@ -95,7 +95,7 @@ export function Navbar({ onMenuClick }: NavbarProps) {
                   await supabase.auth.signOut();
                   navigate('/auth/login');
                 }}
-                className="nav-user-dropdown-item flex items-center gap-3 w-full text-sm text-red-400 hover:bg-red-500/10 transition-colors"
+                className="nav-user-dropdown-item flex items-center gap-3 w-full text-sm text-[var(--danger-text)] hover:bg-red-500/10 transition-colors"
               >
                 <LogOut size={16} />
                 Sign Out

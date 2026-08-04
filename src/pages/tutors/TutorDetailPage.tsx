@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NotFound } from '@/components/ui/NotFound';
-import { getTutorById, getTutorBatches, getBatchById } from '@/lib/supabase';
+import { getTutorById, getTutorBatches } from '@/lib/supabase';
 import type { Tutor, TutorBatchMapping, Batch } from '@/lib/types';
 import { formatDate } from '@/lib/utils/format';
 
@@ -18,15 +18,10 @@ export default function TutorDetailPage() {
 
   useEffect(() => {
     if (!tutorId) return;
-    Promise.all([getTutorById(tutorId), getTutorBatches(tutorId)]).then(async ([t, mappings]) => {
+    Promise.all([getTutorById(tutorId), getTutorBatches(tutorId)]).then(([t, mappings]) => {
       setTutor(t ?? null);
-      const withBatches = await Promise.all(
-        mappings.map(async (m) => {
-          const batch = await getBatchById(m.batch_id);
-          return { ...m, batch };
-        })
-      );
-      setBatchMappings(withBatches);
+      // `getTutorBatches` joins the batch in — no per-mapping fetch needed.
+      setBatchMappings(mappings);
       setLoading(false);
     });
   }, [tutorId]);

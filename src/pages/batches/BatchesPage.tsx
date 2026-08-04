@@ -1,12 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Layers, Search, Check } from 'lucide-react';
+import { Plus, Layers, Search } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { SearchBar } from '@/components/ui/SearchBar';
+import { SearchFilterBar } from '@/components/ui/SearchFilterBar';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import { getBatches } from '@/lib/supabase';
 import type { Batch, BatchStatus } from '@/lib/types';
@@ -23,7 +23,6 @@ function statusVariant(status: BatchStatus) {
 export default function BatchesPage() {
   const [batches, setBatches] = useState<Batch[]>([]);
   const [search, setSearch] = useState('');
-  const [filterOpen, setFilterOpen] = useState(false);
   const [status, setStatus] = useState<BatchStatus | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -45,7 +44,6 @@ export default function BatchesPage() {
 
   const selectStatus = (next: BatchStatus | null) => {
     setStatus(next);
-    setFilterOpen(false);
   };
 
   if (loading) return <Spinner centered />;
@@ -62,43 +60,15 @@ export default function BatchesPage() {
       ) : (
         <>
           <div className="mb-4 max-w-md">
-            <SearchBar
+            <SearchFilterBar
               value={search}
               onChange={setSearch}
               placeholder="Search by name or track"
-              filter={{
-                open: filterOpen,
-                onOpenChange: setFilterOpen,
-                active: status !== null,
-                label: 'Filter by status',
-                panel: (
-                  <div className="searchbar-panel-scroll" role="listbox">
-                    <button
-                      type="button"
-                      role="option"
-                      aria-selected={status === null}
-                      onClick={() => selectStatus(null)}
-                      className="searchbar-option"
-                    >
-                      <span>All statuses</span>
-                      {status === null && <Check size={16} className="text-[var(--primary)]" />}
-                    </button>
-                    {STATUSES.map((option) => (
-                      <button
-                        key={option}
-                        type="button"
-                        role="option"
-                        aria-selected={status === option}
-                        onClick={() => selectStatus(option)}
-                        className="searchbar-option"
-                      >
-                        <span className="capitalize">{option}</span>
-                        {status === option && <Check size={16} className="text-[var(--primary)]" />}
-                      </button>
-                    ))}
-                  </div>
-                ),
-              }}
+              filterLabel="Filter by status"
+              allLabel="All statuses"
+              filterValue={status}
+              filterOptions={STATUSES.map((option) => ({ value: option, label: option }))}
+              onFilterChange={(next) => selectStatus(next as BatchStatus | null)}
             />
           </div>
 

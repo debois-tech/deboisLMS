@@ -21,7 +21,9 @@ export default function PortalAssignmentsPage() {
   const [repoUrl, setRepoUrl] = useState<string | undefined>();
   const [open, setOpen] = useState<StudentAssignment | null>(null);
   const [query, setQuery] = useState('');
-  const [loading, setLoading] = useState(true);
+  // Seeded from whether there is anything to load, so the no-student case never
+  // needs a synchronous setState inside the effect below.
+  const [loading, setLoading] = useState(Boolean(studentId));
   const { showToast } = useToast();
 
   // The saved repo loads with the assignments, so the dialog's submit view can
@@ -37,10 +39,7 @@ export default function PortalAssignmentsPage() {
   }, [studentId]);
 
   useEffect(() => {
-    if (!studentId) {
-      setLoading(false);
-      return;
-    }
+    if (!studentId) return;
     let active = true;
     load().finally(() => { if (active) setLoading(false); });
     return () => { active = false; };

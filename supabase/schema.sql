@@ -42,6 +42,9 @@ create table batches (
   track      text,
   status     batch_status default 'upcoming',
   start_date date,
+  -- Filename prefix for this batch's study material, e.g. DBT-TEPC-2026-D.
+  -- Material titles are this plus an admin-entered suffix: DBT-TEPC-2026-D01.
+  batch_code text,
   created_at timestamptz default now()
 );
 
@@ -184,6 +187,61 @@ create table fee_payment_logs (
 create index idx_fee_logs_fee on fee_payment_logs(student_fee_id);
 create index idx_fee_logs_batch on fee_payment_logs(batch_id);
 
+-- Payment log + running balance are written in one transaction.
+create or replace function public.record_fee_payment(
+  p_student_fee_id uuid,
+  p_amount numeric,
+  p_payment_date date,
+  p_payment_method payment_method default 'other',
+  p_notes text default null
+)
+returns jsonb
+language plpgsql
+set search_path = public
+as $$
+declare
+  fee_row student_fees%rowtype;
+  log_row fee_payment_logs%rowtype;
+  updated_fee student_fees%rowtype;
+begin
+  if p_amount is null or p_amount <= 0 then
+    raise exception 'Payment amount must be greater than zero';
+  end if;
+
+  select * into fee_row
+  from student_fees
+  where id = p_student_fee_id
+  for update;
+
+  if not found then
+    raise exception 'Could not find the fee record';
+  end if;
+
+  insert into fee_payment_logs (
+    student_fee_id, student_id, batch_id, amount,
+    payment_date, payment_method, notes
+  ) values (
+    fee_row.id, fee_row.student_id, fee_row.batch_id, p_amount,
+    p_payment_date, p_payment_method, p_notes
+  )
+  returning * into log_row;
+
+  update student_fees
+  set paid_amount = fee_row.paid_amount + p_amount,
+      updated_at = now()
+  where id = fee_row.id
+  returning * into updated_fee;
+
+  return jsonb_build_object(
+    'log', to_jsonb(log_row),
+    'fee', to_jsonb(updated_fee)
+  );
+end;
+$$;
+
+revoke all on function public.record_fee_payment(uuid, numeric, date, payment_method, text) from public;
+grant execute on function public.record_fee_payment(uuid, numeric, date, payment_method, text) to authenticated;
+
 -- -----------------------------------------------------------
 -- 11. ASSIGNMENTS (the assignment definition, per batch)
 -- -----------------------------------------------------------
@@ -236,10 +294,16 @@ create table student_repos (
 -- Bucket, RLS and view-log policies: supabase/study_material_migration.sql
 create table materials (
   id           uuid primary key default gen_random_uuid(),
-  batch_id     uuid not null references batches(id) on delete cascade,
+  -- NULL means the material is for every student, not one batch.
+  batch_id     uuid references batches(id) on delete cascade,
+  -- Whose name the watermark carries, alongside the company phone number.
+  tutor_id     uuid references tutors(id) on delete set null,
   title        text not null,
   description  text,
-  storage_path text not null unique,   -- <batch_id>/<uuid>.pdf inside the bucket
+  -- Folder name when this came from a folder upload; NULL for a single file.
+  -- One row per PDF either way — this only groups them in listings.
+  folder       text,
+  storage_path text not null unique,   -- <batch_id|all>/<uuid>.pdf inside the bucket
   size_bytes   bigint,
   page_count   int,
   uploaded_by  uuid,

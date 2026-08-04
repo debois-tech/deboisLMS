@@ -8,6 +8,7 @@ import { CredentialsModal } from '@/components/students/StudentLoginCard';
 import { createOrReuseStudent, createStudentLogin } from '@/lib/supabase';
 import { useToast } from '@/lib/context/ToastContext';
 import type { StudentCredentials } from '@/lib/types';
+import { errorMessage } from '@/lib/utils/errors';
 
 export default function NewStudentPage() {
   const navigate = useNavigate();
@@ -42,8 +43,8 @@ export default function NewStudentPage() {
         showToast(loginError?.message ?? 'Student saved. Login not created.', 'warning');
         navigate(`/students/${student.id}`);
       }
-    } catch (error: any) {
-      showToast(error?.message ?? 'Failed to add student', 'error');
+    } catch (error) {
+      showToast(errorMessage(error, 'Failed to add student'), 'error');
     } finally {
       setLoading(false);
     }

@@ -18,6 +18,7 @@ import type { Batch, Lecture, AttendanceRecord } from '@/lib/types';
 import { parseCsv } from '@/lib/utils/csvParser';
 import type { CsvRow } from '@/lib/utils/csvParser';
 import { useToast } from '@/lib/context/ToastContext';
+import { errorMessage } from '@/lib/utils/errors';
 
 export default function AttendancePage() {
   const [batches, setBatches] = useState<Batch[]>([]);
@@ -97,8 +98,8 @@ export default function AttendancePage() {
       if (report.duplicateRowsIgnored > 0) parts.push(`${report.duplicateRowsIgnored} duplicate rows merged`);
       if (report.unmatched.length > 0) parts.push(`${report.unmatched.length} participant(s) need review`);
       showToast(parts.join(' · '), report.unmatched.length > 0 ? 'warning' : 'success');
-    } catch (err: any) {
-      showToast(err?.message ?? 'Attendance upload failed', 'error');
+    } catch (err) {
+      showToast(errorMessage(err, 'Attendance upload failed'), 'error');
     }
     setProcessing(false);
   };
@@ -121,8 +122,8 @@ export default function AttendancePage() {
       await bulkApproveAttendance(selectedLecture);
       loadRecords(selectedLecture);
       showToast('All records approved');
-    } catch (error: any) {
-      showToast(error?.message ?? 'Failed to approve records', 'error');
+    } catch (error) {
+      showToast(errorMessage(error, 'Failed to approve records'), 'error');
     }
   };
 
@@ -141,8 +142,8 @@ export default function AttendancePage() {
       setNewLectureMeeting('');
       getLecturesByBatch(selectedBatch).then(setLectures);
       showToast('Lecture created');
-    } catch (error: any) {
-      showToast(error?.message ?? 'Failed to create lecture', 'error');
+    } catch (error) {
+      showToast(errorMessage(error, 'Failed to create lecture'), 'error');
     }
   };
 
@@ -152,8 +153,8 @@ export default function AttendancePage() {
     <div className="page-section">
       <PageHeader title="Attendance" />
 
-      <Card>
-            <CardHeader title="Select batch" />
+      <Card className="step-card">
+        <CardHeader title="Select Batch" />
         <BatchSelect batches={batches} value={selectedBatch} onChange={setSelectedBatch} />
       </Card>
 

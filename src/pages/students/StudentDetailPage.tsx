@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Mail, Phone, Layers, CalendarDays, Wallet, Clock, History, KeyRound } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, Layers, CalendarDays, History } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
@@ -8,7 +8,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { NotFound } from '@/components/ui/NotFound';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import { StudentLoginCard } from '@/components/students/StudentLoginCard';
-import { getStudentById, getStudentBatches, getBatchById, getFeesByStudent, getLecturesByBatch, getFeePaymentLogsByStudent } from '@/lib/supabase';
+import { getStudentById, getStudentBatches, getFeesByStudent, getLecturesByBatch, getFeePaymentLogsByStudent } from '@/lib/supabase';
 import type { Student, BatchStudentMapping, Batch, StudentFee, Lecture, FeePaymentLog } from '@/lib/types';
 import { formatDate, formatCurrency } from '@/lib/utils/format';
 
@@ -27,12 +27,8 @@ export default function StudentDetailPage() {
       async ([s, mappings, logs]) => {
         setStudent(s ?? null);
         setPaymentLogs(logs);
-        const withBatches = await Promise.all(
-          mappings.map(async (m) => {
-            const batch = await getBatchById(m.batch_id);
-            return { ...m, batch };
-          })
-        );
+        // `getStudentBatches` joins the batch in — no per-mapping fetch needed.
+        const withBatches = mappings;
         setBatchMappings(withBatches);
 
         // Multiple active batches are possible; the most recently joined one is treated as "current".
@@ -104,50 +100,47 @@ export default function StudentDetailPage() {
         </div>
       </Card>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <Card padding="sm">
-          <p className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><Layers size={13} /> Current Batch</p>
+      <div className="student-summary-grid">
+        <Card padding="sm" className="student-summary-card">
+          <p className="student-summary-label">Current Batch</p>
           {currentBatch ? (
-            <Link to={`/batches/${currentBatch.id}`} className="mt-3 flex items-center gap-2 text-lg font-bold text-[var(--text-primary)] hover:underline">
+            <Link to={`/batches/${currentBatch.id}`} className="student-summary-value student-summary-link">
               {currentBatch.name}
             </Link>
           ) : (
-          <p className="mt-3 text-sm text-[var(--text-muted)]">No current batch</p>
+            <p className="student-summary-empty">No current batch</p>
           )}
         </Card>
-        <Card padding="sm">
-          <p className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><Wallet size={13} /> Total Payment</p>
+        <Card padding="sm" className="student-summary-card">
+          <p className="student-summary-label">Total Payment</p>
           {currentBatch && currentFee ? (
-            <div className="mt-3 flex items-center justify-between gap-3">
-              <p className="text-lg font-bold text-[var(--text-primary)]">{formatCurrency(currentFee.paid_amount)} <span className="text-sm font-normal text-[var(--text-muted)]">/ {formatCurrency(currentFee.total_fee)}</span></p>
-              <p className={`shrink-0 text-xs font-semibold ${currentFee.total_fee - currentFee.paid_amount > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+            <div className="student-summary-payment">
+              <p className="student-summary-value">{formatCurrency(currentFee.paid_amount)} <span className="student-summary-total">/ {formatCurrency(currentFee.total_fee)}</span></p>
+              <p className={`student-summary-status ${currentFee.total_fee - currentFee.paid_amount > 0 ? 'is-due' : 'is-paid'}`}>
                 {currentFee.total_fee - currentFee.paid_amount > 0 ? `${formatCurrency(currentFee.total_fee - currentFee.paid_amount)} due` : 'Paid in full'}
               </p>
             </div>
           ) : (
-            <p className="mt-3 text-sm text-[var(--text-muted)]">—</p>
+            <p className="student-summary-empty">—</p>
           )}
         </Card>
-        <Card padding="sm">
-          <p className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><Clock size={13} /> Next Lecture</p>
+        <Card padding="sm" className="student-summary-card">
+          <p className="student-summary-label">Next Lecture</p>
           {currentBatch && nextLecture ? (
-            <div className="mt-3">
-              <p className="text-lg font-bold text-[var(--text-primary)]">{formatDate(nextLecture.lecture_date)}</p>
-              <p className="mt-0.5 text-xs text-[var(--text-muted)]">
+            <div className="student-summary-lecture">
+              <p className="student-summary-value">{formatDate(nextLecture.lecture_date)}</p>
+              <p className="student-summary-meta">
                 {nextLecture.session_type}{nextLecture.meeting_code ? ` • ${nextLecture.meeting_code}` : ''}
               </p>
             </div>
           ) : (
-          <p className="mt-3 text-sm text-[var(--text-muted)]">{currentBatch ? 'All lectures up to date' : '—'}</p>
+            <p className="student-summary-empty">{currentBatch ? 'All lectures up to date' : '—'}</p>
           )}
         </Card>
       </div>
 
-      <Card>
-        <CardHeader
-          title="Portal Login"
-          action={<KeyRound size={18} className="text-[var(--text-muted)]" />}
-        />
+      <Card className="portal-login-card">
+        <CardHeader title="Portal Login" className="portal-login-header" />
         <StudentLoginCard
           studentId={student.id}
           email={student.email}
@@ -201,7 +194,7 @@ export default function StudentDetailPage() {
             <TBody>
               {paymentLogs.map((log) => (
                 <TR key={log.id}>
-                  <TD className="font-semibold text-emerald-400">{formatCurrency(Number(log.amount))}</TD>
+                  <TD className="font-semibold text-[var(--success-text)]">{formatCurrency(Number(log.amount))}</TD>
                   <TD className="cell-secondary">{log.payment_date}</TD>
                   <TD className="cell-secondary">{batchNameById.get(log.batch_id) ?? log.batch_id}</TD>
                   <TD className="cell-muted capitalize">{(log.payment_method ?? '—').replace('_', ' ')}</TD>

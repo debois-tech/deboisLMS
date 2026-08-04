@@ -4,7 +4,9 @@ import { Loader2, ShieldAlert, X } from 'lucide-react';
 import * as pdfjs from 'pdfjs-dist';
 import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { getWatermarkedMaterialUrl } from '@/lib/supabase';
+import { useTheme } from '@/lib/context/ThemeContext';
 import type { Material } from '@/lib/types';
+import { errorMessage } from '@/lib/utils/errors';
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
 
@@ -27,7 +29,9 @@ interface MaterialViewerProps {
  * the person who took it.
  */
 export function MaterialViewer({ material, onClose }: MaterialViewerProps) {
+  const { theme } = useTheme();
   const pagesRef = useRef<HTMLDivElement>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   // Blanked while the tab is in the background, which is what a naive screen
@@ -59,9 +63,18 @@ export function MaterialViewer({ material, onClose }: MaterialViewerProps) {
         const ratio = Math.min(window.devicePixelRatio || 1, 2);
         const targetWidth = container.clientWidth;
 
-        for (let pageNumber = 1; pageNumber <= doc.numPages; pageNumber += 1) {
-          if (cancelled) return;
-
+        /*
+         * Pages are laid out immediately at their real size but drawn only as they
+         * approach the viewport. Rendering all of them up front held a
+         * full-resolution canvas per page — on a 40-page deck that is enough
+         * memory to be a problem on a mid-range phone, and nothing appeared until
+         * the whole loop finished.
+         *
+         * The placeholder carries the page's aspect ratio, so the scrollbar is
+         * honest from the start and nothing jumps as pages fill in.
+         */
+        const drawPage = async (slot: HTMLElement, pageNumber: number) => {
+          if (cancelled || !doc) return;
           const page = await doc.getPage(pageNumber);
           const base = page.getViewport({ scale: 1 });
           const viewport = page.getViewport({ scale: (targetWidth / base.width) * ratio });
@@ -70,21 +83,56 @@ export function MaterialViewer({ material, onClose }: MaterialViewerProps) {
           canvas.className = 'material-page';
           canvas.width = viewport.width;
           canvas.height = viewport.height;
-          canvas.style.width = '100%';
-          canvas.style.height = 'auto';
 
           const context = canvas.getContext('2d');
-          if (!context) continue;
+          if (!context) return;
 
           await page.render({ canvasContext: context, viewport }).promise;
           if (cancelled) return;
-          container.append(canvas);
+          slot.replaceChildren(canvas);
+          slot.classList.add('is-drawn');
+        };
+
+        const first = await doc.getPage(1);
+        const firstViewport = first.getViewport({ scale: 1 });
+        const aspect = firstViewport.height / firstViewport.width;
+
+        const slots: HTMLElement[] = [];
+        for (let pageNumber = 1; pageNumber <= doc.numPages; pageNumber += 1) {
+          const slot = document.createElement('div');
+          slot.className = 'material-page-slot';
+          slot.style.aspectRatio = `1 / ${aspect}`;
+          slot.dataset.page = String(pageNumber);
+          container.append(slot);
+          slots.push(slot);
         }
 
-        setLoading(false);
-      } catch (err: any) {
+        // `rootMargin` starts the render a screen early, so scrolling at a normal
+        // pace never catches up with a blank page.
+        observerRef.current = new IntersectionObserver(
+          (entries, observer) => {
+            for (const entry of entries) {
+              if (!entry.isIntersecting) continue;
+              const slot = entry.target as HTMLElement;
+              observer.unobserve(slot);
+              void drawPage(slot, Number(slot.dataset.page));
+            }
+          },
+          { root: container.parentElement, rootMargin: '150% 0px' },
+        );
+
+        slots.forEach((slot) => observerRef.current?.observe(slot));
+
+        // The first page is drawn directly rather than waiting for the observer,
+        // so something is on screen the moment loading ends.
+        await drawPage(slots[0], 1);
+        observerRef.current.unobserve(slots[0]);
+
         if (cancelled) return;
-        setError(err?.message ?? 'Could not open this material.');
+        setLoading(false);
+      } catch (err) {
+        if (cancelled) return;
+        setError(errorMessage(err, 'Could not open this material.'));
         setLoading(false);
       } finally {
         // Revoked as soon as the pages are drawn: after this the document exists
@@ -95,6 +143,8 @@ export function MaterialViewer({ material, onClose }: MaterialViewerProps) {
 
     return () => {
       cancelled = true;
+      observerRef.current?.disconnect();
+      observerRef.current = null;
       if (blobUrl) URL.revokeObjectURL(blobUrl);
       doc?.destroy();
     };
@@ -145,6 +195,11 @@ export function MaterialViewer({ material, onClose }: MaterialViewerProps) {
   return createPortal(
     <div className="material-viewer" role="dialog" aria-modal="true" aria-label={material.title}>
       <header className="material-viewer-bar">
+        <img
+          src={theme === 'dark' ? '/logo-dark.png' : '/logo.png'}
+          alt="Deboistech"
+          className="material-viewer-logo"
+        />
         <p className="material-viewer-title">{material.title}</p>
         <button type="button" onClick={onClose} className="material-viewer-close" aria-label="Close">
           <X size={18} />

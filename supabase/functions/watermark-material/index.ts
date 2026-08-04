@@ -1,11 +1,16 @@
 // Edge Function: watermark-material
 // The only reader of the private `materials` bucket. Given a material id and the
 // caller's JWT, it fetches the original PDF with the service role key, stamps the
-// reading student's name and phone onto every page, and streams back that copy.
+// tutor's name and the company phone number onto every page, and streams back
+// that copy.
 //
-// The unstamped file never reaches a browser. Screenshots and screen recordings
-// are still possible — no web technology prevents them — but every copy in
-// circulation carries the identity of the student who opened it.
+// The stamp is deliberately NOT the reading student's identity. A shared copy is
+// treated as reach rather than theft: whoever ends up with the file also ends up
+// with the tutor's name and a number to call. `material_views` still records who
+// opened what, so opens remain auditable even though the page no longer names
+// the reader.
+//
+// The unstamped file never reaches a browser.
 //
 // Deploy: supabase functions deploy watermark-material
 
@@ -17,11 +22,29 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const json = (body: unknown, status = 200) =>
+const json = (body: unknown, status = 200, extraHeaders: Record<string, string> = {}) =>
   new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: { ...corsHeaders, 'Content-Type': 'application/json', ...extraHeaders },
   });
+
+/** Per-student throttle. Generous enough for real reading, tight enough to stop a loop. */
+const THROTTLE_SECONDS = 60;
+const THROTTLE_MAX_OPENS = 20;
+
+/** Shown on every page, under every tutor name. */
+const COMPANY_NAME = 'DeboisTech';
+const COMPANY_PHONE = '8263830296';
+
+/**
+ * pdf-lib holds the whole document in memory and serialises a second copy, inside
+ * an Edge Function's ~256 MB budget. Past this the function is killed mid-render
+ * and the student sees a generic failure, so it is rejected with a real reason.
+ *
+ * The bucket enforces the same 50 MB, so this should be unreachable — it stays as
+ * the backstop for anything uploaded before that limit was set.
+ */
+const MAX_WATERMARK_BYTES = 50 * 1024 * 1024;
 
 /**
  * Two layers, because they defeat different things. The tiled diagonal layer
@@ -37,12 +60,13 @@ async function stamp(pdfBytes: ArrayBuffer, identity: string, issuedAt: string):
   for (const page of pdf.getPages()) {
     const { width, height } = page.getSize();
 
-    // Tiled diagonal. Low opacity so the material stays readable underneath —
-    // a watermark that makes the page hard to read gets worked around.
-    const size = 11;
+    // Tiled diagonal, sized to be legible in a screenshot that has been scaled
+    // down or re-shared. Opacity stays low so the material underneath is still
+    // readable — a watermark that makes the page hard to read gets cropped out.
+    const size = 15;
     const textWidth = font.widthOfTextAtSize(identity, size);
-    const stepX = textWidth + 90;
-    const stepY = 130;
+    const stepX = textWidth + 110;
+    const stepY = 150;
 
     for (let y = -height; y < height * 2; y += stepY) {
       // Offset alternate rows so the tiling doesn't leave clean vertical gutters
@@ -55,14 +79,14 @@ async function stamp(pdfBytes: ArrayBuffer, identity: string, issuedAt: string):
           size,
           font,
           color: rgb(0.45, 0.45, 0.45),
-          opacity: 0.13,
+          opacity: 0.16,
           rotate: degrees(35),
         });
       }
     }
 
     // Footer bar, drawn last so it sits above the page content.
-    const barHeight = 18;
+    const barHeight = 24;
     page.drawRectangle({
       x: 0,
       y: 0,
@@ -71,10 +95,10 @@ async function stamp(pdfBytes: ArrayBuffer, identity: string, issuedAt: string):
       color: rgb(0.04, 0.06, 0.05),
       opacity: 0.88,
     });
-    page.drawText(`${identity}  ·  opened ${issuedAt}`, {
-      x: 10,
-      y: 5.5,
-      size: 8,
+    page.drawText(`${identity}  ·  ${issuedAt}`, {
+      x: 12,
+      y: 8,
+      size: 11,
       font: bold,
       color: rgb(1, 1, 1),
       opacity: 0.92,
@@ -113,21 +137,31 @@ Deno.serve(async (req) => {
 
     const { data: material } = await admin
       .from('materials')
-      .select('id, batch_id, title, storage_path')
+      .select('id, batch_id, title, storage_path, size_bytes, tutor:tutors(name)')
       .eq('id', material_id)
       .single();
 
     if (!material) return json({ error: 'Material not found.' }, 404);
 
+    if ((material.size_bytes ?? 0) > MAX_WATERMARK_BYTES) {
+      return json(
+        { error: 'This file is too large to open in the reader. Ask your coordinator for it.' },
+        413,
+      );
+    }
+
+    /*
+     * The stamp is the same for everyone: the tutor who taught it, the company,
+     * and the number to call. It does not vary by reader, which is the point —
+     * a shared copy still advertises where it came from.
+     */
+    const tutorName = (material.tutor as { name?: string } | null)?.name;
+    const identity = [tutorName, COMPANY_NAME, COMPANY_PHONE].filter(Boolean).join(' · ');
+
     const role = caller.app_metadata?.role;
-    let identity: string;
     let studentId: string | null = null;
 
-    if (role === 'admin') {
-      // Admins get a copy stamped as theirs, not an unstamped one. An admin
-      // preview that leaks should be as traceable as a student's.
-      identity = `${caller.email ?? 'Admin'} · DeboisTech admin`;
-    } else {
+    if (role !== 'admin') {
       const { data: student } = await admin
         .from('students')
         .select('id, name, phone')
@@ -136,21 +170,51 @@ Deno.serve(async (req) => {
 
       if (!student) return json({ error: 'This login is not linked to a student record.' }, 403);
 
-      // Enrolment is re-checked here rather than trusted from the client: this
-      // function runs as the service role and bypasses RLS, so it has to do the
-      // work the policy would otherwise have done.
-      const { data: mapping } = await admin
-        .from('batch_student_mapping')
-        .select('id')
-        .eq('student_id', student.id)
-        .eq('batch_id', material.batch_id)
-        .eq('status', 'active')
-        .maybeSingle();
+      /*
+       * Enrolment is re-checked here rather than trusted from the client: this
+       * function runs as the service role and bypasses RLS, so it has to do the
+       * work the policy would otherwise have done.
+       *
+       * A null batch_id means the material is for every student, so there is no
+       * enrolment to check — miss this and every all-students material 403s.
+       */
+      if (material.batch_id) {
+        const { data: mapping } = await admin
+          .from('batch_student_mapping')
+          .select('id')
+          .eq('student_id', student.id)
+          .eq('batch_id', material.batch_id)
+          .eq('status', 'active')
+          .maybeSingle();
 
-      if (!mapping) return json({ error: 'This material is not for your batch.' }, 403);
+        if (!mapping) return json({ error: 'This material is not for your batch.' }, 403);
+      }
+
+      /*
+       * Throttle. Every call downloads the whole PDF, stamps every page and
+       * re-serialises it, so a loop from one logged-in student burns the free
+       * tier's invocation budget and floods `material_views` — the table a leak
+       * investigation depends on.
+       *
+       * The view log doubles as the rate-limit store: no extra table, and it is
+       * already written on every successful open.
+       */
+      const since = new Date(Date.now() - THROTTLE_SECONDS * 1000).toISOString();
+      const { count: recentOpens } = await admin
+        .from('material_views')
+        .select('id', { count: 'exact', head: true })
+        .eq('student_id', student.id)
+        .gte('viewed_at', since);
+
+      if ((recentOpens ?? 0) >= THROTTLE_MAX_OPENS) {
+        return json(
+          { error: 'You are opening material too quickly. Wait a moment and try again.' },
+          429,
+          { 'Retry-After': String(THROTTLE_SECONDS) },
+        );
+      }
 
       studentId = student.id;
-      identity = [student.name, student.phone].filter(Boolean).join(' · ');
     }
 
     const { data: file, error: downloadError } = await admin.storage

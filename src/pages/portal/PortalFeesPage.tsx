@@ -27,13 +27,12 @@ export default function PortalFeesPage() {
   const [fees, setFees] = useState<StudentFee[]>([]);
   const [logs, setLogs] = useState<FeePaymentLog[]>([]);
   const [batchNames, setBatchNames] = useState<Map<string, string>>(new Map());
-  const [loading, setLoading] = useState(true);
+  // Seeded from whether there is anything to load, so the no-student case never
+  // needs a synchronous setState inside the effect below.
+  const [loading, setLoading] = useState(Boolean(studentId));
 
   useEffect(() => {
-    if (!studentId) {
-      setLoading(false);
-      return;
-    }
+    if (!studentId) return;
     let active = true;
 
     (async () => {

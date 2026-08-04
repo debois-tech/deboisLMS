@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Users, Upload, Check, Search } from 'lucide-react';
-import { SearchBar } from '@/components/ui/SearchBar';
+import { Plus, Users, Upload, Search } from 'lucide-react';
+import { SearchFilterBar } from '@/components/ui/SearchFilterBar';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -22,7 +22,6 @@ export default function StudentsPage() {
   const [mappings, setMappings] = useState<BatchStudentMapping[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [filterOpen, setFilterOpen] = useState(false);
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [showImport, setShowImport] = useState(false);
   const [bulkLogins, setBulkLogins] = useState<BulkLoginResult | null>(null);
@@ -59,7 +58,6 @@ export default function StudentsPage() {
 
   const selectBatch = (batchId: string | null) => {
     setSelectedBatchId(batchId);
-    setFilterOpen(false);
   };
 
   const handleImport = async (rows: Record<string, string>[], _fee?: number, createLogins?: boolean) => {
@@ -103,43 +101,15 @@ export default function StudentsPage() {
       ) : (
         <>
           <div className="mb-4 max-w-md">
-            <SearchBar
+            <SearchFilterBar
               value={search}
               onChange={setSearch}
               placeholder="Search by name, phone, or email"
-              filter={{
-                open: filterOpen,
-                onOpenChange: setFilterOpen,
-                active: selectedBatchId !== null,
-                label: 'Filter by batch',
-                panel: (
-                  <div className="searchbar-panel-scroll" role="listbox">
-                    <button
-                      type="button"
-                      role="option"
-                      aria-selected={selectedBatchId === null}
-                      onClick={() => selectBatch(null)}
-                      className="searchbar-option"
-                    >
-                      <span>All batches</span>
-                      {selectedBatchId === null && <Check size={16} className="text-[var(--primary)]" />}
-                    </button>
-                    {batches.map((batch) => (
-                      <button
-                        key={batch.id}
-                        type="button"
-                        role="option"
-                        aria-selected={selectedBatchId === batch.id}
-                        onClick={() => selectBatch(batch.id)}
-                        className="searchbar-option"
-                      >
-                        <span>{batch.name}</span>
-                        {selectedBatchId === batch.id && <Check size={16} className="text-[var(--primary)]" />}
-                      </button>
-                    ))}
-                  </div>
-                ),
-              }}
+              filterLabel="Filter by batch"
+              allLabel="All batches"
+              filterValue={selectedBatchId}
+              filterOptions={batches.map((batch) => ({ value: batch.id, label: batch.name }))}
+              onFilterChange={selectBatch}
             />
           </div>
 

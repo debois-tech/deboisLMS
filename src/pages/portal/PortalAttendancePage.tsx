@@ -11,20 +11,19 @@ import {
   PortalStatus,
   usePortalStudentId,
 } from '@/components/portal';
-import { getApprovedAttendanceByStudent } from '@/lib/supabase';
+import { ATTENDANCE_PARTIAL_PERCENT, getApprovedAttendanceByStudent } from '@/lib/supabase';
 import type { AttendanceRecord } from '@/lib/types';
 import { formatDayLabel } from '@/lib/utils/format';
 
 export default function PortalAttendancePage() {
   const studentId = usePortalStudentId();
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Seeded from whether there is anything to load, so the no-student case never
+  // needs a synchronous setState inside the effect below.
+  const [loading, setLoading] = useState(Boolean(studentId));
 
   useEffect(() => {
-    if (!studentId) {
-      setLoading(false);
-      return;
-    }
+    if (!studentId) return;
     let active = true;
     getApprovedAttendanceByStudent(studentId).then((data) => {
       if (!active) return;
@@ -49,7 +48,7 @@ export default function PortalAttendancePage() {
               label="Attendance"
               icon={CalendarCheck}
               value={`${rate}%`}
-              tone={rate !== null && rate >= 75 ? 'positive' : 'attention'}
+              tone={rate !== null && rate >= ATTENDANCE_PARTIAL_PERCENT ? 'positive' : 'attention'}
               progress={rate ?? undefined}
               note={`${attended} of ${records.length} classes`}
             />

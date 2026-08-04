@@ -26,6 +26,11 @@ export interface Batch {
   track?: string;
   status: BatchStatus;
   start_date?: string;
+  /**
+   * Filename prefix for this batch's study material, e.g. `DBT-TEPC-2026-D`.
+   * A material's title is this plus an admin-entered suffix: `DBT-TEPC-2026-D01`.
+   */
+  batch_code?: string;
   created_at: string;
   student_count?: number;
 }
@@ -164,15 +169,21 @@ export interface BatchStudentMapping {
  */
 export interface Material {
   id: string;
-  batch_id: string;
+  /** Null means the material is for every student rather than one batch. */
+  batch_id?: string | null;
+  /** Whose name the watermark carries, alongside the company phone number. */
+  tutor_id?: string | null;
   title: string;
   description?: string;
+  /** Folder this came from, when uploaded as part of one. Groups listings only. */
+  folder?: string | null;
   storage_path: string;
   size_bytes?: number;
   page_count?: number;
   uploaded_by?: string;
   created_at: string;
   batch?: Batch;
+  tutor?: Tutor;
 }
 
 export interface MaterialView {

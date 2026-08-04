@@ -1,11 +1,12 @@
-import { useState } from 'react';
-import { Check, Copy, KeyRound, RotateCcw } from 'lucide-react';
+import { ReactNode, useState } from 'react';
+import { Check, Copy, KeyRound } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { createStudentLogin } from '@/lib/supabase';
 import type { StudentCredentials } from '@/lib/types';
 import { derivePortalPassword } from '@/lib/utils/portalPassword';
+import { errorMessage } from '@/lib/utils/errors';
 
 interface StudentLoginCardProps {
   studentId: string;
@@ -40,8 +41,8 @@ export function StudentLoginCard({ studentId, email, phone, hasLogin, onCreated 
       const result = await createStudentLogin(studentId);
       setFresh(result);
       onCreated?.();
-    } catch (err: any) {
-      setError(err?.message ?? 'Failed to create login');
+    } catch (err) {
+      setError(errorMessage(err, 'Failed to create login'));
     } finally {
       setLoading(false);
     }
@@ -74,7 +75,15 @@ export function StudentLoginCard({ studentId, email, phone, hasLogin, onCreated 
       <CredentialRow label="Email" value={email} />
 
       {password ? (
-        <CredentialRow label="Password" value={password} />
+        <CredentialRow
+          label="Password"
+          value={password}
+          action={(
+            <button type="button" onClick={run} disabled={loading} className="credential-reset">
+              Reset
+            </button>
+          )}
+        />
       ) : (
         <div className="credential-row">
           <div className="min-w-0">
@@ -86,17 +95,6 @@ export function StudentLoginCard({ studentId, email, phone, hasLogin, onCreated 
         </div>
       )}
 
-      <div className="flex items-center gap-3">
-        <Button className="action-button-compact" variant="secondary" onClick={run} loading={loading}>
-          <RotateCcw size={15} />
-          Reset password
-        </Button>
-        {password && (
-          <p className="text-xs text-[var(--text-muted)]">
-            Reset uses the same password rule.
-          </p>
-        )}
-      </div>
     </div>
   );
 }
@@ -125,7 +123,7 @@ export function CredentialsModal({
   );
 }
 
-export function CredentialRow({ label, value }: { label: string; value: string }) {
+export function CredentialRow({ label, value, action }: { label: string; value: string; action?: ReactNode }) {
   const [copied, setCopied] = useState(false);
 
   const copy = async () => {
@@ -140,14 +138,17 @@ export function CredentialRow({ label, value }: { label: string; value: string }
         <p className="credential-label">{label}</p>
         <p className="credential-value">{value}</p>
       </div>
-      <button
-        type="button"
-        onClick={copy}
-        aria-label={`Copy ${label.toLowerCase()}`}
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-overlay)] hover:text-[var(--text-primary)]"
-      >
-        {copied ? <Check size={16} className="text-[var(--success-text)]" /> : <Copy size={16} />}
-      </button>
+      <div className="flex shrink-0 items-center gap-1">
+        {action}
+        <button
+          type="button"
+          onClick={copy}
+          aria-label={`Copy ${label.toLowerCase()}`}
+          className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-overlay)] hover:text-[var(--text-primary)]"
+        >
+          {copied ? <Check size={15} className="text-[var(--success-text)]" /> : <Copy size={15} />}
+        </button>
+      </div>
     </div>
   );
 }

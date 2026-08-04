@@ -4,8 +4,10 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { FormField } from '@/components/ui/FormField';
+import { SearchSelect } from '@/components/ui/SearchSelect';
 import { createBatch } from '@/lib/supabase';
 import { useToast } from '@/lib/context/ToastContext';
+import { errorMessage } from '@/lib/utils/errors';
 
 export default function NewBatchPage() {
   const navigate = useNavigate();
@@ -15,6 +17,7 @@ export default function NewBatchPage() {
     track: '',
     status: 'upcoming' as const,
     start_date: '',
+    batch_code: '',
   });
   const { showToast } = useToast();
 
@@ -25,8 +28,8 @@ export default function NewBatchPage() {
       const batch = await createBatch(form);
       showToast('Batch created');
       navigate(`/batches/${batch.id}`);
-    } catch (error: any) {
-      showToast(error?.message ?? 'Failed to create batch', 'error');
+    } catch (error) {
+      showToast(errorMessage(error, 'Failed to create batch'), 'error');
     } finally {
       setLoading(false);
     }
@@ -47,26 +50,47 @@ export default function NewBatchPage() {
             />
           </FormField>
           <FormField label="Track">
-            <select
+            <SearchSelect
+              options={[
+                { value: '', label: 'Select track' },
+                { value: 'DevOps', label: 'DevOps' },
+                { value: 'AI/ML', label: 'AI/ML' },
+                { value: 'Full Stack', label: 'Full Stack' },
+                { value: 'Cloud', label: 'Cloud' },
+              ]}
               value={form.track}
-              onChange={(e) => setForm({ ...form, track: e.target.value })}
-            >
-              <option value="">Select track</option>
-              <option value="DevOps">DevOps</option>
-              <option value="AI/ML">AI/ML</option>
-              <option value="Full Stack">Full Stack</option>
-              <option value="Cloud">Cloud</option>
-            </select>
+              onChange={(track) => setForm({ ...form, track })}
+              placeholder="Select track"
+              searchPlaceholder="Search tracks"
+              emptyText="No tracks found"
+            />
           </FormField>
           <FormField label="Status">
-            <select
+            <SearchSelect
+              options={[
+                { value: 'upcoming', label: 'Upcoming' },
+                { value: 'ongoing', label: 'Ongoing' },
+                { value: 'completed', label: 'Completed' },
+              ]}
               value={form.status}
-              onChange={(e) => setForm({ ...form, status: e.target.value as typeof form.status })}
-            >
-              <option value="upcoming">Upcoming</option>
-              <option value="ongoing">Ongoing</option>
-              <option value="completed">Completed</option>
-            </select>
+              onChange={(status) => setForm({ ...form, status: status as typeof form.status })}
+              placeholder="Select status"
+              searchPlaceholder="Search statuses"
+              emptyText="No statuses found"
+            />
+          </FormField>
+          <FormField label="Batch Code">
+            <input
+              value={form.batch_code}
+              onChange={(e) => setForm({ ...form, batch_code: e.target.value })}
+              placeholder="e.g. DBT-TEPC-2026-D"
+              autoCapitalize="characters"
+              spellCheck={false}
+            />
+            <p className="field-hint">
+              Prefix for this batch's study material. Uploads add a suffix to it, e.g.
+              DBT-TEPC-2026-D01.
+            </p>
           </FormField>
           <FormField label="Start Date">
             <input

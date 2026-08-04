@@ -6,6 +6,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { FormField } from '@/components/ui/FormField';
 import { createTutor } from '@/lib/supabase';
 import { useToast } from '@/lib/context/ToastContext';
+import { errorMessage } from '@/lib/utils/errors';
 
 export default function NewTutorPage() {
   const navigate = useNavigate();
@@ -20,8 +21,8 @@ export default function NewTutorPage() {
       const tutor = await createTutor(form);
       showToast('Tutor added');
       navigate(`/tutors/${tutor.id}`);
-    } catch (error: any) {
-      showToast(error?.message ?? 'Failed to add tutor', 'error');
+    } catch (error) {
+      showToast(errorMessage(error, 'Failed to add tutor'), 'error');
     } finally {
       setLoading(false);
     }
@@ -44,7 +45,7 @@ export default function NewTutorPage() {
             </FormField>
           </div>
           <div className="flex gap-3 pt-2">
-            <Button className="action-button" type="submit" loading={loading}>Add Tutor</Button>
+            <Button className="action-button-compact" type="submit" loading={loading}>Add Tutor</Button>
             <Button variant="ghost" onClick={() => navigate('/tutors')}>Cancel</Button>
           </div>
         </form>

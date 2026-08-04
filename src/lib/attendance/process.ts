@@ -1,5 +1,5 @@
 import { clearUploads, insertAttendance, loadProcessingContext, loadUploadRows } from './db';
-import { getGeminiUnavailableReason, isGeminiConfigured } from './gemini';
+import { getGeminiUnavailableReason } from './gemini';
 import { matchParticipant } from './match';
 import { mergeSessions } from './merge';
 import type {
@@ -58,9 +58,9 @@ export async function processAttendance(
     `Lecture ${lectureId} (batch ${ctx.batchId}, scheduled ${ctx.scheduledMinutes} min): ${uploads.length} upload rows, ${ctx.roster.length} roster students.`,
   );
 
-  if (!isGeminiConfigured()) {
-    log('WARN: No Gemini API key configured — AI name matching disabled (deterministic matching only).');
-  }
+  // Whether AI matching is available can no longer be checked up front: the key
+  // lives in the `match-name` edge function, not the browser. The first call
+  // reports it, and step 4b logs the outcome.
 
   // ── 2. Merge sessions + dedupe devices ────────────────────────
   const participants = mergeSessions(uploads);
@@ -152,11 +152,19 @@ export async function processAttendance(
   };
 }
 
+/**
+ * Attendance bands, from the PRD (§5.4). Exported so nothing re-invents them:
+ * the portal used to colour its attendance tile green at an invented 75%, which
+ * corresponded to no rule in the product.
+ */
+export const ATTENDANCE_PRESENT_PERCENT = 90;
+export const ATTENDANCE_PARTIAL_PERCENT = 65;
+
 /** Map attended minutes against scheduled minutes to an attendance status. */
 export function computeStatus(totalMinutes: number, scheduledMinutes: number): 'present' | 'partial' | 'absent' {
   const percentage = scheduledMinutes > 0 ? (totalMinutes / scheduledMinutes) * 100 : 0;
-  if (percentage >= 90) return 'present';
-  if (percentage >= 65) return 'partial';
+  if (percentage >= ATTENDANCE_PRESENT_PERCENT) return 'present';
+  if (percentage >= ATTENDANCE_PARTIAL_PERCENT) return 'partial';
   return 'absent';
 }
 

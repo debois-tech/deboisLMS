@@ -7,6 +7,7 @@ import { InlineAlert } from '@/components/ui/InlineAlert';
 import { PortalStatus } from '@/components/portal/PortalStatus';
 import type { Assignment, AssignmentCompletion } from '@/lib/types';
 import { formatDate, formatDateTime } from '@/lib/utils/format';
+import { errorMessage } from '@/lib/utils/errors';
 
 export type StudentAssignment = Assignment & { completion?: AssignmentCompletion };
 
@@ -79,8 +80,8 @@ export function AssignmentModal({ assignment, repoUrl, onClose, onSubmit }: Assi
     setError('');
     try {
       await onSubmit(trimmed);
-    } catch (err: any) {
-      setError(err?.message ?? 'Could not submit. Try again.');
+    } catch (err) {
+      setError(errorMessage(err, 'Could not submit. Try again.'));
       setSubmitting(false);
     }
   };

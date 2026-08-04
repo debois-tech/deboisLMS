@@ -1,46 +1,74 @@
 import { supabase } from '../client';
-import type { Student, BatchStudentMapping, StudentCredentials } from '@/lib/types';
+import { maybeRow, ok, row, rows } from './result';
+import type { Batch, Student, BatchStudentMapping, StudentCredentials } from '@/lib/types';
+import { errorMessage } from '@/lib/utils/errors';
 
 export async function getStudents(): Promise<Student[]> {
-  const { data } = await supabase
-    .from('students')
-    .select('*')
-    .order('created_at', { ascending: false });
-  return (data ?? []) as Student[];
+  return rows<Student>(
+    await supabase.from('students').select('*').order('created_at', { ascending: false }),
+    'Could not load students',
+  );
 }
 
 export async function getStudentById(id: string): Promise<Student | undefined> {
-  const { data } = await supabase
-    .from('students')
-    .select('*')
-    .eq('id', id)
-    .single();
-  return data as Student | undefined;
+  return maybeRow<Student>(
+    await supabase.from('students').select('*').eq('id', id).single(),
+    'Could not load this student',
+  );
 }
 
 export async function createStudent(input: Omit<Student, 'id' | 'created_at'>): Promise<Student> {
-  const { data } = await supabase
-    .from('students')
-    .insert(input)
-    .select()
-    .single();
-  return data as Student;
+  return row<Student>(
+    await supabase.from('students').insert(input).select().single(),
+    'Could not create the student',
+  );
 }
 
 const normalizePhone = (phone: string | undefined | null) => (phone ?? '').replace(/\D/g, '');
 
+/**
+ * Finds the student a CSV row refers to, by **phone or email only**.
+ *
+ * Name is deliberately not an identity key. It used to be, and two students
+ * called "Rahul Sharma" would collapse into one record on import — sharing a
+ * portal login, attendance, fees and assignments, with no way to tell afterwards
+ * that it had happened. A duplicate row is a nuisance an admin can merge; a
+ * silent merge of two people is data loss.
+ */
 export async function findExistingStudent(input: { name?: string; phone?: string; email?: string }): Promise<Student | undefined> {
-  const { data } = await supabase.from('students').select('*');
-  const students = (data ?? []) as Student[];
   const phone = normalizePhone(input.phone);
   const email = input.email?.trim().toLowerCase();
-  const name = input.name?.trim().toLowerCase();
+  if (!phone && !email) return undefined;
+
+  const students = rows<Student>(
+    await supabase.from('students').select('*'),
+    'Could not check for an existing student',
+  );
+
   return students.find((s) => {
     if (phone && s.phone && normalizePhone(s.phone) === phone) return true;
     if (email && s.email && s.email.trim().toLowerCase() === email) return true;
-    if (name && s.name && s.name.trim().toLowerCase() === name) return true;
     return false;
   });
+}
+
+/**
+ * Rows that look like an existing student by name alone. The import preview
+ * shows these as a warning so the admin can decide — the import itself never
+ * acts on a name match.
+ */
+export async function findNameCollisions(names: string[]): Promise<string[]> {
+  const wanted = new Set(names.map((n) => n.trim().toLowerCase()).filter(Boolean));
+  if (wanted.size === 0) return [];
+
+  const students = rows<Student>(
+    await supabase.from('students').select('*'),
+    'Could not check for duplicate names',
+  );
+
+  return students
+    .filter((s) => wanted.has(s.name.trim().toLowerCase()))
+    .map((s) => s.name);
 }
 
 export async function createOrReuseStudent(input: Omit<Student, 'id' | 'created_at'>): Promise<Student> {
@@ -50,22 +78,17 @@ export async function createOrReuseStudent(input: Omit<Student, 'id' | 'created_
 }
 
 export async function updateStudent(id: string, input: Partial<Student>): Promise<Student | undefined> {
-  const { data } = await supabase
-    .from('students')
-    .update(input)
-    .eq('id', id)
-    .select()
-    .single();
-  return data as Student | undefined;
+  return maybeRow<Student>(
+    await supabase.from('students').update(input).eq('id', id).select().single(),
+    'Could not save the student',
+  );
 }
 
 export async function getStudentByAuthUserId(authUserId: string): Promise<Student | undefined> {
-  const { data } = await supabase
-    .from('students')
-    .select('*')
-    .eq('auth_user_id', authUserId)
-    .maybeSingle();
-  return (data ?? undefined) as Student | undefined;
+  return maybeRow<Student>(
+    await supabase.from('students').select('*').eq('auth_user_id', authUserId).maybeSingle(),
+    'Could not load your student record',
+  );
 }
 
 /**
@@ -121,11 +144,11 @@ export async function createStudentLoginsBulk(
       try {
         const credentials = await createStudentLogin(student.id);
         result.created.push({ ...credentials, studentId: student.id, name: student.name });
-      } catch (err: any) {
+      } catch (err) {
         result.failed.push({
           studentId: student.id,
           name: student.name,
-          reason: err?.message ?? 'Failed',
+          reason: errorMessage(err, 'Failed'),
         });
       } finally {
         done += 1;
@@ -137,28 +160,34 @@ export async function createStudentLoginsBulk(
   return result;
 }
 
-export async function getStudentBatches(studentId: string): Promise<BatchStudentMapping[]> {
-  const { data } = await supabase
-    .from('batch_student_mapping')
-    .select('*')
-    .eq('student_id', studentId);
-  return (data ?? []) as BatchStudentMapping[];
+/**
+ * The student's enrolments with each batch joined in. The batch used to be
+ * fetched per mapping by the pages that needed its name, which cost one round
+ * trip per batch on the portal's landing page.
+ */
+export async function getStudentBatches(studentId: string): Promise<(BatchStudentMapping & { batch?: Batch })[]> {
+  return rows<BatchStudentMapping & { batch?: Batch }>(
+    await supabase
+      .from('batch_student_mapping')
+      .select('*, batch:batches(*)')
+      .eq('student_id', studentId),
+    'Could not load your batches',
+  );
 }
 
 export async function getAllBatchStudentMappings(): Promise<BatchStudentMapping[]> {
-  const { data } = await supabase
-    .from('batch_student_mapping')
-    .select('*');
-  return (data ?? []) as BatchStudentMapping[];
+  return rows<BatchStudentMapping>(
+    await supabase.from('batch_student_mapping').select('*'),
+    'Could not load enrolments',
+  );
 }
 
 export async function getBatchStudents(batchId: string): Promise<(Student & { mapping: BatchStudentMapping })[]> {
-  const { data: mappings } = await supabase
-    .from('batch_student_mapping')
-    .select('*, students(*)')
-    .eq('batch_id', batchId);
+  const mappings = rows<any>(
+    await supabase.from('batch_student_mapping').select('*, students(*)').eq('batch_id', batchId),
+    'Could not load the batch roster',
+  );
 
-  if (!mappings) return [];
   return mappings.map((m: any) => ({
     ...(m.students as Student),
     mapping: { id: m.id, batch_id: m.batch_id, student_id: m.student_id, joined_at: m.joined_at, status: m.status },
@@ -166,19 +195,33 @@ export async function getBatchStudents(batchId: string): Promise<(Student & { ma
 }
 
 export async function addStudentToBatch(studentId: string, batchId: string, totalFee: number): Promise<BatchStudentMapping> {
-  const { data } = await supabase
-    .from('batch_student_mapping')
-    .insert({ student_id: studentId, batch_id: batchId })
-    .select()
-    .single();
+  const mapping = row<BatchStudentMapping>(
+    await supabase
+      .from('batch_student_mapping')
+      .insert({ student_id: studentId, batch_id: batchId })
+      .select()
+      .single(),
+    'Could not add the student to the batch',
+  );
+
   // Re-adding a previously removed student leaves a stale student_fees row behind (removeStudentFromBatch
   // only deletes the mapping) — upsert without ignoreDuplicates so the fee just entered always overwrites it.
-  await supabase
-    .from('student_fees')
-    .upsert({ student_id: studentId, batch_id: batchId, total_fee: totalFee, paid_amount: 0 }, { onConflict: 'student_id,batch_id' });
-  return data as BatchStudentMapping;
+  ok(
+    await supabase
+      .from('student_fees')
+      .upsert(
+        { student_id: studentId, batch_id: batchId, total_fee: totalFee, paid_amount: 0 },
+        { onConflict: 'student_id,batch_id' },
+      ),
+    'Student was added but the fee could not be set',
+  );
+
+  return mapping;
 }
 
 export async function removeStudentFromBatch(mappingId: string): Promise<void> {
-  await supabase.from('batch_student_mapping').delete().eq('id', mappingId);
+  ok(
+    await supabase.from('batch_student_mapping').delete().eq('id', mappingId),
+    'Could not remove the student from the batch',
+  );
 }

@@ -6,9 +6,11 @@ import { Spinner } from '@/components/ui/Spinner';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { NotFound } from '@/components/ui/NotFound';
 import { FormField } from '@/components/ui/FormField';
+import { SearchSelect } from '@/components/ui/SearchSelect';
 import { getBatchById, updateBatch } from '@/lib/supabase';
 import type { Batch } from '@/lib/types';
 import { useToast } from '@/lib/context/ToastContext';
+import { errorMessage } from '@/lib/utils/errors';
 
 export default function EditBatchPage() {
   const { batchId } = useParams();
@@ -34,8 +36,8 @@ export default function EditBatchPage() {
       await updateBatch(form.id, form);
       showToast('Batch updated');
       navigate(`/batches/${form.id}`);
-    } catch (error: any) {
-      showToast(error?.message ?? 'Failed to update batch', 'error');
+    } catch (error) {
+      showToast(errorMessage(error, 'Failed to update batch'), 'error');
     } finally {
       setSaving(false);
     }
@@ -58,24 +60,47 @@ export default function EditBatchPage() {
             />
           </FormField>
           <FormField label="Track">
-            <select
+            <SearchSelect
+              options={[
+                { value: '', label: 'Select track' },
+                { value: 'DevOps', label: 'DevOps' },
+                { value: 'AI/ML', label: 'AI/ML' },
+                { value: 'Full Stack', label: 'Full Stack' },
+                { value: 'Cloud', label: 'Cloud' },
+              ]}
               value={form.track ?? ''}
-              onChange={(e) => setForm({ ...form, track: e.target.value })}
-            >
-              <option value="">Select track</option>
-              <option value="DevOps">DevOps</option>
-              <option value="AI/ML">AI/ML</option>
-            </select>
+              onChange={(track) => setForm({ ...form, track })}
+              placeholder="Select track"
+              searchPlaceholder="Search tracks"
+              emptyText="No tracks found"
+            />
           </FormField>
           <FormField label="Status">
-            <select
+            <SearchSelect
+              options={[
+                { value: 'upcoming', label: 'Upcoming' },
+                { value: 'ongoing', label: 'Ongoing' },
+                { value: 'completed', label: 'Completed' },
+              ]}
               value={form.status}
-              onChange={(e) => setForm({ ...form, status: e.target.value as Batch['status'] })}
-            >
-              <option value="upcoming">Upcoming</option>
-              <option value="ongoing">Ongoing</option>
-              <option value="completed">Completed</option>
-            </select>
+              onChange={(status) => setForm({ ...form, status: status as Batch['status'] })}
+              placeholder="Select status"
+              searchPlaceholder="Search statuses"
+              emptyText="No statuses found"
+            />
+          </FormField>
+          <FormField label="Batch Code">
+            <input
+              value={form.batch_code ?? ''}
+              onChange={(e) => setForm({ ...form, batch_code: e.target.value })}
+              placeholder="e.g. DBT-TEPC-2026-D"
+              autoCapitalize="characters"
+              spellCheck={false}
+            />
+            <p className="field-hint">
+              Prefix for this batch's study material. Uploads add a suffix to it, e.g.
+              DBT-TEPC-2026-D01.
+            </p>
           </FormField>
           <FormField label="Start Date">
             <input
@@ -85,7 +110,7 @@ export default function EditBatchPage() {
             />
           </FormField>
           <div className="flex gap-3 pt-2">
-            <Button type="submit" loading={saving}>Save Changes</Button>
+            <Button className='action-button-compact' type="submit" loading={saving}>Save Changes</Button>
             <Button variant="ghost" onClick={() => navigate(`/batches/${form.id}`)}>Cancel</Button>
           </div>
         </form>

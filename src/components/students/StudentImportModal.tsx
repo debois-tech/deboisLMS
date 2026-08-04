@@ -5,6 +5,7 @@ import { Modal } from '@/components/ui/Modal';
 import { FormField } from '@/components/ui/FormField';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { parseStudentCsv } from '@/lib/utils/studentImport';
+import { errorMessage } from '@/lib/utils/errors';
 
 interface StudentImportModalProps {
   open: boolean;
@@ -75,8 +76,8 @@ export function StudentImportModal({ open, onClose, requireFee, onImport }: Stud
       await onImport(rows, requireFee ? Number(fee) : undefined, createLogins);
       reset();
       onClose();
-    } catch (err: any) {
-      setError(err?.message ?? 'Import failed. Some rows may already exist.');
+    } catch (err) {
+      setError(errorMessage(err, 'Import failed. Some rows may already exist.'));
       setImporting(false);
     }
   };

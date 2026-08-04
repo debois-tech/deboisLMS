@@ -13,6 +13,7 @@ import { AssignmentSubmissionTable } from '@/components/assignments/AssignmentSu
 import { getBatches, getAssignmentsByBatch, createAssignment } from '@/lib/supabase';
 import type { Batch, Assignment } from '@/lib/types';
 import { useToast } from '@/lib/context/ToastContext';
+import { errorMessage } from '@/lib/utils/errors';
 
 export default function AssignmentsPage() {
   const [batches, setBatches] = useState<Batch[]>([]);
@@ -47,8 +48,8 @@ export default function AssignmentsPage() {
       setForm({ title: '', description: '', assigned_date: '' });
       fetchBatchData(selectedBatch);
       showToast('Assignment created');
-    } catch (error: any) {
-      showToast(error?.message ?? 'Failed to create assignment', 'error');
+    } catch (error) {
+      showToast(errorMessage(error, 'Failed to create assignment'), 'error');
     }
   };
 
@@ -58,15 +59,15 @@ export default function AssignmentsPage() {
     <div className="page-section">
       <PageHeader title="Assignments" />
 
-      <Card>
-        <CardHeader title="1. Select Batch" />
+      <Card className="step-card">
+        <CardHeader title="Select Batch" />
         <BatchSelect batches={batches} value={selectedBatch} onChange={fetchBatchData} />
       </Card>
 
       {selectedBatch && (
         <Card>
           <CardHeader
-            title="2. Select Assignment"
+            title="Select Assignment"
             action={<Button size="sm" className="action-button-compact" onClick={() => setShowNew(true)}><Plus size={14} /> New Assignment</Button>}
           />
           {assignments.length === 0 ? (
@@ -79,7 +80,7 @@ export default function AssignmentsPage() {
 
       {selectedBatch && selectedAsgn && (
         <Card>
-          <CardHeader title="3. Submission Status" />
+          <CardHeader title="Submission Status" />
           <AssignmentSubmissionTable
             key={selectedAsgn}
             assignmentId={selectedAsgn}

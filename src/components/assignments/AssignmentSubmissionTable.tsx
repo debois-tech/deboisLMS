@@ -10,6 +10,7 @@ import type { AssignmentSubmissionRow } from '@/lib/supabase';
 import { formatDateTime } from '@/lib/utils/format';
 import { downloadCsv, toCsv, toFileStem } from '@/lib/utils/csvExport';
 import { useToast } from '@/lib/context/ToastContext';
+import { errorMessage } from '@/lib/utils/errors';
 
 interface AssignmentSubmissionTableProps {
   assignmentId: string;
@@ -58,8 +59,8 @@ export function AssignmentSubmissionTable({
       await markSubmission(assignmentId, row.student_id, !row.submitted);
       const data = await getAssignmentSubmissions(assignmentId, batchId);
       setRows(data);
-    } catch (error: any) {
-      showToast(error?.message ?? 'Failed to update submission', 'error');
+    } catch (error) {
+      showToast(errorMessage(error, 'Failed to update submission'), 'error');
     } finally {
       setBusyStudentId(null);
     }

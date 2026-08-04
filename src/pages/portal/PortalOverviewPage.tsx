@@ -14,9 +14,9 @@ import {
   usePortalStudentId,
 } from '@/components/portal';
 import {
+  ATTENDANCE_PARTIAL_PERCENT,
   getApprovedAttendanceByStudent,
   getAssignmentsForStudent,
-  getBatchById,
   getFeesByStudent,
   getLecturesByBatch,
   getStudentById,
@@ -43,47 +43,43 @@ export default function PortalOverviewPage() {
   const { user } = useAuth();
   const [student, setStudent] = useState<Student | null>(null);
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
-  const [currentFee, setCurrentFee] = useState<StudentFee | null>(null);
+  const [fees, setFees] = useState<StudentFee[]>([]);
   const [nextLecture, setNextLecture] = useState<Lecture | null>(null);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [assignments, setAssignments] = useState<StudentAssignment[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Seeded from whether there is anything to load, so the no-student case never
+  // needs a synchronous setState inside the effect below.
+  const [loading, setLoading] = useState(Boolean(studentId));
 
   useEffect(() => {
-    if (!studentId) {
-      setLoading(false);
-      return;
-    }
+    if (!studentId) return;
 
     let active = true;
 
     (async () => {
-      const [record, mappings, records, work] = await Promise.all([
+      // Fees are fetched for the student, not for one batch: Home used to show
+      // the current batch's balance while the Fees tab showed the total across
+      // every batch, so the same word meant two different numbers.
+      const [record, mappings, records, work, feeRows] = await Promise.all([
         getStudentById(studentId),
         getStudentBatches(studentId),
         getApprovedAttendanceByStudent(studentId),
         getAssignmentsForStudent(studentId),
+        getFeesByStudent(studentId),
       ]);
 
-      const withBatches = await Promise.all(
-        mappings.map(async (mapping) => ({ ...mapping, batch: await getBatchById(mapping.batch_id) })),
-      );
+      // `getStudentBatches` joins the batch in, so there is no per-mapping fetch.
+      const withBatches = mappings;
 
       // Multiple active batches are possible; the most recently joined one is "current".
       const currentMapping = withBatches
         .filter((mapping) => mapping.status === 'active')
         .sort((a, b) => new Date(b.joined_at).getTime() - new Date(a.joined_at).getTime())[0];
 
-      let fee: StudentFee | null = null;
       let upcoming: Lecture | null = null;
 
       if (currentMapping) {
-        const [fees, lectures] = await Promise.all([
-          getFeesByStudent(studentId),
-          getLecturesByBatch(currentMapping.batch_id),
-        ]);
-        fee = fees.find((f) => f.batch_id === currentMapping.batch_id) ?? null;
-
+        const lectures = await getLecturesByBatch(currentMapping.batch_id);
         const today = new Date().toISOString().slice(0, 10);
         upcoming = lectures
           .filter((lecture) => lecture.lecture_date.slice(0, 10) >= today)
@@ -93,7 +89,7 @@ export default function PortalOverviewPage() {
       if (!active) return;
       setStudent(record ?? null);
       setEnrollments(withBatches);
-      setCurrentFee(fee);
+      setFees(feeRows);
       setNextLecture(upcoming);
       setAttendance(records);
       setAssignments(work);
@@ -111,7 +107,10 @@ export default function PortalOverviewPage() {
   const attendanceRate = attendance.length > 0 ? Math.round((attended / attendance.length) * 100) : null;
   const handedIn = assignments.filter((item) => item.completion?.submitted).length;
   const pending = assignments.length - handedIn;
-  const outstanding = currentFee ? Number(currentFee.total_fee) - Number(currentFee.paid_amount) : 0;
+  // Totals across every batch, matching the Fees tab exactly.
+  const totalFee = fees.reduce((sum, fee) => sum + Number(fee.total_fee), 0);
+  const totalPaid = fees.reduce((sum, fee) => sum + Number(fee.paid_amount), 0);
+  const outstanding = totalFee - totalPaid;
 
   const name = student?.name ?? user?.full_name ?? 'there';
   const firstName = name.split(' ')[0];
@@ -135,7 +134,7 @@ export default function PortalOverviewPage() {
               label="Attendance"
               icon={CalendarCheck}
               value={attendanceRate === null ? 'Not started' : `${attendanceRate}%`}
-              tone={attendanceRate === null ? 'default' : attendanceRate >= 75 ? 'positive' : 'attention'}
+              tone={attendanceRate === null ? 'default' : attendanceRate >= ATTENDANCE_PARTIAL_PERCENT ? 'positive' : 'attention'}
               progress={attendanceRate ?? undefined}
               note={
                 attendance.length > 0
@@ -160,14 +159,14 @@ export default function PortalOverviewPage() {
             <PortalStat
               label="Fees"
               icon={Wallet}
-              value={!currentFee ? 'Not set' : outstanding > 0 ? formatCurrency(outstanding) : 'All paid'}
-              tone={!currentFee ? 'default' : outstanding > 0 ? 'attention' : 'positive'}
+              value={fees.length === 0 ? 'Not set' : outstanding > 0 ? formatCurrency(outstanding) : 'All paid'}
+              tone={fees.length === 0 ? 'default' : outstanding > 0 ? 'attention' : 'positive'}
               note={
-                !currentFee
+                fees.length === 0
                   ? 'Not set yet'
                   : outstanding > 0
-                    ? `of ${formatCurrency(Number(currentFee.total_fee))} total`
-                    : `${formatCurrency(Number(currentFee.total_fee))} paid`
+                    ? `of ${formatCurrency(totalFee)} total`
+                    : `${formatCurrency(totalFee)} paid`
               }
             />
           </PortalStatGrid>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { BookOpen, Check, SearchX } from 'lucide-react';
-import { SearchBar } from '@/components/ui/SearchBar';
+import { BookOpen, SearchX } from 'lucide-react';
+import { SearchFilterBar } from '@/components/ui/SearchFilterBar';
 import {
   MaterialViewer,
   PortalEmpty,
@@ -20,14 +20,12 @@ export default function PortalMaterialsPage() {
   const [open, setOpen] = useState<Material | null>(null);
   const [query, setQuery] = useState('');
   const [batchId, setBatchId] = useState<string | null>(null);
-  const [filterOpen, setFilterOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
+  // Seeded from whether there is anything to load, so the no-student case never
+  // needs a synchronous setState inside the effect below.
+  const [loading, setLoading] = useState(Boolean(studentId));
 
   useEffect(() => {
-    if (!studentId) {
-      setLoading(false);
-      return;
-    }
+    if (!studentId) return;
     let active = true;
     getMaterialsForStudent().then((data) => {
       if (!active) return;
@@ -37,10 +35,15 @@ export default function PortalMaterialsPage() {
     return () => { active = false; };
   }, [studentId]);
 
+  // Material with no batch is for everyone; it gets its own group and its own
+  // filter entry rather than being lumped in with a batch it does not belong to.
+  const EVERYONE = '__all__';
+
   const batches = useMemo(() => {
     const seen = new Map<string, string>();
     for (const material of materials) {
-      if (!seen.has(material.batch_id)) seen.set(material.batch_id, material.batch?.name ?? 'Your batch');
+      const key = material.batch_id ?? EVERYONE;
+      if (!seen.has(key)) seen.set(key, material.batch_id ? material.batch?.name ?? 'Your batch' : 'For everyone');
     }
     return [...seen].map(([id, name]) => ({ id, name }));
   }, [materials]);
@@ -48,27 +51,36 @@ export default function PortalMaterialsPage() {
   const matched = useMemo(() => {
     const term = query.trim().toLowerCase();
     return materials.filter((material) => {
-      if (batchId && material.batch_id !== batchId) return false;
+      if (batchId && (material.batch_id ?? EVERYONE) !== batchId) return false;
       if (!term) return true;
       return `${material.title} ${material.description ?? ''}`.toLowerCase().includes(term);
     });
   }, [materials, query, batchId]);
 
-  // Grouped by batch, since a student in two batches would otherwise get one
-  // undifferentiated pile of PDFs.
+  /*
+   * Grouped by batch, then by folder inside it — a student in two batches would
+   * otherwise get one undifferentiated pile, and a folder of twenty handouts
+   * would bury everything else. A folder is just a column on the row, so this is
+   * a group-by rather than a second query.
+   */
   const groups = useMemo(() => {
     const map = new Map<string, { name: string; items: Material[] }>();
     for (const material of matched) {
-      const name = material.batch?.name ?? 'Your batch';
-      if (!map.has(material.batch_id)) map.set(material.batch_id, { name, items: [] });
-      map.get(material.batch_id)!.items.push(material);
+      const batchName = material.batch_id ? material.batch?.name ?? 'Your batch' : 'For everyone';
+      const key = `${material.batch_id ?? EVERYONE}::${material.folder ?? ''}`;
+      const name = material.folder ? `${batchName} — ${material.folder}` : batchName;
+      if (!map.has(key)) map.set(key, { name, items: [] });
+      map.get(key)!.items.push(material);
     }
-    return [...map.values()];
+    // Folders after the loose files of the same batch, so a long folder never
+    // pushes the batch's own material off the screen.
+    return [...map.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([, group]) => group);
   }, [matched]);
 
   const pickBatch = (id: string | null) => {
     setBatchId(id);
-    setFilterOpen(false);
   };
 
   return (
@@ -78,45 +90,17 @@ export default function PortalMaterialsPage() {
       shape="list"
       action={
         materials.length > 0 ? (
-          <SearchBar
+          <SearchFilterBar
             className="portal-search"
             value={query}
             onChange={setQuery}
             placeholder="Search material"
             label="Search material"
-            filter={batches.length > 0 ? {
-              open: filterOpen,
-              onOpenChange: setFilterOpen,
-              active: batchId !== null,
-              label: 'Filter by batch',
-              panel: (
-                <div className="searchbar-panel-scroll" role="listbox">
-                  <button
-                    type="button"
-                    role="option"
-                    aria-selected={batchId === null}
-                    onClick={() => pickBatch(null)}
-                    className="searchbar-option"
-                  >
-                    <span>All batches</span>
-                    {batchId === null && <Check size={16} className="text-[var(--primary)]" />}
-                  </button>
-                  {batches.map((batch) => (
-                    <button
-                      key={batch.id}
-                      type="button"
-                      role="option"
-                      aria-selected={batchId === batch.id}
-                      onClick={() => pickBatch(batch.id)}
-                      className="searchbar-option"
-                    >
-                      <span>{batch.name}</span>
-                      {batchId === batch.id && <Check size={16} className="text-[var(--primary)]" />}
-                    </button>
-                  ))}
-                </div>
-              ),
-            } : undefined}
+            filterLabel="Filter by batch"
+            allLabel="All batches"
+            filterValue={batchId}
+            filterOptions={batches.map((batch) => ({ value: batch.id, label: batch.name }))}
+            onFilterChange={pickBatch}
           />
         ) : undefined
       }

@@ -1,5 +1,12 @@
 import { supabase } from '../client';
+import { rows } from './result';
 import { getBatchFeeSummary } from './fees';
+
+/** Count queries answer with `count`, not `data`, so they need their own check. */
+function count(result: { count: number | null; error: { message: string } | null }, what: string): number {
+  if (result.error) throw new Error(`${what}: ${result.error.message}`);
+  return result.count ?? 0;
+}
 
 export interface DashboardStats {
   total_batches: number;
@@ -18,24 +25,21 @@ export interface RecentActivity {
 }
 
 export async function getDashboardStats(): Promise<DashboardStats> {
-  const [batchRes, studentRes, attendanceRes, feeSummary] = await Promise.all([
+  // The active-batch count joins the others rather than running after them —
+  // there is no dependency between the five.
+  const [batchRes, activeRes, studentRes, attendanceRes, feeSummary] = await Promise.all([
     supabase.from('batches').select('*', { count: 'exact', head: true }),
+    supabase.from('batches').select('*', { count: 'exact', head: true }).eq('status', 'ongoing'),
     supabase.from('students').select('*', { count: 'exact', head: true }),
     supabase.from('attendance').select('*', { count: 'exact', head: true }).eq('approved', false),
     getBatchFeeSummary(),
   ]);
 
-  const totalBatches = batchRes.count ?? 0;
-  const { count: activeBatches } = await supabase
-    .from('batches')
-    .select('*', { count: 'exact', head: true })
-    .eq('status', 'ongoing');
-
   return {
-    total_batches: totalBatches,
-    active_batches: activeBatches ?? 0,
-    total_students: studentRes.count ?? 0,
-    pending_attendance: attendanceRes.count ?? 0,
+    total_batches: count(batchRes, 'Could not count batches'),
+    active_batches: count(activeRes, 'Could not count active batches'),
+    total_students: count(studentRes, 'Could not count students'),
+    pending_attendance: count(attendanceRes, 'Could not count pending attendance'),
     total_fees_collected: feeSummary.reduce((s, f) => s + f.total_collected, 0),
     total_fees_outstanding: feeSummary.reduce((s, f) => s + f.total_outstanding, 0),
   };
@@ -44,13 +48,16 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 export async function getRecentActivity(): Promise<RecentActivity[]> {
   const results: RecentActivity[] = [];
 
-  const { data: batches } = await supabase
-    .from('batches')
-    .select('id, name, created_at')
-    .order('created_at', { ascending: false })
-    .limit(3);
+  const batches = rows<{ id: string; name: string; created_at: string }>(
+    await supabase
+      .from('batches')
+      .select('id, name, created_at')
+      .order('created_at', { ascending: false })
+      .limit(3),
+    'Could not load recent batches',
+  );
 
-  batches?.forEach((b) =>
+  batches.forEach((b) =>
     results.push({
       id: `act-b-${b.id}`,
       text: `Batch "${b.name}" created`,
@@ -59,13 +66,16 @@ export async function getRecentActivity(): Promise<RecentActivity[]> {
     })
   );
 
-  const { data: mappings } = await supabase
-    .from('batch_student_mapping')
-    .select('id, joined_at, students(name), batches(name)')
-    .order('joined_at', { ascending: false })
-    .limit(3);
+  const mappings = rows<any>(
+    await supabase
+      .from('batch_student_mapping')
+      .select('id, joined_at, students(name), batches(name)')
+      .order('joined_at', { ascending: false })
+      .limit(3),
+    'Could not load recent enrolments',
+  );
 
-  mappings?.forEach((m: any) =>
+  mappings.forEach((m: any) =>
     results.push({
       id: `act-s-${m.id}`,
       text: `${m.students?.name ?? 'A student'} joined ${m.batches?.name ?? 'a batch'}`,

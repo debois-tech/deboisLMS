@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Layers, Users, DollarSign, ArrowUpRight } from 'lucide-react';
+import { ArrowUpRight, Layers } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -37,11 +37,11 @@ export default function DashboardPage() {
       <PageHeader title="Dashboard" />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <StatCard label="Total Batches" value={stats?.total_batches ?? 0} icon={Layers} color="var(--primary)" />
-        <StatCard label="Active Batches" value={stats?.active_batches ?? 0} icon={Layers} color="#10b981" />
-        <StatCard label="Total Students" value={stats?.total_students ?? 0} icon={Users} color="#8b5cf6" />
-        <StatCard label="Fees Collected" value={formatCurrency(stats?.total_fees_collected ?? 0)} icon={DollarSign} color="#10b981" valueClassName="text-emerald-400" />
-        <StatCard label="Pending Due" value={formatCurrency(stats?.total_fees_outstanding ?? 0)} icon={DollarSign} color="#ef4444" valueClassName="text-red-400" />
+        <StatCard label="Total Batches" value={stats?.total_batches ?? 0} />
+        <StatCard label="Active Batches" value={stats?.active_batches ?? 0} />
+        <StatCard label="Total Students" value={stats?.total_students ?? 0} />
+        <StatCard label="Fees Collected" value={formatCurrency(stats?.total_fees_collected ?? 0)} valueClassName="text-[var(--success-text)]" />
+        <StatCard label="Pending Due" value={formatCurrency(stats?.total_fees_outstanding ?? 0)} valueClassName="text-[var(--danger-text)]" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

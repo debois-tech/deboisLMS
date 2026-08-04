@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Edit3, Users, GraduationCap, Layers, ClipboardCheck, FileText, Plus, Trash2, ChevronRight, CalendarDays, Upload } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -11,6 +11,7 @@ import { NotFound } from '@/components/ui/NotFound';
 import { Modal } from '@/components/ui/Modal';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import { StudentMultiSelect } from '@/components/ui/StudentMultiSelect';
+import { SearchSelect } from '@/components/ui/SearchSelect';
 import { FormField } from '@/components/ui/FormField';
 import { AttendanceRecordsTable } from '@/components/attendance/AttendanceRecordsTable';
 import { AssignmentSubmissionTable } from '@/components/assignments/AssignmentSubmissionTable';
@@ -31,14 +32,13 @@ import { StudentImportModal } from '@/components/students/StudentImportModal';
 import { toStudentInput } from '@/lib/utils/studentImport';
 import { useToast } from '@/lib/context/ToastContext';
 import { useConfirm } from '@/lib/context/ConfirmContext';
+import { errorMessage } from '@/lib/utils/errors';
 
 
 export default function BatchDetailPage() {
   const { batchId } = useParams();
-  const navigate = useNavigate();
   const [batch, setBatch] = useState<Batch | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('overview');
 
   useEffect(() => {
     if (!batchId) return;
@@ -139,12 +139,12 @@ function StudentsTab({ batchId }: { batchId: string }) {
   const { showToast } = useToast();
   const confirm = useConfirm();
 
-  const fetchStudents = () => {
+  const fetchStudents = useCallback(() => {
     getBatchStudents(batchId).then(setStudents);
     getStudents().then(setAllStudents);
-  };
+  }, [batchId]);
 
-  useEffect(() => { fetchStudents(); }, [batchId]);
+  useEffect(() => { fetchStudents(); }, [fetchStudents]);
 
   const handleAdd = async () => {
     if (!selectedStudents.length || !totalFee || Number(totalFee) <= 0) return;
@@ -155,8 +155,8 @@ function StudentsTab({ batchId }: { batchId: string }) {
       setShowAdd(false);
       fetchStudents();
       showToast('Students added');
-    } catch (error: any) {
-      showToast(error?.message ?? 'Failed to add students', 'error');
+    } catch (error) {
+      showToast(errorMessage(error, 'Failed to add students'), 'error');
     }
   };
 
@@ -173,8 +173,8 @@ function StudentsTab({ batchId }: { batchId: string }) {
       await removeStudentFromBatch(mappingId);
       fetchStudents();
       showToast('Student removed from batch');
-    } catch (error: any) {
-      showToast(error?.message ?? 'Failed to remove student', 'error');
+    } catch (error) {
+      showToast(errorMessage(error, 'Failed to remove student'), 'error');
     }
   };
 
@@ -235,7 +235,7 @@ function StudentsTab({ batchId }: { batchId: string }) {
               </div>
               <div className="flex items-center gap-2">
                 <Badge variant={s.mapping.status === 'active' ? 'success' : 'danger'}>{s.mapping.status}</Badge>
-                <button onClick={() => handleRemove(s.mapping.id, s.name)} aria-label={`Remove ${s.name} from batch`} className="text-[var(--text-muted)] hover:text-red-400 p-1">
+                <button onClick={() => handleRemove(s.mapping.id, s.name)} aria-label={`Remove ${s.name} from batch`} className="text-[var(--text-muted)] hover:text-[var(--danger-text)] p-1">
                   <Trash2 size={14} />
                 </button>
               </div>
@@ -277,12 +277,12 @@ function TutorsTab({ batchId }: { batchId: string }) {
   const { showToast } = useToast();
   const confirm = useConfirm();
 
-  const fetchTutors = () => {
+  const fetchTutors = useCallback(() => {
     getBatchTutors(batchId).then(setTutors);
     getTutors().then(setAllTutors);
-  };
+  }, [batchId]);
 
-  useEffect(() => { fetchTutors(); }, [batchId]);
+  useEffect(() => { fetchTutors(); }, [fetchTutors]);
 
   const handleAdd = async () => {
     if (!selectedTutor) return;
@@ -292,8 +292,8 @@ function TutorsTab({ batchId }: { batchId: string }) {
       setShowAdd(false);
       fetchTutors();
       showToast('Tutor assigned to batch');
-    } catch (error: any) {
-      showToast(error?.message ?? 'Failed to assign tutor', 'error');
+    } catch (error) {
+      showToast(errorMessage(error, 'Failed to assign tutor'), 'error');
     }
   };
 
@@ -310,8 +310,8 @@ function TutorsTab({ batchId }: { batchId: string }) {
       await removeTutorFromBatch(mappingId);
       fetchTutors();
       showToast('Tutor removed from batch');
-    } catch (error: any) {
-      showToast(error?.message ?? 'Failed to remove tutor', 'error');
+    } catch (error) {
+      showToast(errorMessage(error, 'Failed to remove tutor'), 'error');
     }
   };
 
@@ -336,7 +336,7 @@ function TutorsTab({ batchId }: { batchId: string }) {
                 <p className="text-sm font-medium text-[var(--text-primary)]">{t.name}</p>
                 <p className="text-xs text-[var(--text-muted)]">{t.email ?? t.phone ?? '—'}</p>
               </div>
-              <button onClick={() => handleRemove(t.mapping.id, t.name)} aria-label={`Unassign ${t.name} from batch`} className="text-[var(--text-muted)] hover:text-red-400 p-1">
+              <button onClick={() => handleRemove(t.mapping.id, t.name)} aria-label={`Unassign ${t.name} from batch`} className="text-[var(--text-muted)] hover:text-[var(--danger-text)] p-1">
                 <Trash2 size={14} />
               </button>
             </div>
@@ -347,12 +347,14 @@ function TutorsTab({ batchId }: { batchId: string }) {
       <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Assign Tutor">
         <div className="popup-form-spaced">
           <FormField label="Select Tutor">
-            <select value={selectedTutor} onChange={(e) => setSelectedTutor(e.target.value)}>
-              <option value="">Choose a tutor...</option>
-              {available.map((t) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </select>
+            <SearchSelect
+              options={available.map((tutor) => ({ value: tutor.id, label: tutor.name }))}
+              value={selectedTutor || null}
+              onChange={setSelectedTutor}
+              placeholder="Choose a tutor"
+              searchPlaceholder="Search tutors"
+              emptyText="No tutors found"
+            />
           </FormField>
           <Button className="action-button" onClick={handleAdd} disabled={!selectedTutor}>Assign</Button>
         </div>
@@ -369,8 +371,8 @@ function LecturesTab({ batchId }: { batchId: string }) {
   const { showToast } = useToast();
   const confirm = useConfirm();
 
-  const fetchLectures = () => getLecturesByBatch(batchId).then(setLectures);
-  useEffect(() => { fetchLectures(); }, [batchId]);
+  const fetchLectures = useCallback(() => getLecturesByBatch(batchId).then(setLectures), [batchId]);
+  useEffect(() => { fetchLectures(); }, [fetchLectures]);
 
   const handleCreate = async () => {
     try {
@@ -379,8 +381,8 @@ function LecturesTab({ batchId }: { batchId: string }) {
       setForm({ lecture_date: '', meeting_code: '', scheduled_duration_minutes: 90 });
       fetchLectures();
       showToast('Lecture created');
-    } catch (error: any) {
-      showToast(error?.message ?? 'Failed to create lecture', 'error');
+    } catch (error) {
+      showToast(errorMessage(error, 'Failed to create lecture'), 'error');
     }
   };
 
@@ -397,8 +399,8 @@ function LecturesTab({ batchId }: { batchId: string }) {
       await deleteLecture(lectureId);
       fetchLectures();
       showToast('Lecture deleted');
-    } catch (error: any) {
-      showToast(error?.message ?? 'Failed to delete lecture', 'error');
+    } catch (error) {
+      showToast(errorMessage(error, 'Failed to delete lecture'), 'error');
     }
   };
 
@@ -417,7 +419,7 @@ function LecturesTab({ batchId }: { batchId: string }) {
                   {l.session_type} {l.meeting_code ? `• ${l.meeting_code}` : ''} {l.scheduled_duration_minutes ? `• ${l.scheduled_duration_minutes}min` : ''}
                 </p>
               </div>
-              <button onClick={() => handleDelete(l.id, formatDate(l.lecture_date))} aria-label={`Delete lecture on ${formatDate(l.lecture_date)}`} className="text-[var(--text-muted)] hover:text-red-400 p-1">
+              <button onClick={() => handleDelete(l.id, formatDate(l.lecture_date))} aria-label={`Delete lecture on ${formatDate(l.lecture_date)}`} className="text-[var(--text-muted)] hover:text-[var(--danger-text)] p-1">
                 <Trash2 size={14} />
               </button>
             </div>
@@ -478,9 +480,9 @@ function AttendanceTab({ batchId }: { batchId: string }) {
       if (updated) {
         setRecords((prev) => prev.map((r) => (r.id === id ? updated : r)));
       }
-    } catch (error: any) {
+    } catch (error) {
       setRecords((prev) => prev.map((r) => (r.id === id ? { ...r, approved: !approved } : r)));
-      showToast(error?.message ?? 'Failed to update approval', 'error');
+      showToast(errorMessage(error, 'Failed to update approval'), 'error');
     }
   };
 
@@ -490,8 +492,8 @@ function AttendanceTab({ batchId }: { batchId: string }) {
       await bulkApproveAttendance(selectedLecture);
       loadAttendance(selectedLecture);
       showToast('All records approved');
-    } catch (error: any) {
-      showToast(error?.message ?? 'Failed to approve records', 'error');
+    } catch (error) {
+      showToast(errorMessage(error, 'Failed to approve records'), 'error');
     }
   };
 
@@ -564,14 +566,14 @@ function FinanceTab({ batchId }: { batchId: string }) {
   const [logging, setLogging] = useState(false);
   const { showToast } = useToast();
 
-  const fetchFees = () => {
+  const fetchFees = useCallback(() => {
     Promise.all([getFeesByBatch(batchId), getBatchStudents(batchId)]).then(([f, s]) => {
       setFees(f);
       setStudents(s);
     });
-  };
+  }, [batchId]);
 
-  useEffect(() => { fetchFees(); }, [batchId]);
+  useEffect(() => { fetchFees(); }, [fetchFees]);
 
   const openPaymentLogs = async (fee: StudentFee) => {
     setLoggingFee(fee);
@@ -597,8 +599,8 @@ function FinanceTab({ batchId }: { batchId: string }) {
         setLogForm({ amount: '', payment_date: new Date().toISOString().slice(0, 10), payment_method: 'other', notes: '' });
         showToast('Payment logged');
       }
-    } catch (error: any) {
-      showToast(error?.message ?? 'Failed to log payment', 'error');
+    } catch (error) {
+      showToast(errorMessage(error, 'Failed to log payment'), 'error');
     }
     setLogging(false);
   };
@@ -610,16 +612,17 @@ function FinanceTab({ batchId }: { batchId: string }) {
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-4">
         <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Total Fees</p><p className="text-lg font-bold text-[var(--text-primary)] mt-1">{formatCurrency(totalFee)}</p></Card>
-        <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Collected</p><p className="text-lg font-bold text-emerald-400 mt-1">{formatCurrency(totalPaid)}</p></Card>
-        <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Outstanding</p><p className="text-lg font-bold text-red-400 mt-1">{formatCurrency(totalFee - totalPaid)}</p></Card>
+        <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Collected</p><p className="text-lg font-bold text-[var(--success-text)] mt-1">{formatCurrency(totalPaid)}</p></Card>
+        <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Outstanding</p><p className="text-lg font-bold text-[var(--danger-text)] mt-1">{formatCurrency(totalFee - totalPaid)}</p></Card>
       </div>
 
       <Card>
-        <CardHeader title="Per-Student Fees" />
+        <CardHeader title="Per-Student Fees" className="mb-8" />
         {fees.length === 0 ? (
           <EmptyState icon={<ClipboardCheck size={32} />} title="No fee records" />
         ) : (
-          <Table maxHeight="28rem">
+          <div style={{ marginTop: '0.75rem' }}>
+            <Table maxHeight="28rem">
             <THead>
               <TR>
                 <TH>Student</TH>
@@ -642,7 +645,7 @@ function FinanceTab({ batchId }: { batchId: string }) {
                     <TD>{formatCurrency(fee.total_fee)}</TD>
                     <TD>{formatCurrency(fee.paid_amount)}</TD>
                     <TD>
-                      <span className={remaining > 0 ? 'text-red-400' : 'text-emerald-400'}>
+                      <span className={remaining > 0 ? 'text-[var(--danger-text)]' : 'text-[var(--success-text)]'}>
                         {remaining > 0 ? formatCurrency(remaining) : '—'}
                       </span>
                     </TD>
@@ -658,7 +661,8 @@ function FinanceTab({ batchId }: { batchId: string }) {
                 );
               })}
             </TBody>
-          </Table>
+            </Table>
+          </div>
         )}
       </Card>
 
@@ -682,11 +686,11 @@ function AssignmentsTab({ batchId }: { batchId: string }) {
   const [showNew, setShowNew] = useState(false);
   const [form, setForm] = useState({ title: '', description: '', assigned_date: '' });
 
-  const fetchAssignments = () => {
+  const fetchAssignments = useCallback(() => {
     getAssignmentsByBatch(batchId).then(setAssignments);
-  };
+  }, [batchId]);
 
-  useEffect(() => { fetchAssignments(); }, [batchId]);
+  useEffect(() => { fetchAssignments(); }, [fetchAssignments]);
 
   const { showToast } = useToast();
 
@@ -697,8 +701,8 @@ function AssignmentsTab({ batchId }: { batchId: string }) {
       setForm({ title: '', description: '', assigned_date: '' });
       fetchAssignments();
       showToast('Assignment created');
-    } catch (error: any) {
-      showToast(error?.message ?? 'Failed to create assignment', 'error');
+    } catch (error) {
+      showToast(errorMessage(error, 'Failed to create assignment'), 'error');
     }
   };
 

@@ -3,6 +3,11 @@
 -- ----------------------------------------------------------------------------
 -- Run this in the Supabase SQL editor. It is idempotent: safe to re-run.
 --
+-- Requires supabase/student_login_migration.sql to have been run first: the
+-- policies below use its is_admin() and current_student_id() helpers rather than
+-- re-inlining the same JWT and auth.uid() checks, so every table in the project
+-- shares one definition of "admin" and "the signed-in student".
+--
 -- Model: the admin uploads one PDF per material and attaches it to a batch.
 -- Students in that batch read it through the `watermark-material` edge function,
 -- which stamps their name and phone onto every page before streaming it back.
@@ -59,8 +64,8 @@ alter table material_views enable row level security;
 drop policy if exists "admin full access to materials" on materials;
 create policy "admin full access to materials" on materials
   for all
-  using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
-  with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+  using (is_admin())
+  with check (is_admin());
 
 -- A student sees the metadata of material for batches they are actively in.
 -- Metadata only — the file itself still requires the edge function.
@@ -68,13 +73,9 @@ drop policy if exists "students read material for their batches" on materials;
 create policy "students read material for their batches" on materials
   for select
   using (
-    exists (
-      select 1
-      from batch_student_mapping m
-      join students s on s.id = m.student_id
-      where m.batch_id = materials.batch_id
-        and m.status = 'active'
-        and s.auth_user_id = auth.uid()
+    batch_id in (
+      select batch_id from batch_student_mapping
+      where student_id = current_student_id() and status = 'active'
     )
   );
 
@@ -82,8 +83,8 @@ create policy "students read material for their batches" on materials
 drop policy if exists "admin full access to material views" on material_views;
 create policy "admin full access to material views" on material_views
   for all
-  using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
-  with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+  using (is_admin())
+  with check (is_admin());
 
 -- A student may read and append their own view log, nothing else. The insert is
 -- written by the edge function under the service role anyway; this policy exists
@@ -91,13 +92,7 @@ create policy "admin full access to material views" on material_views
 drop policy if exists "students read own material views" on material_views;
 create policy "students read own material views" on material_views
   for select
-  using (
-    exists (
-      select 1 from students s
-      where s.id = material_views.student_id
-        and s.auth_user_id = auth.uid()
-    )
-  );
+  using (student_id = current_student_id());
 
 -- ── RLS: storage.objects ────────────────────────────────────────────────────
 -- Admins get full access to the bucket. Students get NO policy at all, on
@@ -107,11 +102,5 @@ create policy "students read own material views" on material_views
 drop policy if exists "admin manages material files" on storage.objects;
 create policy "admin manages material files" on storage.objects
   for all
-  using (
-    bucket_id = 'materials'
-    and (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
-  )
-  with check (
-    bucket_id = 'materials'
-    and (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
-  );
+  using (bucket_id = 'materials' and is_admin())
+  with check (bucket_id = 'materials' and is_admin());
