@@ -9,7 +9,9 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Avatar } from '@/components/ui/Avatar';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import { StudentImportModal } from '@/components/students/StudentImportModal';
-import { getStudents, getBatches, getAllBatchStudentMappings, createOrReuseStudent } from '@/lib/supabase';
+import { BulkLoginsModal } from '@/components/students/BulkLoginsModal';
+import { getStudents, getBatches, getAllBatchStudentMappings, createOrReuseStudent, createStudentLoginsBulk } from '@/lib/supabase';
+import type { BulkLoginResult } from '@/lib/supabase';
 import type { Student, Batch, BatchStudentMapping } from '@/lib/types';
 import { toStudentInput } from '@/lib/utils/studentImport';
 import { useToast } from '@/lib/context/ToastContext';
@@ -23,6 +25,7 @@ export default function StudentsPage() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [showImport, setShowImport] = useState(false);
+  const [bulkLogins, setBulkLogins] = useState<BulkLoginResult | null>(null);
   const { showToast } = useToast();
 
   useEffect(() => {
@@ -59,10 +62,26 @@ export default function StudentsPage() {
     setFilterOpen(false);
   };
 
-  const handleImport = async (rows: Record<string, string>[]) => {
-    await Promise.all(rows.map((row) => createOrReuseStudent(toStudentInput(row))));
+  const handleImport = async (rows: Record<string, string>[], _fee?: number, createLogins?: boolean) => {
+    const imported = await Promise.all(rows.map((row) => createOrReuseStudent(toStudentInput(row))));
     setStudents(await getStudents());
-    showToast('Students imported successfully');
+
+    if (!createLogins) {
+      showToast('Students imported');
+      return;
+    }
+
+    // Students already holding a login are skipped: re-running the edge function
+    // for them would reset a password that may already be in someone's hands.
+    const needLogins = imported.filter((student) => !student.auth_user_id);
+    if (needLogins.length === 0) {
+      showToast('Students imported — logins already existed');
+      return;
+    }
+
+    const result = await createStudentLoginsBulk(needLogins.map((s) => ({ id: s.id, name: s.name })));
+    setStudents(await getStudents());
+    setBulkLogins(result);
   };
 
   if (loading) return <Spinner centered />;
@@ -159,6 +178,8 @@ export default function StudentsPage() {
         onClose={() => setShowImport(false)}
         onImport={handleImport}
       />
+
+      <BulkLoginsModal result={bulkLogins} onClose={() => setBulkLogins(null)} />
     </div>
   );
 }

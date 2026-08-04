@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { FormField } from '@/components/ui/FormField';
@@ -25,19 +25,19 @@ interface AssignmentModalProps {
  */
 function validateRepoUrl(value: string): string | null {
   const trimmed = value.trim();
-  if (!trimmed) return 'Paste the link to your GitHub repository.';
+  if (!trimmed) return 'Enter your GitHub repository link.';
 
   let url: URL;
   try {
     url = new URL(trimmed.startsWith('http') ? trimmed : `https://${trimmed}`);
   } catch {
-    return 'That doesn\'t look like a link. It should start with https://github.com/';
+    return 'Enter a link starting with https://github.com/';
   }
   if (!/(^|\.)github\.com$/i.test(url.hostname)) {
-    return 'Use a GitHub link — it should start with https://github.com/';
+    return 'Use a GitHub link starting with https://github.com/';
   }
   if (url.pathname.split('/').filter(Boolean).length < 2) {
-    return 'Link to the repository itself, like https://github.com/your-name/your-repo';
+    return 'Link to the repository, e.g. https://github.com/your-name/your-repo';
   }
   return null;
 }
@@ -90,7 +90,7 @@ export function AssignmentModal({ assignment, repoUrl, onClose, onSubmit }: Assi
       open={assignment !== null}
       onClose={submitting ? () => {} : onClose}
       title={assignment?.title ?? ''}
-      size="lg"
+      size="md"
       footer={
         view === 'info' ? (
           <>
@@ -120,20 +120,23 @@ export function AssignmentModal({ assignment, repoUrl, onClose, onSubmit }: Assi
         <div className="assignment-detail">
           <div className="assignment-detail-meta">
             <PortalStatus kind="submission" value={submitted ? 'submitted' : 'pending'} />
-            {assignment?.assigned_date && <span>Given on {formatDate(assignment.assigned_date)}</span>}
+            {assignment?.assigned_date && <span>Given {formatDate(assignment.assigned_date)}</span>}
           </div>
 
-          {assignment?.description && (
-            <p className="assignment-detail-body">{assignment.description}</p>
-          )}
+          <p className={`assignment-detail-body ${assignment?.description ? '' : 'is-empty'}`}>
+            {assignment?.description || 'No details added.'}
+          </p>
 
           {submitted && (
             <dl className="assignment-detail-facts">
               {repoUrl && (
                 <div className="assignment-fact">
-                  <dt>Repo</dt>
+                  <dt>Your repo</dt>
                   <dd>
-                    <a href={repoUrl} target="_blank" rel="noreferrer">{repoUrl}</a>
+                    <a href={repoUrl} target="_blank" rel="noreferrer">
+                      {repoUrl}
+                      <ExternalLink size={13} className="shrink-0" />
+                    </a>
                   </dd>
                 </div>
               )}
@@ -147,37 +150,35 @@ export function AssignmentModal({ assignment, repoUrl, onClose, onSubmit }: Assi
           )}
         </div>
       ) : (
-        <div className="flex flex-col gap-4">
+        <div className="repo-submit-row">
           {error && <InlineAlert>{error}</InlineAlert>}
 
-          <div className="repo-submit-row">
-            <FormField label="GitHub repo link" required>
-              <input
-                value={draftRepo}
-                onChange={(e) => { setDraftRepo(e.target.value); setError(''); }}
-                placeholder="https://github.com/your-name/your-repo"
-                inputMode="url"
-                autoComplete="off"
-                spellCheck={false}
-                disabled={submitting}
-              />
-            </FormField>
+          <FormField label="GitHub repo link" required>
+            <input
+              value={draftRepo}
+              onChange={(e) => { setDraftRepo(e.target.value); setError(''); }}
+              placeholder="https://github.com/your-name/your-repo"
+              inputMode="url"
+              autoComplete="off"
+              spellCheck={false}
+              disabled={submitting}
+            />
+          </FormField>
 
-            <label className={`repo-confirm ${confirmed ? 'is-checked' : ''}`}>
-              <input
-                type="checkbox"
-                checked={confirmed}
-                onChange={(e) => setConfirmed(e.target.checked)}
-                disabled={submitting}
-              />
-              Homework is in the repo
-            </label>
-          </div>
+          <label className={`repo-confirm ${confirmed ? 'is-checked' : ''}`}>
+            <input
+              type="checkbox"
+              checked={confirmed}
+              onChange={(e) => setConfirmed(e.target.checked)}
+              disabled={submitting}
+            />
+            My work is in this repo
+          </label>
 
           {isReplacingRepo && (
             <p className="repo-notice is-warning">
-              <AlertTriangle size={14} />
-              <span>This also changes the link on every assignment you have already submitted.</span>
+              <AlertTriangle size={14} className="shrink-0" />
+              <span>Updates the link on all submitted assignments.</span>
             </p>
           )}
         </div>

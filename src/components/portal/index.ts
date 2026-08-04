@@ -18,3 +18,4 @@ export { PortalStatus, statusLabel } from './PortalStatus';
 export { PortalEmpty } from './PortalEmpty';
 export { AssignmentModal } from './AssignmentModal';
 export type { StudentAssignment } from './AssignmentModal';
+export { MaterialViewer } from './MaterialViewer';

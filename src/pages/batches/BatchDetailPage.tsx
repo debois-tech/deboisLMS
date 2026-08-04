@@ -17,7 +17,9 @@ import { AssignmentSubmissionTable } from '@/components/assignments/AssignmentSu
 import { StudentLink } from '@/components/students/StudentLink';
 import { PaymentLogModal, type PaymentLogFormState } from '@/components/finance/PaymentLogModal';
 import { getBatchById } from '@/lib/supabase';
-import { getBatchStudents, addStudentToBatch, removeStudentFromBatch, getStudents, createOrReuseStudent } from '@/lib/supabase';
+import { getBatchStudents, addStudentToBatch, removeStudentFromBatch, getStudents, createOrReuseStudent, createStudentLoginsBulk } from '@/lib/supabase';
+import type { BulkLoginResult } from '@/lib/supabase';
+import { BulkLoginsModal } from '@/components/students/BulkLoginsModal';
 import { getBatchTutors, assignTutorToBatch, removeTutorFromBatch, getTutors } from '@/lib/supabase';
 import { getLecturesByBatch, createLecture, deleteLecture } from '@/lib/supabase';
 import { getAttendanceByLecture, setAttendanceApproved, bulkApproveAttendance } from '@/lib/supabase';
@@ -28,6 +30,7 @@ import { formatDate, formatCurrency } from '@/lib/utils/format';
 import { StudentImportModal } from '@/components/students/StudentImportModal';
 import { toStudentInput } from '@/lib/utils/studentImport';
 import { useToast } from '@/lib/context/ToastContext';
+import { useConfirm } from '@/lib/context/ConfirmContext';
 
 
 export default function BatchDetailPage() {
@@ -132,7 +135,9 @@ function StudentsTab({ batchId }: { batchId: string }) {
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
   const [totalFee, setTotalFee] = useState('');
   const [showImport, setShowImport] = useState(false);
+  const [bulkLogins, setBulkLogins] = useState<BulkLoginResult | null>(null);
   const { showToast } = useToast();
+  const confirm = useConfirm();
 
   const fetchStudents = () => {
     getBatchStudents(batchId).then(setStudents);
@@ -149,13 +154,21 @@ function StudentsTab({ batchId }: { batchId: string }) {
       setTotalFee('');
       setShowAdd(false);
       fetchStudents();
-      showToast('Student(s) added to batch');
+      showToast('Students added');
     } catch (error: any) {
       showToast(error?.message ?? 'Failed to add students', 'error');
     }
   };
 
-  const handleRemove = async (mappingId: string) => {
+  const handleRemove = async (mappingId: string, name: string) => {
+    const ok = await confirm({
+      title: `Remove ${name} from this batch?`,
+      message: 'The student keeps their record but loses access to this batch.',
+      confirmLabel: 'Remove',
+      danger: true,
+    });
+    if (!ok) return;
+
     try {
       await removeStudentFromBatch(mappingId);
       fetchStudents();
@@ -169,18 +182,34 @@ function StudentsTab({ batchId }: { batchId: string }) {
 
   // Importing here also enrols: create-or-reuse the student, then add them to this
   // batch at the given fee unless they are already on the roster.
-  const handleImport = async (rows: Record<string, string>[], fee?: number) => {
+  const handleImport = async (rows: Record<string, string>[], fee?: number, createLogins?: boolean) => {
     const enrolledStudents = await getBatchStudents(batchId);
-    await Promise.all(
+    const imported = await Promise.all(
       rows.map(async (row) => {
         const student = await createOrReuseStudent(toStudentInput(row));
         if (!enrolledStudents.some((e) => e.id === student.id)) {
           await addStudentToBatch(student.id, batchId, fee ?? 0);
         }
+        return student;
       }),
     );
     fetchStudents();
-    showToast('Students imported successfully');
+
+    if (!createLogins) {
+      showToast('Students imported');
+      return;
+    }
+
+    // Skip anyone who already has a login: re-running the edge function would
+    // reset a password that may already be in the student's hands.
+    const needLogins = imported.filter((student) => !student.auth_user_id);
+    if (needLogins.length === 0) {
+      showToast('Students imported — logins already existed');
+      return;
+    }
+
+    setBulkLogins(await createStudentLoginsBulk(needLogins.map((s) => ({ id: s.id, name: s.name }))));
+    fetchStudents();
   };
 
   return (
@@ -206,7 +235,7 @@ function StudentsTab({ batchId }: { batchId: string }) {
               </div>
               <div className="flex items-center gap-2">
                 <Badge variant={s.mapping.status === 'active' ? 'success' : 'danger'}>{s.mapping.status}</Badge>
-                <button onClick={() => handleRemove(s.mapping.id)} className="text-[var(--text-muted)] hover:text-red-400 p-1">
+                <button onClick={() => handleRemove(s.mapping.id, s.name)} aria-label={`Remove ${s.name} from batch`} className="text-[var(--text-muted)] hover:text-red-400 p-1">
                   <Trash2 size={14} />
                 </button>
               </div>
@@ -233,6 +262,8 @@ function StudentsTab({ batchId }: { batchId: string }) {
         requireFee
         onImport={handleImport}
       />
+
+      <BulkLoginsModal result={bulkLogins} onClose={() => setBulkLogins(null)} />
     </Card>
   );
 }
@@ -244,6 +275,7 @@ function TutorsTab({ batchId }: { batchId: string }) {
   const [selectedTutor, setSelectedTutor] = useState('');
 
   const { showToast } = useToast();
+  const confirm = useConfirm();
 
   const fetchTutors = () => {
     getBatchTutors(batchId).then(setTutors);
@@ -265,7 +297,15 @@ function TutorsTab({ batchId }: { batchId: string }) {
     }
   };
 
-  const handleRemove = async (mappingId: string) => {
+  const handleRemove = async (mappingId: string, name: string) => {
+    const ok = await confirm({
+      title: `Unassign ${name} from this batch?`,
+      message: 'The tutor record stays. Only this assignment is removed.',
+      confirmLabel: 'Unassign',
+      danger: true,
+    });
+    if (!ok) return;
+
     try {
       await removeTutorFromBatch(mappingId);
       fetchTutors();
@@ -296,7 +336,7 @@ function TutorsTab({ batchId }: { batchId: string }) {
                 <p className="text-sm font-medium text-[var(--text-primary)]">{t.name}</p>
                 <p className="text-xs text-[var(--text-muted)]">{t.email ?? t.phone ?? '—'}</p>
               </div>
-              <button onClick={() => handleRemove(t.mapping.id)} className="text-[var(--text-muted)] hover:text-red-400 p-1">
+              <button onClick={() => handleRemove(t.mapping.id, t.name)} aria-label={`Unassign ${t.name} from batch`} className="text-[var(--text-muted)] hover:text-red-400 p-1">
                 <Trash2 size={14} />
               </button>
             </div>
@@ -327,6 +367,7 @@ function LecturesTab({ batchId }: { batchId: string }) {
   const [form, setForm] = useState({ lecture_date: '', meeting_code: '', scheduled_duration_minutes: 90 });
 
   const { showToast } = useToast();
+  const confirm = useConfirm();
 
   const fetchLectures = () => getLecturesByBatch(batchId).then(setLectures);
   useEffect(() => { fetchLectures(); }, [batchId]);
@@ -343,7 +384,15 @@ function LecturesTab({ batchId }: { batchId: string }) {
     }
   };
 
-  const handleDelete = async (lectureId: string) => {
+  const handleDelete = async (lectureId: string, label: string) => {
+    const ok = await confirm({
+      title: `Delete the lecture on ${label}?`,
+      message: 'Attendance for this lecture is also deleted. This cannot be undone.',
+      confirmLabel: 'Delete lecture',
+      danger: true,
+    });
+    if (!ok) return;
+
     try {
       await deleteLecture(lectureId);
       fetchLectures();
@@ -368,7 +417,7 @@ function LecturesTab({ batchId }: { batchId: string }) {
                   {l.session_type} {l.meeting_code ? `• ${l.meeting_code}` : ''} {l.scheduled_duration_minutes ? `• ${l.scheduled_duration_minutes}min` : ''}
                 </p>
               </div>
-              <button onClick={() => handleDelete(l.id)} className="text-[var(--text-muted)] hover:text-red-400 p-1">
+              <button onClick={() => handleDelete(l.id, formatDate(l.lecture_date))} aria-label={`Delete lecture on ${formatDate(l.lecture_date)}`} className="text-[var(--text-muted)] hover:text-red-400 p-1">
                 <Trash2 size={14} />
               </button>
             </div>
@@ -546,7 +595,7 @@ function FinanceTab({ batchId }: { batchId: string }) {
         setPaymentLogs((prev) => [result.log, ...prev]);
         setFees((prev) => prev.map((f) => (f.id === result.fee.id ? result.fee : f)));
         setLogForm({ amount: '', payment_date: new Date().toISOString().slice(0, 10), payment_method: 'other', notes: '' });
-        showToast('Payment logged successfully');
+        showToast('Payment logged');
       }
     } catch (error: any) {
       showToast(error?.message ?? 'Failed to log payment', 'error');

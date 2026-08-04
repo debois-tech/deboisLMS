@@ -1,33 +1,44 @@
 import { useState } from 'react';
-import { Check, Copy, KeyRound } from 'lucide-react';
+import { Check, Copy, KeyRound, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { createStudentLogin } from '@/lib/supabase';
 import type { StudentCredentials } from '@/lib/types';
+import { derivePortalPassword } from '@/lib/utils/portalPassword';
 
 interface StudentLoginCardProps {
   studentId: string;
-  hasEmail: boolean;
+  email?: string;
+  phone?: string;
   hasLogin: boolean;
   onCreated?: () => void;
 }
 
 /**
- * Create or reset a student's portal login. The password comes back from the edge function
- * once and is never stored — if the admin loses it, the only path is another reset.
+ * The student's portal login: its current password, and the reset that rotates it.
+ *
+ * The password shown is recomputed from the phone number, not read back from
+ * Supabase Auth — Auth stores a hash and nothing here stores a plaintext copy.
+ * That works because `create-student-login` derives the password deterministically
+ * and a reset re-applies the same rule, so what is displayed stays correct unless
+ * the student changes it themselves in the portal.
  */
-export function StudentLoginCard({ studentId, hasEmail, hasLogin, onCreated }: StudentLoginCardProps) {
+export function StudentLoginCard({ studentId, email, phone, hasLogin, onCreated }: StudentLoginCardProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [credentials, setCredentials] = useState<StudentCredentials | null>(null);
+  const [fresh, setFresh] = useState<StudentCredentials | null>(null);
 
-  const handleClick = async () => {
+  const derived = derivePortalPassword(phone);
+  // A just-returned password is authoritative; otherwise fall back to the rule.
+  const password = fresh?.password ?? derived;
+
+  const run = async () => {
     setLoading(true);
     setError('');
     try {
       const result = await createStudentLogin(studentId);
-      setCredentials(result);
+      setFresh(result);
       onCreated?.();
     } catch (err: any) {
       setError(err?.message ?? 'Failed to create login');
@@ -36,23 +47,57 @@ export function StudentLoginCard({ studentId, hasEmail, hasLogin, onCreated }: S
     }
   };
 
-  return (
-    <>
+  if (!email) {
+    return (
+      <p className="text-xs text-[var(--text-muted)]">
+        Add an email to create a login.
+      </p>
+    );
+  }
+
+  if (!hasLogin && !fresh) {
+    return (
       <div className="flex flex-col items-start gap-3">
         {error && <InlineAlert>{error}</InlineAlert>}
-        <Button className='action-button-compact' variant="secondary" onClick={handleClick} loading={loading} disabled={!hasEmail}>
+        <Button className="action-button-compact" variant="secondary" onClick={run} loading={loading}>
           <KeyRound size={15} />
-          {hasLogin ? 'Reset login' : 'Create login'}
+          Create login
         </Button>
-        {!hasEmail && (
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      {error && <InlineAlert>{error}</InlineAlert>}
+
+      <CredentialRow label="Email" value={email} />
+
+      {password ? (
+        <CredentialRow label="Password" value={password} />
+      ) : (
+        <div className="credential-row">
+          <div className="min-w-0">
+            <p className="credential-label">Password</p>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
+              Random password. Reset to generate a new one.
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-center gap-3">
+        <Button className="action-button-compact" variant="secondary" onClick={run} loading={loading}>
+          <RotateCcw size={15} />
+          Reset password
+        </Button>
+        {password && (
           <p className="text-xs text-[var(--text-muted)]">
-            Add an email to this student before creating a login.
+            Reset uses the same password rule.
           </p>
         )}
       </div>
-
-      <CredentialsModal credentials={credentials} onClose={() => setCredentials(null)} />
-    </>
+    </div>
   );
 }
 
@@ -68,7 +113,7 @@ export function CredentialsModal({
       open={credentials !== null}
       onClose={onClose}
       title="Portal login ready"
-      footer={<Button className='action-button-compact' onClick={onClose}>Done</Button>}
+      footer={<Button className="action-button-compact" onClick={onClose}>Done</Button>}
     >
       {credentials && (
         <div className="flex flex-col gap-3">
@@ -80,7 +125,7 @@ export function CredentialsModal({
   );
 }
 
-function CredentialRow({ label, value }: { label: string; value: string }) {
+export function CredentialRow({ label, value }: { label: string; value: string }) {
   const [copied, setCopied] = useState(false);
 
   const copy = async () => {
@@ -101,7 +146,7 @@ function CredentialRow({ label, value }: { label: string; value: string }) {
         aria-label={`Copy ${label.toLowerCase()}`}
         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-overlay)] hover:text-[var(--text-primary)]"
       >
-        {copied ? <Check size={16} className="text-emerald-400" /> : <Copy size={16} />}
+        {copied ? <Check size={16} className="text-[var(--success-text)]" /> : <Copy size={16} />}
       </button>
     </div>
   );

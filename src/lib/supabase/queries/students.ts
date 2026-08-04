@@ -93,6 +93,50 @@ export async function createStudentLogin(studentId: string): Promise<StudentCred
   return data as StudentCredentials;
 }
 
+export interface BulkLoginResult {
+  created: (StudentCredentials & { studentId: string; name: string })[];
+  failed: { studentId: string; name: string; reason: string }[];
+}
+
+/**
+ * Creates portal logins for a list of students, e.g. straight after a CSV import.
+ *
+ * Runs a few at a time rather than all at once: each call is an edge function
+ * invocation that creates an auth user, and firing eighty of those in parallel
+ * gets rate-limited. One student's failure — usually a missing email — never
+ * stops the rest; it comes back in `failed` so the admin can see who to fix.
+ */
+export async function createStudentLoginsBulk(
+  students: { id: string; name: string }[],
+  onProgress?: (done: number, total: number) => void,
+): Promise<BulkLoginResult> {
+  const result: BulkLoginResult = { created: [], failed: [] };
+  const BATCH_SIZE = 4;
+  let done = 0;
+
+  for (let index = 0; index < students.length; index += BATCH_SIZE) {
+    const slice = students.slice(index, index + BATCH_SIZE);
+
+    await Promise.all(slice.map(async (student) => {
+      try {
+        const credentials = await createStudentLogin(student.id);
+        result.created.push({ ...credentials, studentId: student.id, name: student.name });
+      } catch (err: any) {
+        result.failed.push({
+          studentId: student.id,
+          name: student.name,
+          reason: err?.message ?? 'Failed',
+        });
+      } finally {
+        done += 1;
+        onProgress?.(done, students.length);
+      }
+    }));
+  }
+
+  return result;
+}
+
 export async function getStudentBatches(studentId: string): Promise<BatchStudentMapping[]> {
   const { data } = await supabase
     .from('batch_student_mapping')

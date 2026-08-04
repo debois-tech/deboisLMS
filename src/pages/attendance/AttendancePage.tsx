@@ -98,7 +98,7 @@ export default function AttendancePage() {
       if (report.unmatched.length > 0) parts.push(`${report.unmatched.length} participant(s) need review`);
       showToast(parts.join(' · '), report.unmatched.length > 0 ? 'warning' : 'success');
     } catch (err: any) {
-      showToast(err?.message ?? 'Upload & processing failed', 'error');
+      showToast(err?.message ?? 'Attendance upload failed', 'error');
     }
     setProcessing(false);
   };
@@ -153,14 +153,14 @@ export default function AttendancePage() {
       <PageHeader title="Attendance" />
 
       <Card>
-        <CardHeader title="1. Select Batch" />
+            <CardHeader title="Select batch" />
         <BatchSelect batches={batches} value={selectedBatch} onChange={setSelectedBatch} />
       </Card>
 
       {selectedBatch && (
         <Card>
           <CardHeader
-            title="2. Select Lecture"
+            title="Select lecture"
             action={
               <Button size="sm" className="action-button-compact" onClick={() => setShowNewLecture(true)}>
                 <Plus size={14} /> New Lecture
@@ -180,7 +180,7 @@ export default function AttendancePage() {
       {selectedLecture && (
         <>
           <Card>
-            <CardHeader title="3. Upload CSV" />
+            <CardHeader title="Upload CSV" />
             <div className="space-y-4">
               <input
                 ref={fileRef}
@@ -201,7 +201,7 @@ export default function AttendancePage() {
                 <div className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-elevated)]/50 border border-[var(--border)] text-sm">
                   {lastReport.geminiUnavailableReason && (
                     <p className="mb-2 text-xs text-amber-500">
-                      AI name matching unavailable — {lastReport.geminiUnavailableReason}
+                      AI matching unavailable — {lastReport.geminiUnavailableReason}
                     </p>
                   )}
                   {lastReport.unmatched.length > 0 && (
@@ -217,7 +217,7 @@ export default function AttendancePage() {
                   )}
                   {lastReport.tutorsDetected.length > 0 && (
                     <p className="mt-2 text-xs text-[var(--text-muted)]">
-                      Tutor(s) detected (excluded from attendance): {lastReport.tutorsDetected.join(', ')}
+                      Tutors excluded: {lastReport.tutorsDetected.join(', ')}
                     </p>
                   )}
                 </div>
@@ -232,14 +232,14 @@ export default function AttendancePage() {
               {processing && (
                 <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
                   <Loader2 size={16} className="animate-spin" />
-                  Uploading and processing attendance — matching students, calculating status...
+                  Processing attendance — matching students and calculating status...
                 </div>
               )}
             </div>
           </Card>
 
           <Card>
-            <CardHeader title="4. Attendance Records" />
+            <CardHeader title="Attendance records" />
             {loading ? (
               <Spinner />
             ) : records.length === 0 ? (

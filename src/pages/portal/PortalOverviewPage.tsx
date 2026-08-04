@@ -119,9 +119,7 @@ export default function PortalOverviewPage() {
   return (
     <PortalPage title={`Hi, ${firstName}`} loading={loading}>
       {!studentId ? (
-        <PortalEmpty icon={UserPlus}>
-          This login isn't linked to your student record yet. Ask your coordinator.
-        </PortalEmpty>
+        <PortalEmpty icon={UserPlus}>Student record not linked.</PortalEmpty>
       ) : (
         <>
           <NextUp
@@ -134,7 +132,7 @@ export default function PortalOverviewPage() {
 
           <PortalStatGrid>
             <PortalStat
-              label="Classes"
+              label="Attendance"
               icon={CalendarCheck}
               value={attendanceRate === null ? 'Not started' : `${attendanceRate}%`}
               tone={attendanceRate === null ? 'default' : attendanceRate >= 75 ? 'positive' : 'attention'}
@@ -142,7 +140,7 @@ export default function PortalOverviewPage() {
               note={
                 attendance.length > 0
                   ? `${attended} of ${attendance.length} classes`
-                  : 'Counted once marked'
+                    : 'No classes yet'
               }
             />
             <PortalStat
@@ -174,7 +172,7 @@ export default function PortalOverviewPage() {
             />
           </PortalStatGrid>
 
-          <PortalSection title="Your batches">
+          <PortalSection title="Batches">
             {enrollments.length === 0 ? (
               <PortalEmpty icon={UserPlus}>Not in a batch yet.</PortalEmpty>
             ) : (
@@ -216,11 +214,7 @@ function NextUp({
 }) {
   if (!enrolled) {
     return (
-      <PortalFocus
-        icon={UserPlus}
-        title="Not in a batch yet"
-        detail="Your coordinator will add you."
-      />
+      <PortalFocus icon={UserPlus} title="Not in a batch yet" />
     );
   }
 
@@ -254,7 +248,7 @@ function NextUp({
     return (
       <PortalFocus
         icon={Wallet}
-        title={`${formatCurrency(outstanding)} fee still to pay`}
+        title={`${formatCurrency(outstanding)} due`}
         action={<Link to="/portal/fees" className="portal-focus-link">Details</Link>}
       />
     );

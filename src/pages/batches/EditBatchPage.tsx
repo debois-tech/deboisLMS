@@ -32,7 +32,7 @@ export default function EditBatchPage() {
     setSaving(true);
     try {
       await updateBatch(form.id, form);
-      showToast('Batch updated successfully');
+      showToast('Batch updated');
       navigate(`/batches/${form.id}`);
     } catch (error: any) {
       showToast(error?.message ?? 'Failed to update batch', 'error');

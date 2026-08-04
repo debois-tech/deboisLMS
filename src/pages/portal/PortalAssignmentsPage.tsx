@@ -94,7 +94,7 @@ export default function PortalAssignmentsPage() {
       action={
         assignments.length > 0 ? (
           <SearchBar
-            className="assignment-search"
+            className="portal-search"
             value={query}
             onChange={setQuery}
             placeholder="Search assignments"
@@ -106,7 +106,7 @@ export default function PortalAssignmentsPage() {
       {assignments.length === 0 ? (
         <PortalEmpty icon={FileText}>No assignments yet.</PortalEmpty>
       ) : matches === 0 ? (
-        <PortalEmpty icon={SearchX}>Nothing matches “{query.trim()}”.</PortalEmpty>
+        <PortalEmpty icon={SearchX}>No matches for “{query.trim()}”.</PortalEmpty>
       ) : (
         <>
           {renderSection('To do', todo, false)}

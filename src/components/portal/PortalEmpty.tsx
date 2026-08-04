@@ -4,16 +4,16 @@ import { Inbox } from 'lucide-react';
 
 interface PortalEmptyProps {
   icon?: LucideIcon;
-  /** Say why it is empty and what happens next — never just "No records". */
+  /** A phrase and a full stop — "No attendance marked yet." Never an explanation. */
   children: ReactNode;
   /** Optional way out, when there is something the student can actually do. */
   action?: ReactNode;
 }
 
 /**
- * The empty state a student sees most often, because a new student starts with
- * every list empty. It has to read as "nothing has happened yet", not "something
- * is broken", so the copy always explains what will fill it.
+ * The state a new student sees most, since every list starts empty. It has to read
+ * as "nothing here yet" rather than "this is broken" — the icon and the framing do
+ * that, so the copy stays a phrase.
  */
 export function PortalEmpty({ icon: Icon = Inbox, children, action }: PortalEmptyProps) {
   return (

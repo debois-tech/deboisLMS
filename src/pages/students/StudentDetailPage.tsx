@@ -112,7 +112,7 @@ export default function StudentDetailPage() {
               {currentBatch.name}
             </Link>
           ) : (
-            <p className="mt-3 text-sm text-[var(--text-muted)]">Not enrolled in any batch</p>
+          <p className="mt-3 text-sm text-[var(--text-muted)]">No current batch</p>
           )}
         </Card>
         <Card padding="sm">
@@ -138,7 +138,7 @@ export default function StudentDetailPage() {
               </p>
             </div>
           ) : (
-            <p className="mt-3 text-sm text-[var(--text-muted)]">{currentBatch ? 'Caught up with all lectures' : '—'}</p>
+          <p className="mt-3 text-sm text-[var(--text-muted)]">{currentBatch ? 'All lectures up to date' : '—'}</p>
           )}
         </Card>
       </div>
@@ -150,7 +150,8 @@ export default function StudentDetailPage() {
         />
         <StudentLoginCard
           studentId={student.id}
-          hasEmail={Boolean(student.email)}
+          email={student.email}
+          phone={student.phone}
           hasLogin={Boolean(student.auth_user_id)}
           onCreated={() => getStudentById(student.id).then((s) => setStudent(s ?? student))}
         />

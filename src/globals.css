@@ -362,14 +362,6 @@ html.light .glass {
   background: rgba(255,255,255,0.72);
 }
 
-/* ── Gradient Text ───────────────────────────────────────────── */
-.gradient-text {
-  background: linear-gradient(135deg, var(--primary-light), var(--accent-light));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
 /* ── Page Layout ─────────────────────────────────────────────── */
 
 .app-shell {
@@ -1332,14 +1324,414 @@ html.light .glass {
   color: var(--text-muted);
 }
 
-/* ── Assignment list — student portal ────────────────────────── */
-/* The list itself is built from the shared portal widgets (`portal-list`,
-   `portal-list-row`); only the search field above it is specific to this page. */
+/* ── Confirm dialog ──────────────────────────────────────────── */
+.confirm-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.875rem;
+}
 
-/* Narrower than the rows it filters, and left-aligned on the same axis. */
-.assignment-search {
+.confirm-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 2.25rem;
+  height: 2.25rem;
+  color: var(--danger-text);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+}
+
+.confirm-message {
+  flex: 1 1 auto;
+  padding-top: 0.375rem;
+  font-size: 0.875rem;
+  line-height: 1.65;
+  color: var(--text-secondary);
+}
+
+/* ── Toast ───────────────────────────────────────────────────── */
+/* Status is carried by the icon and its tint, not by a slab of colour down one
+   edge. The card itself stays neutral, so four stacked toasts read as one
+   component in four states rather than four different objects. */
+.toast-stack {
+  position: fixed;
+  right: 1.5rem;
+  bottom: 1.5rem;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.625rem;
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
   width: 100%;
-  max-width: 18rem;
+  min-width: 18rem;
+  max-width: 24rem;
+  padding: 0.875rem 0.875rem 0.875rem 0.8125rem;
+  pointer-events: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-lg);
+  animation: toastIn 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.toast.is-leaving {
+  animation: toastOut 0.18s ease-in forwards;
+}
+
+.toast-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-md);
+}
+
+.toast-icon.is-success {
+  color: var(--success-text);
+  background: color-mix(in srgb, var(--success) 15%, transparent);
+}
+
+.toast-icon.is-error {
+  color: var(--danger-text);
+  background: color-mix(in srgb, var(--danger) 15%, transparent);
+}
+
+.toast-icon.is-warning {
+  color: var(--warning-text);
+  background: color-mix(in srgb, var(--warning) 15%, transparent);
+}
+
+.toast-icon.is-info {
+  color: var(--info-text);
+  background: color-mix(in srgb, var(--info) 15%, transparent);
+}
+
+.toast-message {
+  flex: 1 1 auto;
+  padding-top: 0.1875rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.toast-close {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 1.75rem;
+  height: 1.75rem;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  transition: color 0.18s ease, background-color 0.18s ease;
+}
+
+.toast-close:hover {
+  color: var(--text-primary);
+  background: var(--bg-overlay);
+}
+
+.toast-close:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+/* Full width on a phone, where a 24rem card pinned to one corner leaves an
+   awkward sliver of screen beside it. */
+@media (max-width: 640px) {
+  .toast-stack {
+    right: 0.75rem;
+    left: 0.75rem;
+    bottom: 0.75rem;
+    align-items: stretch;
+  }
+
+  .toast { min-width: 0; max-width: none; }
+}
+
+/* ── Bulk login results ──────────────────────────────────────── */
+.bulk-login-failures {
+  padding: 0.875rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--warning) 30%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--warning) 10%, transparent);
+}
+
+.bulk-login-failures-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--warning-text);
+}
+
+.bulk-login-failures ul {
+  margin-top: 0.625rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  list-style: none;
+}
+
+.bulk-login-failures li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+}
+
+.bulk-login-reason {
+  flex: 0 0 auto;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+/* ── Study material — admin ──────────────────────────────────── */
+.material-admin-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.material-admin-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  padding: 0.875rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.material-admin-row:last-child { border-bottom: none; }
+
+.material-admin-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 2.25rem;
+  height: 2.25rem;
+  color: var(--primary);
+  border-radius: var(--radius-md);
+  background: var(--primary-glow-soft);
+}
+
+.material-admin-body {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.material-admin-title {
+  overflow: hidden;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.material-admin-meta {
+  margin-top: 0.15rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.material-admin-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.material-views {
+  display: flex;
+  flex-direction: column;
+  max-height: 22rem;
+  overflow-y: auto;
+}
+
+.material-view-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.material-view-row:last-child { border-bottom: none; }
+
+.material-view-name {
+  font-size: 0.875rem;
+  font-weight: 550;
+  color: var(--text-primary);
+}
+
+.material-view-time {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* ── Study material reader — student portal ──────────────────── */
+/* Full-screen and opaque on purpose: nothing of the app shows through, so a
+   screenshot of the reader is a screenshot of the watermarked page and nothing
+   else. Pages are canvases — there is no file here to right-click and save. */
+.material-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-base);
+}
+
+.material-viewer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex: 0 0 auto;
+  height: var(--navbar-h);
+  padding: 0 1rem 0 1.25rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-surface);
+}
+
+.material-viewer-title {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.9375rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.material-viewer-close {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 2.25rem;
+  height: 2.25rem;
+  color: var(--text-muted);
+  border-radius: var(--radius-md);
+  transition: background-color 0.18s ease, color 0.18s ease;
+}
+
+.material-viewer-close:hover {
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+}
+
+.material-viewer-close:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.material-viewer-body {
+  flex: 1 1 auto;
+  padding: 1.5rem 1rem 3rem;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  /* Selection and long-press callouts off: there is no text layer to select
+     anyway, and the callout offers "save image" on a phone. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Block, not flex. As flex items the page canvases inherit `flex-shrink: 1` and
+   get squashed to whatever height is left in the viewport — a tall PDF rendered
+   as a letterbox strip. Block layout lets each canvas keep its own height and
+   the body scroll through them. */
+.material-pages {
+  display: block;
+  width: 100%;
+  max-width: 52rem;
+  margin: 0 auto;
+}
+
+.material-page {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: #ffffff;
+  box-shadow: var(--shadow-md);
+  pointer-events: none;
+}
+
+.material-page + .material-page {
+  margin-top: 1rem;
+}
+
+.material-viewer-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 3rem 1rem;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.material-viewer-status.is-error { color: var(--danger-text); }
+
+.material-viewer-note {
+  max-width: 52rem;
+  margin: 1.5rem auto 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* Covers the pages whenever the tab loses focus — the shape a screen share or a
+   switch to a capture tool takes from inside the page. */
+.material-viewer-shield {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  z-index: 1;
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: var(--bg-base);
+}
+
+/* Printing a reader whose whole point is that the file does not leave. */
+@media print {
+  .material-viewer { display: none !important; }
+}
+
+/* ── Portal search ───────────────────────────────────────────── */
+/* Sits in `PortalPage`'s action slot on any portal page with enough rows to be
+   worth searching. Narrower than the list it filters. */
+.portal-search {
+  width: 100%;
+  max-width: 20rem;
+}
+
+@media (max-width: 640px) {
+  .portal-search { max-width: none; }
 }
 
 /* ── Assignment dialog ───────────────────────────────────────── */
@@ -1353,7 +1745,7 @@ html.light .glass {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem 1rem;
+  gap: 0.5rem 0.875rem;
   font-size: 0.75rem;
   color: var(--text-muted);
 }
@@ -1365,64 +1757,74 @@ html.light .glass {
   white-space: pre-line;
 }
 
+/* Placeholder for an assignment with no description, so the dialog never opens
+   on an empty box with two buttons under it. */
+.assignment-detail-body.is-empty {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Label above value rather than beside it: a repo URL is long, and the old
+   fixed-width label column forced it onto one truncated line. */
 .assignment-detail-facts {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  padding-top: 1.25rem;
+  gap: 0.875rem;
+  padding-top: 1.125rem;
   border-top: 1px solid var(--border);
 }
 
-.assignment-fact {
-  display: flex;
-  align-items: baseline;
-  gap: 1rem;
-  font-size: 0.8125rem;
-}
-
 .assignment-fact dt {
-  flex: 0 0 5.5rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--text-muted);
 }
 
 .assignment-fact dd {
-  min-width: 0;
-  overflow: hidden;
+  margin-top: 0.25rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
   color: var(--text-primary);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .assignment-fact a {
-  color: var(--text-primary);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--primary);
   transition: color 0.18s;
 }
 
 .assignment-fact a:hover {
-  color: var(--primary);
+  color: var(--primary-light);
   text-decoration: underline;
 }
 
 /* ── Repo submit dialog ──────────────────────────────────────── */
 /* The link field and its confirmation tick sit side by side; the tick wraps
    underneath once the field can no longer hold its 14rem basis. */
+/* Stacked, not side by side. The field and its confirmation used to sit on one
+   row that wrapped the moment the dialog narrowed, leaving a full-width input
+   above a stranded checkbox pill. */
 .repo-submit-row {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 0.625rem;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
 .repo-submit-row > .field {
-  flex: 1 1 14rem;
+  width: 100%;
   min-width: 0;
 }
 
 .repo-confirm {
-  display: inline-flex;
-  flex: 0 0 auto;
+  display: flex;
+  width: 100%;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.625rem;
   min-height: 2.75rem;
   padding: 0.625rem 0.875rem;
   font-size: 0.8125rem;
@@ -1536,9 +1938,16 @@ html.light .glass {
   0%, 100% { box-shadow: 0 0 8px var(--primary-glow-soft); }
   50%       { box-shadow: 0 0 22px var(--primary-glow); }
 }
+/* Exponential ease-out, no overshoot: the toast arrives and settles rather than
+   springing past its mark. */
 @keyframes toastIn {
-  from { opacity: 0; transform: translateY(18px) scale(0.94); }
+  from { opacity: 0; transform: translateY(14px) scale(0.97); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes toastOut {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateY(6px) scale(0.98); }
 }
 @keyframes shimmer {
   from { background-position: -200% 0; }
@@ -1549,7 +1958,6 @@ html.light .glass {
 .animate-fade-in-fast { animation: fadeInFast 0.2s ease-out forwards; }
 .animate-dropdown     { animation: dropdown 0.2s ease-out forwards; }
 .animate-slide-in     { animation: slideIn 0.3s ease-out forwards; }
-.animate-toast-in     { animation: toastIn 0.3s cubic-bezier(.175,.885,.32,1.275) forwards; }
 .animate-spin         { animation: spin 1s linear infinite; }
 .animate-pulse-glow   { animation: pulse-glow 2s ease-in-out infinite; }
 

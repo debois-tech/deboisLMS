@@ -18,7 +18,7 @@ export default function NewTutorPage() {
     setLoading(true);
     try {
       const tutor = await createTutor(form);
-      showToast('Tutor added successfully');
+      showToast('Tutor added');
       navigate(`/tutors/${tutor.id}`);
     } catch (error: any) {
       showToast(error?.message ?? 'Failed to add tutor', 'error');

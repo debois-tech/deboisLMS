@@ -157,6 +157,32 @@ export interface BatchStudentMapping {
   status: MappingStatus;
 }
 
+/**
+ * One PDF attached to a batch. The row is metadata only — the file lives in the
+ * private `materials` storage bucket and is only ever handed to a student as a
+ * watermarked copy produced by the `watermark-material` edge function.
+ */
+export interface Material {
+  id: string;
+  batch_id: string;
+  title: string;
+  description?: string;
+  storage_path: string;
+  size_bytes?: number;
+  page_count?: number;
+  uploaded_by?: string;
+  created_at: string;
+  batch?: Batch;
+}
+
+export interface MaterialView {
+  id: string;
+  material_id: string;
+  student_id: string;
+  viewed_at: string;
+  student?: Student;
+}
+
 export interface TutorBatchMapping {
   id: string;
   tutor_id: string;
@@ -189,6 +215,8 @@ export interface Toast {
   id: string;
   message: string;
   variant: ToastVariant;
+  /** Set for the length of the exit animation, just before the toast is dropped. */
+  leaving?: boolean;
 }
 
 export interface NavItem {

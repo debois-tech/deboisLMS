@@ -25,9 +25,7 @@ export default function PortalThingPage() {
   return (
     <PortalPage title="Your things" loading={loading}>
       {things.length === 0 ? (
-        <PortalEmpty icon={CalendarCheck}>
-          Nothing here yet. Say what will fill this and who fills it.
-        </PortalEmpty>
+        <PortalEmpty icon={CalendarCheck}>Nothing here yet.</PortalEmpty>
       ) : (
         <>
           <PortalStatGrid>
@@ -64,6 +62,7 @@ export default function PortalThingPage() {
 | `PortalList` + `PortalRow` | Any list of records. `onClick` makes a row a real button with a chevron; `state` adds the amber/green dot; `muted` dims rows that need no attention. |
 | `PortalStatus` | Every status pill. Pass the domain value (`present`, `due`, `active`…), never a label or a colour. |
 | `PortalEmpty` | Any empty list. |
+| `MaterialViewer` | Read-only PDF reader for study material. Full-screen, canvas-rendered, watermarked server-side. Also used by the admin material page for previews. |
 
 ## Rules that keep it consistent
 
@@ -73,11 +72,12 @@ export default function PortalThingPage() {
 - **No raw enum reaches the screen.** The schema says `partial` and `dropped`; a
   student reads "Partly attended" and "Finished". `PortalStatus.tsx` holds the
   entire translation — extend that map, never the page.
-- **Empty states explain themselves.** "No records yet" tells a new student
-  nothing. Say why it is empty and what will fill it: *"A class shows up here
-  after your teacher has checked who attended."* Every student starts with every
-  list empty, so this copy is the first thing most of them read.
-- **One h1 per page, and it is a sentence.** "Your attendance", not "Attendance".
+- **Phrases, not sentences.** The portal is scanned, not read. "11 of 12 classes",
+  not "You were in 11 of 12 classes so far". Empty states are a phrase and a full
+  stop — *"No attendance marked yet."* — never an explanation of who will fill
+  them. Drop a `note` or a `detail` entirely when the value above it already says
+  everything; blank is better than a line that restates.
+- **One h1 per page, and it is plain.** "Your attendance", not "Attendance".
   Nothing goes directly under it — supporting facts belong in the content.
 - **Write for someone who has never used it.** No internal vocabulary
   (*approved*, *mapping*, *outstanding*), no counts without their unit.

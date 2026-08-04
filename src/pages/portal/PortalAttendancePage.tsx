@@ -41,9 +41,7 @@ export default function PortalAttendancePage() {
   return (
     <PortalPage title="Your attendance" loading={loading}>
       {records.length === 0 ? (
-        <PortalEmpty icon={CalendarCheck}>
-          No classes counted yet. They appear once your teacher marks them.
-        </PortalEmpty>
+        <PortalEmpty icon={CalendarCheck}>No attendance marked yet.</PortalEmpty>
       ) : (
         <>
           <PortalStatGrid>

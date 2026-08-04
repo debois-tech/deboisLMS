@@ -23,7 +23,7 @@ export default function NewBatchPage() {
     setLoading(true);
     try {
       const batch = await createBatch(form);
-      showToast('Batch created successfully');
+      showToast('Batch created');
       navigate(`/batches/${batch.id}`);
     } catch (error: any) {
       showToast(error?.message ?? 'Failed to create batch', 'error');

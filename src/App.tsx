@@ -19,6 +19,7 @@ const TutorDetailPage = lazy(() => import('@/pages/tutors/TutorDetailPage'));
 const AttendancePage = lazy(() => import('@/pages/attendance/AttendancePage'));
 const FeesPage = lazy(() => import('@/pages/fees/FeesPage'));
 const AssignmentsPage = lazy(() => import('@/pages/assignments/AssignmentsPage'));
+const MaterialsPage = lazy(() => import('@/pages/materials/MaterialsPage'));
 const LoginPage = lazy(() => import('@/pages/auth/LoginPage'));
 const LoginChoicePage = lazy(() => import('@/pages/auth/LoginChoicePage'));
 const UserLoginPage = lazy(() => import('@/pages/auth/UserLoginPage'));
@@ -26,6 +27,7 @@ const UserLoginPage = lazy(() => import('@/pages/auth/UserLoginPage'));
 const PortalOverviewPage = lazy(() => import('@/pages/portal/PortalOverviewPage'));
 const PortalAttendancePage = lazy(() => import('@/pages/portal/PortalAttendancePage'));
 const PortalAssignmentsPage = lazy(() => import('@/pages/portal/PortalAssignmentsPage'));
+const PortalMaterialsPage = lazy(() => import('@/pages/portal/PortalMaterialsPage'));
 const PortalFeesPage = lazy(() => import('@/pages/portal/PortalFeesPage'));
 
 function PageFallback() {
@@ -60,6 +62,7 @@ export default function App() {
             <Route path="attendance" element={<AttendancePage />} />
             <Route path="fees" element={<FeesPage />} />
             <Route path="assignments" element={<AssignmentsPage />} />
+            <Route path="materials" element={<MaterialsPage />} />
           </Route>
         </Route>
 
@@ -70,6 +73,7 @@ export default function App() {
             <Route index element={<PortalOverviewPage />} />
             <Route path="attendance" element={<PortalAttendancePage />} />
             <Route path="assignments" element={<PortalAssignmentsPage />} />
+            <Route path="materials" element={<PortalMaterialsPage />} />
             <Route path="fees" element={<PortalFeesPage />} />
           </Route>
         </Route>

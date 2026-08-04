@@ -1,20 +1,13 @@
-import { useToast } from '@/lib/context/ToastContext';
 import { clsx } from 'clsx';
-import { CheckCircle2, XCircle, AlertTriangle, Info, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Info, X, XCircle } from 'lucide-react';
+import { useToast } from '@/lib/context/ToastContext';
 import type { ToastVariant } from '@/lib/types';
 
-const icons: Record<ToastVariant, React.ReactNode> = {
-  success: <CheckCircle2 size={18} className="text-emerald-400" />,
-  error:   <XCircle     size={18} className="text-red-400" />,
-  warning: <AlertTriangle size={18} className="text-amber-400" />,
-  info:    <Info         size={18} className="text-blue-400" />,
-};
-
-const borders: Record<ToastVariant, string> = {
-  success: 'border-l-emerald-400',
-  error:   'border-l-red-400',
-  warning: 'border-l-amber-400',
-  info:    'border-l-blue-400',
+const icons: Record<ToastVariant, typeof Info> = {
+  success: CheckCircle2,
+  error: XCircle,
+  warning: AlertTriangle,
+  info: Info,
 };
 
 export function ToastContainer() {
@@ -23,27 +16,34 @@ export function ToastContainer() {
   if (!toasts.length) return null;
 
   return (
-    <div className="fixed bottom-6 right-6 z-[100] flex flex-col gap-2 pointer-events-none">
-      {toasts.map((toast) => (
-        <div
-          key={toast.id}
-          className={clsx(
-            'pointer-events-auto flex items-center gap-3 min-w-[280px] max-w-sm',
-            'bg-[var(--bg-elevated)] border border-[var(--border)] border-l-4 rounded-[var(--radius-lg)]',
-            'px-4 py-3 shadow-[var(--shadow-lg)] animate-toast-in',
-            borders[toast.variant]
-          )}
-        >
-          {icons[toast.variant]}
-          <p className="flex-1 text-sm text-[var(--text-primary)]">{toast.message}</p>
-          <button
-            onClick={() => removeToast(toast.id)}
-            className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+    // `polite` rather than `assertive`: these confirm work that just happened, so
+    // they should not interrupt whatever a screen reader is already saying.
+    <div className="toast-stack" role="region" aria-live="polite" aria-label="Notifications">
+      {toasts.map((toast) => {
+        const Icon = icons[toast.variant];
+        return (
+          <div
+            key={toast.id}
+            className={clsx('toast', toast.leaving && 'is-leaving')}
+            role={toast.variant === 'error' ? 'alert' : 'status'}
           >
-            <X size={14} />
-          </button>
-        </div>
-      ))}
+            <span className={clsx('toast-icon', `is-${toast.variant}`)}>
+              <Icon size={16} aria-hidden="true" />
+            </span>
+
+            <p className="toast-message">{toast.message}</p>
+
+            <button
+              type="button"
+              onClick={() => removeToast(toast.id)}
+              className="toast-close"
+              aria-label="Dismiss"
+            >
+              <X size={15} />
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 }

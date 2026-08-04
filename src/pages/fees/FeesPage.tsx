@@ -66,7 +66,7 @@ export default function FeesPage() {
         setFees((prev) => prev.map((f) => (f.id === result.fee.id ? result.fee : f)));
         setLogForm({ amount: '', payment_date: new Date().toISOString().slice(0, 10), payment_method: 'other', notes: '' });
         getBatchFeeSummary().then(setSummary);
-        showToast('Payment logged successfully');
+        showToast('Payment logged');
       }
     } catch (error: any) {
       showToast(error?.message ?? 'Failed to log payment', 'error');
@@ -99,7 +99,7 @@ export default function FeesPage() {
         <Card>
           <CardHeader title="Per-Student Fees"/>
           {fees.length === 0 ? (
-            <p className="text-sm text-[var(--text-muted)]" style={{ padding: '1rem 1.25rem' }}>No fee records for this batch.</p>
+            <p className="text-sm text-[var(--text-muted)]" style={{ padding: '1rem 1.25rem' }}>No fee records.</p>
           ) : (
             <Table maxHeight="28rem">
               <THead>

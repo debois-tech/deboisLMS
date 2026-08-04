@@ -228,6 +228,38 @@ create table student_repos (
 );
 
 -- -----------------------------------------------------------
+-- 12c. STUDY MATERIAL (PDF per batch, watermarked per student)
+-- -----------------------------------------------------------
+-- The file itself lives in the private `materials` storage bucket; only the
+-- edge function (service role) can reach it, and it stamps the reading
+-- student's name and phone onto every page before returning it.
+-- Bucket, RLS and view-log policies: supabase/study_material_migration.sql
+create table materials (
+  id           uuid primary key default gen_random_uuid(),
+  batch_id     uuid not null references batches(id) on delete cascade,
+  title        text not null,
+  description  text,
+  storage_path text not null unique,   -- <batch_id>/<uuid>.pdf inside the bucket
+  size_bytes   bigint,
+  page_count   int,
+  uploaded_by  uuid,
+  created_at   timestamptz default now()
+);
+
+create index idx_materials_batch on materials(batch_id);
+
+-- Who opened what. A watermarked leak identifies the student; this says when.
+create table material_views (
+  id          uuid primary key default gen_random_uuid(),
+  material_id uuid not null references materials(id) on delete cascade,
+  student_id  uuid not null references students(id) on delete cascade,
+  viewed_at   timestamptz default now()
+);
+
+create index idx_material_views_material on material_views(material_id);
+create index idx_material_views_student  on material_views(student_id);
+
+-- -----------------------------------------------------------
 -- 13. COMPUTED VIEWS (convenience)
 -- -----------------------------------------------------------
 

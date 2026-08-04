@@ -38,7 +38,7 @@ export function parseStudentCsv(text: string): ParsedStudentCsv {
     rows,
     error:
       !table.headers.length || !rows.length
-        ? 'CSV must include a Name column and at least one student row.'
+        ? 'CSV needs a Name column and one student row.'
         : '',
   };
 }

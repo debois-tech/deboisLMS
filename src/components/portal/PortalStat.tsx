@@ -7,7 +7,7 @@ interface PortalStatProps {
   label: string;
   icon: LucideIcon;
   value: ReactNode;
-  /** A full sentence explaining the number — "You attended 11 of 12 classes". */
+  /** What the number was counted from, in as few words as possible — "11 of 12 classes". */
   note?: ReactNode;
   /** 0–100. Draws the bar under the note; omit it and no bar is drawn. */
   progress?: number;
@@ -16,9 +16,9 @@ interface PortalStatProps {
 }
 
 /**
- * One number with the sentence that explains it. The note is what makes the tile
- * readable by someone who has never used the portal: the value is the headline,
- * the note says what it was counted from.
+ * One number and, at most, the few words that say what it was counted from. Drop
+ * the note entirely when the value already speaks — an empty line under a number
+ * reads better than a line restating it.
  */
 export function PortalStat({ label, icon: Icon, value, note, progress, tone = 'default' }: PortalStatProps) {
   const clamped = progress === undefined ? undefined : Math.max(0, Math.min(100, progress));

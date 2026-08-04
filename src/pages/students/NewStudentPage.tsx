@@ -25,7 +25,7 @@ export default function NewStudentPage() {
     try {
       const student = await createOrReuseStudent(form);
       setCreatedStudentId(student.id);
-      showToast('Student added successfully');
+        showToast('Student added');
 
       // Reusing an existing student would otherwise rotate a password they already have —
       // leave those alone; the detail page has an explicit reset action.
@@ -39,7 +39,7 @@ export default function NewStudentPage() {
       } catch (loginError: any) {
         // The student record is already saved; a failed login just needs a retry from the
         // detail page, so surface it and move on rather than rolling anything back.
-        showToast(loginError?.message ?? 'Student saved, but login was not created', 'warning');
+        showToast(loginError?.message ?? 'Student saved. Login not created.', 'warning');
         navigate(`/students/${student.id}`);
       }
     } catch (error: any) {
@@ -65,7 +65,7 @@ export default function NewStudentPage() {
               <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="student@email.com" required />
             </FormField>
           </div>
-          <p className="field-hint">Portal login credentials are generated from this email.</p>
+          <p className="field-hint">Used for portal login.</p>
           <FormField label="GitHub URL">
             <input value={form.github_url} onChange={(e) => setForm({ ...form, github_url: e.target.value })} placeholder="https://github.com/username" />
           </FormField>

@@ -11,8 +11,12 @@ interface StudentImportModalProps {
   onClose: () => void;
   /** Batch enrolment needs a per-student fee; the global students list does not. */
   requireFee?: boolean;
-  /** Throw to surface a message in the dialog; the modal owns the busy state. */
-  onImport: (rows: Record<string, string>[], fee?: number) => Promise<void>;
+  /**
+   * Throw to surface a message in the dialog; the modal owns the busy state.
+   * `createLogins` reflects the checkbox — the caller decides what that means,
+   * since only it knows which students the rows resolved to.
+   */
+  onImport: (rows: Record<string, string>[], fee?: number, createLogins?: boolean) => Promise<void>;
 }
 
 const PREVIEW_ROWS = 5;
@@ -26,6 +30,7 @@ export function StudentImportModal({ open, onClose, requireFee, onImport }: Stud
   const [rows, setRows] = useState<Record<string, string>[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
   const [fee, setFee] = useState('');
+  const [createLogins, setCreateLogins] = useState(true);
   const [error, setError] = useState('');
   const [importing, setImporting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -34,6 +39,7 @@ export function StudentImportModal({ open, onClose, requireFee, onImport }: Stud
     setRows([]);
     setHeaders([]);
     setFee('');
+    setCreateLogins(true);
     setError('');
     setImporting(false);
     if (fileRef.current) fileRef.current.value = '';
@@ -66,11 +72,11 @@ export function StudentImportModal({ open, onClose, requireFee, onImport }: Stud
     setImporting(true);
     setError('');
     try {
-      await onImport(rows, requireFee ? Number(fee) : undefined);
+      await onImport(rows, requireFee ? Number(fee) : undefined, createLogins);
       reset();
       onClose();
     } catch (err: any) {
-      setError(err?.message ?? 'Import failed. Some rows may already have been imported.');
+      setError(err?.message ?? 'Import failed. Some rows may already exist.');
       setImporting(false);
     }
   };
@@ -107,14 +113,14 @@ export function StudentImportModal({ open, onClose, requireFee, onImport }: Stud
             </div>
             {rows.length > PREVIEW_ROWS && (
               <p className="text-xs text-[var(--text-muted)]">
-                Showing first {PREVIEW_ROWS}. All {rows.length} rows will be imported.
+                Showing {PREVIEW_ROWS} of {rows.length} rows.
               </p>
             )}
           </div>
         )}
 
         {requireFee && (
-          <FormField label="Total Fee per Student" required>
+          <FormField label="Fee per student" required>
             <input
               type="number"
               min="1"
@@ -124,6 +130,24 @@ export function StudentImportModal({ open, onClose, requireFee, onImport }: Stud
               disabled={importing}
             />
           </FormField>
+        )}
+
+        {/* Default on: an imported student with no login cannot use the portal,
+            and creating them one at a time afterwards is the tedious path. */}
+        <label className={`repo-confirm ${createLogins ? 'is-checked' : ''}`}>
+          <input
+            type="checkbox"
+            checked={createLogins}
+            onChange={(event) => setCreateLogins(event.target.checked)}
+            disabled={importing}
+          />
+          Create portal logins for these students
+        </label>
+
+        {createLogins && (
+          <p className="text-xs text-[var(--text-muted)]">
+            Email required. Passwords appear after import. Rows without email are skipped.
+          </p>
         )}
 
         {error && <InlineAlert>{error}</InlineAlert>}

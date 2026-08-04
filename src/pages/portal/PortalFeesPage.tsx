@@ -108,7 +108,7 @@ export default function PortalFeesPage() {
 
           <PortalSection title="Payments">
             {logs.length === 0 ? (
-              <PortalEmpty icon={ReceiptText}>No payments recorded yet.</PortalEmpty>
+              <PortalEmpty icon={ReceiptText}>No payments yet.</PortalEmpty>
             ) : (
               <PortalList>
                 {logs.map((log) => (
