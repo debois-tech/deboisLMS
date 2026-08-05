@@ -24,8 +24,7 @@ export default function PortalAssignmentsPage() {
   const [query, setQuery] = useState('');
   const { showToast } = useToast();
 
-  // The saved repo loads with the assignments, so the dialog's submit view can
-  // prefill the link immediately instead of showing an empty field first.
+  // The saved repo loads with the assignments, so the submit view can prefill the link immediately.
   const load = useCallback(async () => {
     if (!studentId) return;
     const [data, repo] = await Promise.all([
@@ -41,8 +40,7 @@ export default function PortalAssignmentsPage() {
   const handleSubmit = async (url: string) => {
     if (!studentId || !open) return;
     await submitAssignmentFromPortal(open.id, studentId, url);
-    // The submission is already saved, so a failed refresh must not surface as
-    // "Could not submit" — that reads as a failure and invites a second attempt.
+    // Already saved, so a failed refresh must not surface as "Could not submit".
     try {
       await load();
     } catch {

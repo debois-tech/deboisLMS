@@ -42,8 +42,7 @@ export default function FeesPage() {
       setFees(f);
       setStudents(s);
     } catch (err) {
-      // The page is already on screen, so this reports rather than replacing it —
-      // but the table must not be left showing the previous batch's rows.
+      // Report without replacing the page, but clear the table so it doesn't keep the previous batch's rows.
       setFees([]);
       setStudents([]);
       showToast(errorMessage(err, 'Failed to load fees for this batch'), 'error');

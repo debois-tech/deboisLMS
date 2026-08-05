@@ -24,11 +24,7 @@ interface PortalPageProps {
   children: ReactNode;
 }
 
-/**
- * Frame for every portal section: the page title, an optional page-level control,
- * and the loading placeholder. A new portal page is this wrapper plus widgets from
- * `@/components/portal` — see the README in this folder.
- */
+/** Frame for every portal section: title, optional control, loading placeholder, error state. */
 export function PortalPage({ title, action, loading, error, onRetry, shape = 'dashboard', children }: PortalPageProps) {
   return (
     <div className="portal-page">
@@ -41,10 +37,7 @@ export function PortalPage({ title, action, loading, error, onRetry, shape = 'da
   );
 }
 
-/**
- * Deliberately not the thrown message: a student can do nothing with "PGRST301
- * JWT expired", and the one action that fixes most of these is trying again.
- */
+/** Not the thrown message — a student can do nothing with "PGRST301 JWT expired". */
 function PortalError({ onRetry }: { onRetry?: () => void }) {
   return (
     <div className="portal-empty" role="alert">
@@ -61,10 +54,7 @@ function PortalError({ onRetry }: { onRetry?: () => void }) {
   );
 }
 
-/**
- * Placeholders shaped like the content that is loading, so the page doesn't jump
- * when the data lands and a slow connection still shows the layout it is getting.
- */
+/** Placeholders shaped like the content that is loading, so the page doesn't jump when data lands. */
 export function PortalLoading({ shape = 'dashboard' }: { shape?: 'dashboard' | 'list' }) {
   return (
     <div className="portal-skeleton" aria-busy="true" aria-label="Loading">

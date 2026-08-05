@@ -16,17 +16,10 @@ interface MaterialViewerProps {
 }
 
 /**
- * Read-only reader for one material.
- *
- * What this actually guarantees: the browser never receives a downloadable file
- * handle — pages are rasterised to canvas and the blob URL is revoked as soon as
- * rendering finishes — and every page carries the reader's name and phone, burned
- * in server-side by the `watermark-material` function.
- *
- * What it cannot do: stop a screenshot or a screen recording. No browser API can.
- * The measures below (no context menu, no print, blank on tab-switch) raise the
- * effort; the watermark is what actually deters, because a leaked capture names
- * the person who took it.
+ * Read-only reader for one material. Pages are rasterised to canvas and the blob
+ * URL revoked once drawn, so the browser never holds a downloadable file. The
+ * friction below (no context menu, no print, blank on tab-switch) is not real
+ * protection — the watermark is what deters, because a leak names the person.
  */
 export function MaterialViewer(props: MaterialViewerProps) {
   return <MaterialViewerBody key={props.material?.id ?? 'closed'} {...props} />;
@@ -59,20 +52,16 @@ function MaterialViewerBody({ material, onClose }: MaterialViewerProps) {
         if (!container) return;
         container.replaceChildren();
 
-        // Render at the device pixel ratio so text stays sharp on phones, but cap
-        // it — a 3x ratio on a 40-page PDF is a lot of canvas memory.
+        // Render at the device pixel ratio, capped so a 3x ratio on a large PDF
+        // does not eat all the canvas memory.
         const ratio = Math.min(window.devicePixelRatio || 1, 2);
         const targetWidth = container.clientWidth;
 
         /*
-         * Pages are laid out immediately at their real size but drawn only as they
-         * approach the viewport. Rendering all of them up front held a
-         * full-resolution canvas per page — on a 40-page deck that is enough
-         * memory to be a problem on a mid-range phone, and nothing appeared until
-         * the whole loop finished.
-         *
-         * The placeholder carries the page's aspect ratio, so the scrollbar is
-         * honest from the start and nothing jumps as pages fill in.
+         * Pages are laid out at their real size but drawn only as they approach
+         * the viewport, so a big deck does not hold a full-resolution canvas per
+         * page. The placeholder carries the aspect ratio so the scrollbar is
+         * honest from the start.
          */
         const drawPage = async (slot: HTMLElement, pageNumber: number) => {
           if (cancelled || !doc) return;
@@ -108,8 +97,7 @@ function MaterialViewerBody({ material, onClose }: MaterialViewerProps) {
           slots.push(slot);
         }
 
-        // `rootMargin` starts the render a screen early, so scrolling at a normal
-        // pace never catches up with a blank page.
+        // `rootMargin` starts the render a screen early so scrolling never hits a blank page.
         observerRef.current = new IntersectionObserver(
           (entries, observer) => {
             for (const entry of entries) {
@@ -124,8 +112,7 @@ function MaterialViewerBody({ material, onClose }: MaterialViewerProps) {
 
         slots.forEach((slot) => observerRef.current?.observe(slot));
 
-        // The first page is drawn directly rather than waiting for the observer,
-        // so something is on screen the moment loading ends.
+        // The first page is drawn directly so something is on screen the moment loading ends.
         await drawPage(slots[0], 1);
         observerRef.current.unobserve(slots[0]);
 
@@ -136,8 +123,7 @@ function MaterialViewerBody({ material, onClose }: MaterialViewerProps) {
         setError(errorMessage(err, 'Could not open this material.'));
         setLoading(false);
       } finally {
-        // Revoked as soon as the pages are drawn: after this the document exists
-        // only as pixels, with no URL left to save or share.
+        // Revoked once drawn: after this the document exists only as pixels.
         if (blobUrl) URL.revokeObjectURL(blobUrl);
       }
     })();
@@ -187,11 +173,8 @@ function MaterialViewerBody({ material, onClose }: MaterialViewerProps) {
   if (!material) return null;
 
   /*
-   * Rendered into <body>, not in place. `position: fixed` resolves against the
-   * nearest ancestor with a transform, filter or containment — and both shells
-   * wrap their content in `.animate-fade-in`, whose `forwards` fill leaves a
-   * settled `transform` behind. In place, the reader sized itself to that
-   * wrapper instead of the viewport and clipped the pages to a strip.
+   * Rendered into <body>, not in place: `position: fixed` resolves against the
+   * nearest ancestor with a transform, and both shells leave a settled one behind.
    */
   return createPortal(
     <div className="material-viewer" role="dialog" aria-modal="true" aria-label={material.title}>

@@ -23,11 +23,7 @@ interface AssignmentSubmissionTableProps {
 
 const CSV_HEADERS = ['Student Name', 'Submitted', 'GitHub Repo', 'Submitted At'];
 
-/**
- * Per-assignment submission roster: every actively enrolled student, whether they
- * have submitted, the repo they submit from, and when. Shared by the Assignments
- * page and the batch detail tab so the two can't drift apart.
- */
+/** Per-assignment submission roster — shared by the Assignments page and the batch detail tab. */
 export function AssignmentSubmissionTable({
   assignmentId,
   batchId,
@@ -54,8 +50,8 @@ export function AssignmentSubmissionTable({
     }
   };
 
-  // Same four columns as the table, and the same rendered values — the file the
-  // admin shares always matches what they were looking at.
+  // Same four columns as the table, and the same rendered values — the exported
+  // file always matches what the admin was looking at.
   const handleExport = () => {
     const csv = toCsv(
       CSV_HEADERS,

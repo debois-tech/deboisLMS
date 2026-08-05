@@ -10,11 +10,7 @@ interface PortalEmptyProps {
   action?: ReactNode;
 }
 
-/**
- * The state a new student sees most, since every list starts empty. It has to read
- * as "nothing here yet" rather than "this is broken" — the icon and the framing do
- * that, so the copy stays a phrase.
- */
+/** "Nothing here yet", not "this is broken" — the icon and framing carry that. */
 export function PortalEmpty({ icon: Icon = Inbox, children, action }: PortalEmptyProps) {
   return (
     <div className="portal-empty">

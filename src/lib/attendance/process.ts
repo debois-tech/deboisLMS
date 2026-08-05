@@ -19,22 +19,10 @@ export interface ProcessOptions {
 const LOG_PREFIX = '[attendance-parser]';
 
 /**
- * Process a lecture's raw upload rows into cleaned `attendance` records.
- *
- * Pipeline:
- *  1. Read every row from the `uploads` table.
- *  2. Merge sessions and dedupe multi-device rows (per participant).
- *  3. Match participants to students (deterministic first, Gemini fallback),
- *     excluding anyone whose name belongs to a tutor.
- *  4. Validate tutor/batch relationships and log inconsistencies.
- *  5. Compute attendance percentage/status and build insert payloads.
- *  6. Insert (idempotent upsert on student_id+lecture_id).
- *  7. Clear the `uploads` table — only after the insert succeeded.
- *
- * All database mutations happen after every match/interval calculation, so a
- * failure at any step leaves the `uploads` table untouched and re-runnable.
- *
- * @returns a detailed processing report (also mirrored to the console).
+ * Process a lecture's raw upload rows into cleaned `attendance` records:
+ * read uploads, merge sessions, match participants (tutors excluded), insert
+ * (idempotent on student_id+lecture_id), then clear the uploads table — only
+ * after the insert succeeded, so a failure leaves it re-runnable.
  */
 export async function processAttendance(
   lectureId: string,
@@ -46,7 +34,6 @@ export async function processAttendance(
     logs.push(message);
   };
 
-  // ── 1. Read raw rows ──────────────────────────────────────────
   const uploads = await loadUploadRows(lectureId);
   if (uploads.length === 0) {
     log(`No upload rows found for lecture ${lectureId}; nothing to process.`);
@@ -58,11 +45,6 @@ export async function processAttendance(
     `Lecture ${lectureId} (batch ${ctx.batchId}, scheduled ${ctx.scheduledMinutes} min): ${uploads.length} upload rows, ${ctx.roster.length} roster students.`,
   );
 
-  // Whether AI matching is available can no longer be checked up front: the key
-  // lives in the `match-name` edge function, not the browser. The first call
-  // reports it, and step 4b logs the outcome.
-
-  // ── 2. Merge sessions + dedupe devices ────────────────────────
   const participants = mergeSessions(uploads);
   const mergedSessions = participants.reduce((sum, p) => sum + p.sessionCount, 0);
   const duplicateRowsIgnored = participants.reduce((sum, p) => sum + p.duplicateRowsIgnored, 0);
@@ -70,7 +52,6 @@ export async function processAttendance(
     `Merged ${uploads.length} rows → ${participants.length} participants (${mergedSessions} sessions; ${duplicateRowsIgnored} duplicate/overlapping rows absorbed).`,
   );
 
-  // ── 3. Match participants ─────────────────────────────────────
   const matched: { participant: MergedParticipant; match: NameMatch }[] = [];
   const unmatched: UnmatchedRecord[] = [];
   const tutorsDetected: string[] = [];
@@ -94,7 +75,7 @@ export async function processAttendance(
     }
   }
 
-  // ── 4. Validate tutor relationships ───────────────────────────
+  // 4. Validate tutor relationships
   const tutorMismatches: string[] = [];
   for (const displayName of tutorsDetected) {
     const tutor = ctx.tutors.find((t) => t.name === displayName);
@@ -106,13 +87,13 @@ export async function processAttendance(
     }
   }
 
-  // ── 4b. Report AI-matching health ─────────────────────────────
+  // 4b. Report AI-matching health
   const geminiUnavailableReason = getGeminiUnavailableReason();
   if (geminiUnavailableReason) {
     log(`WARN: AI name matching unavailable — ${geminiUnavailableReason}. Only deterministic matching was used.`);
   }
 
-  // ── 5. Build cleaned records ──────────────────────────────────
+  // 5. Build cleaned records
   const payloads: AttendanceInsertPayload[] = matched.map(({ participant, match }) => ({
     student_id: match.studentId!,
     batch_id: ctx.batchId,
@@ -124,11 +105,10 @@ export async function processAttendance(
     approved: false,
   }));
 
-  // ── 6. Insert ─────────────────────────────────────────────────
+  // 6. Insert, then 7. clear uploads — only reached on success
   const inserted = payloads.length > 0 ? await insertAttendance(payloads) : 0;
   log(`Inserted ${inserted} attendance records.`);
 
-  // ── 7. Cleanup (only reached on success) ──────────────────────
   await clearUploads(lectureId);
   log(`Cleared uploads for lecture ${lectureId}.`);
 
@@ -152,11 +132,7 @@ export async function processAttendance(
   };
 }
 
-/**
- * Attendance bands, from the PRD (§5.4). Exported so nothing re-invents them:
- * the portal used to colour its attendance tile green at an invented 75%, which
- * corresponded to no rule in the product.
- */
+/** Attendance bands, from the PRD (§5.4). Exported so nothing re-invents them. */
 export const ATTENDANCE_PRESENT_PERCENT = 90;
 export const ATTENDANCE_PARTIAL_PERCENT = 65;
 

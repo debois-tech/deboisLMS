@@ -13,11 +13,7 @@ export function formatDate(iso: string): string {
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-/**
- * A date as a student would say it: "Today", "Tomorrow", "Yesterday", otherwise
- * "Tue, 4 Aug". Used across the portal so a lecture date reads as a plan rather
- * than as a record.
- */
+/** A date as a student would say it: "Today", "Tomorrow", "Yesterday", otherwise "Tue, 4 Aug". */
 export function formatDayLabel(iso: string): string {
   const midnight = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
   const date = new Date(iso);

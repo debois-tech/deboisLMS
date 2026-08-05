@@ -1,10 +1,6 @@
 import { Card } from '@/components/ui/Card';
 
-/**
- * A label and a number on one line. It used to also take `icon` and `color`,
- * which every caller passed and the component never rendered — the props are
- * gone rather than left as a promise the card does not keep.
- */
+/** A label and a number on one line. */
 interface StatCardProps {
   label: string;
   value: string | number;

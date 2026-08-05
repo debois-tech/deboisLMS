@@ -49,12 +49,8 @@ export default function PortalMaterialsPage() {
     });
   }, [materials, query, batchId]);
 
-  /*
-   * Grouped by batch, then by folder inside it — a student in two batches would
-   * otherwise get one undifferentiated pile, and a folder of twenty handouts
-   * would bury everything else. A folder is just a column on the row, so this is
-   * a group-by rather than a second query.
-   */
+  // Grouped by batch, then by folder inside it — a folder is just a column, so
+  // this is a group-by rather than a second query.
   const groups = useMemo(() => {
     const map = new Map<string, { name: string; items: Material[] }>();
     for (const material of matched) {

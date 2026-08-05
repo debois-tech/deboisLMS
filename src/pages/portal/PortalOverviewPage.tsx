@@ -180,11 +180,7 @@ export default function PortalOverviewPage() {
   );
 }
 
-/**
- * The one thing worth acting on, picked in the order a student would care about
- * it: the next class, then work that is still due, then money owed. "Nothing to
- * do" is a real answer and gets said out loud rather than leaving the slot blank.
- */
+/** The one thing worth acting on, picked in a student's order of concern: next class, work due, money owed. */
 function NextUp({
   batchName,
   lecture,

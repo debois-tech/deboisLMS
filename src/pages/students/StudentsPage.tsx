@@ -72,8 +72,8 @@ export default function StudentsPage() {
       return;
     }
 
-    // Students already holding a login are skipped: re-running the edge function
-    // for them would reset a password that may already be in someone's hands.
+    // Students already holding a login are skipped — re-running the edge function
+    // would reset a password that may already be in someone's hands.
     const needLogins = imported.filter((student) => !student.auth_user_id);
     if (needLogins.length === 0) {
       showToast('Students imported — logins already existed');

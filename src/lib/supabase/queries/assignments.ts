@@ -19,10 +19,7 @@ export async function getAssignmentsByBatch(batchId: string): Promise<Assignment
   return (data ?? []) as Assignment[];
 }
 
-/**
- * Every assignment from the batches a student belongs to, paired with that student's
- * own completion row (undefined when they have no row yet — i.e. not submitted).
- */
+/** Every assignment from a student's batches, paired with their own completion row. */
 export async function getAssignmentsForStudent(
   studentId: string,
 ): Promise<(Assignment & { completion?: AssignmentCompletion })[]> {
@@ -59,10 +56,9 @@ export async function createAssignment(input: Omit<Assignment, 'id' | 'created_a
 }
 
 /**
- * The admin submission table for one assignment: every actively enrolled student in
- * the batch, whether they have a completion row or not, joined to the single repo
- * link they submit all their homework from. The CSV export ships the same rows, so
- * the file and the screen can never disagree.
+ * The admin submission table for one assignment: every active student, whether
+ * they have submitted, and the repo link they submit from. The CSV export ships
+ * the same rows, so the file and the screen can never disagree.
  */
 export async function getAssignmentSubmissions(
   assignmentId: string,
@@ -126,10 +122,7 @@ export async function saveStudentRepo(studentId: string, repoUrl: string): Promi
   return data as StudentRepo;
 }
 
-/**
- * A student submitting from the portal. The repo link is saved first so the admin
- * table never shows a submission with a stale (or missing) link next to it.
- */
+/** A student submitting from the portal. The repo link is saved first so the admin table never shows a stale one. */
 export async function submitAssignmentFromPortal(
   assignmentId: string,
   studentId: string,

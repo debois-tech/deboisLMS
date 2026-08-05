@@ -4,16 +4,7 @@ import type { Material, MaterialView } from '@/lib/types';
 
 const BUCKET = 'materials';
 
-/**
- * Per-file upload limit, matching the bucket and the watermark function.
- *
- * Set by what the reader can process, not by what storage would accept: the edge
- * function loads the whole PDF into memory and writes a second copy out inside a
- * ~256 MB budget, so a file much past this uploads fine and then fails to open
- * for every student. One number everything agrees on.
- *
- * Per file — nothing limits how many files a batch has.
- */
+/** Per-file upload limit, matching the bucket and the watermark function. */
 export const MATERIAL_MAX_BYTES = 50 * 1024 * 1024;
 
 /** `null` batchId = material for every student, stored under `all/`. */
@@ -44,11 +35,7 @@ export async function getMaterialsForEveryone(): Promise<Material[]> {
   );
 }
 
-/**
- * Every material the student can open, newest first. RLS does the filtering — the
- * policy returns rows for batches the student is actively mapped to, plus every
- * row with a null batch_id — so this deliberately does not repeat that logic.
- */
+/** Every material the student can open, newest first. RLS does the filtering. */
 export async function getMaterialsForStudent(): Promise<Material[]> {
   return rows<Material>(
     await supabase
@@ -78,11 +65,7 @@ export interface UploadMaterialInput {
   uploadedBy?: string;
 }
 
-/**
- * Uploads the file first and only then writes the row, so a failed upload can
- * never leave a material listed with nothing behind it. If the row insert fails
- * the orphaned object is removed rather than left paying for storage.
- */
+/** Uploads the file first and only then writes the row; a failed insert removes the orphaned object. */
 export async function uploadMaterial(input: UploadMaterialInput): Promise<Material> {
   if (input.file.type !== 'application/pdf') {
     throw new Error(`${input.file.name} is not a PDF.`);
@@ -124,16 +107,7 @@ export interface BulkUploadResult {
   failed: { name: string; reason: string }[];
 }
 
-/**
- * Uploads a folder's worth of PDFs as one material each.
- *
- * One row per file, tagged with `folder`, rather than a materials/material_files
- * pair. One material = one file is assumed by the reader, the portal list and the
- * delete path, and a second table would add a join to every read to express
- * something a single column already says. Listings group by the column.
- *
- * One file's failure never stops the rest — non-PDFs inside a folder are common.
- */
+/** Uploads a folder's worth of PDFs, one material per file. One file's failure never stops the rest. */
 export async function uploadMaterials(
   files: File[],
   base: Omit<UploadMaterialInput, 'file' | 'title'> & { title: (file: File, index: number) => string },
@@ -141,8 +115,7 @@ export async function uploadMaterials(
 ): Promise<BulkUploadResult> {
   const result: BulkUploadResult = { uploaded: [], failed: [] };
 
-  // Sequential on purpose: parallel uploads of large PDFs saturate the
-  // connection and make the progress count meaningless.
+  // Sequential on purpose: parallel uploads of large PDFs saturate the connection.
   for (const [index, file] of files.entries()) {
     try {
       result.uploaded.push(
@@ -160,14 +133,7 @@ export async function uploadMaterials(
   return result;
 }
 
-/**
- * Removes the row first, then the file.
- *
- * That order matters: if the object delete fails, the material is already gone
- * from the list and the leftover file only costs storage. The other way round —
- * which this used to do — a failed row delete leaves the material listed with
- * nothing behind it, and a student opening it hits "the file is missing".
- */
+/** Removes the row first, then the file — a failed object delete leaves only a storage orphan. */
 export async function deleteMaterial(material: Material): Promise<void> {
   ok(await supabase.from('materials').delete().eq('id', material.id), 'Could not delete the material');
 
@@ -192,10 +158,7 @@ export async function getMaterialViews(materialId: string): Promise<MaterialView
 }
 
 /**
- * Fetches the watermarked copy as a blob URL. The raw file is never exposed: the
- * edge function is the only reader of the bucket, and what comes back carries the
- * tutor's name and the company phone number on every page.
- *
+ * Fetches the watermarked copy as a blob URL; the raw file is never exposed.
  * The caller owns the returned URL and must `URL.revokeObjectURL` it.
  */
 export async function getWatermarkedMaterialUrl(materialId: string): Promise<string> {

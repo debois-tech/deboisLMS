@@ -10,13 +10,7 @@ interface State {
   error: Error | null;
 }
 
-/**
- * Last line of defence: a throw during render anywhere below this lands here
- * instead of unmounting the whole tree and leaving a white page.
- *
- * Data-loading failures should be caught by `useInitialLoad` and rendered in
- * place — this is for the ones nothing anticipated.
- */
+/** Last line of defence: a render throw lands here instead of unmounting the whole tree. */
 class ErrorBoundaryInner extends Component<Props, State> {
   state: State = { error: null };
 
@@ -42,11 +36,7 @@ class ErrorBoundaryInner extends Component<Props, State> {
   }
 }
 
-/**
- * Keyed by pathname so navigating away from a broken page clears the error —
- * without the key the boundary stays latched and every later route renders the
- * failure from the one before it.
- */
+/** Keyed by pathname so navigating away from a broken page clears the error. */
 export default function ErrorBoundary({ children }: Props) {
   const { pathname } = useLocation();
   return <ErrorBoundaryInner key={pathname}>{children}</ErrorBoundaryInner>;

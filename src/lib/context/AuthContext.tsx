@@ -20,11 +20,7 @@ const AuthContext = createContext<AuthContextValue>({
   loading: true,
 });
 
-/**
- * Role comes from app_metadata (set server-side: admin via the migration, student by the
- * create-student-login edge function) — never from user_metadata, which a user can edit
- * on themselves. Anything untagged is treated as a student, the lower-privilege default.
- */
+/** Role comes from app_metadata (set server-side) — never user_metadata, which a user can edit on themselves. */
 export function roleFromUser(user: User): Role {
   return user.app_metadata?.role === 'admin' ? 'admin' : 'student';
 }

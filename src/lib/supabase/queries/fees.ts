@@ -2,11 +2,7 @@ import { supabase } from '../client';
 import { maybeRow, ok, row, rows } from './result';
 import type { StudentFee, BatchFeeSummary, FeePaymentLog, PaymentMethod } from '@/lib/types';
 
-/**
- * Fees for a batch, backfilling a zeroed row for any active student who has none
- * yet — the finance table is built from this, so a student missing a row would
- * otherwise be invisible on it.
- */
+/** Fees for a batch, backfilling a zeroed row for any active student who has none yet. */
 export async function getFeesByBatch(batchId: string): Promise<StudentFee[]> {
   const existingFees = rows<StudentFee>(
     await supabase.from('student_fees').select('*').eq('batch_id', batchId),

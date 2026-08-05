@@ -1,17 +1,9 @@
-/**
- * CSV writing, for exports the admin shares outside the app.
- * The counterpart to `csvParser.ts`, which reads Google Meet exports coming in.
- */
-
+/** CSV writing for exports the admin shares outside the app. */
 type CsvCell = string | number | boolean | null | undefined;
 
 /**
- * Quote a cell per RFC 4180: wrap in quotes when it contains a delimiter,
- * quote, or newline, and double any embedded quotes.
- *
- * The leading-punctuation guard blocks CSV injection — a cell starting with
- * `=`, `+`, `-`, or `@` is executed as a formula when the file is opened in
- * Excel or Sheets, and student-supplied repo URLs land in these exports.
+ * Quote a cell per RFC 4180, and guard against CSV injection — a cell starting
+ * with `=`, `+`, `-`, or `@` would be executed as a formula in Excel or Sheets.
  */
 function escapeCell(value: CsvCell): string {
   if (value === null || value === undefined) return '';

@@ -3,11 +3,7 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { useConfirmState } from '@/lib/context/ConfirmContext';
 
-/**
- * Renders whatever `useConfirm()` last asked for. Mounted once, next to
- * `ToastContainer` — pages never render this themselves, they just await
- * `confirm(...)`.
- */
+/** Renders whatever `useConfirm()` last asked for. Mounted once, next to `ToastContainer`. */
 export function ConfirmDialog() {
   const { state, resolve } = useConfirmState();
 

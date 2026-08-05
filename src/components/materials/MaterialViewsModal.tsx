@@ -10,10 +10,7 @@ import type { Material, MaterialView } from '@/lib/types';
 import { formatDateTime } from '@/lib/utils/format';
 import { errorMessage } from '@/lib/utils/errors';
 
-/**
- * Who opened a material, and when. This is the other half of the watermark: the
- * stamp on a leaked page names a student, and this says when they opened it.
- */
+/** Who opened a material and when — the other half of the watermark. */
 export function MaterialViewsModal({ material, onClose }: { material: Material | null; onClose: () => void }) {
   const [result, setResult] = useState<{ materialId: string; views: MaterialView[]; error?: string } | null>(null);
 

@@ -2,17 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { errorMessage } from '@/lib/utils/errors';
 
 /**
- * The first load of a page's data, with the failure case included.
- *
- * Every query throws (`queries/result.ts`), so a page that fetches inside a bare
- * `.then()` spins forever the moment RLS denies the read, the session expires or
- * the network drops — and the one thing the user is never told is that anything
- * went wrong. This holds the three states a load actually has (loading, failed,
- * loaded) so a page can render an error rather than an empty table that claims
- * there are no batches.
- *
- * `load` runs on mount and again on `retry`. It is read through a ref, so a page
- * can pass an inline closure without the effect re-running on every render.
+ * The first load of a page's data, with the failure case included — queries throw,
+ * so a bare `.then()` would render an empty table instead of an error. `load` runs
+ * on mount and on `retry`, read through a ref so an inline closure doesn't re-run
+ * the effect on every render.
  */
 export function useInitialLoad(load: () => Promise<void>) {
   const [loading, setLoading] = useState(true);
@@ -21,9 +14,7 @@ export function useInitialLoad(load: () => Promise<void>) {
 
   const loadRef = useRef(load);
 
-  // Kept in sync from an effect rather than assigned during render — a render must
-  // stay free of side effects for React to be able to replay it. Declared before
-  // the load effect so it has already run by the time that one fires.
+  // Kept in sync from an effect rather than during render, so renders stay side-effect free.
   useEffect(() => {
     loadRef.current = load;
   });
@@ -51,8 +42,7 @@ export function useInitialLoad(load: () => Promise<void>) {
     };
   }, [attempt]);
 
-  // Loading is set here rather than in the effect so the effect body stays free of
-  // synchronous setState; on mount it is already true.
+  // Loading is set here so the effect body stays free of synchronous setState.
   const retry = useCallback(() => {
     setError(null);
     setLoading(true);
@@ -63,15 +53,9 @@ export function useInitialLoad(load: () => Promise<void>) {
 }
 
 /**
- * A section inside a page that loads its own data and refetches after a mutation —
- * the tabs on the batch detail page.
- *
- * There is no loading flag on purpose: these sections render their table straight
- * away, and a refetch after adding a row should not blink the table out and back.
- * What was missing was the failure case, which used to leave the section showing
- * "No students" when the read had actually been refused.
- *
- * `load` must be stable (`useCallback`) — it is the effect's dependency.
+ * A section that loads its own data and refetches after a mutation — no loading
+ * flag on purpose, so a refetch after adding a row doesn't blink the table out
+ * and back. `load` must be stable (`useCallback`).
  */
 export function useReloadableSection(load: () => Promise<void>) {
   const [error, setError] = useState<string | null>(null);

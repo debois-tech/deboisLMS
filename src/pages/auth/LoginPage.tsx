@@ -19,11 +19,7 @@ interface LoginPanelProps {
   hint?: string;
 }
 
-/**
- * Shared by the admin and student login routes. Which dashboard you land on comes from
- * the role on the session, not from which page you logged in through — the two routes
- * are a UX convenience, not a security boundary (RLS is).
- */
+/** Shared by the admin and student login routes. Which dashboard you land on comes from the session role. */
 export function LoginPanel({ title, emailPlaceholder, hint }: LoginPanelProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

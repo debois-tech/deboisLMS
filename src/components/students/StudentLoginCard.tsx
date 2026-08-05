@@ -17,13 +17,8 @@ interface StudentLoginCardProps {
 }
 
 /**
- * The student's portal login: its current password, and the reset that rotates it.
- *
- * The password shown is recomputed from the phone number, not read back from
- * Supabase Auth — Auth stores a hash and nothing here stores a plaintext copy.
- * That works because `create-student-login` derives the password deterministically
- * and a reset re-applies the same rule, so what is displayed stays correct unless
- * the student changes it themselves in the portal.
+ * The student's portal login: current password (recomputed from the phone, since
+ * Auth stores only a hash) and the reset that rotates it.
  */
 export function StudentLoginCard({ studentId, email, phone, hasLogin, onCreated }: StudentLoginCardProps) {
   const [loading, setLoading] = useState(false);

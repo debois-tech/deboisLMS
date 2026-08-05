@@ -1,18 +1,9 @@
 import type { PostgrestError } from '@supabase/supabase-js';
 
 /**
- * How every query in this layer handles a Postgrest response.
- *
- * The rule: a failure throws, so an empty array can only ever mean "no rows".
- * Returning `data ?? []` on error — which most of these queries used to do —
- * renders an RLS denial or a dropped connection as a confident empty state, and
- * the user is told they have no batches when the batches are sitting in the
- * database.
- *
- * Callers already run inside try/catch with a toast, or inside a page that can
- * show an error, so throwing is the useful behaviour.
+ * How every query handles a Postgrest response: a failure throws, so an empty
+ * array can only ever mean "no rows" — never an RLS denial or dropped connection.
  */
-
 interface Result<T> {
   data: T | null;
   error: PostgrestError | null;
@@ -22,8 +13,7 @@ interface Result<T> {
 const NO_ROWS = 'PGRST116';
 
 function fail(error: PostgrestError, what: string): never {
-  // `details` carries the useful part for RLS and constraint violations, which
-  // is exactly where the bare `message` is least informative.
+  // `details` carries the useful part for RLS and constraint violations.
   const detail = error.details ? ` (${error.details})` : '';
   throw new Error(`${what}: ${error.message}${detail}`);
 }

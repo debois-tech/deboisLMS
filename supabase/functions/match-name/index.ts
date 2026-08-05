@@ -38,8 +38,7 @@ Deno.serve(async (req) => {
     }
 
     const apiKey = Deno.env.get('GEMINI_API_KEY');
-    // 501, not 500: "not configured" is a deployment state the client should stop
-    // retrying on, not a transient failure.
+    // 501, not 500: "not configured" is something the client should stop retrying on.
     if (!apiKey) return json({ error: 'GEMINI_API_KEY is not set', configured: false }, 501);
 
     const prompt = [

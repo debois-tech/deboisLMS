@@ -20,10 +20,7 @@ interface AssignmentModalProps {
   onSubmit: (repoUrl: string) => Promise<void>;
 }
 
-/**
- * Lenient on purpose: rejects only what clearly isn't a GitHub repo, because a
- * false rejection stops a student handing work in.
- */
+/** Lenient on purpose: rejects only what clearly isn't a GitHub repo, so a false rejection never stops a hand-in. */
 function validateRepoUrl(value: string): string | null {
   const trimmed = value.trim();
   if (!trimmed) return 'Enter your GitHub repository link.';
@@ -43,11 +40,7 @@ function validateRepoUrl(value: string): string | null {
   return null;
 }
 
-/**
- * Everything about one assignment. The list row carries only a title, a date and
- * a state dot; the detail and the submit form both live here, as two views of the
- * same dialog so submitting never stacks a second modal on top of the first.
- */
+/** Everything about one assignment — detail and submit form as two views of one dialog, so submitting never stacks a modal. */
 export function AssignmentModal(props: AssignmentModalProps) {
   return <AssignmentModalBody key={props.assignment?.id ?? 'closed'} {...props} />;
 }

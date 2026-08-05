@@ -21,7 +21,6 @@ export default function TutorDetailPage() {
     if (!tutorId) return;
     const [t, mappings] = await Promise.all([getTutorById(tutorId), getTutorBatches(tutorId)]);
     setTutor(t ?? null);
-    // `getTutorBatches` joins the batch in — no per-mapping fetch needed.
     setBatchMappings(mappings);
   });
 

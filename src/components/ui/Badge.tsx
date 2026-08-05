@@ -9,8 +9,7 @@ interface BadgeProps {
   dot?: boolean;
 }
 
-// Label colours come from the `*-text` tokens, which are tuned per theme: the
-// fill shades stay readable on a dark surface but drop to ~2:1 on a light one.
+// Label colours come from the `*-text` tokens, tuned per theme for contrast.
 const variants: Record<BadgeVariant, string> = {
   default:  'bg-[var(--bg-overlay)] text-[var(--text-secondary)] border border-[var(--border)]',
   success:  'bg-emerald-500/15 text-[var(--success-text)] border border-emerald-500/25',

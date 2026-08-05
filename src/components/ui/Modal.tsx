@@ -21,15 +21,11 @@ const sizes = { sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-2xl', xl: 'max-w-4xl'
 
 export function Modal({ open, onClose, title, description, children, footer, size = 'md' }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
-  // Held in a ref so the key handler below reads the current `onClose` without
-  // the effect re-subscribing whenever a caller passes a new inline closure.
-  // Written in an effect, not during render — a render-phase ref write is a
-  // side effect, and breaks under concurrent rendering.
+  // Held in a ref so the key handler reads the current `onClose` without re-subscribing.
   const onCloseRef = useRef(onClose);
   useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
 
-  // Where focus came from, so closing returns it there instead of dumping the
-  // user back at the top of the page.
+  // Where focus came from, so closing returns there instead of dumping the user at the top.
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
   const descriptionId = useId();
@@ -39,8 +35,8 @@ export function Modal({ open, onClose, title, description, children, footer, siz
 
     returnFocusRef.current = document.activeElement as HTMLElement | null;
 
-    // Focus moves into the dialog on open; without this a keyboard user is still
-    // outside it and their next Tab lands on the page behind the backdrop.
+    // Focus moves into the dialog on open; without this a keyboard user's Tab
+    // would land on the page behind the backdrop.
     const focusFirst = () => {
       const panel = panelRef.current;
       if (!panel) return;
@@ -57,8 +53,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
       }
       if (event.key !== 'Tab') return;
 
-      // Focus trap: Tab used to walk straight out of the dialog and into the
-      // page behind it, which is unusable with a keyboard and wrong for a modal.
+      // Focus trap: Tab would otherwise walk out of the dialog into the page behind it.
       const panel = panelRef.current;
       if (!panel) return;
       const focusable = [...panel.querySelectorAll<HTMLElement>(FOCUSABLE)]

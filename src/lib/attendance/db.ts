@@ -6,9 +6,7 @@ import type {
   RosterEntry,
 } from './types';
 
-/**
- * Load every raw upload row for a lecture, in CSV order.
- */
+/** Load every raw upload row for a lecture, in CSV order. */
 export async function loadUploadRows(lectureId: string): Promise<RawUploadRow[]> {
   const { data, error } = await supabase
     .from('uploads')
@@ -20,11 +18,7 @@ export async function loadUploadRows(lectureId: string): Promise<RawUploadRow[]>
   return (data ?? []) as RawUploadRow[];
 }
 
-/**
- * Build the processing context for a lecture:
- * lecture metadata, the active student roster for the lecture's batch,
- * all tutors, and the tutors assigned to that batch.
- */
+/** Build the processing context: lecture metadata, the active roster, and assigned tutors. */
 export async function loadProcessingContext(lectureId: string): Promise<ProcessingContext> {
   const [lectureRes, tutorsRes, tutorMapRes] = await Promise.all([
     supabase
@@ -72,12 +66,8 @@ export async function loadProcessingContext(lectureId: string): Promise<Processi
 }
 
 /**
- * Insert cleaned attendance records.
- *
- * Uses an idempotent upsert on `(student_id, lecture_id)` so a re-run (e.g.
- * after a partial failure) cannot create duplicate rows.
- *
- * @returns the number of rows written.
+ * Insert cleaned attendance records, idempotent on `(student_id, lecture_id)` so
+ * a re-run cannot create duplicates. Returns the number of rows written.
  */
 export async function insertAttendance(payloads: AttendanceInsertPayload[]): Promise<number> {
   if (payloads.length === 0) return 0;
@@ -91,12 +81,7 @@ export async function insertAttendance(payloads: AttendanceInsertPayload[]): Pro
   return (data ?? []).length;
 }
 
-/**
- * Delete all upload rows for a lecture.
- *
- * Only ever called after the attendance insert succeeded, so the upload table
- * stays intact if processing fails midway.
- */
+/** Delete all upload rows for a lecture. Only called after the attendance insert succeeded. */
 export async function clearUploads(lectureId: string): Promise<void> {
   const { error } = await supabase.from('uploads').delete().eq('lecture_id', lectureId);
   if (error) throw new Error(`Failed to clear uploads: ${error.message}`);

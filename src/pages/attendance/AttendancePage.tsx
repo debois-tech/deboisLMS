@@ -46,8 +46,7 @@ export default function AttendancePage() {
   });
 
   // Picking a batch resets everything downstream of it, so this runs from the
-  // change handler rather than an effect on `selectedBatch` — the state it clears
-  // belongs to the interaction, not to a render.
+  // change handler rather than an effect on `selectedBatch`.
   const selectBatch = async (batchId: string) => {
     setSelectedBatch(batchId);
     setSelectedLecture(null);

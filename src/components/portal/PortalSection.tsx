@@ -8,11 +8,7 @@ interface PortalSectionProps {
   children: ReactNode;
 }
 
-/**
- * A labelled group inside a portal page. Every portal page builds its body from
- * these instead of hand-rolling a heading and a margin, so the gap between a label
- * and its content is the same everywhere.
- */
+/** A labelled group inside a portal page — the gap between label and content is the same everywhere. */
 export function PortalSection({ title, action, children }: PortalSectionProps) {
   return (
     <section className="portal-section">

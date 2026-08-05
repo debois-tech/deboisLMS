@@ -22,21 +22,12 @@ const COMPANY_NAME = 'DeboisTech';
 const COMPANY_PHONE = '8263830296';
 
 /**
- * pdf-lib holds the whole document in memory and serialises a second copy, inside
- * an Edge Function's ~256 MB budget. Past this the function is killed mid-render
- * and the student sees a generic failure, so it is rejected with a real reason.
- *
- * The bucket enforces the same 50 MB, so this should be unreachable — it stays as
- * the backstop for anything uploaded before that limit was set.
+ * pdf-lib holds the whole document in memory, so past this size the function is
+ * killed mid-render. Backstop for anything uploaded before the bucket limit was set.
  */
 const MAX_WATERMARK_BYTES = 50 * 1024 * 1024;
 
-/**
- * Two layers, because they defeat different things. The tiled diagonal layer
- * survives a crop — any fragment large enough to read still carries a full
- * identity string. The footer bar survives a downscaled screenshot, where the
- * tiled text turns to mush but a solid strip stays legible.
- */
+/** Two layers: the tiled diagonal survives crops, the footer bar survives downscaled screenshots. */
 async function stamp(pdfBytes: ArrayBuffer, identity: string, issuedAt: string): Promise<Uint8Array> {
   const pdf = await PDFDocument.load(pdfBytes);
   const font = await pdf.embedFont(StandardFonts.Helvetica);
@@ -125,11 +116,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    /*
-     * The stamp is the same for everyone: the tutor who taught it, the company,
-     * and the number to call. It does not vary by reader, which is the point —
-     * a shared copy still advertises where it came from.
-     */
+    // The stamp is the same for everyone — a shared copy still advertises where it came from.
     const tutorName = (material.tutor as { name?: string } | null)?.name;
     const identity = [tutorName, COMPANY_NAME, COMPANY_PHONE].filter(Boolean).join(' · ');
 
@@ -146,12 +133,9 @@ Deno.serve(async (req) => {
       if (!student) return json({ error: 'This login is not linked to a student record.' }, 403);
 
       /*
-       * Enrolment is re-checked here rather than trusted from the client: this
-       * function runs as the service role and bypasses RLS, so it has to do the
-       * work the policy would otherwise have done.
-       *
-       * A null batch_id means the material is for every student, so there is no
-       * enrolment to check — miss this and every all-students material 403s.
+       * Enrolment is re-checked here because this function runs as the service
+       * role and bypasses RLS. A null batch_id means it's for every student, so
+       * there is no enrolment to check.
        */
       if (material.batch_id) {
         const { data: mapping } = await admin
@@ -166,13 +150,8 @@ Deno.serve(async (req) => {
       }
 
       /*
-       * Throttle. Every call downloads the whole PDF, stamps every page and
-       * re-serialises it, so a loop from one logged-in student burns the free
-       * tier's invocation budget and floods `material_views` — the table a leak
-       * investigation depends on.
-       *
-       * The view log doubles as the rate-limit store: no extra table, and it is
-       * already written on every successful open.
+       * Throttle: every call downloads and re-stamps the whole PDF, and the view
+       * log doubles as the rate-limit store — it is already written on every open.
        */
       const since = new Date(Date.now() - THROTTLE_SECONDS * 1000).toISOString();
       const { count: recentOpens } = await admin

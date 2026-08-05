@@ -28,11 +28,7 @@ interface PortalRowProps {
   label?: string;
 }
 
-/**
- * One line of meaning: an optional state dot, the thing, a quiet second line, and
- * one trailing slot. Every portal list uses this row — a list of lectures, fees,
- * assignments and batches should not each invent their own line.
- */
+/** One line of meaning: state dot, the thing, a quiet second line, one trailing slot. */
 export function PortalRow({ primary, secondary, trailing, state, muted, onClick, label }: PortalRowProps) {
   const className = clsx(
     'portal-list-row',

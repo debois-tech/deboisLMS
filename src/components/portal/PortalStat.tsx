@@ -15,11 +15,7 @@ interface PortalStatProps {
   tone?: 'default' | 'positive' | 'attention';
 }
 
-/**
- * One number and, at most, the few words that say what it was counted from. Drop
- * the note entirely when the value already speaks — an empty line under a number
- * reads better than a line restating it.
- */
+/** One number and, at most, the few words that say what it was counted from. */
 export function PortalStat({ label, icon: Icon, value, note, progress, tone = 'default' }: PortalStatProps) {
   const clamped = progress === undefined ? undefined : Math.max(0, Math.min(100, progress));
 

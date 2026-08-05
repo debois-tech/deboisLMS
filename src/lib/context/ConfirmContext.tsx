@@ -30,24 +30,14 @@ const ConfirmContext = createContext<ConfirmContextValue>({
   resolve: () => {},
 });
 
-/**
- * One confirmation dialog for the whole app, so destructive actions stop
- * reaching for `window.confirm` — which renders an OS dialog that ignores the
- * theme, cannot be styled, and gives no room to say what is actually lost.
- *
- * Usage:
- *   const confirm = useConfirm();
- *   if (!(await confirm({ title: 'Delete this?', danger: true }))) return;
- */
+/** One confirmation dialog for the whole app, so destructive actions never use `window.confirm`. */
 export function ConfirmProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<ConfirmState>({ open: false, title: '' });
-  // Held across renders so the promise handed to the caller can be settled by
-  // whichever button they press later.
+  // Held across renders so the promise can be settled by whichever button is pressed later.
   const pending = useRef<((accepted: boolean) => void) | null>(null);
 
   const confirm = useCallback((options: ConfirmOptions) => {
-    // A second request while one is open would strand the first promise, so the
-    // previous one is settled as a cancel rather than left hanging forever.
+    // A second request while one is open settles the previous one as a cancel.
     pending.current?.(false);
     setState({ ...options, open: true });
     return new Promise<boolean>((resolvePromise) => {

@@ -30,11 +30,7 @@ interface SearchBarProps {
   filter?: SearchBarFilter;
 }
 
-/**
- * The one search field in the app. Every surface that searches uses this, at one
- * of three sizes, so icon size, height, padding and focus treatment stay in step.
- * The filter toggle is opt-in — pages without a filter get a plain field.
- */
+/** The one search field in the app, at one of three sizes. The filter toggle is opt-in. */
 export function SearchBar({
   value,
   onChange,

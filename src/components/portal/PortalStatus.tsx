@@ -4,10 +4,8 @@ import type { AttendanceStatus, FeeStatus, MappingStatus } from '@/lib/types';
 type Tone = 'default' | 'success' | 'warning' | 'danger';
 
 /**
- * Every status a student sees, in their words rather than the database's. The
- * schema says `partial` and `dropped`; a student reads "Partly attended" and
- * "Finished". This map is the only place the translation happens, so no page can
- * leak a raw enum into the interface or pick its own colour for a state.
+ * Every status a student sees, in their words rather than the database's.
+ * The only place the schema → student-wording translation happens.
  */
 const attendance: Record<AttendanceStatus, [string, Tone]> = {
   present: ['Attended', 'success'],

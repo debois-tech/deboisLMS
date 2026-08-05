@@ -28,8 +28,7 @@ export default function NewStudentPage() {
       setCreatedStudentId(student.id);
         showToast('Student added');
 
-      // Reusing an existing student would otherwise rotate a password they already have —
-      // leave those alone; the detail page has an explicit reset action.
+      // Reusing an existing student would rotate a password they already have — skip those.
       if (student.auth_user_id) {
         navigate(`/students/${student.id}`);
         return;
@@ -38,8 +37,7 @@ export default function NewStudentPage() {
       try {
         setCredentials(await createStudentLogin(student.id));
       } catch (loginError) {
-        // The student record is already saved; a failed login just needs a retry from the
-        // detail page, so surface it and move on rather than rolling anything back.
+        // The record is saved; a failed login just needs a retry from the detail page.
         showToast(errorMessage(loginError, 'Student saved. Login not created.'), 'warning');
         navigate(`/students/${student.id}`);
       }

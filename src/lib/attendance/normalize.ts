@@ -1,12 +1,7 @@
 /** Honorifics that add no identity value and should be stripped before matching. */
 const HONORIFICS = /\b(mr|mrs|ms|miss|dr|prof|sir|er|shri|smt)\.?\b/gi;
 
-/**
- * Normalize a participant/student/tutor name for comparison.
- *
- * Handles: unicode folding, honorific stripping, punctuation removal,
- * extra/duplicate whitespace and case. Preserves letters and digits only.
- */
+/** Normalize a name for comparison: unicode folding, honorific stripping, punctuation, whitespace, case. */
 export function normalizeName(raw: string): string {
   return (raw ?? '')
     .normalize('NFKC')
@@ -22,10 +17,7 @@ export function nameTokens(name: string): string[] {
   return normalizeName(name).split(' ').filter(Boolean);
 }
 
-/**
- * True when two names contain exactly the same tokens regardless of order.
- * Catches "Doe, John" vs "John Doe" and spacing/case differences.
- */
+/** True when two names contain exactly the same tokens regardless of order. */
 export function tokenSetsEqual(a: string, b: string): boolean {
   const ta = nameTokens(a).sort().join(' ');
   const tb = nameTokens(b).sort().join(' ');
@@ -60,11 +52,7 @@ function diceCoefficient(a: string, b: string): number {
   return (2 * common) / (ga.size + gb.size);
 }
 
-/**
- * Jaro-Winkler string similarity. Scores the same characters in proximity and
- * rewards a shared prefix, so it catches single-character omissions/typos that
- * bigram Dice under-rates (e.g. "Jon Doe" vs "John Doe").
- */
+/** Jaro-Winkler similarity — catches single-character omissions that bigram Dice under-rates. */
 function jaroWinkler(a: string, b: string): number {
   const na = normalizeName(a);
   const nb = normalizeName(b);
@@ -112,11 +100,7 @@ function jaroWinkler(a: string, b: string): number {
   return jaro + prefix * 0.1 * (1 - jaro);
 }
 
-/**
- * Combined name similarity = max(bigram Dice, Jaro-Winkler).
- * 1 = identical, 0 = disjoint. Robust against small typos, omissions and
- * name-order differences.
- */
+/** Combined name similarity = max(bigram Dice, Jaro-Winkler). */
 export function similarity(a: string, b: string): number {
   return Math.max(diceCoefficient(a, b), jaroWinkler(a, b));
 }

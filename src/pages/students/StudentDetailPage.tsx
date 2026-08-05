@@ -32,10 +32,9 @@ export default function StudentDetailPage() {
     ]);
     setStudent(s ?? null);
     setPaymentLogs(logs);
-    // `getStudentBatches` joins the batch in — no per-mapping fetch needed.
     setBatchMappings(mappings);
 
-    // Multiple active batches are possible; the most recently joined one is treated as "current".
+    // Multiple active batches are possible; the most recently joined one is "current".
     const activeMappings = mappings.filter((m) => m.status === 'active');
     const currentMapping = activeMappings.sort(
       (a, b) => new Date(b.joined_at).getTime() - new Date(a.joined_at).getTime()

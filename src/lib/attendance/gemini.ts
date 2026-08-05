@@ -1,27 +1,6 @@
 import { supabase } from '@/lib/supabase/client';
 
-/**
- * Client side of AI name matching.
- *
- * The Gemini key is NOT here. It used to be read from `VITE_GEMINI_API_KEY`,
- * which Vite inlines into the client bundle — readable by any student with
- * DevTools, and spendable against our quota by anyone who found it. The call now
- * runs in the `match-name` edge function, which holds the key as a Supabase
- * secret and checks the caller is an admin.
- *
- * The health cache below stays client-side on purpose: it is per-session UI
- * state, not a security control.
- */
-
-/**
- * Lazy health cache. Once a request fails, subsequent calls short-circuit so a
- * broken key or an exhausted quota does not produce one failed request per
- * unmatched name. Cleared on page reload, so a fixed key is picked up at once.
- *
- * Auth / configuration errors (4xx, 501) permanently disable AI matching for the
- * session. Rate-limit and server errors (429/5xx) only start a cooldown and are
- * retried later, since quota can recover within the same session.
- */
+/** Client side of AI name matching. The Gemini key lives in the `match-name` edge function, not here. */
 let geminiUnavailableReason: string | null = null;
 let geminiCooldownUntil = 0;
 
@@ -30,13 +9,7 @@ export function getGeminiUnavailableReason(): string | null {
   return geminiUnavailableReason;
 }
 
-/**
- * Whether AI matching is worth attempting.
- *
- * The browser can no longer see whether a key is configured — that is the point
- * — so this is optimistic until the first call proves otherwise. A missing key
- * comes back as 501 on the first attempt and disables matching from then on.
- */
+/** Optimistic until the first call proves otherwise. */
 export function isGeminiConfigured(): boolean {
   return geminiUnavailableReason === null;
 }
@@ -49,12 +22,7 @@ export interface GeminiMatchResult {
 /**
  * Ask Gemini to find the closest roster entry for a participant name.
  *
- * Deterministic matching always runs first; this is only a fallback for names
- * that could not be confidently matched locally. Any failure returns `null` so
- * the caller degrades to "flag for manual review".
- *
- * @param rawName  Participant name exactly as it appeared in the CSV.
- * @param candidates  Roster names to pick from, in order (indexes match).
+ * Any failure returns `null` so the caller degrades to "flag for manual review".
  */
 export async function matchNameWithGemini(
   rawName: string,
@@ -107,8 +75,7 @@ export async function matchNameWithGemini(
       } else if (status >= 500 && status !== 501) {
         cooldownAndWarn(detail ?? `Gemini API server error (${status})`, 60_000);
       } else {
-        // 4xx and 501: a missing key, a bad key, or a non-admin caller. None of
-        // these recover on their own within a session.
+        // 4xx and 501: a missing key, a bad key, or a non-admin caller.
         disableAndWarn(detail ?? `AI matching unavailable (${status})`);
       }
       return null;
@@ -119,8 +86,7 @@ export async function matchNameWithGemini(
       return { index: body.index, confidence: body.confidence };
     }
 
-    // A clean "not in the roster" — not a failure, and not a reason to stop
-    // asking about the next name.
+    // A clean "not in the roster" — not a failure, so keep asking about the next name.
     return null;
   } catch (error) {
     disableAndWarn(

@@ -22,11 +22,7 @@ interface StudentImportModalProps {
 
 const PREVIEW_ROWS = 5;
 
-/**
- * The one CSV import dialog. Both the students list and a batch's students tab
- * render this, so the picker, preview table, validation and error handling can't
- * drift apart again — they previously did, down to different spacing classes.
- */
+/** The one CSV import dialog, shared by the students list and a batch's students tab. */
 export function StudentImportModal({ open, onClose, requireFee, onImport }: StudentImportModalProps) {
   const [rows, setRows] = useState<Record<string, string>[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -133,8 +129,7 @@ export function StudentImportModal({ open, onClose, requireFee, onImport }: Stud
           </FormField>
         )}
 
-        {/* Default on: an imported student with no login cannot use the portal,
-            and creating them one at a time afterwards is the tedious path. */}
+        {/* Default on: an imported student with no login cannot use the portal. */}
         <label className={`repo-confirm ${createLogins ? 'is-checked' : ''}`}>
           <input
             type="checkbox"

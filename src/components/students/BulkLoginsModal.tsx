@@ -4,13 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import type { BulkLoginResult } from '@/lib/supabase';
 
-/**
- * Every login created by an import, in one list the admin can copy out in a
- * single action — the passwords are derivable later from the phone number, but
- * handing them over right after the import is the moment they are actually
- * needed. Students whose row had no email are listed rather than silently
- * dropped, since that is the one thing the admin has to go back and fix.
- */
+/** Every login created by an import in one list the admin can copy out. Skips are listed, not dropped. */
 export function BulkLoginsModal({ result, onClose }: { result: BulkLoginResult | null; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
 

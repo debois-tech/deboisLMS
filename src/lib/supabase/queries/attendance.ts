@@ -21,11 +21,7 @@ export async function getAttendanceByLecture(lectureId: string): Promise<Attenda
   );
 }
 
-/**
- * Attendance for one student across every lecture, newest first. Only approved rows
- * are returned — unapproved records are still pending admin review and shouldn't be
- * presented to the student as fact (RLS enforces the same rule server-side).
- */
+/** Approved-only attendance for one student, newest first (RLS enforces the same rule server-side). */
 export async function getApprovedAttendanceByStudent(studentId: string): Promise<AttendanceRecord[]> {
   const records = unwrapRows<AttendanceRecord>(
     await supabase

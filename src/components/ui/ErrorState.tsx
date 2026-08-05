@@ -9,12 +9,7 @@ interface ErrorStateProps {
   centered?: boolean;
 }
 
-/**
- * A load that failed, shown as a failure.
- *
- * Distinct from `EmptyState` on purpose: an empty state means "no rows", and using
- * it for an error tells the user their data is gone when it is only unreachable.
- */
+/** A load that failed, shown as a failure — never as an empty state, which would claim the data is gone. */
 export function ErrorState({ message, onRetry, centered = false }: ErrorStateProps) {
   const body = (
     <div className="flex flex-col items-center justify-center py-10 px-4 text-center">

@@ -225,12 +225,9 @@ function UploadModal({
   };
 
   /**
-   * A folder keeps its own filenames. Its files are already named by whoever
-   * assembled it — renaming twelve handouts to `…-D01-07` throws away the only
-   * thing that said which was which. The folder name groups them instead.
-   *
-   * Anything picked as individual files is named from the batch code: prefix
-   * plus the typed suffix, numbered if there is more than one.
+   * A folder keeps its own filenames — renaming twelve handouts would throw away
+   * the only thing that said which was which. Individual files are named from the
+   * batch code plus the typed suffix, numbered if there is more than one.
    */
   const titleFor = (file: File, index: number) => {
     if (folder) return file.name.replace(/\.pdf$/i, '');
@@ -247,14 +244,13 @@ function UploadModal({
 
     /*
      * A folder pick sets `webkitRelativePath` to "Folder/Sub/file.pdf" on every
-     * entry. The first segment is the folder the admin chose, and it is stored on
-     * each row so listings can group them without a second table.
+     * entry; the first segment is the folder the admin chose, stored per row so
+     * listings can group them.
      */
     const relative = (chosen[0] as File & { webkitRelativePath?: string })?.webkitRelativePath;
     setFolder(relative ? relative.split('/')[0] : null);
 
-    // A folder pick brings everything in it, so non-PDFs are filtered rather
-    // than treated as an error the admin has to go and fix.
+    // A folder pick brings everything in it, so non-PDFs are filtered rather than errors.
     const pdfs = chosen.filter((file) => file.type === 'application/pdf');
     const skipped = chosen.length - pdfs.length;
     const tooBig = pdfs.filter((file) => file.size > MATERIAL_MAX_BYTES);

@@ -11,11 +11,7 @@ interface PortalFocusProps {
   action?: ReactNode;
 }
 
-/**
- * The answer to "what do I do now?", at the top of a portal page and heavier than
- * any tile under it. There is at most one per page: the moment a second appears,
- * neither is the focus any more.
- */
+/** The answer to "what do I do now?", heavier than any tile under it. At most one per page. */
 export function PortalFocus({ icon: Icon, title, detail, action }: PortalFocusProps) {
   return (
     <div className="portal-focus">

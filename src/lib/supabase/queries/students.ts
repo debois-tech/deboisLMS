@@ -27,13 +27,9 @@ export async function createStudent(input: Omit<Student, 'id' | 'created_at'>): 
 const normalizePhone = (phone: string | undefined | null) => (phone ?? '').replace(/\D/g, '');
 
 /**
- * Finds the student a CSV row refers to, by **phone or email only**.
- *
- * Name is deliberately not an identity key. It used to be, and two students
- * called "Rahul Sharma" would collapse into one record on import — sharing a
- * portal login, attendance, fees and assignments, with no way to tell afterwards
- * that it had happened. A duplicate row is a nuisance an admin can merge; a
- * silent merge of two people is data loss.
+ * Finds the student a CSV row refers to, by phone or email only. Name is
+ * deliberately not an identity key — two students with the same name used to
+ * collapse into one record on import, which is silent data loss.
  */
 export async function findExistingStudent(input: { name?: string; phone?: string; email?: string }): Promise<Student | undefined> {
   const phone = normalizePhone(input.phone);
@@ -52,11 +48,7 @@ export async function findExistingStudent(input: { name?: string; phone?: string
   });
 }
 
-/**
- * Rows that look like an existing student by name alone. The import preview
- * shows these as a warning so the admin can decide — the import itself never
- * acts on a name match.
- */
+/** Rows that look like an existing student by name alone — shown as a warning, never acted on. */
 export async function findNameCollisions(names: string[]): Promise<string[]> {
   const wanted = new Set(names.map((n) => n.trim().toLowerCase()).filter(Boolean));
   if (wanted.size === 0) return [];
@@ -92,9 +84,8 @@ export async function getStudentByAuthUserId(authUserId: string): Promise<Studen
 }
 
 /**
- * Creates (or resets) the student's portal login. Runs in the `create-student-login`
- * edge function because it needs the service role key — the returned password is
- * shown to the admin once and never stored, so a lost password means a reset.
+ * Creates (or resets) the student's portal login, via the `create-student-login`
+ * edge function. The password is shown once and never stored — a lost one means a reset.
  */
 export async function createStudentLogin(studentId: string): Promise<StudentCredentials> {
   const { data, error } = await supabase.functions.invoke('create-student-login', {
@@ -102,8 +93,7 @@ export async function createStudentLogin(studentId: string): Promise<StudentCred
   });
 
   if (error) {
-    // A non-2xx response surfaces as a generic message; the useful reason is in the body,
-    // which supabase-js hands back untouched on error.context.
+    // Non-2xx surfaces as a generic message; the useful reason is on error.context.
     let detail: string | undefined;
     const response = (error as { context?: Response }).context;
     if (response && typeof response.json === 'function') {
@@ -125,12 +115,9 @@ export interface BulkLoginResult {
 }
 
 /**
- * Creates portal logins for a list of students, e.g. straight after a CSV import.
- *
- * Runs a few at a time rather than all at once: each call is an edge function
- * invocation that creates an auth user, and firing eighty of those in parallel
- * gets rate-limited. One student's failure — usually a missing email — never
- * stops the rest; it comes back in `failed` so the admin can see who to fix.
+ * Creates portal logins for a list of students, a few at a time rather than all at
+ * once — each call creates an auth user, and firing eighty in parallel gets
+ * rate-limited. One student's failure never stops the rest.
  */
 export async function createStudentLoginsBulk(
   students: { id: string; name: string }[],
@@ -163,11 +150,7 @@ export async function createStudentLoginsBulk(
   return result;
 }
 
-/**
- * The student's enrolments with each batch joined in. The batch used to be
- * fetched per mapping by the pages that needed its name, which cost one round
- * trip per batch on the portal's landing page.
- */
+/** The student's enrolments with each batch joined in — no per-batch round trips. */
 export async function getStudentBatches(studentId: string): Promise<(BatchStudentMapping & { batch?: Batch })[]> {
   return rows<BatchStudentMapping & { batch?: Batch }>(
     await supabase
@@ -207,8 +190,9 @@ export async function addStudentToBatch(studentId: string, batchId: string, tota
     'Could not add the student to the batch',
   );
 
-  // Re-adding a previously removed student leaves a stale student_fees row behind (removeStudentFromBatch
-  // only deletes the mapping) — upsert without ignoreDuplicates so the fee just entered always overwrites it.
+  // Re-adding a previously removed student leaves a stale student_fees row behind
+  // (removeStudentFromBatch only deletes the mapping) — upsert so the fee just
+  // entered always overwrites it.
   ok(
     await supabase
       .from('student_fees')
