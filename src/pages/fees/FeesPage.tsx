@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { Button } from '@/components/ui/Button';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { BatchSelect } from '@/components/ui/BatchSelect';
@@ -21,33 +23,42 @@ export default function FeesPage() {
   const [fees, setFees] = useState<StudentFee[]>([]);
   const [students, setStudents] = useState<(Student & { mapping: BatchStudentMapping })[]>([]);
   const [summary, setSummary] = useState<BatchFeeSummary[]>([]);
-  const [loading, setLoading] = useState(true);
   const [loggingFee, setLoggingFee] = useState<StudentFee | null>(null);
   const [paymentLogs, setPaymentLogs] = useState<FeePaymentLog[]>([]);
   const [logForm, setLogForm] = useState<PaymentLogFormState>({ amount: '', payment_date: new Date().toISOString().slice(0, 10), payment_method: 'other', notes: '' });
   const [logging, setLogging] = useState(false);
   const { showToast } = useToast();
 
-  useEffect(() => {
-    Promise.all([getBatches(), getBatchFeeSummary()]).then(([b, s]) => {
-      setBatches(b);
-      setSummary(s);
-      setLoading(false);
-    });
-  }, []);
+  const { loading, error, retry } = useInitialLoad(async () => {
+    const [b, s] = await Promise.all([getBatches(), getBatchFeeSummary()]);
+    setBatches(b);
+    setSummary(s);
+  });
 
-  const loadBatchFees = (batchId: string) => {
+  const loadBatchFees = async (batchId: string) => {
     setSelectedBatch(batchId);
-    Promise.all([getFeesByBatch(batchId), getBatchStudents(batchId)]).then(([f, s]) => {
+    try {
+      const [f, s] = await Promise.all([getFeesByBatch(batchId), getBatchStudents(batchId)]);
       setFees(f);
       setStudents(s);
-    });
+    } catch (err) {
+      // The page is already on screen, so this reports rather than replacing it —
+      // but the table must not be left showing the previous batch's rows.
+      setFees([]);
+      setStudents([]);
+      showToast(errorMessage(err, 'Failed to load fees for this batch'), 'error');
+    }
   };
 
   const openPaymentLogs = async (fee: StudentFee) => {
     setLoggingFee(fee);
     setLogForm({ amount: '', payment_date: new Date().toISOString().slice(0, 10), payment_method: 'other', notes: '' });
-    setPaymentLogs(await getFeePaymentLogs(fee.id));
+    try {
+      setPaymentLogs(await getFeePaymentLogs(fee.id));
+    } catch (err) {
+      setPaymentLogs([]);
+      showToast(errorMessage(err, 'Failed to load payment history'), 'error');
+    }
   };
 
   const handleAddPaymentLog = async () => {
@@ -76,6 +87,8 @@ export default function FeesPage() {
   };
 
   if (loading) return <Spinner centered />;
+  if (error) return <ErrorState centered message={error} onRetry={retry} />;
+
   const selectedSummary = selectedBatch ? summary.find((item) => item.batch_id === selectedBatch) : undefined;
 
   return (

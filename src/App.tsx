@@ -3,6 +3,7 @@ import { Routes, Route } from 'react-router-dom';
 import DashboardLayout from '@/layouts/DashboardLayout';
 import PortalLayout from '@/layouts/PortalLayout';
 import ProtectedRoute from '@/components/layout/ProtectedRoute';
+import ErrorBoundary from '@/components/layout/ErrorBoundary';
 import { Loader2 } from 'lucide-react';
 
 const DashboardPage = lazy(() => import('@/pages/DashboardPage'));
@@ -30,6 +31,8 @@ const PortalAssignmentsPage = lazy(() => import('@/pages/portal/PortalAssignment
 const PortalMaterialsPage = lazy(() => import('@/pages/portal/PortalMaterialsPage'));
 const PortalFeesPage = lazy(() => import('@/pages/portal/PortalFeesPage'));
 
+const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
+
 function PageFallback() {
   return (
     <div className="flex min-h-screen items-center justify-center">
@@ -40,44 +43,52 @@ function PageFallback() {
 
 export default function App() {
   return (
-    <Suspense fallback={<PageFallback />}>
-      <Routes>
-        <Route path="/auth/login" element={<LoginChoicePage />} />
-        <Route path="/auth/login/admin" element={<LoginPage />} />
-        <Route path="/auth/login/user" element={<UserLoginPage />} />
+    <ErrorBoundary>
+      <Suspense fallback={<PageFallback />}>
+        <Routes>
+          <Route path="/auth/login" element={<LoginChoicePage />} />
+          <Route path="/auth/login/admin" element={<LoginPage />} />
+          <Route path="/auth/login/user" element={<UserLoginPage />} />
 
-        <Route path="/" element={<ProtectedRoute role="admin" />}>
-          <Route element={<DashboardLayout />}>
-            <Route index element={<DashboardPage />} />
-            <Route path="batches" element={<BatchesPage />} />
-            <Route path="batches/new" element={<NewBatchPage />} />
-            <Route path="batches/:batchId" element={<BatchDetailPage />} />
-            <Route path="batches/:batchId/edit" element={<EditBatchPage />} />
-            <Route path="students" element={<StudentsPage />} />
-            <Route path="students/new" element={<NewStudentPage />} />
-            <Route path="students/:studentId" element={<StudentDetailPage />} />
-            <Route path="tutors" element={<TutorsPage />} />
-            <Route path="tutors/new" element={<NewTutorPage />} />
-            <Route path="tutors/:tutorId" element={<TutorDetailPage />} />
-            <Route path="attendance" element={<AttendancePage />} />
-            <Route path="fees" element={<FeesPage />} />
-            <Route path="assignments" element={<AssignmentsPage />} />
-            <Route path="materials" element={<MaterialsPage />} />
+          <Route path="/" element={<ProtectedRoute role="admin" />}>
+            <Route element={<DashboardLayout />}>
+              <Route index element={<DashboardPage />} />
+              <Route path="batches" element={<BatchesPage />} />
+              <Route path="batches/new" element={<NewBatchPage />} />
+              <Route path="batches/:batchId" element={<BatchDetailPage />} />
+              <Route path="batches/:batchId/edit" element={<EditBatchPage />} />
+              <Route path="students" element={<StudentsPage />} />
+              <Route path="students/new" element={<NewStudentPage />} />
+              <Route path="students/:studentId" element={<StudentDetailPage />} />
+              <Route path="tutors" element={<TutorsPage />} />
+              <Route path="tutors/new" element={<NewTutorPage />} />
+              <Route path="tutors/:tutorId" element={<TutorDetailPage />} />
+              <Route path="attendance" element={<AttendancePage />} />
+              <Route path="fees" element={<FeesPage />} />
+              <Route path="assignments" element={<AssignmentsPage />} />
+              <Route path="materials" element={<MaterialsPage />} />
+              {/* Keeps an unknown admin URL inside the dashboard shell rather than
+                  rendering nothing. */}
+              <Route path="*" element={<NotFoundPage />} />
+            </Route>
           </Route>
-        </Route>
 
-        {/* Student portal — read-only view of the student's own record. Adding a section
-            is a route here plus an entry in portalNavItems. */}
-        <Route path="/portal" element={<ProtectedRoute role="student" />}>
-          <Route element={<PortalLayout />}>
-            <Route index element={<PortalOverviewPage />} />
-            <Route path="attendance" element={<PortalAttendancePage />} />
-            <Route path="assignments" element={<PortalAssignmentsPage />} />
-            <Route path="materials" element={<PortalMaterialsPage />} />
-            <Route path="fees" element={<PortalFeesPage />} />
+          {/* Student portal — read-only view of the student's own record. Adding a section
+              is a route here plus an entry in portalNavItems. */}
+          <Route path="/portal" element={<ProtectedRoute role="student" />}>
+            <Route element={<PortalLayout />}>
+              <Route index element={<PortalOverviewPage />} />
+              <Route path="attendance" element={<PortalAttendancePage />} />
+              <Route path="assignments" element={<PortalAssignmentsPage />} />
+              <Route path="materials" element={<PortalMaterialsPage />} />
+              <Route path="fees" element={<PortalFeesPage />} />
+              <Route path="*" element={<NotFoundPage />} />
+            </Route>
           </Route>
-        </Route>
-      </Routes>
-    </Suspense>
+
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </Suspense>
+    </ErrorBoundary>
   );
 }

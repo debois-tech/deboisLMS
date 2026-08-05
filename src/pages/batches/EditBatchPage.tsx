@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { NotFound } from '@/components/ui/NotFound';
+import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { FormField } from '@/components/ui/FormField';
 import { SearchSelect } from '@/components/ui/SearchSelect';
 import { getBatchById, updateBatch } from '@/lib/supabase';
@@ -15,18 +17,15 @@ import { errorMessage } from '@/lib/utils/errors';
 export default function EditBatchPage() {
   const { batchId } = useParams();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<Batch | null>(null);
   const { showToast } = useToast();
 
-  useEffect(() => {
+  const { loading, error, retry } = useInitialLoad(async () => {
     if (!batchId) return;
-    getBatchById(batchId).then((batch) => {
-      if (batch) setForm(batch);
-      setLoading(false);
-    });
-  }, [batchId]);
+    const batch = await getBatchById(batchId);
+    if (batch) setForm(batch);
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,6 +43,7 @@ export default function EditBatchPage() {
   };
 
   if (loading) return <Spinner centered />;
+  if (error) return <ErrorState centered message={error} onRetry={retry} />;
   if (!form) return <NotFound label="Batch" />;
 
   return (

@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Users, Upload, Search } from 'lucide-react';
 import { SearchFilterBar } from '@/components/ui/SearchFilterBar';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Avatar } from '@/components/ui/Avatar';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
@@ -20,21 +22,22 @@ export default function StudentsPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [mappings, setMappings] = useState<BatchStudentMapping[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [showImport, setShowImport] = useState(false);
   const [bulkLogins, setBulkLogins] = useState<BulkLoginResult | null>(null);
   const { showToast } = useToast();
 
-  useEffect(() => {
-    Promise.all([getStudents(), getBatches(), getAllBatchStudentMappings()]).then(([studentData, batchData, mappingData]) => {
-      setStudents(studentData);
-      setBatches(batchData);
-      setMappings(mappingData);
-      setLoading(false);
-    });
-  }, []);
+  const { loading, error, retry } = useInitialLoad(async () => {
+    const [studentData, batchData, mappingData] = await Promise.all([
+      getStudents(),
+      getBatches(),
+      getAllBatchStudentMappings(),
+    ]);
+    setStudents(studentData);
+    setBatches(batchData);
+    setMappings(mappingData);
+  });
 
 
   const studentBatchIds = new Map<string, string[]>();
@@ -83,6 +86,7 @@ export default function StudentsPage() {
   };
 
   if (loading) return <Spinner centered />;
+  if (error) return <ErrorState centered message={error} onRetry={retry} />;
 
   return (
     <div className="page-section">

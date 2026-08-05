@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Edit3, Users, GraduationCap, Layers, ClipboardCheck, FileText, Plus, Trash2, ChevronRight, CalendarDays, Upload } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Tabs } from '@/components/ui/Tabs';
 import { Spinner } from '@/components/ui/Spinner';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NotFound } from '@/components/ui/NotFound';
 import { Modal } from '@/components/ui/Modal';
@@ -33,22 +34,20 @@ import { toStudentInput } from '@/lib/utils/studentImport';
 import { useToast } from '@/lib/context/ToastContext';
 import { useConfirm } from '@/lib/context/ConfirmContext';
 import { errorMessage } from '@/lib/utils/errors';
+import { useInitialLoad, useReloadableSection } from '@/lib/hooks/useInitialLoad';
 
 
 export default function BatchDetailPage() {
   const { batchId } = useParams();
   const [batch, setBatch] = useState<Batch | null>(null);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const { loading, error, retry } = useInitialLoad(async () => {
     if (!batchId) return;
-    getBatchById(batchId).then((b) => {
-      setBatch(b ?? null);
-      setLoading(false);
-    });
-  }, [batchId]);
+    setBatch((await getBatchById(batchId)) ?? null);
+  });
 
   if (loading) return <Spinner centered />;
+  if (error) return <ErrorState centered message={error} onRetry={retry} />;
   if (!batch) return <NotFound label="Batch" />;
 
   return (
@@ -103,12 +102,15 @@ function OverviewTab({ batch }: { batch: Batch }) {
   const [students, setStudents] = useState<(Student & { mapping: BatchStudentMapping })[]>([]);
   const [lectures, setLectures] = useState<Lecture[]>([]);
 
-  useEffect(() => {
-    Promise.all([getBatchStudents(batch.id), getLecturesByBatch(batch.id)]).then(([s, l]) => {
-      setStudents(s);
-      setLectures(l);
-    });
+  const load = useCallback(async () => {
+    const [s, l] = await Promise.all([getBatchStudents(batch.id), getLecturesByBatch(batch.id)]);
+    setStudents(s);
+    setLectures(l);
   }, [batch.id]);
+
+  const { error, reload } = useReloadableSection(load);
+
+  if (error) return <ErrorState message={error} onRetry={reload} />;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -139,12 +141,13 @@ function StudentsTab({ batchId }: { batchId: string }) {
   const { showToast } = useToast();
   const confirm = useConfirm();
 
-  const fetchStudents = useCallback(() => {
-    getBatchStudents(batchId).then(setStudents);
-    getStudents().then(setAllStudents);
+  const fetchStudents = useCallback(async () => {
+    const [batchRows, allRows] = await Promise.all([getBatchStudents(batchId), getStudents()]);
+    setStudents(batchRows);
+    setAllStudents(allRows);
   }, [batchId]);
 
-  useEffect(() => { fetchStudents(); }, [fetchStudents]);
+  const { error: loadError, reload: reloadStudents } = useReloadableSection(fetchStudents);
 
   const handleAdd = async () => {
     if (!selectedStudents.length || !totalFee || Number(totalFee) <= 0) return;
@@ -153,7 +156,7 @@ function StudentsTab({ batchId }: { batchId: string }) {
       setSelectedStudents([]);
       setTotalFee('');
       setShowAdd(false);
-      fetchStudents();
+      void reloadStudents();
       showToast('Students added');
     } catch (error) {
       showToast(errorMessage(error, 'Failed to add students'), 'error');
@@ -171,7 +174,7 @@ function StudentsTab({ batchId }: { batchId: string }) {
 
     try {
       await removeStudentFromBatch(mappingId);
-      fetchStudents();
+      void reloadStudents();
       showToast('Student removed from batch');
     } catch (error) {
       showToast(errorMessage(error, 'Failed to remove student'), 'error');
@@ -193,7 +196,7 @@ function StudentsTab({ batchId }: { batchId: string }) {
         return student;
       }),
     );
-    fetchStudents();
+    void reloadStudents();
 
     if (!createLogins) {
       showToast('Students imported');
@@ -209,8 +212,10 @@ function StudentsTab({ batchId }: { batchId: string }) {
     }
 
     setBulkLogins(await createStudentLoginsBulk(needLogins.map((s) => ({ id: s.id, name: s.name }))));
-    fetchStudents();
+    void reloadStudents();
   };
+
+  if (loadError) return <Card><ErrorState message={loadError} onRetry={reloadStudents} /></Card>;
 
   return (
     <Card>
@@ -277,12 +282,13 @@ function TutorsTab({ batchId }: { batchId: string }) {
   const { showToast } = useToast();
   const confirm = useConfirm();
 
-  const fetchTutors = useCallback(() => {
-    getBatchTutors(batchId).then(setTutors);
-    getTutors().then(setAllTutors);
+  const fetchTutors = useCallback(async () => {
+    const [batchRows, allRows] = await Promise.all([getBatchTutors(batchId), getTutors()]);
+    setTutors(batchRows);
+    setAllTutors(allRows);
   }, [batchId]);
 
-  useEffect(() => { fetchTutors(); }, [fetchTutors]);
+  const { error: loadError, reload: reloadTutors } = useReloadableSection(fetchTutors);
 
   const handleAdd = async () => {
     if (!selectedTutor) return;
@@ -290,7 +296,7 @@ function TutorsTab({ batchId }: { batchId: string }) {
       await assignTutorToBatch(selectedTutor, batchId);
       setSelectedTutor('');
       setShowAdd(false);
-      fetchTutors();
+      void reloadTutors();
       showToast('Tutor assigned to batch');
     } catch (error) {
       showToast(errorMessage(error, 'Failed to assign tutor'), 'error');
@@ -308,7 +314,7 @@ function TutorsTab({ batchId }: { batchId: string }) {
 
     try {
       await removeTutorFromBatch(mappingId);
-      fetchTutors();
+      void reloadTutors();
       showToast('Tutor removed from batch');
     } catch (error) {
       showToast(errorMessage(error, 'Failed to remove tutor'), 'error');
@@ -316,6 +322,8 @@ function TutorsTab({ batchId }: { batchId: string }) {
   };
 
   const available = allTutors.filter((t) => !tutors.some((e) => e.id === t.id));
+
+  if (loadError) return <Card><ErrorState message={loadError} onRetry={reloadTutors} /></Card>;
 
   return (
     <Card>
@@ -371,15 +379,18 @@ function LecturesTab({ batchId }: { batchId: string }) {
   const { showToast } = useToast();
   const confirm = useConfirm();
 
-  const fetchLectures = useCallback(() => getLecturesByBatch(batchId).then(setLectures), [batchId]);
-  useEffect(() => { fetchLectures(); }, [fetchLectures]);
+  const fetchLectures = useCallback(async () => {
+    setLectures(await getLecturesByBatch(batchId));
+  }, [batchId]);
+
+  const { error: loadError, reload: reloadLectures } = useReloadableSection(fetchLectures);
 
   const handleCreate = async () => {
     try {
       await createLecture({ ...form, batch_id: batchId, session_type: 'online' });
       setShowNew(false);
       setForm({ lecture_date: '', meeting_code: '', scheduled_duration_minutes: 90 });
-      fetchLectures();
+      void reloadLectures();
       showToast('Lecture created');
     } catch (error) {
       showToast(errorMessage(error, 'Failed to create lecture'), 'error');
@@ -397,12 +408,14 @@ function LecturesTab({ batchId }: { batchId: string }) {
 
     try {
       await deleteLecture(lectureId);
-      fetchLectures();
+      void reloadLectures();
       showToast('Lecture deleted');
     } catch (error) {
       showToast(errorMessage(error, 'Failed to delete lecture'), 'error');
     }
   };
+
+  if (loadError) return <Card><ErrorState message={loadError} onRetry={reloadLectures} /></Card>;
 
   return (
     <Card>
@@ -463,13 +476,21 @@ function AttendanceTab({ batchId }: { batchId: string }) {
   const [loading, setLoading] = useState(false);
   const { showToast } = useToast();
 
-  useEffect(() => { getLecturesByBatch(batchId).then(setLectures); }, [batchId]);
+  const fetchLectures = useCallback(async () => {
+    setLectures(await getLecturesByBatch(batchId));
+  }, [batchId]);
+
+  const { error: loadError, reload: reloadLectures } = useReloadableSection(fetchLectures);
 
   const loadAttendance = async (lecId: string) => {
     setLoading(true);
-    const data = await getAttendanceByLecture(lecId);
-    setRecords(data);
     setSelectedLecture(lecId);
+    try {
+      setRecords(await getAttendanceByLecture(lecId));
+    } catch (err) {
+      setRecords([]);
+      showToast(errorMessage(err, 'Failed to load attendance records'), 'error');
+    }
     setLoading(false);
   };
 
@@ -498,6 +519,8 @@ function AttendanceTab({ batchId }: { batchId: string }) {
   };
 
   const selectedLectureData = lectures.find((lecture) => lecture.id === selectedLecture);
+
+  if (loadError) return <Card><ErrorState message={loadError} onRetry={reloadLectures} /></Card>;
 
   return (
     <div className="space-y-4">
@@ -566,19 +589,23 @@ function FinanceTab({ batchId }: { batchId: string }) {
   const [logging, setLogging] = useState(false);
   const { showToast } = useToast();
 
-  const fetchFees = useCallback(() => {
-    Promise.all([getFeesByBatch(batchId), getBatchStudents(batchId)]).then(([f, s]) => {
-      setFees(f);
-      setStudents(s);
-    });
+  const fetchFees = useCallback(async () => {
+    const [f, s] = await Promise.all([getFeesByBatch(batchId), getBatchStudents(batchId)]);
+    setFees(f);
+    setStudents(s);
   }, [batchId]);
 
-  useEffect(() => { fetchFees(); }, [fetchFees]);
+  const { error: loadError, reload: reloadFees } = useReloadableSection(fetchFees);
 
   const openPaymentLogs = async (fee: StudentFee) => {
     setLoggingFee(fee);
     setLogForm({ amount: '', payment_date: new Date().toISOString().slice(0, 10), payment_method: 'other', notes: '' });
-    setPaymentLogs(await getFeePaymentLogs(fee.id));
+    try {
+      setPaymentLogs(await getFeePaymentLogs(fee.id));
+    } catch (err) {
+      setPaymentLogs([]);
+      showToast(errorMessage(err, 'Failed to load payment history'), 'error');
+    }
   };
 
   const handleAddPaymentLog = async () => {
@@ -607,6 +634,8 @@ function FinanceTab({ batchId }: { batchId: string }) {
 
   const totalFee = fees.reduce((s, f) => s + f.total_fee, 0);
   const totalPaid = fees.reduce((s, f) => s + f.paid_amount, 0);
+
+  if (loadError) return <Card><ErrorState message={loadError} onRetry={reloadFees} /></Card>;
 
   return (
     <div className="space-y-4">
@@ -686,11 +715,11 @@ function AssignmentsTab({ batchId }: { batchId: string }) {
   const [showNew, setShowNew] = useState(false);
   const [form, setForm] = useState({ title: '', description: '', assigned_date: '' });
 
-  const fetchAssignments = useCallback(() => {
-    getAssignmentsByBatch(batchId).then(setAssignments);
+  const fetchAssignments = useCallback(async () => {
+    setAssignments(await getAssignmentsByBatch(batchId));
   }, [batchId]);
 
-  useEffect(() => { fetchAssignments(); }, [fetchAssignments]);
+  const { error: loadError, reload: reloadAssignments } = useReloadableSection(fetchAssignments);
 
   const { showToast } = useToast();
 
@@ -699,12 +728,14 @@ function AssignmentsTab({ batchId }: { batchId: string }) {
       await createAssignment({ ...form, batch_id: batchId });
       setShowNew(false);
       setForm({ title: '', description: '', assigned_date: '' });
-      fetchAssignments();
+      void reloadAssignments();
       showToast('Assignment created');
     } catch (error) {
       showToast(errorMessage(error, 'Failed to create assignment'), 'error');
     }
   };
+
+  if (loadError) return <Card><ErrorState message={loadError} onRetry={reloadAssignments} /></Card>;
 
   return (
     <div className="space-y-4">

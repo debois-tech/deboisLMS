@@ -1,9 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { ClipboardCheck, Upload, Loader2, Plus } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { Modal } from '@/components/ui/Modal';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { BatchSelect } from '@/components/ui/BatchSelect';
@@ -26,7 +28,7 @@ export default function AttendancePage() {
   const [lectures, setLectures] = useState<Lecture[]>([]);
   const [selectedLecture, setSelectedLecture] = useState<string | null>(null);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loadingRecords, setLoadingRecords] = useState(false);
   const [processing, setProcessing] = useState(false);
 
   const [csvRows, setCsvRows] = useState<CsvRow[]>([]);
@@ -39,26 +41,37 @@ export default function AttendancePage() {
 
   const [lastReport, setLastReport] = useState<ProcessingReport | null>(null);
 
-  useEffect(() => {
-    getBatches().then(setBatches);
-  }, []);
+  const { loading, error, retry } = useInitialLoad(async () => {
+    setBatches(await getBatches());
+  });
 
-  useEffect(() => {
-    if (!selectedBatch) return;
-    getLecturesByBatch(selectedBatch).then(setLectures);
+  // Picking a batch resets everything downstream of it, so this runs from the
+  // change handler rather than an effect on `selectedBatch` — the state it clears
+  // belongs to the interaction, not to a render.
+  const selectBatch = async (batchId: string) => {
+    setSelectedBatch(batchId);
     setSelectedLecture(null);
     setRecords([]);
     setCsvRows([]);
     setCsvFileName('');
-  }, [selectedBatch]);
+    try {
+      setLectures(await getLecturesByBatch(batchId));
+    } catch (err) {
+      setLectures([]);
+      showToast(errorMessage(err, 'Failed to load lectures for this batch'), 'error');
+    }
+  };
 
-  const loadRecords = (lecId: string) => {
+  const loadRecords = async (lecId: string) => {
     setSelectedLecture(lecId);
-    setLoading(true);
-    getAttendanceByLecture(lecId).then((data) => {
-      setRecords(data);
-      setLoading(false);
-    });
+    setLoadingRecords(true);
+    try {
+      setRecords(await getAttendanceByLecture(lecId));
+    } catch (err) {
+      setRecords([]);
+      showToast(errorMessage(err, 'Failed to load attendance records'), 'error');
+    }
+    setLoadingRecords(false);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -140,7 +153,7 @@ export default function AttendancePage() {
       setShowNewLecture(false);
       setNewLectureDate('');
       setNewLectureMeeting('');
-      getLecturesByBatch(selectedBatch).then(setLectures);
+      setLectures(await getLecturesByBatch(selectedBatch));
       showToast('Lecture created');
     } catch (error) {
       showToast(errorMessage(error, 'Failed to create lecture'), 'error');
@@ -149,13 +162,16 @@ export default function AttendancePage() {
 
   const showUploadAction = csvRows.length > 0 && selectedLecture && !processing;
 
+  if (loading) return <Spinner centered />;
+  if (error) return <ErrorState centered message={error} onRetry={retry} />;
+
   return (
     <div className="page-section">
       <PageHeader title="Attendance" />
 
       <Card className="step-card">
         <CardHeader title="Select Batch" />
-        <BatchSelect batches={batches} value={selectedBatch} onChange={setSelectedBatch} />
+        <BatchSelect batches={batches} value={selectedBatch} onChange={selectBatch} />
       </Card>
 
       {selectedBatch && (
@@ -241,7 +257,7 @@ export default function AttendancePage() {
 
           <Card>
             <CardHeader title="Attendance records" />
-            {loading ? (
+            {loadingRecords ? (
               <Spinner />
             ) : records.length === 0 ? (
               <EmptyState icon={<ClipboardCheck size={32} />} title="No attendance records" />

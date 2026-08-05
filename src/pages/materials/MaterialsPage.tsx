@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { BookOpen, Eye, FileText, FolderUp, Trash2, Upload, Users } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -26,6 +27,7 @@ import { useAuth } from '@/lib/context/AuthContext';
 import { useToast } from '@/lib/context/ToastContext';
 import { useConfirm } from '@/lib/context/ConfirmContext';
 import { errorMessage } from '@/lib/utils/errors';
+import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { formatDateTime, formatFileSize } from '@/lib/utils/format';
 
 /** Sentinel for the "not tied to a batch" option in the batch picker. */
@@ -37,20 +39,17 @@ export default function MaterialsPage() {
   const [tutors, setTutors] = useState<Tutor[]>([]);
   const [audience, setAudience] = useState<string | null>(null);
   const [materials, setMaterials] = useState<Material[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showUpload, setShowUpload] = useState(false);
   const [preview, setPreview] = useState<Material | null>(null);
   const [viewsFor, setViewsFor] = useState<Material | null>(null);
   const { showToast } = useToast();
   const confirm = useConfirm();
 
-  useEffect(() => {
-    Promise.all([getBatches(), getTutors()]).then(([batchRows, tutorRows]) => {
-      setBatches(batchRows);
-      setTutors(tutorRows);
-      setLoading(false);
-    });
-  }, []);
+  const { loading, error, retry } = useInitialLoad(async () => {
+    const [batchRows, tutorRows] = await Promise.all([getBatches(), getTutors()]);
+    setBatches(batchRows);
+    setTutors(tutorRows);
+  });
 
   const selectedBatch = batches.find((batch) => batch.id === audience);
   const isEveryone = audience === ALL_STUDENTS;
@@ -58,7 +57,11 @@ export default function MaterialsPage() {
   const loadMaterials = (next: string) => {
     setAudience(next);
     const fetch = next === ALL_STUDENTS ? getMaterialsForEveryone() : getMaterialsByBatch(next);
-    fetch.then(setMaterials).catch((error) => showToast(errorMessage(error, 'Could not load material'), 'error'));
+    fetch.then(setMaterials).catch((err) => {
+      // Clear first: the previous batch's material must not sit under the new label.
+      setMaterials([]);
+      showToast(errorMessage(err, 'Could not load material'), 'error');
+    });
   };
 
   const refresh = () => { if (audience) loadMaterials(audience); };
@@ -82,6 +85,7 @@ export default function MaterialsPage() {
   };
 
   if (loading) return <Spinner centered />;
+  if (error) return <ErrorState centered message={error} onRetry={retry} />;
 
   return (
     <div className="page-section">

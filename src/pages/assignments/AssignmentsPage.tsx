@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { ClipboardCheck, Plus } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { Modal } from '@/components/ui/Modal';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { BatchSelect } from '@/components/ui/BatchSelect';
@@ -22,22 +24,21 @@ export default function AssignmentsPage() {
   const [selectedAsgn, setSelectedAsgn] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [form, setForm] = useState({ title: '', description: '', assigned_date: '' });
-  const [loading, setLoading] = useState(true);
   const { showToast } = useToast();
 
-  useEffect(() => {
-    getBatches().then((b) => {
-      setBatches(b);
-      setLoading(false);
-    });
-  }, []);
+  const { loading, error, retry } = useInitialLoad(async () => {
+    setBatches(await getBatches());
+  });
 
-  const fetchBatchData = (batchId: string) => {
+  const fetchBatchData = async (batchId: string) => {
     setSelectedBatch(batchId);
-    getAssignmentsByBatch(batchId).then((a) => {
-      setAssignments(a);
-      setSelectedAsgn(null);
-    });
+    setSelectedAsgn(null);
+    try {
+      setAssignments(await getAssignmentsByBatch(batchId));
+    } catch (err) {
+      setAssignments([]);
+      showToast(errorMessage(err, 'Failed to load assignments for this batch'), 'error');
+    }
   };
 
   const handleCreate = async () => {
@@ -46,14 +47,15 @@ export default function AssignmentsPage() {
       await createAssignment({ ...form, batch_id: selectedBatch });
       setShowNew(false);
       setForm({ title: '', description: '', assigned_date: '' });
-      fetchBatchData(selectedBatch);
+      await fetchBatchData(selectedBatch);
       showToast('Assignment created');
-    } catch (error) {
-      showToast(errorMessage(error, 'Failed to create assignment'), 'error');
+    } catch (err) {
+      showToast(errorMessage(err, 'Failed to create assignment'), 'error');
     }
   };
 
   if (loading) return <Spinner centered />;
+  if (error) return <ErrorState centered message={error} onRetry={retry} />;
 
   return (
     <div className="page-section">

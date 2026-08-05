@@ -1,11 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Mail, Phone, Layers, CalendarDays, History } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NotFound } from '@/components/ui/NotFound';
+import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import { StudentLoginCard } from '@/components/students/StudentLoginCard';
 import { getStudentById, getStudentBatches, getFeesByStudent, getLecturesByBatch, getFeePaymentLogsByStudent } from '@/lib/supabase';
@@ -19,44 +21,43 @@ export default function StudentDetailPage() {
   const [currentFee, setCurrentFee] = useState<StudentFee | null>(null);
   const [nextLecture, setNextLecture] = useState<Lecture | null>(null);
   const [paymentLogs, setPaymentLogs] = useState<FeePaymentLog[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const { loading, error, retry } = useInitialLoad(async () => {
     if (!studentId) return;
-    Promise.all([getStudentById(studentId), getStudentBatches(studentId), getFeePaymentLogsByStudent(studentId)]).then(
-      async ([s, mappings, logs]) => {
-        setStudent(s ?? null);
-        setPaymentLogs(logs);
-        // `getStudentBatches` joins the batch in — no per-mapping fetch needed.
-        const withBatches = mappings;
-        setBatchMappings(withBatches);
 
-        // Multiple active batches are possible; the most recently joined one is treated as "current".
-        const activeMappings = withBatches.filter((m) => m.status === 'active');
-        const currentMapping = activeMappings.sort(
-          (a, b) => new Date(b.joined_at).getTime() - new Date(a.joined_at).getTime()
-        )[0];
+    const [s, mappings, logs] = await Promise.all([
+      getStudentById(studentId),
+      getStudentBatches(studentId),
+      getFeePaymentLogsByStudent(studentId),
+    ]);
+    setStudent(s ?? null);
+    setPaymentLogs(logs);
+    // `getStudentBatches` joins the batch in — no per-mapping fetch needed.
+    setBatchMappings(mappings);
 
-        if (currentMapping) {
-          const [fees, lectures] = await Promise.all([
-            getFeesByStudent(studentId),
-            getLecturesByBatch(currentMapping.batch_id),
-          ]);
-          setCurrentFee(fees.find((f) => f.batch_id === currentMapping.batch_id) ?? null);
+    // Multiple active batches are possible; the most recently joined one is treated as "current".
+    const activeMappings = mappings.filter((m) => m.status === 'active');
+    const currentMapping = activeMappings.sort(
+      (a, b) => new Date(b.joined_at).getTime() - new Date(a.joined_at).getTime()
+    )[0];
 
-          const today = new Date().toISOString().slice(0, 10);
-          const upcoming = lectures
-            .filter((l) => l.lecture_date.slice(0, 10) >= today)
-            .sort((a, b) => a.lecture_date.localeCompare(b.lecture_date))[0];
-          setNextLecture(upcoming ?? null);
-        }
+    if (currentMapping) {
+      const [fees, lectures] = await Promise.all([
+        getFeesByStudent(studentId),
+        getLecturesByBatch(currentMapping.batch_id),
+      ]);
+      setCurrentFee(fees.find((f) => f.batch_id === currentMapping.batch_id) ?? null);
 
-        setLoading(false);
-      }
-    );
-  }, [studentId]);
+      const today = new Date().toISOString().slice(0, 10);
+      const upcoming = lectures
+        .filter((l) => l.lecture_date.slice(0, 10) >= today)
+        .sort((a, b) => a.lecture_date.localeCompare(b.lecture_date))[0];
+      setNextLecture(upcoming ?? null);
+    }
+  });
 
   if (loading) return <Spinner centered />;
+  if (error) return <ErrorState centered message={error} onRetry={retry} />;
   if (!student) return <NotFound label="Student" />;
 
   const activeMappings = batchMappings.filter((m) => m.status === 'active');

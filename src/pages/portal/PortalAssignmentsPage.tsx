@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { FileText, SearchX } from 'lucide-react';
 import { SearchBar } from '@/components/ui/SearchBar';
 import {
@@ -13,6 +13,7 @@ import {
 } from '@/components/portal';
 import { getAssignmentsForStudent, getStudentRepo, submitAssignmentFromPortal } from '@/lib/supabase';
 import { formatDate } from '@/lib/utils/format';
+import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { useToast } from '@/lib/context/ToastContext';
 
 export default function PortalAssignmentsPage() {
@@ -21,9 +22,6 @@ export default function PortalAssignmentsPage() {
   const [repoUrl, setRepoUrl] = useState<string | undefined>();
   const [open, setOpen] = useState<StudentAssignment | null>(null);
   const [query, setQuery] = useState('');
-  // Seeded from whether there is anything to load, so the no-student case never
-  // needs a synchronous setState inside the effect below.
-  const [loading, setLoading] = useState(Boolean(studentId));
   const { showToast } = useToast();
 
   // The saved repo loads with the assignments, so the dialog's submit view can
@@ -38,17 +36,18 @@ export default function PortalAssignmentsPage() {
     setRepoUrl(repo?.repo_url);
   }, [studentId]);
 
-  useEffect(() => {
-    if (!studentId) return;
-    let active = true;
-    load().finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, [studentId, load]);
+  const { loading, error, retry } = useInitialLoad(load);
 
   const handleSubmit = async (url: string) => {
     if (!studentId || !open) return;
     await submitAssignmentFromPortal(open.id, studentId, url);
-    await load();
+    // The submission is already saved, so a failed refresh must not surface as
+    // "Could not submit" — that reads as a failure and invites a second attempt.
+    try {
+      await load();
+    } catch {
+      // The list is stale until the next visit; the work is handed in either way.
+    }
     setOpen(null);
     showToast('Assignment submitted');
   };
@@ -89,6 +88,8 @@ export default function PortalAssignmentsPage() {
     <PortalPage
       title="Your assignments"
       loading={loading}
+      error={error}
+      onRetry={retry}
       shape="list"
       action={
         assignments.length > 0 ? (

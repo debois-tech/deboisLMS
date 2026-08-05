@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowUpRight, Layers } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatCard } from '@/components/ui/StatCard';
 import { getDashboardStats, getRecentActivity, type DashboardStats, type RecentActivity } from '@/lib/supabase';
@@ -15,20 +17,16 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [activity, setActivity] = useState<RecentActivity[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    Promise.all([getDashboardStats(), getRecentActivity(), getBatches()]).then(
-      ([s, a, b]) => {
-        setStats(s);
-        setActivity(a);
-        setBatches(b);
-        setLoading(false);
-      }
-    );
-  }, []);
+  const { loading, error, retry } = useInitialLoad(async () => {
+    const [s, a, b] = await Promise.all([getDashboardStats(), getRecentActivity(), getBatches()]);
+    setStats(s);
+    setActivity(a);
+    setBatches(b);
+  });
 
   if (loading) return <Spinner centered />;
+  if (error) return <ErrorState centered message={error} onRetry={retry} />;
 
   const ongoingBatches = batches.filter((b) => b.status === 'ongoing');
 

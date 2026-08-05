@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { BookOpen, SearchX } from 'lucide-react';
 import { SearchFilterBar } from '@/components/ui/SearchFilterBar';
 import {
@@ -12,6 +12,7 @@ import {
 } from '@/components/portal';
 import { getMaterialsForStudent } from '@/lib/supabase';
 import type { Material } from '@/lib/types';
+import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { formatDate } from '@/lib/utils/format';
 
 export default function PortalMaterialsPage() {
@@ -20,20 +21,11 @@ export default function PortalMaterialsPage() {
   const [open, setOpen] = useState<Material | null>(null);
   const [query, setQuery] = useState('');
   const [batchId, setBatchId] = useState<string | null>(null);
-  // Seeded from whether there is anything to load, so the no-student case never
-  // needs a synchronous setState inside the effect below.
-  const [loading, setLoading] = useState(Boolean(studentId));
 
-  useEffect(() => {
+  const { loading, error, retry } = useInitialLoad(async () => {
     if (!studentId) return;
-    let active = true;
-    getMaterialsForStudent().then((data) => {
-      if (!active) return;
-      setMaterials(data);
-      setLoading(false);
-    });
-    return () => { active = false; };
-  }, [studentId]);
+    setMaterials(await getMaterialsForStudent());
+  });
 
   // Material with no batch is for everyone; it gets its own group and its own
   // filter entry rather than being lumped in with a batch it does not belong to.
@@ -87,6 +79,8 @@ export default function PortalMaterialsPage() {
     <PortalPage
       title="Study material"
       loading={loading}
+      error={error}
+      onRetry={retry}
       shape="list"
       action={
         materials.length > 0 ? (

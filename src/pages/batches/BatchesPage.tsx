@@ -1,10 +1,12 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Layers, Search } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { SearchFilterBar } from '@/components/ui/SearchFilterBar';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
@@ -24,14 +26,10 @@ export default function BatchesPage() {
   const [batches, setBatches] = useState<Batch[]>([]);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<BatchStatus | null>(null);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    getBatches().then((data) => {
-      setBatches(data);
-      setLoading(false);
-    });
-  }, []);
+  const { loading, error, retry } = useInitialLoad(async () => {
+    setBatches(await getBatches());
+  });
 
   const filteredBatches = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -47,6 +45,7 @@ export default function BatchesPage() {
   };
 
   if (loading) return <Spinner centered />;
+  if (error) return <ErrorState centered message={error} onRetry={retry} />;
 
   return (
     <div className="page-section">

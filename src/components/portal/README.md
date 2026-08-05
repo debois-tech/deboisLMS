@@ -20,10 +20,16 @@ import {
 
 export default function PortalThingPage() {
   const studentId = usePortalStudentId();
-  // ...fetch by studentId, hold `loading`
+
+  // Never fetch in a bare effect: every query throws, and a page that only tracks
+  // `loading` shows its skeleton forever when the read is refused.
+  const { loading, error, retry } = useInitialLoad(async () => {
+    if (!studentId) return;
+    setThings(await getThingsForStudent(studentId));
+  });
 
   return (
-    <PortalPage title="Your things" loading={loading}>
+    <PortalPage title="Your things" loading={loading} error={error} onRetry={retry}>
       {things.length === 0 ? (
         <PortalEmpty icon={CalendarCheck}>Nothing here yet.</PortalEmpty>
       ) : (
@@ -55,7 +61,7 @@ export default function PortalThingPage() {
 
 | Widget | Use it for |
 |---|---|
-| `PortalPage` | The page frame: the one h1, an optional page-wide control, the loading skeleton. Pass `shape="list"` on a page with no stat tiles so the placeholder matches what loads. |
+| `PortalPage` | The page frame: the one h1, an optional page-wide control, the loading skeleton and the failed-load state. Pass `shape="list"` on a page with no stat tiles so the placeholder matches what loads, and always pass `error`/`onRetry` from `useInitialLoad`. |
 | `PortalFocus` | The answer to "what do I do now?". **At most one per page** — a second one means neither is the focus. Only the Home page has one today. |
 | `PortalStatGrid` + `PortalStat` | Numbers with the sentence that explains them. `progress` draws the bar; `tone` colours the value from semantic tokens. |
 | `PortalSection` | A labelled group. Its label deliberately sits *below* the page title in weight so pages never stack competing headings. |
@@ -81,3 +87,7 @@ export default function PortalThingPage() {
   Nothing goes directly under it — supporting facts belong in the content.
 - **Write for someone who has never used it.** No internal vocabulary
   (*approved*, *mapping*, *outstanding*), no counts without their unit.
+- **An empty state means "no rows", never "the read failed".** A page that hides a
+  refused query behind *"No classes yet."* tells a student their record is gone.
+  `useInitialLoad` separates the two; `PortalPage`'s `error` renders the second.
+  The thrown message never reaches the student — they cannot act on `PGRST301`.

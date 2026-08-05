@@ -802,6 +802,28 @@ html.light .glass {
   text-wrap: balance;
 }
 
+/* A failed load reuses the empty-state frame, and the icon alone carries the
+   difference — the panel itself stays quiet rather than turning red. */
+.portal-empty-icon-alert {
+  color: var(--danger-text);
+}
+
+.portal-retry {
+  padding: 0.5rem 1rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.portal-retry:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-overlay);
+}
+
 /* ── Loading ─────────────────────────────────────────────────── */
 /* Placeholders in the shape of the content that is coming, rather than a spinner
    that tells a student nothing about what to expect. */

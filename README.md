@@ -34,8 +34,14 @@ Run these in the Supabase SQL editor, in order. All are idempotent.
 | `supabase/student_login_migration.sql` | Links students to auth users, defines the `is_admin()` / `current_student_id()` helpers, enables RLS everywhere |
 | `supabase/fee_migration.sql` | Fee payment logs |
 | `supabase/attendance_timestamp_migration.sql` | Attendance timestamp columns |
+| `supabase/fee_atomic_payment_migration.sql` | `record_fee_payment()` — payment log and running balance in one transaction |
 | `supabase/assignment_repo_migration.sql` | Per-student GitHub repo + student-writable policies |
 | `supabase/study_material_migration.sql` | Study material table, private storage bucket, RLS |
+| `supabase/study_material_v2_migration.sql` | Batch codes, tutor attribution, folder grouping, and the policy that lets students see material with no batch |
+
+`study_material_v2_migration.sql` is **not optional**. `schema.sql` already has its columns, but
+the read policy it replaces is the batch-only one from v1 — skip it and material uploaded for "All
+students" is written successfully and then visible to nobody.
 
 Edit the admin email in `student_login_migration.sql` before running it — that block is what tags
 your account as an admin.
@@ -89,8 +95,7 @@ by recomputing it from the same rule.
 
 ## Docs
 
-- `deboistech erp prd.md` — product scope and DB schema, the source of truth
-- `CLAUDE.md` — architecture and conventions
+- `completed md/deboistech erp prd.md` — product scope and DB schema, the source of truth
+- `completed md/plan_steps.md` — the LMS → ERP migration plan this repo followed
 - `THEME.md` — design tokens and the visual system
-- `AUDIT.md` — known issues and their status
 - `src/components/portal/README.md` — the portal widget kit and its rules

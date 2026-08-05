@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CalendarCheck, CalendarClock, FileText, PartyPopper, UserPlus, Wallet } from 'lucide-react';
 import {
@@ -33,6 +33,7 @@ import type {
   StudentFee,
 } from '@/lib/types';
 import { useAuth } from '@/lib/context/AuthContext';
+import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { formatCurrency, formatDate, formatDayLabel } from '@/lib/utils/format';
 
 type Enrollment = BatchStudentMapping & { batch?: Batch };
@@ -47,57 +48,43 @@ export default function PortalOverviewPage() {
   const [nextLecture, setNextLecture] = useState<Lecture | null>(null);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [assignments, setAssignments] = useState<StudentAssignment[]>([]);
-  // Seeded from whether there is anything to load, so the no-student case never
-  // needs a synchronous setState inside the effect below.
-  const [loading, setLoading] = useState(Boolean(studentId));
-
-  useEffect(() => {
+  const { loading, error, retry } = useInitialLoad(async () => {
     if (!studentId) return;
 
-    let active = true;
+    // Fees are fetched for the student, not for one batch: Home used to show
+    // the current batch's balance while the Fees tab showed the total across
+    // every batch, so the same word meant two different numbers.
+    const [record, mappings, records, work, feeRows] = await Promise.all([
+      getStudentById(studentId),
+      getStudentBatches(studentId),
+      getApprovedAttendanceByStudent(studentId),
+      getAssignmentsForStudent(studentId),
+      getFeesByStudent(studentId),
+    ]);
 
-    (async () => {
-      // Fees are fetched for the student, not for one batch: Home used to show
-      // the current batch's balance while the Fees tab showed the total across
-      // every batch, so the same word meant two different numbers.
-      const [record, mappings, records, work, feeRows] = await Promise.all([
-        getStudentById(studentId),
-        getStudentBatches(studentId),
-        getApprovedAttendanceByStudent(studentId),
-        getAssignmentsForStudent(studentId),
-        getFeesByStudent(studentId),
-      ]);
+    // Multiple active batches are possible; the most recently joined one is "current".
+    const currentMapping = mappings
+      .filter((mapping) => mapping.status === 'active')
+      .sort((a, b) => new Date(b.joined_at).getTime() - new Date(a.joined_at).getTime())[0];
 
-      // `getStudentBatches` joins the batch in, so there is no per-mapping fetch.
-      const withBatches = mappings;
+    let upcoming: Lecture | null = null;
 
-      // Multiple active batches are possible; the most recently joined one is "current".
-      const currentMapping = withBatches
-        .filter((mapping) => mapping.status === 'active')
-        .sort((a, b) => new Date(b.joined_at).getTime() - new Date(a.joined_at).getTime())[0];
+    if (currentMapping) {
+      const lectures = await getLecturesByBatch(currentMapping.batch_id);
+      const today = new Date().toISOString().slice(0, 10);
+      upcoming = lectures
+        .filter((lecture) => lecture.lecture_date.slice(0, 10) >= today)
+        .sort((a, b) => a.lecture_date.localeCompare(b.lecture_date))[0] ?? null;
+    }
 
-      let upcoming: Lecture | null = null;
-
-      if (currentMapping) {
-        const lectures = await getLecturesByBatch(currentMapping.batch_id);
-        const today = new Date().toISOString().slice(0, 10);
-        upcoming = lectures
-          .filter((lecture) => lecture.lecture_date.slice(0, 10) >= today)
-          .sort((a, b) => a.lecture_date.localeCompare(b.lecture_date))[0] ?? null;
-      }
-
-      if (!active) return;
-      setStudent(record ?? null);
-      setEnrollments(withBatches);
-      setFees(feeRows);
-      setNextLecture(upcoming);
-      setAttendance(records);
-      setAssignments(work);
-      setLoading(false);
-    })();
-
-    return () => { active = false; };
-  }, [studentId]);
+    setStudent(record ?? null);
+    // `getStudentBatches` joins the batch in, so there is no per-mapping fetch.
+    setEnrollments(mappings);
+    setFees(feeRows);
+    setNextLecture(upcoming);
+    setAttendance(records);
+    setAssignments(work);
+  });
 
   const currentBatch = enrollments
     .filter((enrollment) => enrollment.status === 'active')
@@ -116,7 +103,7 @@ export default function PortalOverviewPage() {
   const firstName = name.split(' ')[0];
 
   return (
-    <PortalPage title={`Hi, ${firstName}`} loading={loading}>
+    <PortalPage title={`Hi, ${firstName}`} loading={loading} error={error} onRetry={retry}>
       {!studentId ? (
         <PortalEmpty icon={UserPlus}>Student record not linked.</PortalEmpty>
       ) : (

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ReceiptText, Wallet } from 'lucide-react';
 import {
   PortalEmpty,
@@ -13,6 +13,7 @@ import {
 } from '@/components/portal';
 import { getBatchById, getFeePaymentLogsByStudent, getFeesByStudent } from '@/lib/supabase';
 import type { FeePaymentLog, StudentFee } from '@/lib/types';
+import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { formatCurrency, formatDate } from '@/lib/utils/format';
 
 /** The database stores `bank_transfer`; a receipt should read "Bank transfer". */
@@ -27,32 +28,22 @@ export default function PortalFeesPage() {
   const [fees, setFees] = useState<StudentFee[]>([]);
   const [logs, setLogs] = useState<FeePaymentLog[]>([]);
   const [batchNames, setBatchNames] = useState<Map<string, string>>(new Map());
-  // Seeded from whether there is anything to load, so the no-student case never
-  // needs a synchronous setState inside the effect below.
-  const [loading, setLoading] = useState(Boolean(studentId));
 
-  useEffect(() => {
+  const { loading, error, retry } = useInitialLoad(async () => {
     if (!studentId) return;
-    let active = true;
 
-    (async () => {
-      const [feeRows, logRows] = await Promise.all([
-        getFeesByStudent(studentId),
-        getFeePaymentLogsByStudent(studentId),
-      ]);
+    const [feeRows, logRows] = await Promise.all([
+      getFeesByStudent(studentId),
+      getFeePaymentLogsByStudent(studentId),
+    ]);
 
-      const batchIds = [...new Set([...feeRows, ...logRows].map((row) => row.batch_id))];
-      const batches = await Promise.all(batchIds.map((id) => getBatchById(id)));
+    const batchIds = [...new Set([...feeRows, ...logRows].map((row) => row.batch_id))];
+    const batches = await Promise.all(batchIds.map((id) => getBatchById(id)));
 
-      if (!active) return;
-      setFees(feeRows);
-      setLogs(logRows);
-      setBatchNames(new Map(batchIds.map((id, index) => [id, batches[index]?.name ?? 'Batch'])));
-      setLoading(false);
-    })();
-
-    return () => { active = false; };
-  }, [studentId]);
+    setFees(feeRows);
+    setLogs(logRows);
+    setBatchNames(new Map(batchIds.map((id, index) => [id, batches[index]?.name ?? 'Batch'])));
+  });
 
   const totalFee = fees.reduce((sum, fee) => sum + Number(fee.total_fee), 0);
   const totalPaid = fees.reduce((sum, fee) => sum + Number(fee.paid_amount), 0);
@@ -60,7 +51,7 @@ export default function PortalFeesPage() {
   const paidPercent = totalFee > 0 ? Math.min(100, Math.round((totalPaid / totalFee) * 100)) : 0;
 
   return (
-    <PortalPage title="Your fees" loading={loading}>
+    <PortalPage title="Your fees" loading={loading} error={error} onRetry={retry}>
       {fees.length === 0 && logs.length === 0 ? (
         <PortalEmpty icon={Wallet}>No fee set yet.</PortalEmpty>
       ) : (

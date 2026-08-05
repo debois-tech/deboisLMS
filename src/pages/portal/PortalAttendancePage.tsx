@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { CalendarCheck, CalendarX } from 'lucide-react';
 import {
   PortalEmpty,
@@ -13,32 +13,24 @@ import {
 } from '@/components/portal';
 import { ATTENDANCE_PARTIAL_PERCENT, getApprovedAttendanceByStudent } from '@/lib/supabase';
 import type { AttendanceRecord } from '@/lib/types';
+import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { formatDayLabel } from '@/lib/utils/format';
 
 export default function PortalAttendancePage() {
   const studentId = usePortalStudentId();
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
-  // Seeded from whether there is anything to load, so the no-student case never
-  // needs a synchronous setState inside the effect below.
-  const [loading, setLoading] = useState(Boolean(studentId));
 
-  useEffect(() => {
+  const { loading, error, retry } = useInitialLoad(async () => {
     if (!studentId) return;
-    let active = true;
-    getApprovedAttendanceByStudent(studentId).then((data) => {
-      if (!active) return;
-      setRecords(data);
-      setLoading(false);
-    });
-    return () => { active = false; };
-  }, [studentId]);
+    setRecords(await getApprovedAttendanceByStudent(studentId));
+  });
 
   const attended = records.filter((record) => record.status !== 'absent').length;
   const missed = records.length - attended;
   const rate = records.length > 0 ? Math.round((attended / records.length) * 100) : null;
 
   return (
-    <PortalPage title="Your attendance" loading={loading}>
+    <PortalPage title="Your attendance" loading={loading} error={error} onRetry={retry}>
       {records.length === 0 ? (
         <PortalEmpty icon={CalendarCheck}>No attendance marked yet.</PortalEmpty>
       ) : (

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/lib/context/AuthContext';
 
 /** The logged-in student's id, or undefined when the login isn't linked to a student row. */
@@ -12,6 +13,12 @@ interface PortalPageProps {
   /** A single control that acts on the whole page, e.g. a search field. */
   action?: ReactNode;
   loading?: boolean;
+  /**
+   * The load failed. Takes over the page, because the alternative is a student
+   * reading "No classes yet." when the classes are there but unreachable.
+   */
+  error?: string | null;
+  onRetry?: () => void;
   /** Shape of the loading placeholder — match it to what the page actually renders. */
   shape?: 'dashboard' | 'list';
   children: ReactNode;
@@ -22,14 +29,34 @@ interface PortalPageProps {
  * and the loading placeholder. A new portal page is this wrapper plus widgets from
  * `@/components/portal` — see the README in this folder.
  */
-export function PortalPage({ title, action, loading, shape = 'dashboard', children }: PortalPageProps) {
+export function PortalPage({ title, action, loading, error, onRetry, shape = 'dashboard', children }: PortalPageProps) {
   return (
     <div className="portal-page">
       <div className="portal-page-head">
         <h1 className="portal-page-title">{title}</h1>
         {action}
       </div>
-      {loading ? <PortalLoading shape={shape} /> : children}
+      {loading ? <PortalLoading shape={shape} /> : error ? <PortalError onRetry={onRetry} /> : children}
+    </div>
+  );
+}
+
+/**
+ * Deliberately not the thrown message: a student can do nothing with "PGRST301
+ * JWT expired", and the one action that fixes most of these is trying again.
+ */
+function PortalError({ onRetry }: { onRetry?: () => void }) {
+  return (
+    <div className="portal-empty" role="alert">
+      <span className="portal-empty-icon portal-empty-icon-alert">
+        <AlertTriangle size={18} aria-hidden="true" />
+      </span>
+      <p className="portal-empty-text">This didn't load. Check your connection and try again.</p>
+      {onRetry && (
+        <button type="button" className="portal-retry" onClick={onRetry}>
+          Try again
+        </button>
+      )}
     </div>
   );
 }
