@@ -17,8 +17,6 @@ export async function getTutorById(id: string): Promise<Tutor | undefined> {
 }
 
 export async function getTutorBatches(tutorId: string): Promise<(TutorBatchMapping & { batch?: Batch })[]> {
-  // Joined rather than fetched per mapping: the tutor detail page needs the batch
-  // name for every row and used to await one lookup each.
   return rows<TutorBatchMapping & { batch?: Batch }>(
     await supabase
       .from('tutor_batch_mapping')
@@ -36,13 +34,13 @@ export async function createTutor(input: Omit<Tutor, 'id' | 'created_at'>): Prom
 }
 
 export async function getBatchTutors(batchId: string): Promise<(Tutor & { mapping: TutorBatchMapping })[]> {
-  const mappings = rows<any>(
+  const mappings = rows<TutorBatchMapping & { tutors: Tutor }>(
     await supabase.from('tutor_batch_mapping').select('*, tutors(*)').eq('batch_id', batchId),
     'Could not load the batch tutors',
   );
 
   return mappings.map((m) => ({
-    ...(m.tutors as Tutor),
+    ...m.tutors,
     mapping: { id: m.id, tutor_id: m.tutor_id, batch_id: m.batch_id, assigned_at: m.assigned_at },
   }));
 }

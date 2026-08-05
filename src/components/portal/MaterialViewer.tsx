@@ -28,11 +28,15 @@ interface MaterialViewerProps {
  * effort; the watermark is what actually deters, because a leaked capture names
  * the person who took it.
  */
-export function MaterialViewer({ material, onClose }: MaterialViewerProps) {
+export function MaterialViewer(props: MaterialViewerProps) {
+  return <MaterialViewerBody key={props.material?.id ?? 'closed'} {...props} />;
+}
+
+function MaterialViewerBody({ material, onClose }: MaterialViewerProps) {
   const { theme } = useTheme();
   const pagesRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(Boolean(material));
   const [error, setError] = useState('');
   // Blanked while the tab is in the background, which is what a naive screen
   // share or a switch to a recording app looks like from in here.
@@ -44,9 +48,6 @@ export function MaterialViewer({ material, onClose }: MaterialViewerProps) {
     let cancelled = false;
     let blobUrl = '';
     let doc: pdfjs.PDFDocumentProxy | null = null;
-
-    setLoading(true);
-    setError('');
 
     (async () => {
       try {

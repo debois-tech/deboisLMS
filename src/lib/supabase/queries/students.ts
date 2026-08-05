@@ -107,7 +107,10 @@ export async function createStudentLogin(studentId: string): Promise<StudentCred
     let detail: string | undefined;
     const response = (error as { context?: Response }).context;
     if (response && typeof response.json === 'function') {
-      detail = await response.json().then((body: any) => body?.error).catch(() => undefined);
+      detail = await response
+        .json()
+        .then((body: { error?: string } | null) => body?.error)
+        .catch(() => undefined);
     }
     throw new Error(detail ?? error.message ?? 'Failed to create login');
   }
@@ -183,13 +186,13 @@ export async function getAllBatchStudentMappings(): Promise<BatchStudentMapping[
 }
 
 export async function getBatchStudents(batchId: string): Promise<(Student & { mapping: BatchStudentMapping })[]> {
-  const mappings = rows<any>(
+  const mappings = rows<BatchStudentMapping & { students: Student }>(
     await supabase.from('batch_student_mapping').select('*, students(*)').eq('batch_id', batchId),
     'Could not load the batch roster',
   );
 
-  return mappings.map((m: any) => ({
-    ...(m.students as Student),
+  return mappings.map((m) => ({
+    ...m.students,
     mapping: { id: m.id, batch_id: m.batch_id, student_id: m.student_id, joined_at: m.joined_at, status: m.status },
   }));
 }

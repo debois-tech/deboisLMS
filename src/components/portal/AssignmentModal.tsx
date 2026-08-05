@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { AlertTriangle, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -48,23 +48,16 @@ function validateRepoUrl(value: string): string | null {
  * a state dot; the detail and the submit form both live here, as two views of the
  * same dialog so submitting never stacks a second modal on top of the first.
  */
-export function AssignmentModal({ assignment, repoUrl, onClose, onSubmit }: AssignmentModalProps) {
+export function AssignmentModal(props: AssignmentModalProps) {
+  return <AssignmentModalBody key={props.assignment?.id ?? 'closed'} {...props} />;
+}
+
+function AssignmentModalBody({ assignment, repoUrl, onClose, onSubmit }: AssignmentModalProps) {
   const [view, setView] = useState<'info' | 'submit'>('info');
-  const [draftRepo, setDraftRepo] = useState('');
+  const [draftRepo, setDraftRepo] = useState(repoUrl ?? '');
   const [confirmed, setConfirmed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-
-  // Every open starts on the detail view with a clean form: the saved link is
-  // prefilled again and the confirmation is re-ticked per assignment.
-  useEffect(() => {
-    if (!assignment) return;
-    setView('info');
-    setDraftRepo(repoUrl ?? '');
-    setConfirmed(false);
-    setError('');
-    setSubmitting(false);
-  }, [assignment, repoUrl]);
 
   const submitted = assignment?.completion?.submitted ?? false;
   const trimmed = draftRepo.trim();

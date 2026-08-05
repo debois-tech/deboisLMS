@@ -1,18 +1,3 @@
-// Edge Function: watermark-material
-// The only reader of the private `materials` bucket. Given a material id and the
-// caller's JWT, it fetches the original PDF with the service role key, stamps the
-// tutor's name and the company phone number onto every page, and streams back
-// that copy.
-//
-// The stamp is deliberately NOT the reading student's identity. A shared copy is
-// treated as reach rather than theft: whoever ends up with the file also ends up
-// with the tutor's name and a number to call. `material_views` still records who
-// opened what, so opens remain auditable even though the page no longer names
-// the reader.
-//
-// The unstamped file never reaches a browser.
-//
-// Deploy: supabase functions deploy watermark-material
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { degrees, PDFDocument, rgb, StandardFonts } from 'npm:pdf-lib@1.17.1';
@@ -60,17 +45,12 @@ async function stamp(pdfBytes: ArrayBuffer, identity: string, issuedAt: string):
   for (const page of pdf.getPages()) {
     const { width, height } = page.getSize();
 
-    // Tiled diagonal, sized to be legible in a screenshot that has been scaled
-    // down or re-shared. Opacity stays low so the material underneath is still
-    // readable — a watermark that makes the page hard to read gets cropped out.
     const size = 15;
     const textWidth = font.widthOfTextAtSize(identity, size);
     const stepX = textWidth + 110;
     const stepY = 150;
 
     for (let y = -height; y < height * 2; y += stepY) {
-      // Offset alternate rows so the tiling doesn't leave clean vertical gutters
-      // a crop could fall into.
       const rowOffset = (Math.floor(y / stepY) % 2) * (stepX / 2);
       for (let x = -width; x < width * 2; x += stepX) {
         page.drawText(identity, {
@@ -85,7 +65,6 @@ async function stamp(pdfBytes: ArrayBuffer, identity: string, issuedAt: string):
       }
     }
 
-    // Footer bar, drawn last so it sits above the page content.
     const barHeight = 24;
     page.drawRectangle({
       x: 0,
@@ -105,8 +84,6 @@ async function stamp(pdfBytes: ArrayBuffer, identity: string, issuedAt: string):
     });
   }
 
-  // `useObjectStreams: false` keeps the output readable by older PDF viewers,
-  // which some students will be on.
   return await pdf.save({ useObjectStreams: false });
 }
 
@@ -119,8 +96,6 @@ Deno.serve(async (req) => {
     const { material_id } = await req.json();
     if (!material_id) return json({ error: 'material_id is required' }, 400);
 
-    // Identify the caller from their own JWT, never from the request body — the
-    // body is attacker-controlled and would let anyone request anyone's copy.
     const authHeader = req.headers.get('Authorization') ?? '';
     const callerClient = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -226,7 +201,6 @@ Deno.serve(async (req) => {
     const issuedAt = new Date().toISOString().slice(0, 16).replace('T', ' ');
     const stamped = await stamp(await file.arrayBuffer(), identity, issuedAt);
 
-    // Logged after the stamp succeeds, so the log records real opens only.
     if (studentId) {
       await admin.from('material_views').insert({ material_id: material.id, student_id: studentId });
     }
@@ -235,7 +209,6 @@ Deno.serve(async (req) => {
       headers: {
         ...corsHeaders,
         'Content-Type': 'application/pdf',
-        // Never cached: each copy is personal and every open should be logged.
         'Cache-Control': 'no-store, no-cache, must-revalidate, private',
         'Content-Disposition': 'inline',
       },

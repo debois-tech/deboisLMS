@@ -41,8 +41,6 @@ export async function profileFromUser(user: User): Promise<Profile> {
 
   if (role !== 'student') return base;
 
-  // app_metadata carries student_id for logins created by the edge function; the lookup
-  // is the fallback for any student row linked by hand.
   const metaStudentId = user.app_metadata?.student_id as string | undefined;
   const student = await getStudentByAuthUserId(user.id);
 

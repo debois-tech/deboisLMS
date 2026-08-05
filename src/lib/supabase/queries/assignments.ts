@@ -31,7 +31,7 @@ export async function getAssignmentsForStudent(
     .select('batch_id')
     .eq('student_id', studentId);
 
-  const batchIds = (mappings ?? []).map((m: any) => m.batch_id as string);
+  const batchIds = ((mappings ?? []) as { batch_id: string }[]).map((m) => m.batch_id);
   if (batchIds.length === 0) return [];
 
   const [{ data: assignments }, { data: completions }] = await Promise.all([
@@ -74,8 +74,10 @@ export async function getAssignmentSubmissions(
     .eq('batch_id', batchId)
     .eq('status', 'active');
 
-  const roster = ((mappings ?? []) as any[])
-    .map((m) => ({ id: m.student_id as string, name: (m.students?.name as string) ?? 'Unknown' }));
+  type RosterRow = { student_id: string; students: { id: string; name: string } | null };
+
+  const roster = ((mappings ?? []) as unknown as RosterRow[])
+    .map((m) => ({ id: m.student_id, name: m.students?.name ?? 'Unknown' }));
   if (roster.length === 0) return [];
 
   const studentIds = roster.map((s) => s.id);

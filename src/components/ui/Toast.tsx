@@ -16,8 +16,6 @@ export function ToastContainer() {
   if (!toasts.length) return null;
 
   return (
-    // `polite` rather than `assertive`: these confirm work that just happened, so
-    // they should not interrupt whatever a screen reader is already saying.
     <div className="toast-stack" role="region" aria-live="polite" aria-label="Notifications">
       {toasts.map((toast) => {
         const Icon = icons[toast.variant];

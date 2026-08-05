@@ -48,8 +48,6 @@ export function SearchBar({
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Dismissal lives here rather than in each caller, which is where the previous
-  // copies drifted: one page handled outside-click, none handled Escape.
   const filterOpen = filter?.open ?? false;
   const onOpenChange = filter?.onOpenChange;
 

@@ -37,10 +37,10 @@ export default function NewStudentPage() {
 
       try {
         setCredentials(await createStudentLogin(student.id));
-      } catch (loginError: any) {
+      } catch (loginError) {
         // The student record is already saved; a failed login just needs a retry from the
         // detail page, so surface it and move on rather than rolling anything back.
-        showToast(loginError?.message ?? 'Student saved. Login not created.', 'warning');
+        showToast(errorMessage(loginError, 'Student saved. Login not created.'), 'warning');
         navigate(`/students/${student.id}`);
       }
     } catch (error) {

@@ -67,14 +67,10 @@ export default function App() {
               <Route path="fees" element={<FeesPage />} />
               <Route path="assignments" element={<AssignmentsPage />} />
               <Route path="materials" element={<MaterialsPage />} />
-              {/* Keeps an unknown admin URL inside the dashboard shell rather than
-                  rendering nothing. */}
               <Route path="*" element={<NotFoundPage />} />
             </Route>
           </Route>
 
-          {/* Student portal — read-only view of the student's own record. Adding a section
-              is a route here plus an entry in portalNavItems. */}
           <Route path="/portal" element={<ProtectedRoute role="student" />}>
             <Route element={<PortalLayout />}>
               <Route index element={<PortalOverviewPage />} />

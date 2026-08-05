@@ -1,3 +1,4 @@
+import type { PostgrestError } from '@supabase/supabase-js';
 import { supabase } from '../client';
 import { rows } from './result';
 import { getBatchFeeSummary } from './fees';
@@ -25,8 +26,6 @@ export interface RecentActivity {
 }
 
 export async function getDashboardStats(): Promise<DashboardStats> {
-  // The active-batch count joins the others rather than running after them —
-  // there is no dependency between the five.
   const [batchRes, activeRes, studentRes, attendanceRes, feeSummary] = await Promise.all([
     supabase.from('batches').select('*', { count: 'exact', head: true }),
     supabase.from('batches').select('*', { count: 'exact', head: true }).eq('status', 'ongoing'),
@@ -66,16 +65,23 @@ export async function getRecentActivity(): Promise<RecentActivity[]> {
     })
   );
 
-  const mappings = rows<any>(
-    await supabase
+  type EnrolmentRow = {
+    id: string;
+    joined_at: string;
+    students: { name: string } | null;
+    batches: { name: string } | null;
+  };
+
+  const mappings = rows<EnrolmentRow>(
+    (await supabase
       .from('batch_student_mapping')
       .select('id, joined_at, students(name), batches(name)')
       .order('joined_at', { ascending: false })
-      .limit(3),
+      .limit(3)) as unknown as { data: EnrolmentRow[] | null; error: PostgrestError | null },
     'Could not load recent enrolments',
   );
 
-  mappings.forEach((m: any) =>
+  mappings.forEach((m) =>
     results.push({
       id: `act-s-${m.id}`,
       text: `${m.students?.name ?? 'A student'} joined ${m.batches?.name ?? 'a batch'}`,

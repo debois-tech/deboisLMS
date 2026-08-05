@@ -18,12 +18,8 @@ const EXIT_MS = 180;
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
-  // A counter, not Date.now(): two toasts raised in the same millisecond used to
-  // get the same id, which collides as a React key and drops one of them.
   const nextId = useRef(0);
 
-  // Flagged first and dropped after the exit animation, so a dismissed toast
-  // fades out instead of vanishing mid-frame.
   const removeToast = useCallback((id: string) => {
     setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, leaving: true } : t)));
     setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), EXIT_MS);

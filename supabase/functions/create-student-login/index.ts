@@ -1,9 +1,3 @@
-// Edge Function: create-student-login
-// Creates (or resets) a Supabase Auth login for a student row, using the
-// service role key — this must run server-side, never in the browser bundle.
-//
-// Deploy: supabase functions deploy create-student-login
-// Invoke from the app: supabase.functions.invoke('create-student-login', { body: { student_id } })
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
@@ -32,8 +26,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Caller must be logged in as admin — verified using the caller's own JWT,
-    // not the service role key, so a non-admin can't hit this function directly.
     const authHeader = req.headers.get('Authorization') ?? '';
     const callerClient = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -75,11 +67,9 @@ Deno.serve(async (req) => {
     const password = generatePassword(student.phone);
 
     if (student.auth_user_id) {
-      // Reset flow: student already has a login, just rotate the password.
       const { error } = await adminClient.auth.admin.updateUserById(student.auth_user_id, { password });
       if (error) throw error;
     } else {
-      // First-time flow: create the auth user and link it back to the student row.
       const { data: created, error } = await adminClient.auth.admin.createUser({
         email: student.email,
         password,

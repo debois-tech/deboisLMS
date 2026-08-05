@@ -95,7 +95,10 @@ export async function matchNameWithGemini(
 
     if (!response.ok) {
       const status = response.status;
-      const detail = await response.json().then((b: any) => b?.error).catch(() => undefined);
+      const detail = await response
+        .json()
+        .then((b: { error?: string } | null) => b?.error)
+        .catch(() => undefined);
 
       if (status === 429) {
         const retryAfter = Number(response.headers.get('retry-after'));

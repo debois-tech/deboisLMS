@@ -1,14 +1,3 @@
-// Edge Function: match-name
-// Fuzzy-matches one Google Meet participant name against a batch roster using
-// Gemini. Exists so the Gemini API key stays server-side: a VITE_-prefixed key is
-// inlined into the client bundle and readable by every student who opens
-// DevTools, and unlike the Supabase anon key it carries no authorization model —
-// anyone holding it can spend the quota, billed to us.
-//
-// Set the secret (note: no VITE_ prefix, this never reaches the browser):
-//   supabase secrets set GEMINI_API_KEY=... --project-ref <ref>
-// Deploy:
-//   supabase functions deploy match-name
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
@@ -38,8 +27,6 @@ Deno.serve(async (req) => {
       return json({ error: 'raw_name and a non-empty candidates array are required' }, 400);
     }
 
-    // Attendance processing is an admin task. Verified from the caller's own JWT
-    // so a student cannot use this as a free Gemini proxy on our quota.
     const callerClient = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_ANON_KEY')!,
@@ -76,9 +63,6 @@ Deno.serve(async (req) => {
 
     if (!response.ok) {
       const detail = await response.text().catch(() => '');
-      // The upstream status is passed straight through: the client distinguishes
-      // "bad key, stop trying" (4xx) from "rate limited, retry later" (429/5xx),
-      // and that distinction is lost if everything becomes a 500.
       const retryAfter = response.headers.get('retry-after');
       return json(
         { error: `Gemini API error ${response.status}${detail ? ` — ${detail.slice(0, 200)}` : ''}` },
@@ -110,8 +94,6 @@ Deno.serve(async (req) => {
       return json({ matched: true, index: parsed.index, confidence: parsed.confidence });
     }
 
-    // A confident "not in the roster" is a valid answer, not a failure — the
-    // caller flags the name for manual review.
     return json({ matched: false });
   } catch (err) {
     return json({ error: (err as Error).message }, 500);

@@ -48,12 +48,16 @@ export async function loadProcessingContext(lectureId: string): Promise<Processi
 
   if (rosterRes.error) throw new Error(`Failed to load roster: ${rosterRes.error.message}`);
 
-  const roster: RosterEntry[] = ((rosterRes.data ?? []) as any[])
+  type RosterRow = { student_id: string; students: { id: string; name: string } | null };
+
+  const roster: RosterEntry[] = ((rosterRes.data ?? []) as unknown as RosterRow[])
     .map((r) => ({ studentId: r.students?.id, name: r.students?.name }))
     .filter((r): r is RosterEntry => Boolean(r.studentId && r.name));
 
   const tutors = (tutorsRes.data ?? []) as { id: string; name: string }[];
-  const batchTutorIds = new Set<string>((tutorMapRes.data ?? []).map((t: any) => t.tutor_id));
+  const batchTutorIds = new Set<string>(
+    ((tutorMapRes.data ?? []) as { tutor_id: string }[]).map((t) => t.tutor_id),
+  );
 
   return {
     lectureId,

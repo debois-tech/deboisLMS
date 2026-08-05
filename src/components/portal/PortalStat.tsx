@@ -48,7 +48,6 @@ export function PortalStat({ label, icon: Icon, value, note, progress, tone = 'd
           aria-valuemax={100}
           aria-label={label}
         >
-          {/* Scales instead of animating width so the fill doesn't lay out on every frame. */}
           <div className="portal-progress-fill" style={{ transform: `scaleX(${clamped / 100})` }} />
         </div>
       )}

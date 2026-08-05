@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { CheckCircle, Download, ExternalLink, Users, XCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { Spinner } from '@/components/ui/Spinner';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import { getAssignmentSubmissions, markSubmission } from '@/lib/supabase';
@@ -11,6 +12,7 @@ import { formatDateTime } from '@/lib/utils/format';
 import { downloadCsv, toCsv, toFileStem } from '@/lib/utils/csvExport';
 import { useToast } from '@/lib/context/ToastContext';
 import { errorMessage } from '@/lib/utils/errors';
+import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 
 interface AssignmentSubmissionTableProps {
   assignmentId: string;
@@ -32,26 +34,12 @@ export function AssignmentSubmissionTable({
   assignmentTitle,
 }: AssignmentSubmissionTableProps) {
   const [rows, setRows] = useState<AssignmentSubmissionRow[]>([]);
-  const [loading, setLoading] = useState(true);
   const [busyStudentId, setBusyStudentId] = useState<string | null>(null);
   const { showToast } = useToast();
 
-  const load = useCallback(() => {
-    let active = true;
-    setLoading(true);
-    getAssignmentSubmissions(assignmentId, batchId)
-      .then((data) => {
-        if (active) setRows(data);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [assignmentId, batchId]);
-
-  useEffect(load, [load]);
+  const { loading, error, retry } = useInitialLoad(async () => {
+    setRows(await getAssignmentSubmissions(assignmentId, batchId));
+  });
 
   const handleToggle = async (row: AssignmentSubmissionRow) => {
     setBusyStudentId(row.student_id);
@@ -59,8 +47,8 @@ export function AssignmentSubmissionTable({
       await markSubmission(assignmentId, row.student_id, !row.submitted);
       const data = await getAssignmentSubmissions(assignmentId, batchId);
       setRows(data);
-    } catch (error) {
-      showToast(errorMessage(error, 'Failed to update submission'), 'error');
+    } catch (err) {
+      showToast(errorMessage(err, 'Failed to update submission'), 'error');
     } finally {
       setBusyStudentId(null);
     }
@@ -103,6 +91,8 @@ export function AssignmentSubmissionTable({
 
       {loading ? (
         <Spinner centered />
+      ) : error ? (
+        <ErrorState message={error} onRetry={retry} />
       ) : rows.length === 0 ? (
         <EmptyState icon={<Users size={32} />} title="No active students in this batch" />
       ) : (
