@@ -1,0 +1,15 @@
+{
+  // Two runtimes in one repo. `deno.enablePaths` scopes the Deno language server to
+  // the edge functions and leaves everything else — the whole React app — on the
+  // built-in TypeScript server, which is what reads tsconfig.json and the `@/*` alias.
+  //
+  // Without this, the TS server reads the edge functions as browser TypeScript and
+  // reports `jsr:`/`npm:` imports and the `Deno` global as errors. They are valid in
+  // Deno, which is where those files actually run, so the errors are noise — but the
+  // side effect is that those three files get no real type-checking at all.
+  //
+  // Needs the `denoland.vscode-deno` extension installed to take effect.
+  "deno.enable": true,
+  "deno.enablePaths": ["supabase/functions"],
+  "deno.lint": true
+}

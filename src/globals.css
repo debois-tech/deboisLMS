@@ -325,7 +325,7 @@ input[type="number"] {
   z-index: -2;
   content: '';
   pointer-events: none;
-  background: url('/favicon.png') center / contain no-repeat;
+  background: url('/glass-background.png') center / contain no-repeat;
   filter: blur(30px);
   opacity: .2;
 }
