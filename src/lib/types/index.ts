@@ -1,11 +1,11 @@
-export type Role = 'admin';
+export type Role = 'admin' | 'student';
 
 export type BatchStatus = 'upcoming' | 'ongoing' | 'completed';
 export type SessionType = 'online' | 'offline';
 export type AttendanceStatus = 'present' | 'partial' | 'absent';
 export type AttendanceSource = 'manual' | 'automated';
 export type MappingStatus = 'active' | 'dropped';
-export type SubmissionChannel = 'whatsapp' | 'other';
+export type SubmissionChannel = 'whatsapp' | 'other' | 'portal';
 export type FeeStatus = 'due' | 'paid';
 export type PaymentMethod = 'cash' | 'upi' | 'bank_transfer' | 'other';
 
@@ -16,6 +16,8 @@ export interface Profile {
   role: Role;
   avatar_url?: string;
   created_at: string;
+  /** Only set for role === 'student' — the students.id row this login belongs to. */
+  student_id?: string;
 }
 
 export interface Batch {
@@ -24,6 +26,11 @@ export interface Batch {
   track?: string;
   status: BatchStatus;
   start_date?: string;
+  /**
+   * Filename prefix for this batch's study material, e.g. `DBT-TEPC-2026-D`.
+   * A material's title is this plus an admin-entered suffix: `DBT-TEPC-2026-D01`.
+   */
+  batch_code?: string;
   created_at: string;
   student_count?: number;
 }
@@ -36,6 +43,13 @@ export interface Student {
   github_url?: string;
   linkedin_url?: string;
   created_at: string;
+  /** auth.users id once a portal login has been created for this student. */
+  auth_user_id?: string;
+}
+
+export interface StudentCredentials {
+  email: string;
+  password: string;
 }
 
 export interface Tutor {
@@ -132,12 +146,52 @@ export interface AssignmentCompletion {
   assignment?: Assignment;
 }
 
+/** One GitHub repo per student — every assignment submission points at it. */
+export interface StudentRepo {
+  student_id: string;
+  repo_url: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface BatchStudentMapping {
   id: string;
   batch_id: string;
   student_id: string;
   joined_at: string;
   status: MappingStatus;
+}
+
+/**
+ * One PDF attached to a batch. The row is metadata only — the file lives in the
+ * private `materials` storage bucket and is only ever handed to a student as a
+ * watermarked copy produced by the `watermark-material` edge function.
+ */
+export interface Material {
+  id: string;
+  /** Null means the material is for every student rather than one batch. */
+  batch_id?: string | null;
+  /** Whose name the watermark carries, alongside the company phone number. */
+  tutor_id?: string | null;
+  title: string;
+  description?: string;
+  /** Folder this came from, when uploaded as part of one. Groups listings only. */
+  folder?: string | null;
+  storage_path: string;
+  size_bytes?: number;
+  page_count?: number;
+  uploaded_by?: string;
+  created_at: string;
+  batch?: Batch;
+  tutor?: Tutor;
+}
+
+export interface MaterialView {
+  id: string;
+  material_id: string;
+  student_id: string;
+  viewed_at: string;
+  student?: Student;
 }
 
 export interface TutorBatchMapping {
@@ -172,6 +226,8 @@ export interface Toast {
   id: string;
   message: string;
   variant: ToastVariant;
+  /** Set for the length of the exit animation, just before the toast is dropped. */
+  leaving?: boolean;
 }
 
 export interface NavItem {

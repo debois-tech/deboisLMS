@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { Button } from '@/components/ui/Button';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { BatchSelect } from '@/components/ui/BatchSelect';
@@ -13,6 +15,7 @@ import { getBatches, getFeesByBatch, getFeePaymentLogs, addFeePaymentLog, getBat
 import type { Batch, StudentFee, Student, BatchStudentMapping, BatchFeeSummary, FeePaymentLog } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils/format';
 import { useToast } from '@/lib/context/ToastContext';
+import { errorMessage } from '@/lib/utils/errors';
 
 export default function FeesPage() {
   const [batches, setBatches] = useState<Batch[]>([]);
@@ -20,33 +23,41 @@ export default function FeesPage() {
   const [fees, setFees] = useState<StudentFee[]>([]);
   const [students, setStudents] = useState<(Student & { mapping: BatchStudentMapping })[]>([]);
   const [summary, setSummary] = useState<BatchFeeSummary[]>([]);
-  const [loading, setLoading] = useState(true);
   const [loggingFee, setLoggingFee] = useState<StudentFee | null>(null);
   const [paymentLogs, setPaymentLogs] = useState<FeePaymentLog[]>([]);
   const [logForm, setLogForm] = useState<PaymentLogFormState>({ amount: '', payment_date: new Date().toISOString().slice(0, 10), payment_method: 'other', notes: '' });
   const [logging, setLogging] = useState(false);
   const { showToast } = useToast();
 
-  useEffect(() => {
-    Promise.all([getBatches(), getBatchFeeSummary()]).then(([b, s]) => {
-      setBatches(b);
-      setSummary(s);
-      setLoading(false);
-    });
-  }, []);
+  const { loading, error, retry } = useInitialLoad(async () => {
+    const [b, s] = await Promise.all([getBatches(), getBatchFeeSummary()]);
+    setBatches(b);
+    setSummary(s);
+  });
 
-  const loadBatchFees = (batchId: string) => {
+  const loadBatchFees = async (batchId: string) => {
     setSelectedBatch(batchId);
-    Promise.all([getFeesByBatch(batchId), getBatchStudents(batchId)]).then(([f, s]) => {
+    try {
+      const [f, s] = await Promise.all([getFeesByBatch(batchId), getBatchStudents(batchId)]);
       setFees(f);
       setStudents(s);
-    });
+    } catch (err) {
+      // Report without replacing the page, but clear the table so it doesn't keep the previous batch's rows.
+      setFees([]);
+      setStudents([]);
+      showToast(errorMessage(err, 'Failed to load fees for this batch'), 'error');
+    }
   };
 
   const openPaymentLogs = async (fee: StudentFee) => {
     setLoggingFee(fee);
     setLogForm({ amount: '', payment_date: new Date().toISOString().slice(0, 10), payment_method: 'other', notes: '' });
-    setPaymentLogs(await getFeePaymentLogs(fee.id));
+    try {
+      setPaymentLogs(await getFeePaymentLogs(fee.id));
+    } catch (err) {
+      setPaymentLogs([]);
+      showToast(errorMessage(err, 'Failed to load payment history'), 'error');
+    }
   };
 
   const handleAddPaymentLog = async () => {
@@ -66,22 +77,24 @@ export default function FeesPage() {
         setFees((prev) => prev.map((f) => (f.id === result.fee.id ? result.fee : f)));
         setLogForm({ amount: '', payment_date: new Date().toISOString().slice(0, 10), payment_method: 'other', notes: '' });
         getBatchFeeSummary().then(setSummary);
-        showToast('Payment logged successfully');
+        showToast('Payment logged');
       }
-    } catch (error: any) {
-      showToast(error?.message ?? 'Failed to log payment', 'error');
+    } catch (error) {
+      showToast(errorMessage(error, 'Failed to log payment'), 'error');
     }
     setLogging(false);
   };
 
   if (loading) return <Spinner centered />;
+  if (error) return <ErrorState centered message={error} onRetry={retry} />;
+
   const selectedSummary = selectedBatch ? summary.find((item) => item.batch_id === selectedBatch) : undefined;
 
   return (
     <div className="page-section">
       <PageHeader title="Finance" />
 
-      <Card>
+      <Card className="step-card">
         <CardHeader title="Select Batch" />
         <BatchSelect batches={batches} value={selectedBatch} onChange={loadBatchFees} />
       </Card>
@@ -89,19 +102,20 @@ export default function FeesPage() {
       {selectedBatch && selectedSummary && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Total Fees</p><p className="mt-1 text-lg font-bold text-[var(--text-primary)]">{formatCurrency(selectedSummary.total_fees)}</p></Card>
-          <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Collected</p><p className="mt-1 text-lg font-bold text-emerald-400">{formatCurrency(selectedSummary.total_collected)}</p></Card>
-          <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Outstanding</p><p className="mt-1 text-lg font-bold text-red-400">{formatCurrency(selectedSummary.total_outstanding)}</p></Card>
+          <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Collected</p><p className="mt-1 text-lg font-bold text-[var(--success-text)]">{formatCurrency(selectedSummary.total_collected)}</p></Card>
+          <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Outstanding</p><p className="mt-1 text-lg font-bold text-[var(--danger-text)]">{formatCurrency(selectedSummary.total_outstanding)}</p></Card>
           <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Students</p><p className="mt-1 text-lg font-bold text-[var(--text-primary)]">{selectedSummary.total_students}</p></Card>
         </div>
       )}
 
       {selectedBatch && (
         <Card>
-          <CardHeader title="Per-Student Fees"/>
+          <CardHeader title="Per-Student Fees" className="mb-8" />
           {fees.length === 0 ? (
-            <p className="text-sm text-[var(--text-muted)]" style={{ padding: '1rem 1.25rem' }}>No fee records for this batch.</p>
+            <p className="text-sm text-[var(--text-muted)]" style={{ padding: '1rem 1.25rem' }}>No fee records.</p>
           ) : (
-            <Table maxHeight="28rem">
+            <div style={{ marginTop: '0.75rem' }}>
+              <Table maxHeight="28rem">
               <THead>
                 <TR>
                   <TH>Student</TH>
@@ -125,7 +139,7 @@ export default function FeesPage() {
                       <TD>{formatCurrency(fee.total_fee)}</TD>
                       <TD>{formatCurrency(fee.paid_amount)}</TD>
                       <TD>
-                        <span className={isPaid ? 'text-emerald-400' : 'text-red-400'}>
+                        <span className={isPaid ? 'text-[var(--success-text)]' : 'text-[var(--danger-text)]'}>
                           {isPaid ? '—' : formatCurrency(remaining)}
                         </span>
                       </TD>
@@ -139,7 +153,8 @@ export default function FeesPage() {
                   );
                 })}
               </TBody>
-            </Table>
+              </Table>
+            </div>
           )}
         </Card>
       )}

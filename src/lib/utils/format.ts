@@ -13,6 +13,18 @@ export function formatDate(iso: string): string {
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+/** A date as a student would say it: "Today", "Tomorrow", "Yesterday", otherwise "Tue, 4 Aug". */
+export function formatDayLabel(iso: string): string {
+  const midnight = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const date = new Date(iso);
+  const days = Math.round((midnight(date) - midnight(new Date())) / 86_400_000);
+
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Tomorrow';
+  if (days === -1) return 'Yesterday';
+  return date.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
 export function formatDateTime(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleDateString('en-US', {

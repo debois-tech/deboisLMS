@@ -8,6 +8,7 @@ import {
   ClipboardCheck,
   DollarSign,
   FileText,
+  BookOpen,
   Plus,
   X,
   PanelLeft,
@@ -21,6 +22,7 @@ const navItems = [
   { label: 'Attendance', to: '/attendance', icon: ClipboardCheck },
   { label: 'Finance', to: '/fees', icon: DollarSign },
   { label: 'Assignments', to: '/assignments', icon: FileText },
+  { label: 'Study Material', to: '/materials', icon: BookOpen },
 ];
 
 interface SidebarProps {

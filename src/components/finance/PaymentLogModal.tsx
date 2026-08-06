@@ -2,6 +2,7 @@ import { History, Plus } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { FormField } from '@/components/ui/FormField';
+import { SearchSelect } from '@/components/ui/SearchSelect';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import type { StudentFee, FeePaymentLog, PaymentMethod } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils/format';
@@ -39,10 +40,10 @@ export function PaymentLogModal({
                 <div className="display-field">{studentName}</div>
               </FormField>
               <FormField label="Paid">
-                <div className="display-field text-emerald-400">{formatCurrency(fee.paid_amount)}</div>
+                <div className="display-field text-[var(--success-text)]">{formatCurrency(fee.paid_amount)}</div>
               </FormField>
               <FormField label="Remaining">
-                <div className={`display-field ${remaining > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                <div className={`display-field ${remaining > 0 ? 'text-[var(--danger-text)]' : 'text-[var(--success-text)]'}`}>
                   {remaining > 0 ? formatCurrency(remaining) : 'Paid in full'}
                 </div>
               </FormField>
@@ -57,12 +58,19 @@ export function PaymentLogModal({
               </FormField>
             </div>
             <FormField label="Payment Method">
-              <select value={form.payment_method} onChange={(event) => onFormChange({ ...form, payment_method: event.target.value as PaymentMethod })}>
-                <option value="cash">Cash</option>
-                <option value="upi">UPI</option>
-                <option value="bank_transfer">Bank transfer</option>
-                <option value="other">Other</option>
-              </select>
+              <SearchSelect
+                options={[
+                  { value: 'cash', label: 'Cash' },
+                  { value: 'upi', label: 'UPI' },
+                  { value: 'bank_transfer', label: 'Bank transfer' },
+                  { value: 'other', label: 'Other' },
+                ]}
+                value={form.payment_method}
+                onChange={(payment_method) => onFormChange({ ...form, payment_method: payment_method as PaymentMethod })}
+                placeholder="Select payment method"
+                searchPlaceholder="Search payment methods"
+                emptyText="No payment methods found"
+              />
             </FormField>
             <FormField label="Notes">
               <textarea value={form.notes} onChange={(event) => onFormChange({ ...form, notes: event.target.value })} placeholder="Optional note" />
@@ -95,7 +103,7 @@ export function PaymentLogModal({
                 <TBody>
                   {paymentLogs.map((log) => (
                     <TR key={log.id}>
-                      <TD className="font-semibold text-emerald-400">{formatCurrency(Number(log.amount))}</TD>
+                      <TD className="font-semibold text-[var(--success-text)]">{formatCurrency(Number(log.amount))}</TD>
                       <TD className="cell-secondary">{log.payment_date}</TD>
                       <TD className="cell-muted capitalize">{(log.payment_method ?? '—').replace('_', ' ')}</TD>
                       <TD className="cell-muted">{log.notes || '—'}</TD>

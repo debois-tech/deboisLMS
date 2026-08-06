@@ -1,11 +1,14 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import type { Profile } from '@/lib/types';
+import type { User } from '@supabase/supabase-js';
+import type { Profile, Role } from '@/lib/types';
 import { supabase } from '@/lib/supabase/client';
+import { getStudentByAuthUserId } from '@/lib/supabase';
 
 interface AuthContextValue {
   user: Profile | null;
   setUser: (u: Profile | null) => void;
   isAdmin: boolean;
+  isStudent: boolean;
   loading: boolean;
 }
 
@@ -13,42 +16,66 @@ const AuthContext = createContext<AuthContextValue>({
   user: null,
   setUser: () => {},
   isAdmin: false,
+  isStudent: false,
   loading: true,
 });
+
+/** Role comes from app_metadata (set server-side) — never user_metadata, which a user can edit on themselves. */
+export function roleFromUser(user: User): Role {
+  return user.app_metadata?.role === 'admin' ? 'admin' : 'student';
+}
+
+export async function profileFromUser(user: User): Promise<Profile> {
+  const role = roleFromUser(user);
+  const base: Profile = {
+    id: user.id,
+    full_name: user.user_metadata?.full_name ?? (role === 'admin' ? 'Admin' : 'Student'),
+    email: user.email ?? '',
+    role,
+    created_at: user.created_at,
+  };
+
+  if (role !== 'student') return base;
+
+  const metaStudentId = user.app_metadata?.student_id as string | undefined;
+  const student = await getStudentByAuthUserId(user.id);
+
+  return {
+    ...base,
+    full_name: student?.name ?? base.full_name,
+    student_id: student?.id ?? metaStudentId,
+  };
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setUser({
-          id: session.user.id,
-          full_name: session.user.user_metadata?.full_name ?? 'Admin',
-          email: session.user.email ?? '',
-          role: 'admin',
-          created_at: session.user.created_at,
-        });
+    let active = true;
+
+    const applySession = async (sessionUser: User | null | undefined) => {
+      if (!sessionUser) {
+        if (active) setUser(null);
+        return;
       }
-      setLoading(false);
+      const profile = await profileFromUser(sessionUser);
+      if (active) setUser(profile);
+    };
+
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      await applySession(session?.user);
+      if (active) setLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        setUser({
-          id: session.user.id,
-          full_name: session.user.user_metadata?.full_name ?? 'Admin',
-          email: session.user.email ?? '',
-          role: 'admin',
-          created_at: session.user.created_at,
-        });
-      } else {
-        setUser(null);
-      }
+      void applySession(session?.user);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   return (
@@ -57,6 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         setUser,
         isAdmin: user?.role === 'admin',
+        isStudent: user?.role === 'student',
         loading,
       }}
     >

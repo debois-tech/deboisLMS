@@ -13,21 +13,19 @@ const ThemeContext = createContext<ThemeContextValue>({
 });
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<Theme>('dark');
+  const [theme, setTheme] = useState<Theme>(() => {
+    const stored = localStorage.getItem('lms-theme');
+    return stored === 'light' || stored === 'dark' ? stored : 'dark';
+  });
 
   useEffect(() => {
-    const stored = localStorage.getItem('lms-theme') as Theme | null;
-    if (stored) {
-      setTheme(stored);
-      document.documentElement.classList.toggle('light', stored === 'light');
-    }
-  }, []);
+    document.documentElement.classList.toggle('light', theme === 'light');
+  }, [theme]);
 
   const toggle = () => {
     setTheme((prev) => {
       const next = prev === 'dark' ? 'light' : 'dark';
       localStorage.setItem('lms-theme', next);
-      document.documentElement.classList.toggle('light', next === 'light');
       return next;
     });
   };

@@ -1,70 +1,101 @@
-# Deboistech LMS
+# DeboisTech ERP
 
-A full-stack Learning Management System built with **Vite + React** and **Supabase**.
+Admin dashboard for running training batches — students, tutors, attendance, fees, assignments and
+study material — plus a read-only student portal.
 
-## Overview
+Built with Vite 6 + React 19 + TypeScript, Tailwind CSS 4, and Supabase (Postgres, Auth, Storage,
+Edge Functions).
 
-Deboistech LMS enables admins to create classes, upload study materials, create assignments and tests, and manage students. Students can join classes via a unique code, access materials, submit assignments, and take tests.
+## Who logs in
 
-## Tech Stack
+- **Admins** run everything from the dashboard at `/`.
+- **Students** get a read-only portal at `/portal`. Their logins are **created by an admin**, not by
+  self-signup — there is no public registration and no class-join code.
+- **Tutors have no login.** They are records the admin manages.
 
-- **Frontend:** React 19, TypeScript, Tailwind CSS 4, React Router 7
-- **Backend:** Supabase (PostgreSQL, Auth, Storage, Edge Functions)
-- **Auth:** Supabase Auth (email/password)
-- **Storage:** Supabase Storage (study materials, submissions, avatars)
-- **Build Tool:** Vite 6
+Roles come from `app_metadata.role` on the auth user, and access is enforced by row-level security
+in Postgres rather than by the client.
 
-## User Roles
-
-- **Admin** — creates/manages classes, content, and grades submissions
-- **Student** — joins classes via code, views materials, submits work, takes tests
-
-## Quick Start
+## Setup
 
 ```bash
-# Install dependencies
 npm install
-
-# Copy environment variables
-cp .env.example .env   # or set up manually (see below)
-
-# Start development server
+cp .env.example .env    # fill in your Supabase URL and anon key
 npm run dev
 ```
 
-### Required Environment Variables
+### Database
 
+Run these in the Supabase SQL editor, in order. All are idempotent.
+
+| File | What it does |
+|---|---|
+| `supabase/schema.sql` | Tables, enums and views — the source of truth for data shape |
+| `supabase/student_login_migration.sql` | Links students to auth users, defines the `is_admin()` / `current_student_id()` helpers, enables RLS everywhere |
+| `supabase/fee_migration.sql` | Fee payment logs |
+| `supabase/attendance_timestamp_migration.sql` | Attendance timestamp columns |
+| `supabase/fee_atomic_payment_migration.sql` | `record_fee_payment()` — payment log and running balance in one transaction |
+| `supabase/assignment_repo_migration.sql` | Per-student GitHub repo + student-writable policies |
+| `supabase/study_material_migration.sql` | Study material table, private storage bucket, RLS |
+| `supabase/study_material_v2_migration.sql` | Batch codes, tutor attribution, folder grouping, and the policy that lets students see material with no batch |
+
+`study_material_v2_migration.sql` is **not optional**. `schema.sql` already has its columns, but
+the read policy it replaces is the batch-only one from v1 — skip it and material uploaded for "All
+students" is written successfully and then visible to nobody.
+
+Edit the admin email in `student_login_migration.sql` before running it — that block is what tags
+your account as an admin.
+
+### Edge functions
+
+Anything needing a secret runs server-side. Deploy each with
+`supabase functions deploy <name> --project-ref <ref>`:
+
+| Function | Purpose | Secret |
+|---|---|---|
+| `create-student-login` | Creates/resets a student's portal login | `SECRET_SERVICE_ROLE_KEY` |
+| `watermark-material` | Stamps a student's name and phone onto every page of a PDF | `SECRET_SERVICE_ROLE_KEY` |
+| `match-name` | Gemini fuzzy name matching for attendance | `GEMINI_API_KEY` |
+
+```bash
+supabase secrets set SECRET_SERVICE_ROLE_KEY=... --project-ref <ref>
+supabase secrets set GEMINI_API_KEY=...          --project-ref <ref>   # optional
 ```
-VITE_SUPABASE_URL=
-VITE_SUPABASE_ANON_KEY=
-VITE_SUPABASE_SERVICE_ROLE_KEY=
-VITE_ADMIN_SETUP_KEY=
+
+Without `GEMINI_API_KEY`, attendance still works — it falls back to deterministic name matching and
+flags the rest for manual review.
+
+## Commands
+
+```bash
+npm run dev       # dev server
+npm run build     # tsc -b && vite build (type-checks before bundling)
+npm run preview   # preview the production build
+npm run lint      # eslint
 ```
 
-## Project Structure
+There is no test runner configured yet.
 
-```
-src/
-├── components/   — Reusable UI components
-├── layouts/      — Layout components
-├── lib/          — Supabase clients, utilities, types
-├── pages/        — Route pages (public, student, admin routes)
-├── App.tsx       — Root component with router
-├── main.tsx      — Entry point
-└── globals.css   — Global styles (Tailwind)
-```
+## How the main pieces work
 
-## Features (V1)
+**Attendance** is a three-stage pipeline: a Google Meet CSV is ingested as-is, then processed per
+lecture (reconnect rows merged, names matched to the roster, minutes compared against the scheduled
+duration), then written as one row per student per lecture with `approved: false`. Nothing counts
+towards a dashboard or a student's portal until an admin approves it — the AI matching step is not
+treated as trustworthy on its own.
 
-- Admin & student authentication
-- Class creation with unique join codes (`XXX-XXXX`)
-- Study materials (documents, links, rich text)
-- Assignments with due dates, file submission, and grading
-- Tests with MCQ (auto-graded) and short answer questions
-- Role-based access control with Supabase RLS
-- Dark/light mode
-- Responsive design
+**Study material** is view-only. The PDF lives in a private bucket that students have no storage
+policy for; the only path to it is the `watermark-material` function, which stamps the reading
+student's name and phone onto every page. Screenshots cannot be prevented in a browser — the
+watermark and the view log make a leak *traceable*, which is the actual goal.
 
-## Documentation
+**Portal logins** use a password derived from the student's phone (`Debois@<last4>`). Supabase Auth
+stores only a hash and this app stores no plaintext copy; the dashboard shows the current password
+by recomputing it from the same rule.
 
-See [`deboistech erp prd.md`](./deboistech%20erp%20prd.md) for the full product specification.
+## Docs
+
+- `completed md/deboistech erp prd.md` — product scope and DB schema, the source of truth
+- `completed md/plan_steps.md` — the LMS → ERP migration plan this repo followed
+- `THEME.md` — design tokens and the visual system
+- `src/components/portal/README.md` — the portal widget kit and its rules

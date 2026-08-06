@@ -1,30 +1,31 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { NotFound } from '@/components/ui/NotFound';
+import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { FormField } from '@/components/ui/FormField';
+import { SearchSelect } from '@/components/ui/SearchSelect';
 import { getBatchById, updateBatch } from '@/lib/supabase';
 import type { Batch } from '@/lib/types';
 import { useToast } from '@/lib/context/ToastContext';
+import { errorMessage } from '@/lib/utils/errors';
 
 export default function EditBatchPage() {
   const { batchId } = useParams();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<Batch | null>(null);
   const { showToast } = useToast();
 
-  useEffect(() => {
+  const { loading, error, retry } = useInitialLoad(async () => {
     if (!batchId) return;
-    getBatchById(batchId).then((batch) => {
-      if (batch) setForm(batch);
-      setLoading(false);
-    });
-  }, [batchId]);
+    const batch = await getBatchById(batchId);
+    if (batch) setForm(batch);
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,16 +33,17 @@ export default function EditBatchPage() {
     setSaving(true);
     try {
       await updateBatch(form.id, form);
-      showToast('Batch updated successfully');
+      showToast('Batch updated');
       navigate(`/batches/${form.id}`);
-    } catch (error: any) {
-      showToast(error?.message ?? 'Failed to update batch', 'error');
+    } catch (error) {
+      showToast(errorMessage(error, 'Failed to update batch'), 'error');
     } finally {
       setSaving(false);
     }
   };
 
   if (loading) return <Spinner centered />;
+  if (error) return <ErrorState centered message={error} onRetry={retry} />;
   if (!form) return <NotFound label="Batch" />;
 
   return (
@@ -58,24 +60,47 @@ export default function EditBatchPage() {
             />
           </FormField>
           <FormField label="Track">
-            <select
+            <SearchSelect
+              options={[
+                { value: '', label: 'Select track' },
+                { value: 'DevOps', label: 'DevOps' },
+                { value: 'AI/ML', label: 'AI/ML' },
+                { value: 'Full Stack', label: 'Full Stack' },
+                { value: 'Cloud', label: 'Cloud' },
+              ]}
               value={form.track ?? ''}
-              onChange={(e) => setForm({ ...form, track: e.target.value })}
-            >
-              <option value="">Select track</option>
-              <option value="DevOps">DevOps</option>
-              <option value="AI/ML">AI/ML</option>
-            </select>
+              onChange={(track) => setForm({ ...form, track })}
+              placeholder="Select track"
+              searchPlaceholder="Search tracks"
+              emptyText="No tracks found"
+            />
           </FormField>
           <FormField label="Status">
-            <select
+            <SearchSelect
+              options={[
+                { value: 'upcoming', label: 'Upcoming' },
+                { value: 'ongoing', label: 'Ongoing' },
+                { value: 'completed', label: 'Completed' },
+              ]}
               value={form.status}
-              onChange={(e) => setForm({ ...form, status: e.target.value as Batch['status'] })}
-            >
-              <option value="upcoming">Upcoming</option>
-              <option value="ongoing">Ongoing</option>
-              <option value="completed">Completed</option>
-            </select>
+              onChange={(status) => setForm({ ...form, status: status as Batch['status'] })}
+              placeholder="Select status"
+              searchPlaceholder="Search statuses"
+              emptyText="No statuses found"
+            />
+          </FormField>
+          <FormField label="Batch Code">
+            <input
+              value={form.batch_code ?? ''}
+              onChange={(e) => setForm({ ...form, batch_code: e.target.value })}
+              placeholder="e.g. DBT-TEPC-2026-D"
+              autoCapitalize="characters"
+              spellCheck={false}
+            />
+            <p className="field-hint">
+              Prefix for this batch's study material. Uploads add a suffix to it, e.g.
+              DBT-TEPC-2026-D01.
+            </p>
           </FormField>
           <FormField label="Start Date">
             <input
@@ -85,7 +110,7 @@ export default function EditBatchPage() {
             />
           </FormField>
           <div className="flex gap-3 pt-2">
-            <Button type="submit" loading={saving}>Save Changes</Button>
+            <Button className='action-button-compact' type="submit" loading={saving}>Save Changes</Button>
             <Button variant="ghost" onClick={() => navigate(`/batches/${form.id}`)}>Cancel</Button>
           </div>
         </form>

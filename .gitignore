@@ -22,6 +22,19 @@ yarn-error.log*
 
 # env files
 .env*
+# …but the template has no secrets in it and every new machine needs it.
+!.env.example
 
 # typescript
 *.tsbuildinfo
+
+# AI tooling & local agent config
+/.claude/
+/.codex/
+/.cursor/
+/.impeccable/
+/.agents/
+/.opencode/
+/skills/
+CLAUDE.md
+AGENTS.md

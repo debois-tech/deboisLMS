@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useRef, ReactNode } from 'react';
 import type { Toast, ToastVariant } from '@/lib/types';
 
 interface ToastContextValue {
@@ -13,16 +13,22 @@ const ToastContext = createContext<ToastContextValue>({
   removeToast: () => {},
 });
 
+/** Keep this in step with the `toastOut` animation in globals.css. */
+const EXIT_MS = 180;
+
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const nextId = useRef(0);
 
   const removeToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
+    setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, leaving: true } : t)));
+    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), EXIT_MS);
   }, []);
 
   const showToast = useCallback(
     (message: string, variant: ToastVariant = 'success') => {
-      const id = `toast-${Date.now()}`;
+      nextId.current += 1;
+      const id = `toast-${nextId.current}`;
       setToasts((prev) => [...prev, { id, message, variant }]);
       setTimeout(() => removeToast(id), 4000);
     },

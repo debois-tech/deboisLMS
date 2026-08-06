@@ -1,10 +1,14 @@
+import { CheckCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import type { AttendanceRecord } from '@/lib/types';
 
 interface AttendanceRecordsTableProps {
   records: AttendanceRecord[];
   onToggleApproved: (id: string, approved: boolean) => void;
+  /** Renders the Approve All toolbar above the table, only while rows await approval. */
+  onApproveAll?: () => void;
   maxHeight?: string;
 }
 
@@ -14,9 +18,26 @@ function statusVariant(status: AttendanceRecord['status']) {
   return 'danger' as const;
 }
 
-export function AttendanceRecordsTable({ records, onToggleApproved, maxHeight = '24rem' }: AttendanceRecordsTableProps) {
+export function AttendanceRecordsTable({
+  records,
+  onToggleApproved,
+  onApproveAll,
+  maxHeight = '24rem',
+}: AttendanceRecordsTableProps) {
+  const pending = records.filter((r) => !r.approved).length;
+
   return (
-    <Table maxHeight={maxHeight}>
+    <div className="table-block">
+      {onApproveAll && pending > 0 && (
+        <div className="table-toolbar">
+          <Badge variant="warning">{pending} awaiting approval</Badge>
+          <Button className="action-button-compact" onClick={onApproveAll}>
+            <CheckCircle size={14} /> Approve All
+          </Button>
+        </div>
+      )}
+
+      <Table maxHeight={maxHeight}>
       <THead>
         <TR>
           <TH>Student</TH>
@@ -54,7 +75,8 @@ export function AttendanceRecordsTable({ records, onToggleApproved, maxHeight = 
             </TD>
           </TR>
         ))}
-      </TBody>
-    </Table>
+        </TBody>
+      </Table>
+    </div>
   );
 }

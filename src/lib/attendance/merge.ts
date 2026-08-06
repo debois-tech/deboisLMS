@@ -1,23 +1,10 @@
 import { mostFrequent, normalizeName } from './normalize';
 import type { MergedParticipant, ParsedInterval, RawUploadRow } from './types';
 
-/**
- * Gap tolerance (ms) for treating two connections as one continuous session.
- * Google Meet frequently splits a single attendee into rows separated by a
- * few seconds of reconnection; anything inside this window is merged so the
- * tiny gap is not counted as time outside the meeting.
- */
+/** Gap tolerance (ms) for treating two connections as one continuous session. */
 const MERGE_GAP_MS = 2 * 60 * 1000;
 
-/**
- * Parse a joined/stopped timestamp from the CSV into epoch ms.
- *
- * Accepts ISO-8601 strings (e.g. `2024-01-01T09:00:00Z`) and time-only
- * formats (`9:00:00 AM`, `09:00`, `9.00`). Time-only values are anchored to
- * "today" which is sufficient because only relative durations matter.
- *
- * @returns epoch ms, or `null` if the value cannot be parsed.
- */
+/** Parse a joined/stopped timestamp from the CSV into epoch ms, or `null` if it can't be parsed. */
 export function parseTimestamp(value?: string | null): number | null {
   if (!value) return null;
   const trimmed = String(value).trim();
@@ -48,13 +35,8 @@ function parseTimeOnly(value: string): number | null {
 }
 
 /**
- * Collapse overlapping / near-overlapping intervals into continuous clusters.
- *
- * - Overlapping intervals (two devices with the same times) merge → counted once.
- * - Intervals separated by ≤ MERGE_GAP_MS merge → a Meet reconnect glitch.
- * - Truly disjoint sessions stay separate → their durations are summed.
- *
- * @returns the sorted clusters covering every interval.
+ * Collapse overlapping or near-overlapping intervals into continuous clusters, so
+ * a second device or a reconnect glitch is counted once and not double-counted.
  */
 function clusterIntervals(intervals: ParsedInterval[]): ParsedInterval[] {
   if (intervals.length === 0) return [];
@@ -80,15 +62,9 @@ function intervalMinutes(interval: ParsedInterval): number {
 }
 
 /**
- * Merge raw upload rows into one entry per participant.
- *
- * Rows are grouped by normalized name. Join/leave pairs are clustered so that:
- * 1. Multiple join/leave sessions for the same person are summed.
- * 2. Identical/overlapping rows from a second device are counted only once.
- *
- * When a row has no usable join/leave timestamps its CSV-provided
- * `attended_minutes` is used instead (only if the participant has no valid
- * intervals at all, otherwise timestamp-derived minutes win).
+ * Merge raw upload rows into one entry per participant: sessions summed, and
+ * identical/overlapping rows from a second device counted once. Rows without
+ * usable timestamps fall back to the CSV's `attended_minutes`.
  */
 export function mergeSessions(rows: RawUploadRow[]): MergedParticipant[] {
   const grouped = new Map<

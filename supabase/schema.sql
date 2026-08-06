@@ -18,7 +18,7 @@ create type session_type as enum ('online', 'offline');
 create type attendance_status as enum ('present', 'partial', 'absent');
 create type attendance_source as enum ('manual', 'automated');
 create type mapping_status as enum ('active', 'dropped');
-create type submission_channel as enum ('whatsapp', 'other');
+create type submission_channel as enum ('whatsapp', 'other', 'portal');
 create type fee_status as enum ('due', 'paid');
 create type payment_method as enum ('cash', 'upi', 'bank_transfer', 'other');
 
@@ -42,6 +42,9 @@ create table batches (
   track      text,
   status     batch_status default 'upcoming',
   start_date date,
+  -- Filename prefix for this batch's study material, e.g. DBT-TEPC-2026-D.
+  -- Material titles are this plus an admin-entered suffix: DBT-TEPC-2026-D01.
+  batch_code text,
   created_at timestamptz default now()
 );
 
@@ -184,6 +187,61 @@ create table fee_payment_logs (
 create index idx_fee_logs_fee on fee_payment_logs(student_fee_id);
 create index idx_fee_logs_batch on fee_payment_logs(batch_id);
 
+-- Payment log + running balance are written in one transaction.
+create or replace function public.record_fee_payment(
+  p_student_fee_id uuid,
+  p_amount numeric,
+  p_payment_date date,
+  p_payment_method payment_method default 'other',
+  p_notes text default null
+)
+returns jsonb
+language plpgsql
+set search_path = public
+as $$
+declare
+  fee_row student_fees%rowtype;
+  log_row fee_payment_logs%rowtype;
+  updated_fee student_fees%rowtype;
+begin
+  if p_amount is null or p_amount <= 0 then
+    raise exception 'Payment amount must be greater than zero';
+  end if;
+
+  select * into fee_row
+  from student_fees
+  where id = p_student_fee_id
+  for update;
+
+  if not found then
+    raise exception 'Could not find the fee record';
+  end if;
+
+  insert into fee_payment_logs (
+    student_fee_id, student_id, batch_id, amount,
+    payment_date, payment_method, notes
+  ) values (
+    fee_row.id, fee_row.student_id, fee_row.batch_id, p_amount,
+    p_payment_date, p_payment_method, p_notes
+  )
+  returning * into log_row;
+
+  update student_fees
+  set paid_amount = fee_row.paid_amount + p_amount,
+      updated_at = now()
+  where id = fee_row.id
+  returning * into updated_fee;
+
+  return jsonb_build_object(
+    'log', to_jsonb(log_row),
+    'fee', to_jsonb(updated_fee)
+  );
+end;
+$$;
+
+revoke all on function public.record_fee_payment(uuid, numeric, date, payment_method, text) from public;
+grant execute on function public.record_fee_payment(uuid, numeric, date, payment_method, text) to authenticated;
+
 -- -----------------------------------------------------------
 -- 11. ASSIGNMENTS (the assignment definition, per batch)
 -- -----------------------------------------------------------
@@ -214,6 +272,56 @@ create table assignment_completions (
 
 create index idx_ac_assignment on assignment_completions(assignment_id);
 create index idx_ac_student    on assignment_completions(student_id);
+
+-- -----------------------------------------------------------
+-- 12b. STUDENT REPO (one GitHub repo per student, all homework)
+-- -----------------------------------------------------------
+-- Stored per student rather than per submission: editing the link from any
+-- assignment's submit dialog re-points every past and future submission.
+create table student_repos (
+  student_id uuid primary key references students(id) on delete cascade,
+  repo_url   text not null,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+-- -----------------------------------------------------------
+-- 12c. STUDY MATERIAL (PDF per batch, watermarked per student)
+-- -----------------------------------------------------------
+-- The file itself lives in the private `materials` storage bucket; only the
+-- edge function (service role) can reach it, and it stamps the reading
+-- student's name and phone onto every page before returning it.
+-- Bucket, RLS and view-log policies: supabase/study_material_migration.sql
+create table materials (
+  id           uuid primary key default gen_random_uuid(),
+  -- NULL means the material is for every student, not one batch.
+  batch_id     uuid references batches(id) on delete cascade,
+  -- Whose name the watermark carries, alongside the company phone number.
+  tutor_id     uuid references tutors(id) on delete set null,
+  title        text not null,
+  description  text,
+  -- Folder name when this came from a folder upload; NULL for a single file.
+  -- One row per PDF either way — this only groups them in listings.
+  folder       text,
+  storage_path text not null unique,   -- <batch_id|all>/<uuid>.pdf inside the bucket
+  size_bytes   bigint,
+  page_count   int,
+  uploaded_by  uuid,
+  created_at   timestamptz default now()
+);
+
+create index idx_materials_batch on materials(batch_id);
+
+-- Who opened what. A watermarked leak identifies the student; this says when.
+create table material_views (
+  id          uuid primary key default gen_random_uuid(),
+  material_id uuid not null references materials(id) on delete cascade,
+  student_id  uuid not null references students(id) on delete cascade,
+  viewed_at   timestamptz default now()
+);
+
+create index idx_material_views_material on material_views(material_id);
+create index idx_material_views_student  on material_views(student_id);
 
 -- -----------------------------------------------------------
 -- 13. COMPUTED VIEWS (convenience)

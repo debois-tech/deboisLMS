@@ -1,23 +1,40 @@
 import { supabase } from '../client';
+import { maybeRow, rows as unwrapRows } from './result';
 import type { UploadRow, AttendanceRecord } from '@/lib/types';
 import { normalizeTimestampForDb } from '@/lib/utils/csvParser';
 
 export async function getUploadsByLecture(lectureId: string): Promise<UploadRow[]> {
-  const { data } = await supabase
-    .from('uploads')
-    .select('*')
-    .eq('lecture_id', lectureId)
-    .order('sno');
-  return (data ?? []) as UploadRow[];
+  return unwrapRows<UploadRow>(
+    await supabase.from('uploads').select('*').eq('lecture_id', lectureId).order('sno'),
+    'Could not load the uploaded rows',
+  );
 }
 
 export async function getAttendanceByLecture(lectureId: string): Promise<AttendanceRecord[]> {
-  const { data } = await supabase
-    .from('attendance')
-    .select('*, student:students(id, name, email, phone)')
-    .eq('lecture_id', lectureId)
-    .order('created_at');
-  return (data ?? []) as AttendanceRecord[];
+  return unwrapRows<AttendanceRecord>(
+    await supabase
+      .from('attendance')
+      .select('*, student:students(id, name, email, phone)')
+      .eq('lecture_id', lectureId)
+      .order('created_at'),
+    'Could not load attendance for this lecture',
+  );
+}
+
+/** Approved-only attendance for one student, newest first (RLS enforces the same rule server-side). */
+export async function getApprovedAttendanceByStudent(studentId: string): Promise<AttendanceRecord[]> {
+  const records = unwrapRows<AttendanceRecord>(
+    await supabase
+      .from('attendance')
+      .select('*, lecture:lectures(*)')
+      .eq('student_id', studentId)
+      .eq('approved', true),
+    'Could not load your attendance',
+  );
+
+  return records.sort((a, b) =>
+    (b.lecture?.lecture_date ?? '').localeCompare(a.lecture?.lecture_date ?? '')
+  );
 }
 
 export async function insertUploadRows(
@@ -48,32 +65,37 @@ export async function approveAttendance(id: string): Promise<AttendanceRecord | 
 }
 
 export async function setAttendanceApproved(id: string, approved: boolean): Promise<AttendanceRecord | undefined> {
-  const { data } = await supabase
-    .from('attendance')
-    .update({
-      approved,
-      approved_at: approved ? new Date().toISOString() : null,
-    })
-    .eq('id', id)
-    .select('*, student:students(id, name, email, phone)')
-    .single();
-  return data as AttendanceRecord | undefined;
+  return maybeRow<AttendanceRecord>(
+    await supabase
+      .from('attendance')
+      .update({
+        approved,
+        approved_at: approved ? new Date().toISOString() : null,
+      })
+      .eq('id', id)
+      .select('*, student:students(id, name, email, phone)')
+      .single(),
+    'Could not update the approval',
+  );
 }
 
 export async function bulkApproveAttendance(lectureId: string): Promise<number> {
-  const { data } = await supabase
-    .from('attendance')
-    .update({ approved: true, approved_at: new Date().toISOString() })
-    .eq('lecture_id', lectureId)
-    .eq('approved', false)
-    .select();
-  return (data ?? []).length;
+  return unwrapRows<{ id: string }>(
+    await supabase
+      .from('attendance')
+      .update({ approved: true, approved_at: new Date().toISOString() })
+      .eq('lecture_id', lectureId)
+      .eq('approved', false)
+      .select(),
+    'Could not approve the attendance',
+  ).length;
 }
 
 export async function getUnapprovedCount(): Promise<number> {
-  const { count } = await supabase
+  const { count, error } = await supabase
     .from('attendance')
     .select('*', { count: 'exact', head: true })
     .eq('approved', false);
+  if (error) throw new Error(`Could not count pending attendance: ${error.message}`);
   return count ?? 0;
 }

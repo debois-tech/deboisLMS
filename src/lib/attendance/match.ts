@@ -17,18 +17,10 @@ interface FuzzyCandidate {
 }
 
 /**
- * Match a CSV participant name against the batch roster.
- *
- * Order of attempts:
- *  1. Exact tutor match (tutors must never be recorded as students)
- *  2. Fuzzy tutor match (defensive, prevents stealing a student's row)
- *  3. Exact student match
- *  4. Token-equivalent student match (name order / spacing variants)
- *  5. Deterministic fuzzy student match (bigram Dice ≥ 0.82)
- *  6. Gemini fallback (only if confidence ≥ 0.75)
- *
- * Anything that cannot be matched confidently is returned as `unmatched`
- * so the caller can flag it for manual review instead of guessing.
+ * Match a CSV participant name against the batch roster. Tutors match first
+ * (they must never be recorded as students), then exact/token/fuzzy student
+ * matches, then Gemini. Anything not matched confidently is returned as
+ * `unmatched` for manual review.
  */
 export async function matchParticipant(
   name: string,

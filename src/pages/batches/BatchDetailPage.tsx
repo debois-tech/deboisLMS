@@ -1,64 +1,53 @@
-import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Edit3, Users, GraduationCap, Layers, ClipboardCheck, FileText, Plus, Trash2, CheckCircle, XCircle, ChevronRight, CalendarDays, Upload, FileSpreadsheet } from 'lucide-react';
+import { useState, useCallback } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { ArrowLeft, Edit3, Users, GraduationCap, Layers, ClipboardCheck, FileText, Plus, Trash2, ChevronRight, CalendarDays, Upload } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Tabs } from '@/components/ui/Tabs';
 import { Spinner } from '@/components/ui/Spinner';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { InlineAlert } from '@/components/ui/InlineAlert';
 import { NotFound } from '@/components/ui/NotFound';
 import { Modal } from '@/components/ui/Modal';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import { StudentMultiSelect } from '@/components/ui/StudentMultiSelect';
+import { SearchSelect } from '@/components/ui/SearchSelect';
 import { FormField } from '@/components/ui/FormField';
 import { AttendanceRecordsTable } from '@/components/attendance/AttendanceRecordsTable';
+import { AssignmentSubmissionTable } from '@/components/assignments/AssignmentSubmissionTable';
 import { StudentLink } from '@/components/students/StudentLink';
 import { PaymentLogModal, type PaymentLogFormState } from '@/components/finance/PaymentLogModal';
 import { getBatchById } from '@/lib/supabase';
-import { getBatchStudents, addStudentToBatch, removeStudentFromBatch, getStudents, createOrReuseStudent } from '@/lib/supabase';
+import { getBatchStudents, addStudentToBatch, removeStudentFromBatch, getStudents, createOrReuseStudent, createStudentLoginsBulk } from '@/lib/supabase';
+import type { BulkLoginResult } from '@/lib/supabase';
+import { BulkLoginsModal } from '@/components/students/BulkLoginsModal';
 import { getBatchTutors, assignTutorToBatch, removeTutorFromBatch, getTutors } from '@/lib/supabase';
 import { getLecturesByBatch, createLecture, deleteLecture } from '@/lib/supabase';
 import { getAttendanceByLecture, setAttendanceApproved, bulkApproveAttendance } from '@/lib/supabase';
 import { getFeesByBatch, getFeePaymentLogs, addFeePaymentLog } from '@/lib/supabase';
-import { getAssignmentsByBatch, getCompletionsByAssignment, markSubmission, createAssignment } from '@/lib/supabase';
-import type { Batch, Student, Tutor, Lecture, AttendanceRecord, StudentFee, FeePaymentLog, Assignment, AssignmentCompletion, BatchStudentMapping, TutorBatchMapping } from '@/lib/types';
+import { getAssignmentsByBatch, createAssignment } from '@/lib/supabase';
+import type { Batch, Student, Tutor, Lecture, AttendanceRecord, StudentFee, FeePaymentLog, Assignment, BatchStudentMapping, TutorBatchMapping } from '@/lib/types';
 import { formatDate, formatCurrency } from '@/lib/utils/format';
-import { parseCsvTable } from '@/lib/utils/csvParser';
+import { StudentImportModal } from '@/components/students/StudentImportModal';
+import { toStudentInput } from '@/lib/utils/studentImport';
 import { useToast } from '@/lib/context/ToastContext';
+import { useConfirm } from '@/lib/context/ConfirmContext';
+import { errorMessage } from '@/lib/utils/errors';
+import { useInitialLoad, useReloadableSection } from '@/lib/hooks/useInitialLoad';
 
-// Add future student fields here. Matching uses headers, not column positions.
-const STUDENT_IMPORT_FIELDS = [
-  { key: 'name', aliases: ['name', 'full name', 'student name'] },
-  { key: 'phone', aliases: ['phone', 'ph no', 'phone number', 'mobile'] },
-  { key: 'email', aliases: ['email', 'email address'] },
-  { key: 'github_url', aliases: ['github', 'github link', 'github url', 'githublink'] },
-  { key: 'linkedin_url', aliases: ['linkedin', 'linkedin link', 'linkedin url', 'linkedinlink'] },
-] as const;
-
-const normalizeCsvHeader = (header: string) => header.toLowerCase().replace(/[^a-z0-9]/g, '');
-const getImportValue = (row: Record<string, string>, aliases: readonly string[]) => {
-  const entry = Object.entries(row).find(([header]) => aliases.some((alias) => normalizeCsvHeader(header) === normalizeCsvHeader(alias)));
-  return entry?.[1]?.trim() || undefined;
-};
 
 export default function BatchDetailPage() {
   const { batchId } = useParams();
-  const navigate = useNavigate();
   const [batch, setBatch] = useState<Batch | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('overview');
 
-  useEffect(() => {
+  const { loading, error, retry } = useInitialLoad(async () => {
     if (!batchId) return;
-    getBatchById(batchId).then((b) => {
-      setBatch(b ?? null);
-      setLoading(false);
-    });
-  }, [batchId]);
+    setBatch((await getBatchById(batchId)) ?? null);
+  });
 
   if (loading) return <Spinner centered />;
+  if (error) return <ErrorState centered message={error} onRetry={retry} />;
   if (!batch) return <NotFound label="Batch" />;
 
   return (
@@ -113,12 +102,15 @@ function OverviewTab({ batch }: { batch: Batch }) {
   const [students, setStudents] = useState<(Student & { mapping: BatchStudentMapping })[]>([]);
   const [lectures, setLectures] = useState<Lecture[]>([]);
 
-  useEffect(() => {
-    Promise.all([getBatchStudents(batch.id), getLecturesByBatch(batch.id)]).then(([s, l]) => {
-      setStudents(s);
-      setLectures(l);
-    });
+  const load = useCallback(async () => {
+    const [s, l] = await Promise.all([getBatchStudents(batch.id), getLecturesByBatch(batch.id)]);
+    setStudents(s);
+    setLectures(l);
   }, [batch.id]);
+
+  const { error, reload } = useReloadableSection(load);
+
+  if (error) return <ErrorState message={error} onRetry={reload} />;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -145,20 +137,17 @@ function StudentsTab({ batchId }: { batchId: string }) {
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
   const [totalFee, setTotalFee] = useState('');
   const [showImport, setShowImport] = useState(false);
-  const [importRows, setImportRows] = useState<Record<string, string>[]>([]);
-  const [importHeaders, setImportHeaders] = useState<string[]>([]);
-  const [importError, setImportError] = useState('');
-  const [importing, setImporting] = useState(false);
-  const [importFee, setImportFee] = useState('');
-  const importFileRef = useRef<HTMLInputElement>(null);
+  const [bulkLogins, setBulkLogins] = useState<BulkLoginResult | null>(null);
   const { showToast } = useToast();
+  const confirm = useConfirm();
 
-  const fetchStudents = () => {
-    getBatchStudents(batchId).then(setStudents);
-    getStudents().then(setAllStudents);
-  };
+  const fetchStudents = useCallback(async () => {
+    const [batchRows, allRows] = await Promise.all([getBatchStudents(batchId), getStudents()]);
+    setStudents(batchRows);
+    setAllStudents(allRows);
+  }, [batchId]);
 
-  useEffect(() => { fetchStudents(); }, [batchId]);
+  const { error: loadError, reload: reloadStudents } = useReloadableSection(fetchStudents);
 
   const handleAdd = async () => {
     if (!selectedStudents.length || !totalFee || Number(totalFee) <= 0) return;
@@ -167,82 +156,66 @@ function StudentsTab({ batchId }: { batchId: string }) {
       setSelectedStudents([]);
       setTotalFee('');
       setShowAdd(false);
-      fetchStudents();
-      showToast('Student(s) added to batch');
-    } catch (error: any) {
-      showToast(error?.message ?? 'Failed to add students', 'error');
+      void reloadStudents();
+      showToast('Students added');
+    } catch (error) {
+      showToast(errorMessage(error, 'Failed to add students'), 'error');
     }
   };
 
-  const handleRemove = async (mappingId: string) => {
+  const handleRemove = async (mappingId: string, name: string) => {
+    const ok = await confirm({
+      title: `Remove ${name} from this batch?`,
+      message: 'The student keeps their record but loses access to this batch.',
+      confirmLabel: 'Remove',
+      danger: true,
+    });
+    if (!ok) return;
+
     try {
       await removeStudentFromBatch(mappingId);
-      fetchStudents();
+      void reloadStudents();
       showToast('Student removed from batch');
-    } catch (error: any) {
-      showToast(error?.message ?? 'Failed to remove student', 'error');
+    } catch (error) {
+      showToast(errorMessage(error, 'Failed to remove student'), 'error');
     }
   };
 
   const available = allStudents.filter((s) => !students.some((e) => e.id === s.id));
 
-  const resetImport = () => {
-    setShowImport(false);
-    setImportRows([]);
-    setImportHeaders([]);
-    setImportError('');
-    setImporting(false);
-    setImportFee('');
-    if (importFileRef.current) importFileRef.current.value = '';
-  };
+  // Importing here also enrols: create-or-reuse the student, then add them to this
+  // batch at the given fee unless they are already on the roster.
+  const handleImport = async (rows: Record<string, string>[], fee?: number, createLogins?: boolean) => {
+    const enrolledStudents = await getBatchStudents(batchId);
+    const imported = await Promise.all(
+      rows.map(async (row) => {
+        const student = await createOrReuseStudent(toStudentInput(row));
+        if (!enrolledStudents.some((e) => e.id === student.id)) {
+          await addStudentToBatch(student.id, batchId, fee ?? 0);
+        }
+        return student;
+      }),
+    );
+    void reloadStudents();
 
-  const handleImportFile = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const table = parseCsvTable(String(reader.result ?? ''));
-      const rows = table.rows.filter((row) => getImportValue(row, ['name']));
-      setImportHeaders(table.headers);
-      setImportRows(rows);
-      setImportError(!table.headers.length || !rows.length ? 'CSV must include a Name column and at least one student row.' : '');
-    };
-    reader.readAsText(file);
-  };
-
-  const handleImport = async () => {
-    if (!importRows.length) return;
-    setImporting(true);
-    setImportError('');
-    if (!importFee || Number(importFee) <= 0) {
-      setImportError('Total Fee per Student is required to import.');
-      setImporting(false);
+    if (!createLogins) {
+      showToast('Students imported');
       return;
     }
-    const fee = Number(importFee);
-    try {
-      const [enrolledStudents] = await Promise.all([getBatchStudents(batchId)]);
-      await Promise.all(importRows.map(async (row) => {
-        const input = STUDENT_IMPORT_FIELDS.reduce<Record<string, string>>((student, field) => {
-          const value = getImportValue(row, field.aliases);
-          if (value) student[field.key] = value;
-          return student;
-        }, {});
-        const student = await createOrReuseStudent(input as Omit<Student, 'id' | 'created_at'>);
-        const alreadyEnrolled = enrolledStudents.some((e) => e.id === student.id);
-        if (!alreadyEnrolled) {
-          await addStudentToBatch(student.id, batchId, fee);
-        }
-      }));
-      fetchStudents();
-      resetImport();
-      showToast('Students imported successfully');
-    } catch (error: any) {
-      setImportError(error?.message ?? 'Import failed. Some rows may already have been imported.');
-      showToast(error?.message ?? 'Import failed', 'error');
-      setImporting(false);
+
+    // Skip anyone who already has a login: re-running the edge function would
+    // reset a password that may already be in the student's hands.
+    const needLogins = imported.filter((student) => !student.auth_user_id);
+    if (needLogins.length === 0) {
+      showToast('Students imported — logins already existed');
+      return;
     }
+
+    setBulkLogins(await createStudentLoginsBulk(needLogins.map((s) => ({ id: s.id, name: s.name }))));
+    void reloadStudents();
   };
+
+  if (loadError) return <Card><ErrorState message={loadError} onRetry={reloadStudents} /></Card>;
 
   return (
     <Card>
@@ -267,7 +240,7 @@ function StudentsTab({ batchId }: { batchId: string }) {
               </div>
               <div className="flex items-center gap-2">
                 <Badge variant={s.mapping.status === 'active' ? 'success' : 'danger'}>{s.mapping.status}</Badge>
-                <button onClick={() => handleRemove(s.mapping.id)} className="text-[var(--text-muted)] hover:text-red-400 p-1">
+                <button onClick={() => handleRemove(s.mapping.id, s.name)} aria-label={`Remove ${s.name} from batch`} className="text-[var(--text-muted)] hover:text-[var(--danger-text)] p-1">
                   <Trash2 size={14} />
                 </button>
               </div>
@@ -288,37 +261,14 @@ function StudentsTab({ batchId }: { batchId: string }) {
         </div>
       </Modal>
 
-      <Modal open={showImport} onClose={resetImport} title="Import Students" size="lg">
-        <div className="popup-form-spaced">
-          <div className="rounded-[var(--radius-md)] bg-[var(--bg-elevated)] text-sm text-[var(--text-secondary)]" style={{ padding: '1rem 1.25rem' }}>
-            <p className="font-semibold text-[var(--text-primary)]">Upload CSV!</p>
-          </div>
-          <label className="flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-[var(--radius-md)] border border-dashed border-[var(--border-strong)] bg-[var(--bg-elevated)] text-sm font-semibold text-[var(--text-secondary)] hover:border-[var(--primary)] hover:text-[var(--text-primary)]" style={{ padding: '0.75rem 1rem' }}>
-            <FileSpreadsheet size={16} /> Choose CSV file
-            <input ref={importFileRef} type="file" accept=".csv,text/csv" onChange={handleImportFile} className="hidden" />
-          </label>
-          {importHeaders.length > 0 && importRows.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-sm font-semibold text-[var(--text-primary)]">Preview ({importRows.length} students)</p>
-              <div className="overflow-x-auto rounded-[var(--radius-md)] border border-[var(--border)]">
-                <table className="w-full min-w-[36rem] text-sm">
-                  <thead><tr className="border-b border-[var(--border)] bg-[var(--bg-elevated)]">{importHeaders.map((header) => <th key={header} className="whitespace-nowrap text-left font-medium text-[var(--text-muted)]" style={{ padding: '0.75rem 1rem' }}>{header}</th>)}</tr></thead>
-                  <tbody>{importRows.slice(0, 5).map((row, index) => <tr key={index} className="border-b border-[var(--border)] last:border-0">{importHeaders.map((header) => <td key={header} className="max-w-[14rem] truncate text-[var(--text-secondary)]" style={{ padding: '0.75rem 1rem' }}>{row[header] || '—'}</td>)}</tr>)}</tbody>
-                </table>
-              </div>
-              {importRows.length > 5 && <p className="text-xs text-[var(--text-muted)]">Showing first 5 rows. All {importRows.length} valid rows will be imported.</p>}
-            </div>
-          )}
-          <FormField label="Total Fee per Student">
-            <input type="number" min="1" value={importFee} onChange={(event) => setImportFee(event.target.value)} placeholder="e.g. 15000" required />
-          </FormField>
-          {importError && <InlineAlert>{importError}</InlineAlert>}
-          <div className="flex justify-end gap-3">
-            <Button variant="ghost" onClick={resetImport} disabled={importing}>Cancel</Button>
-            <Button className="action-button-import" onClick={handleImport} loading={importing} disabled={!importRows.length || !importFee || Number(importFee) <= 0}>Import</Button>
-          </div>
-        </div>
-      </Modal>
+      <StudentImportModal
+        open={showImport}
+        onClose={() => setShowImport(false)}
+        requireFee
+        onImport={handleImport}
+      />
+
+      <BulkLoginsModal result={bulkLogins} onClose={() => setBulkLogins(null)} />
     </Card>
   );
 }
@@ -330,13 +280,15 @@ function TutorsTab({ batchId }: { batchId: string }) {
   const [selectedTutor, setSelectedTutor] = useState('');
 
   const { showToast } = useToast();
+  const confirm = useConfirm();
 
-  const fetchTutors = () => {
-    getBatchTutors(batchId).then(setTutors);
-    getTutors().then(setAllTutors);
-  };
+  const fetchTutors = useCallback(async () => {
+    const [batchRows, allRows] = await Promise.all([getBatchTutors(batchId), getTutors()]);
+    setTutors(batchRows);
+    setAllTutors(allRows);
+  }, [batchId]);
 
-  useEffect(() => { fetchTutors(); }, [batchId]);
+  const { error: loadError, reload: reloadTutors } = useReloadableSection(fetchTutors);
 
   const handleAdd = async () => {
     if (!selectedTutor) return;
@@ -344,24 +296,34 @@ function TutorsTab({ batchId }: { batchId: string }) {
       await assignTutorToBatch(selectedTutor, batchId);
       setSelectedTutor('');
       setShowAdd(false);
-      fetchTutors();
+      void reloadTutors();
       showToast('Tutor assigned to batch');
-    } catch (error: any) {
-      showToast(error?.message ?? 'Failed to assign tutor', 'error');
+    } catch (error) {
+      showToast(errorMessage(error, 'Failed to assign tutor'), 'error');
     }
   };
 
-  const handleRemove = async (mappingId: string) => {
+  const handleRemove = async (mappingId: string, name: string) => {
+    const ok = await confirm({
+      title: `Unassign ${name} from this batch?`,
+      message: 'The tutor record stays. Only this assignment is removed.',
+      confirmLabel: 'Unassign',
+      danger: true,
+    });
+    if (!ok) return;
+
     try {
       await removeTutorFromBatch(mappingId);
-      fetchTutors();
+      void reloadTutors();
       showToast('Tutor removed from batch');
-    } catch (error: any) {
-      showToast(error?.message ?? 'Failed to remove tutor', 'error');
+    } catch (error) {
+      showToast(errorMessage(error, 'Failed to remove tutor'), 'error');
     }
   };
 
   const available = allTutors.filter((t) => !tutors.some((e) => e.id === t.id));
+
+  if (loadError) return <Card><ErrorState message={loadError} onRetry={reloadTutors} /></Card>;
 
   return (
     <Card>
@@ -382,7 +344,7 @@ function TutorsTab({ batchId }: { batchId: string }) {
                 <p className="text-sm font-medium text-[var(--text-primary)]">{t.name}</p>
                 <p className="text-xs text-[var(--text-muted)]">{t.email ?? t.phone ?? '—'}</p>
               </div>
-              <button onClick={() => handleRemove(t.mapping.id)} className="text-[var(--text-muted)] hover:text-red-400 p-1">
+              <button onClick={() => handleRemove(t.mapping.id, t.name)} aria-label={`Unassign ${t.name} from batch`} className="text-[var(--text-muted)] hover:text-[var(--danger-text)] p-1">
                 <Trash2 size={14} />
               </button>
             </div>
@@ -393,12 +355,14 @@ function TutorsTab({ batchId }: { batchId: string }) {
       <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Assign Tutor">
         <div className="popup-form-spaced">
           <FormField label="Select Tutor">
-            <select value={selectedTutor} onChange={(e) => setSelectedTutor(e.target.value)}>
-              <option value="">Choose a tutor...</option>
-              {available.map((t) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </select>
+            <SearchSelect
+              options={available.map((tutor) => ({ value: tutor.id, label: tutor.name }))}
+              value={selectedTutor || null}
+              onChange={setSelectedTutor}
+              placeholder="Choose a tutor"
+              searchPlaceholder="Search tutors"
+              emptyText="No tutors found"
+            />
           </FormField>
           <Button className="action-button" onClick={handleAdd} disabled={!selectedTutor}>Assign</Button>
         </div>
@@ -413,31 +377,45 @@ function LecturesTab({ batchId }: { batchId: string }) {
   const [form, setForm] = useState({ lecture_date: '', meeting_code: '', scheduled_duration_minutes: 90 });
 
   const { showToast } = useToast();
+  const confirm = useConfirm();
 
-  const fetchLectures = () => getLecturesByBatch(batchId).then(setLectures);
-  useEffect(() => { fetchLectures(); }, [batchId]);
+  const fetchLectures = useCallback(async () => {
+    setLectures(await getLecturesByBatch(batchId));
+  }, [batchId]);
+
+  const { error: loadError, reload: reloadLectures } = useReloadableSection(fetchLectures);
 
   const handleCreate = async () => {
     try {
       await createLecture({ ...form, batch_id: batchId, session_type: 'online' });
       setShowNew(false);
       setForm({ lecture_date: '', meeting_code: '', scheduled_duration_minutes: 90 });
-      fetchLectures();
+      void reloadLectures();
       showToast('Lecture created');
-    } catch (error: any) {
-      showToast(error?.message ?? 'Failed to create lecture', 'error');
+    } catch (error) {
+      showToast(errorMessage(error, 'Failed to create lecture'), 'error');
     }
   };
 
-  const handleDelete = async (lectureId: string) => {
+  const handleDelete = async (lectureId: string, label: string) => {
+    const ok = await confirm({
+      title: `Delete the lecture on ${label}?`,
+      message: 'Attendance for this lecture is also deleted. This cannot be undone.',
+      confirmLabel: 'Delete lecture',
+      danger: true,
+    });
+    if (!ok) return;
+
     try {
       await deleteLecture(lectureId);
-      fetchLectures();
+      void reloadLectures();
       showToast('Lecture deleted');
-    } catch (error: any) {
-      showToast(error?.message ?? 'Failed to delete lecture', 'error');
+    } catch (error) {
+      showToast(errorMessage(error, 'Failed to delete lecture'), 'error');
     }
   };
+
+  if (loadError) return <Card><ErrorState message={loadError} onRetry={reloadLectures} /></Card>;
 
   return (
     <Card>
@@ -454,7 +432,7 @@ function LecturesTab({ batchId }: { batchId: string }) {
                   {l.session_type} {l.meeting_code ? `• ${l.meeting_code}` : ''} {l.scheduled_duration_minutes ? `• ${l.scheduled_duration_minutes}min` : ''}
                 </p>
               </div>
-              <button onClick={() => handleDelete(l.id)} className="text-[var(--text-muted)] hover:text-red-400 p-1">
+              <button onClick={() => handleDelete(l.id, formatDate(l.lecture_date))} aria-label={`Delete lecture on ${formatDate(l.lecture_date)}`} className="text-[var(--text-muted)] hover:text-[var(--danger-text)] p-1">
                 <Trash2 size={14} />
               </button>
             </div>
@@ -462,7 +440,19 @@ function LecturesTab({ batchId }: { batchId: string }) {
         </div>
       )}
 
-      <Modal open={showNew} onClose={() => setShowNew(false)} title="New Lecture">
+      <Modal
+        open={showNew}
+        onClose={() => setShowNew(false)}
+        title="New Lecture"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setShowNew(false)}>Cancel</Button>
+            <Button className="action-button-compact" onClick={handleCreate} disabled={!form.lecture_date}>
+              Create Lecture
+            </Button>
+          </>
+        }
+      >
         <div className="popup-form-spaced">
           <FormField label="Date" required>
             <input type="date" value={form.lecture_date} onChange={(e) => setForm({ ...form, lecture_date: e.target.value })} required />
@@ -473,7 +463,6 @@ function LecturesTab({ batchId }: { batchId: string }) {
           <FormField label="Duration (minutes)">
             <input type="number" value={form.scheduled_duration_minutes} onChange={(e) => setForm({ ...form, scheduled_duration_minutes: Number(e.target.value) })} />
           </FormField>
-          <Button onClick={handleCreate}>Create Lecture</Button>
         </div>
       </Modal>
     </Card>
@@ -487,13 +476,21 @@ function AttendanceTab({ batchId }: { batchId: string }) {
   const [loading, setLoading] = useState(false);
   const { showToast } = useToast();
 
-  useEffect(() => { getLecturesByBatch(batchId).then(setLectures); }, [batchId]);
+  const fetchLectures = useCallback(async () => {
+    setLectures(await getLecturesByBatch(batchId));
+  }, [batchId]);
+
+  const { error: loadError, reload: reloadLectures } = useReloadableSection(fetchLectures);
 
   const loadAttendance = async (lecId: string) => {
     setLoading(true);
-    const data = await getAttendanceByLecture(lecId);
-    setRecords(data);
     setSelectedLecture(lecId);
+    try {
+      setRecords(await getAttendanceByLecture(lecId));
+    } catch (err) {
+      setRecords([]);
+      showToast(errorMessage(err, 'Failed to load attendance records'), 'error');
+    }
     setLoading(false);
   };
 
@@ -504,9 +501,9 @@ function AttendanceTab({ batchId }: { batchId: string }) {
       if (updated) {
         setRecords((prev) => prev.map((r) => (r.id === id ? updated : r)));
       }
-    } catch (error: any) {
+    } catch (error) {
       setRecords((prev) => prev.map((r) => (r.id === id ? { ...r, approved: !approved } : r)));
-      showToast(error?.message ?? 'Failed to update approval', 'error');
+      showToast(errorMessage(error, 'Failed to update approval'), 'error');
     }
   };
 
@@ -516,12 +513,14 @@ function AttendanceTab({ batchId }: { batchId: string }) {
       await bulkApproveAttendance(selectedLecture);
       loadAttendance(selectedLecture);
       showToast('All records approved');
-    } catch (error: any) {
-      showToast(error?.message ?? 'Failed to approve records', 'error');
+    } catch (error) {
+      showToast(errorMessage(error, 'Failed to approve records'), 'error');
     }
   };
 
   const selectedLectureData = lectures.find((lecture) => lecture.id === selectedLecture);
+
+  if (loadError) return <Card><ErrorState message={loadError} onRetry={reloadLectures} /></Card>;
 
   return (
     <div className="space-y-4">
@@ -564,22 +563,18 @@ function AttendanceTab({ batchId }: { batchId: string }) {
         description={selectedLectureData ? `${formatDate(selectedLectureData.lecture_date)}${selectedLectureData.meeting_code ? ` • ${selectedLectureData.meeting_code}` : ''}` : undefined}
         size="xl"
       >
-        <div className="space-y-4">
-          {records.some((r) => !r.approved) && (
-            <div className="flex justify-end">
-              <Button size="sm" onClick={handleBulkApprove}>
-                <CheckCircle size={14} /> Approve All
-              </Button>
-            </div>
-          )}
-          {loading ? (
-            <Spinner />
-          ) : records.length === 0 ? (
-            <EmptyState icon={<ClipboardCheck size={32} />} title="No attendance records" description="Upload a CSV or add records manually" />
-          ) : (
-            <AttendanceRecordsTable records={records} onToggleApproved={handleToggleApproved} maxHeight="28rem" />
-          )}
-        </div>
+        {loading ? (
+          <Spinner />
+        ) : records.length === 0 ? (
+          <EmptyState icon={<ClipboardCheck size={32} />} title="No attendance records" />
+        ) : (
+          <AttendanceRecordsTable
+            records={records}
+            onToggleApproved={handleToggleApproved}
+            onApproveAll={handleBulkApprove}
+            maxHeight="28rem"
+          />
+        )}
       </Modal>
     </div>
   );
@@ -594,19 +589,23 @@ function FinanceTab({ batchId }: { batchId: string }) {
   const [logging, setLogging] = useState(false);
   const { showToast } = useToast();
 
-  const fetchFees = () => {
-    Promise.all([getFeesByBatch(batchId), getBatchStudents(batchId)]).then(([f, s]) => {
-      setFees(f);
-      setStudents(s);
-    });
-  };
+  const fetchFees = useCallback(async () => {
+    const [f, s] = await Promise.all([getFeesByBatch(batchId), getBatchStudents(batchId)]);
+    setFees(f);
+    setStudents(s);
+  }, [batchId]);
 
-  useEffect(() => { fetchFees(); }, [batchId]);
+  const { error: loadError, reload: reloadFees } = useReloadableSection(fetchFees);
 
   const openPaymentLogs = async (fee: StudentFee) => {
     setLoggingFee(fee);
     setLogForm({ amount: '', payment_date: new Date().toISOString().slice(0, 10), payment_method: 'other', notes: '' });
-    setPaymentLogs(await getFeePaymentLogs(fee.id));
+    try {
+      setPaymentLogs(await getFeePaymentLogs(fee.id));
+    } catch (err) {
+      setPaymentLogs([]);
+      showToast(errorMessage(err, 'Failed to load payment history'), 'error');
+    }
   };
 
   const handleAddPaymentLog = async () => {
@@ -625,10 +624,10 @@ function FinanceTab({ batchId }: { batchId: string }) {
         setPaymentLogs((prev) => [result.log, ...prev]);
         setFees((prev) => prev.map((f) => (f.id === result.fee.id ? result.fee : f)));
         setLogForm({ amount: '', payment_date: new Date().toISOString().slice(0, 10), payment_method: 'other', notes: '' });
-        showToast('Payment logged successfully');
+        showToast('Payment logged');
       }
-    } catch (error: any) {
-      showToast(error?.message ?? 'Failed to log payment', 'error');
+    } catch (error) {
+      showToast(errorMessage(error, 'Failed to log payment'), 'error');
     }
     setLogging(false);
   };
@@ -636,20 +635,23 @@ function FinanceTab({ batchId }: { batchId: string }) {
   const totalFee = fees.reduce((s, f) => s + f.total_fee, 0);
   const totalPaid = fees.reduce((s, f) => s + f.paid_amount, 0);
 
+  if (loadError) return <Card><ErrorState message={loadError} onRetry={reloadFees} /></Card>;
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-4">
         <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Total Fees</p><p className="text-lg font-bold text-[var(--text-primary)] mt-1">{formatCurrency(totalFee)}</p></Card>
-        <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Collected</p><p className="text-lg font-bold text-emerald-400 mt-1">{formatCurrency(totalPaid)}</p></Card>
-        <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Outstanding</p><p className="text-lg font-bold text-red-400 mt-1">{formatCurrency(totalFee - totalPaid)}</p></Card>
+        <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Collected</p><p className="text-lg font-bold text-[var(--success-text)] mt-1">{formatCurrency(totalPaid)}</p></Card>
+        <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Outstanding</p><p className="text-lg font-bold text-[var(--danger-text)] mt-1">{formatCurrency(totalFee - totalPaid)}</p></Card>
       </div>
 
       <Card>
-        <CardHeader title="Per-Student Fees" />
+        <CardHeader title="Per-Student Fees" className="mb-8" />
         {fees.length === 0 ? (
           <EmptyState icon={<ClipboardCheck size={32} />} title="No fee records" />
         ) : (
-          <Table maxHeight="28rem">
+          <div style={{ marginTop: '0.75rem' }}>
+            <Table maxHeight="28rem">
             <THead>
               <TR>
                 <TH>Student</TH>
@@ -672,7 +674,7 @@ function FinanceTab({ batchId }: { batchId: string }) {
                     <TD>{formatCurrency(fee.total_fee)}</TD>
                     <TD>{formatCurrency(fee.paid_amount)}</TD>
                     <TD>
-                      <span className={remaining > 0 ? 'text-red-400' : 'text-emerald-400'}>
+                      <span className={remaining > 0 ? 'text-[var(--danger-text)]' : 'text-[var(--success-text)]'}>
                         {remaining > 0 ? formatCurrency(remaining) : '—'}
                       </span>
                     </TD>
@@ -688,7 +690,8 @@ function FinanceTab({ batchId }: { batchId: string }) {
                 );
               })}
             </TBody>
-          </Table>
+            </Table>
+          </div>
         )}
       </Card>
 
@@ -708,48 +711,31 @@ function FinanceTab({ batchId }: { batchId: string }) {
 
 function AssignmentsTab({ batchId }: { batchId: string }) {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [students, setStudents] = useState<(Student & { mapping: BatchStudentMapping })[]>([]);
   const [selectedAsgn, setSelectedAsgn] = useState<string | null>(null);
-  const [completions, setCompletions] = useState<(AssignmentCompletion & { student_name: string })[]>([]);
   const [showNew, setShowNew] = useState(false);
   const [form, setForm] = useState({ title: '', description: '', assigned_date: '' });
 
-  const fetchAssignments = () => {
-    Promise.all([getAssignmentsByBatch(batchId), getBatchStudents(batchId)]).then(([a, s]) => {
-      setAssignments(a);
-      setStudents(s.filter((st) => st.mapping.status === 'active'));
-    });
-  };
+  const fetchAssignments = useCallback(async () => {
+    setAssignments(await getAssignmentsByBatch(batchId));
+  }, [batchId]);
 
-  useEffect(() => { fetchAssignments(); }, [batchId]);
+  const { error: loadError, reload: reloadAssignments } = useReloadableSection(fetchAssignments);
 
   const { showToast } = useToast();
-
-  const loadCompletions = (asgnId: string) => {
-    setSelectedAsgn(asgnId);
-    getCompletionsByAssignment(asgnId).then(setCompletions);
-  };
 
   const handleCreate = async () => {
     try {
       await createAssignment({ ...form, batch_id: batchId });
       setShowNew(false);
       setForm({ title: '', description: '', assigned_date: '' });
-      fetchAssignments();
+      void reloadAssignments();
       showToast('Assignment created');
-    } catch (error: any) {
-      showToast(error?.message ?? 'Failed to create assignment', 'error');
+    } catch (error) {
+      showToast(errorMessage(error, 'Failed to create assignment'), 'error');
     }
   };
 
-  const handleToggle = async (studentId: string, assignmentId: string, current: boolean) => {
-    try {
-      await markSubmission(assignmentId, studentId, !current);
-      loadCompletions(assignmentId);
-    } catch (error: any) {
-      showToast(error?.message ?? 'Failed to update submission', 'error');
-    }
-  };
+  if (loadError) return <Card><ErrorState message={loadError} onRetry={reloadAssignments} /></Card>;
 
   return (
     <div className="space-y-4">
@@ -762,7 +748,7 @@ function AssignmentsTab({ batchId }: { batchId: string }) {
             {assignments.map((a) => (
               <div
                 key={a.id}
-                onClick={() => loadCompletions(a.id)}
+                onClick={() => setSelectedAsgn(a.id)}
                 className={`batch-list-item cursor-pointer transition-colors ${
                   selectedAsgn === a.id ? 'bg-[var(--primary)]/10 border border-[var(--primary)]/20' : 'hover:bg-[var(--bg-elevated)]'
                 }`}
@@ -780,40 +766,29 @@ function AssignmentsTab({ batchId }: { batchId: string }) {
       {selectedAsgn && (
         <Card>
           <CardHeader title="Submission Status" />
-          <Table maxHeight="24rem">
-            <THead>
-              <TR>
-                <TH>Student</TH>
-                <TH align="center">Submitted</TH>
-                <TH>Via</TH>
-              </TR>
-            </THead>
-            <TBody>
-              {students.map((s) => {
-                const comp = completions.find((c) => c.student_id === s.id);
-                const submitted = comp?.submitted ?? false;
-                return (
-                  <TR key={s.id}>
-                    <TD className="font-medium text-[var(--text-primary)]">{s.name}</TD>
-                    <TD align="center">
-                      <button
-                        onClick={() => handleToggle(s.id, selectedAsgn, submitted)}
-                        className={submitted ? 'text-emerald-400' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}
-                      >
-                        {submitted ? <CheckCircle size={18} /> : <XCircle size={18} />}
-                      </button>
-                    </TD>
-                    <TD className="cell-secondary">{comp?.submitted_via ?? '—'}</TD>
-                  </TR>
-                );
-              })}
-            </TBody>
-          </Table>
+          <AssignmentSubmissionTable
+            key={selectedAsgn}
+            assignmentId={selectedAsgn}
+            batchId={batchId}
+            assignmentTitle={assignments.find((a) => a.id === selectedAsgn)?.title ?? 'assignment'}
+          />
         </Card>
       )}
 
-      <Modal open={showNew} onClose={() => setShowNew(false)} title="New Assignment">
-        <div className="space-y-4">
+      <Modal
+        open={showNew}
+        onClose={() => setShowNew(false)}
+        title="New Assignment"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setShowNew(false)}>Cancel</Button>
+            <Button className="action-button-compact" onClick={handleCreate} disabled={!form.title.trim()}>
+              Create Assignment
+            </Button>
+          </>
+        }
+      >
+        <div className="popup-form-spaced">
           <FormField label="Title" required>
             <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
           </FormField>
@@ -823,7 +798,6 @@ function AssignmentsTab({ batchId }: { batchId: string }) {
           <FormField label="Due Date">
             <input type="date" value={form.assigned_date} onChange={(e) => setForm({ ...form, assigned_date: e.target.value })} />
           </FormField>
-          <Button onClick={handleCreate}>Create Assignment</Button>
         </div>
       </Modal>
     </div>

@@ -1,9 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
-import { ClipboardCheck, Upload, CheckCircle, Loader2 } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { ClipboardCheck, Upload, Loader2, Plus } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { Modal } from '@/components/ui/Modal';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { BatchSelect } from '@/components/ui/BatchSelect';
@@ -18,6 +20,7 @@ import type { Batch, Lecture, AttendanceRecord } from '@/lib/types';
 import { parseCsv } from '@/lib/utils/csvParser';
 import type { CsvRow } from '@/lib/utils/csvParser';
 import { useToast } from '@/lib/context/ToastContext';
+import { errorMessage } from '@/lib/utils/errors';
 
 export default function AttendancePage() {
   const [batches, setBatches] = useState<Batch[]>([]);
@@ -25,7 +28,7 @@ export default function AttendancePage() {
   const [lectures, setLectures] = useState<Lecture[]>([]);
   const [selectedLecture, setSelectedLecture] = useState<string | null>(null);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loadingRecords, setLoadingRecords] = useState(false);
   const [processing, setProcessing] = useState(false);
 
   const [csvRows, setCsvRows] = useState<CsvRow[]>([]);
@@ -38,26 +41,36 @@ export default function AttendancePage() {
 
   const [lastReport, setLastReport] = useState<ProcessingReport | null>(null);
 
-  useEffect(() => {
-    getBatches().then(setBatches);
-  }, []);
+  const { loading, error, retry } = useInitialLoad(async () => {
+    setBatches(await getBatches());
+  });
 
-  useEffect(() => {
-    if (!selectedBatch) return;
-    getLecturesByBatch(selectedBatch).then(setLectures);
+  // Picking a batch resets everything downstream of it, so this runs from the
+  // change handler rather than an effect on `selectedBatch`.
+  const selectBatch = async (batchId: string) => {
+    setSelectedBatch(batchId);
     setSelectedLecture(null);
     setRecords([]);
     setCsvRows([]);
     setCsvFileName('');
-  }, [selectedBatch]);
+    try {
+      setLectures(await getLecturesByBatch(batchId));
+    } catch (err) {
+      setLectures([]);
+      showToast(errorMessage(err, 'Failed to load lectures for this batch'), 'error');
+    }
+  };
 
-  const loadRecords = (lecId: string) => {
+  const loadRecords = async (lecId: string) => {
     setSelectedLecture(lecId);
-    setLoading(true);
-    getAttendanceByLecture(lecId).then((data) => {
-      setRecords(data);
-      setLoading(false);
-    });
+    setLoadingRecords(true);
+    try {
+      setRecords(await getAttendanceByLecture(lecId));
+    } catch (err) {
+      setRecords([]);
+      showToast(errorMessage(err, 'Failed to load attendance records'), 'error');
+    }
+    setLoadingRecords(false);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -97,8 +110,8 @@ export default function AttendancePage() {
       if (report.duplicateRowsIgnored > 0) parts.push(`${report.duplicateRowsIgnored} duplicate rows merged`);
       if (report.unmatched.length > 0) parts.push(`${report.unmatched.length} participant(s) need review`);
       showToast(parts.join(' · '), report.unmatched.length > 0 ? 'warning' : 'success');
-    } catch (err: any) {
-      showToast(err?.message ?? 'Upload & processing failed', 'error');
+    } catch (err) {
+      showToast(errorMessage(err, 'Attendance upload failed'), 'error');
     }
     setProcessing(false);
   };
@@ -121,8 +134,8 @@ export default function AttendancePage() {
       await bulkApproveAttendance(selectedLecture);
       loadRecords(selectedLecture);
       showToast('All records approved');
-    } catch (error: any) {
-      showToast(error?.message ?? 'Failed to approve records', 'error');
+    } catch (error) {
+      showToast(errorMessage(error, 'Failed to approve records'), 'error');
     }
   };
 
@@ -139,31 +152,34 @@ export default function AttendancePage() {
       setShowNewLecture(false);
       setNewLectureDate('');
       setNewLectureMeeting('');
-      getLecturesByBatch(selectedBatch).then(setLectures);
+      setLectures(await getLecturesByBatch(selectedBatch));
       showToast('Lecture created');
-    } catch (error: any) {
-      showToast(error?.message ?? 'Failed to create lecture', 'error');
+    } catch (error) {
+      showToast(errorMessage(error, 'Failed to create lecture'), 'error');
     }
   };
 
   const showUploadAction = csvRows.length > 0 && selectedLecture && !processing;
 
+  if (loading) return <Spinner centered />;
+  if (error) return <ErrorState centered message={error} onRetry={retry} />;
+
   return (
     <div className="page-section">
       <PageHeader title="Attendance" />
 
-      <Card>
-        <CardHeader title="1. Select Batch" />
-        <BatchSelect batches={batches} value={selectedBatch} onChange={setSelectedBatch} />
+      <Card className="step-card">
+        <CardHeader title="Select Batch" />
+        <BatchSelect batches={batches} value={selectedBatch} onChange={selectBatch} />
       </Card>
 
       {selectedBatch && (
         <Card>
           <CardHeader
-            title="2. Select Lecture"
+            title="Select lecture"
             action={
-              <Button size="sm" className="action-button" variant="ghost" onClick={() => setShowNewLecture(true)}>
-                + New Lecture
+              <Button size="sm" className="action-button-compact" onClick={() => setShowNewLecture(true)}>
+                <Plus size={14} /> New Lecture
               </Button>
             }
           />
@@ -180,7 +196,7 @@ export default function AttendancePage() {
       {selectedLecture && (
         <>
           <Card>
-            <CardHeader title="3. Upload CSV" />
+            <CardHeader title="Upload CSV" />
             <div className="space-y-4">
               <input
                 ref={fileRef}
@@ -201,7 +217,7 @@ export default function AttendancePage() {
                 <div className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-elevated)]/50 border border-[var(--border)] text-sm">
                   {lastReport.geminiUnavailableReason && (
                     <p className="mb-2 text-xs text-amber-500">
-                      AI name matching unavailable — {lastReport.geminiUnavailableReason}
+                      AI matching unavailable — {lastReport.geminiUnavailableReason}
                     </p>
                   )}
                   {lastReport.unmatched.length > 0 && (
@@ -217,7 +233,7 @@ export default function AttendancePage() {
                   )}
                   {lastReport.tutorsDetected.length > 0 && (
                     <p className="mt-2 text-xs text-[var(--text-muted)]">
-                      Tutor(s) detected (excluded from attendance): {lastReport.tutorsDetected.join(', ')}
+                      Tutors excluded: {lastReport.tutorsDetected.join(', ')}
                     </p>
                   )}
                 </div>
@@ -232,35 +248,43 @@ export default function AttendancePage() {
               {processing && (
                 <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
                   <Loader2 size={16} className="animate-spin" />
-                  Uploading and processing attendance — matching students, calculating status...
+                  Processing attendance — matching students and calculating status...
                 </div>
               )}
             </div>
           </Card>
 
           <Card>
-            <CardHeader
-              title="4. Attendance Records"
-              action={
-                records.some((r) => !r.approved) ? (
-                  <Button size="sm" onClick={handleBulkApprove}>
-                    <CheckCircle size={14} /> Approve All
-                  </Button>
-                ) : undefined
-              }
-            />
-            {loading ? (
+            <CardHeader title="Attendance records" />
+            {loadingRecords ? (
               <Spinner />
             ) : records.length === 0 ? (
-              <EmptyState icon={<ClipboardCheck size={32} />} title="No attendance records" description="Upload a CSV and click Upload & Process to generate records" />
+              <EmptyState icon={<ClipboardCheck size={32} />} title="No attendance records" />
             ) : (
-              <AttendanceRecordsTable records={records} onToggleApproved={handleToggleApproved} maxHeight="28rem" />
+              <AttendanceRecordsTable
+                records={records}
+                onToggleApproved={handleToggleApproved}
+                onApproveAll={handleBulkApprove}
+                maxHeight="28rem"
+              />
             )}
           </Card>
         </>
       )}
 
-      <Modal open={showNewLecture} onClose={() => setShowNewLecture(false)} title="New Lecture">
+      <Modal
+        open={showNewLecture}
+        onClose={() => setShowNewLecture(false)}
+        title="New Lecture"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setShowNewLecture(false)}>Cancel</Button>
+            <Button className="action-button-compact" onClick={handleCreateLecture} disabled={!newLectureDate}>
+              Create Lecture
+            </Button>
+          </>
+        }
+      >
         <div className="popup-form-spaced">
           <FormField label="Date" required>
             <input type="date" value={newLectureDate} onChange={(e) => setNewLectureDate(e.target.value)} required />
@@ -268,7 +292,6 @@ export default function AttendancePage() {
           <FormField label="Meeting Code">
             <input value={newLectureMeeting} onChange={(e) => setNewLectureMeeting(e.target.value)} placeholder="e.g. meet-xyz" />
           </FormField>
-          <Button onClick={handleCreateLecture}>Create Lecture</Button>
         </div>
       </Modal>
     </div>

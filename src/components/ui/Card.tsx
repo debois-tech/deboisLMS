@@ -34,10 +34,10 @@ export function Card({ glass, hover, padding = 'md', children, className, ...res
   );
 }
 
-interface CardHeaderProps { title: string; subtitle?: string; action?: ReactNode }
-export function CardHeader({ title, subtitle, action }: CardHeaderProps) {
+interface CardHeaderProps { title: string; subtitle?: string; action?: ReactNode; className?: string }
+export function CardHeader({ title, subtitle, action, className }: CardHeaderProps) {
   return (
-    <div className="flex items-start justify-between gap-4 mb-6">
+    <div className={`flex items-start justify-between gap-4 mb-6 ${className ?? ''}`}>
       <div className="min-w-0">
         <h3 className="text-base font-bold text-[var(--text-primary)]">{title}</h3>
         {subtitle && <p className="text-xs text-[var(--text-muted)] mt-0.5">{subtitle}</p>}

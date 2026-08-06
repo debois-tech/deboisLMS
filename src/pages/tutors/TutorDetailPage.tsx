@@ -1,12 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Mail, Phone, Layers, CalendarDays, GraduationCap } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NotFound } from '@/components/ui/NotFound';
-import { getTutorById, getTutorBatches, getBatchById } from '@/lib/supabase';
+import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
+import { getTutorById, getTutorBatches } from '@/lib/supabase';
 import type { Tutor, TutorBatchMapping, Batch } from '@/lib/types';
 import { formatDate } from '@/lib/utils/format';
 
@@ -14,24 +16,16 @@ export default function TutorDetailPage() {
   const { tutorId } = useParams();
   const [tutor, setTutor] = useState<Tutor | null>(null);
   const [batchMappings, setBatchMappings] = useState<(TutorBatchMapping & { batch?: Batch })[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const { loading, error, retry } = useInitialLoad(async () => {
     if (!tutorId) return;
-    Promise.all([getTutorById(tutorId), getTutorBatches(tutorId)]).then(async ([t, mappings]) => {
-      setTutor(t ?? null);
-      const withBatches = await Promise.all(
-        mappings.map(async (m) => {
-          const batch = await getBatchById(m.batch_id);
-          return { ...m, batch };
-        })
-      );
-      setBatchMappings(withBatches);
-      setLoading(false);
-    });
-  }, [tutorId]);
+    const [t, mappings] = await Promise.all([getTutorById(tutorId), getTutorBatches(tutorId)]);
+    setTutor(t ?? null);
+    setBatchMappings(mappings);
+  });
 
   if (loading) return <Spinner centered />;
+  if (error) return <ErrorState centered message={error} onRetry={retry} />;
   if (!tutor) return <NotFound label="Tutor" />;
 
   return (

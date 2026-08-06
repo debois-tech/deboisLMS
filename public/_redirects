@@ -1,0 +1,4 @@
+# Netlify / Cloudflare Pages: serve index.html for every path so a hard refresh or a
+# shared link to /students or /portal/fees reaches the router instead of a host 404.
+# React Router matches the path client-side; unmatched paths render NotFoundPage.
+/*  /index.html  200

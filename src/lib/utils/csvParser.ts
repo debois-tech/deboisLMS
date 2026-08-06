@@ -65,18 +65,9 @@ function parseDuration(raw: string): number {
 }
 
 /**
- * Convert a CSV time cell into a value Postgres accepts for a `timestamp`
- * (without time zone) column, or `null` when it cannot be parsed.
- *
- * The Google Meet extension exports time-only values ("9:00:00 AM") which
- * Postgres rejects outright. When a full date/time is present its wall-clock
- * components are preserved; otherwise the value is combined with the lecture's
- * date to form a complete timestamp. The result is always a naive local
- * `YYYY-MM-DDTHH:MM:SS` (no time zone suffix), safe for both `timestamp` and
- * `timestamptz` columns.
- *
- * @param value  Raw CSV cell (joined/left time).
- * @param fallbackDate  Lecture date as `YYYY-MM-DD`, used for time-only cells.
+ * Convert a CSV time cell into a value Postgres accepts for a `timestamp` column.
+ * The Meet export uses time-only values Postgres rejects; those are combined with
+ * the lecture's date. Always a naive local `YYYY-MM-DDTHH:MM:SS`.
  */
 export function normalizeTimestampForDb(
   value: string | undefined,
