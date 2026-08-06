@@ -34,6 +34,8 @@ import type {
 } from '@/lib/types';
 import { useAuth } from '@/lib/context/AuthContext';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
+import { useNow } from '@/lib/hooks/useNow';
+import { assignmentState } from '@/lib/utils/deadline';
 import { formatCurrency, formatDate, formatDayLabel } from '@/lib/utils/format';
 
 type Enrollment = BatchStudentMapping & { batch?: Batch };
@@ -48,6 +50,7 @@ export default function PortalOverviewPage() {
   const [nextLecture, setNextLecture] = useState<Lecture | null>(null);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [assignments, setAssignments] = useState<StudentAssignment[]>([]);
+  const now = useNow();
   const { loading, error, retry } = useInitialLoad(async () => {
     if (!studentId) return;
 
@@ -92,8 +95,11 @@ export default function PortalOverviewPage() {
 
   const attended = attendance.filter((record) => record.status !== 'absent').length;
   const attendanceRate = attendance.length > 0 ? Math.round((attended / attendance.length) * 100) : null;
-  const handedIn = assignments.filter((item) => item.completion?.submitted).length;
-  const pending = assignments.length - handedIn;
+  // By state, not submitted/not: closed work is not "to hand in".
+  const states = assignments.map((item) => assignmentState(item, now));
+  const handedIn = states.filter((state) => state === 'done').length;
+  const pending = states.filter((state) => state === 'todo').length;
+  const missed = states.filter((state) => state === 'missed').length;
   // Totals across every batch, matching the Fees tab exactly.
   const totalFee = fees.reduce((sum, fee) => sum + Number(fee.total_fee), 0);
   const totalPaid = fees.reduce((sum, fee) => sum + Number(fee.paid_amount), 0);
@@ -133,14 +139,16 @@ export default function PortalOverviewPage() {
               label="Assignments"
               icon={FileText}
               value={assignments.length === 0 ? 'None yet' : `${handedIn} of ${assignments.length}`}
-              tone={assignments.length === 0 ? 'default' : pending > 0 ? 'attention' : 'positive'}
+              tone={assignments.length === 0 ? 'default' : pending > 0 || missed > 0 ? 'attention' : 'positive'}
               progress={assignments.length > 0 ? (handedIn / assignments.length) * 100 : undefined}
               note={
                 assignments.length === 0
                   ? 'Nothing set yet'
                   : pending > 0
                     ? `${pending} to hand in`
-                    : 'All handed in'
+                    : missed > 0
+                      ? `${missed} missed`
+                      : 'All handed in'
               }
             />
             <PortalStat

@@ -7,6 +7,8 @@ export { PortalSection } from './PortalSection';
 export { PortalFocus } from './PortalFocus';
 export { PortalStat, PortalStatGrid } from './PortalStat';
 export { PortalList, PortalRow } from './PortalList';
+export { PortalTabs } from './PortalTabs';
+export type { PortalTab } from './PortalTabs';
 export { PortalStatus, statusLabel } from './PortalStatus';
 export { PortalEmpty } from './PortalEmpty';
 export { AssignmentModal } from './AssignmentModal';

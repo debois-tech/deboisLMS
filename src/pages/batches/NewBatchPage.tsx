@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { FormField } from '@/components/ui/FormField';
 import { SearchSelect } from '@/components/ui/SearchSelect';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { createBatch } from '@/lib/supabase';
 import { useToast } from '@/lib/context/ToastContext';
 import { errorMessage } from '@/lib/utils/errors';
@@ -93,10 +94,11 @@ export default function NewBatchPage() {
             </p>
           </FormField>
           <FormField label="Start Date">
-            <input
-              type="date"
+            <DatePicker
               value={form.start_date}
-              onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+              onChange={(start_date) => setForm({ ...form, start_date })}
+              placeholder="Pick a start date"
+              ariaLabel="Start date"
             />
           </FormField>
           <div className="flex gap-3 pt-2">

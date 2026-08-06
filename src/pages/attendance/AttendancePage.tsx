@@ -11,6 +11,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { BatchSelect } from '@/components/ui/BatchSelect';
 import { LectureSelect } from '@/components/ui/LectureSelect';
 import { FormField } from '@/components/ui/FormField';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { AttendanceRecordsTable } from '@/components/attendance/AttendanceRecordsTable';
 import { getLecturesByBatch, createLecture } from '@/lib/supabase';
 import { getAttendanceByLecture, insertUploadRows, processAttendance, setAttendanceApproved, bulkApproveAttendance } from '@/lib/supabase';
@@ -287,7 +288,12 @@ export default function AttendancePage() {
       >
         <div className="popup-form-spaced">
           <FormField label="Date" required>
-            <input type="date" value={newLectureDate} onChange={(e) => setNewLectureDate(e.target.value)} required />
+            <DatePicker
+              value={newLectureDate}
+              onChange={setNewLectureDate}
+              placeholder="Pick a date"
+              ariaLabel="Lecture date"
+            />
           </FormField>
           <FormField label="Meeting Code">
             <input value={newLectureMeeting} onChange={(e) => setNewLectureMeeting(e.target.value)} placeholder="e.g. meet-xyz" />

@@ -3,6 +3,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { FormField } from '@/components/ui/FormField';
 import { SearchSelect } from '@/components/ui/SearchSelect';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import type { StudentFee, FeePaymentLog, PaymentMethod } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils/format';
@@ -54,7 +55,13 @@ export function PaymentLogModal({
                 <input type="number" min="1" value={form.amount} onChange={(event) => onFormChange({ ...form, amount: event.target.value })} />
               </FormField>
               <FormField label="Payment Date" required>
-                <input type="date" value={form.payment_date} onChange={(event) => onFormChange({ ...form, payment_date: event.target.value })} />
+                <DatePicker
+                  value={form.payment_date}
+                  onChange={(payment_date) => onFormChange({ ...form, payment_date })}
+                  placeholder="Pick a date"
+                  ariaLabel="Payment date"
+                  clearable={false}
+                />
               </FormField>
             </div>
             <FormField label="Payment Method">

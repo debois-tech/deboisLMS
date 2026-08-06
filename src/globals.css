@@ -694,7 +694,7 @@ html.light .glass {
 }
 
 /* A state the eye can catch before reading: amber for outstanding work, brand
-   green once it is done. */
+   green once it is done, red once the deadline has closed on it. */
 .portal-row-dot {
   flex: 0 0 auto;
   width: 0.4375rem;
@@ -704,6 +704,13 @@ html.light .glass {
 }
 
 .portal-row-dot.is-done { background: var(--primary); }
+.portal-row-dot.is-missed { background: var(--danger-text); }
+
+/* The last day before a deadline — the wording alone is easy to skim past. */
+.portal-due-soon {
+  color: var(--warning-text);
+  font-weight: 600;
+}
 
 .portal-row-chevron {
   flex: 0 0 auto;
@@ -2122,6 +2129,65 @@ html.light .glass {
   .portal-search { max-width: none; }
 }
 
+/* ── Portal tabs ─────────────────────────────────────────────── */
+/* Quieter than the admin `batch-tabs-bar`: a filter on one list, not navigation. */
+.portal-tabs {
+  display: flex;
+  gap: 0.375rem;
+  margin-top: -1rem;
+  padding-bottom: 0.125rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.portal-tabs::-webkit-scrollbar { display: none; }
+
+.portal-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4375rem;
+  flex: 0 0 auto;
+  padding: 0.4375rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--text-muted);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  transition: color 0.18s ease, background-color 0.18s ease, border-color 0.18s ease;
+}
+
+.portal-tab:hover {
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+}
+
+.portal-tab.is-active {
+  color: var(--primary);
+  border-color: var(--primary-glow);
+  background: var(--primary-glow-soft);
+}
+
+.portal-tab:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.portal-tab-count {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  padding: 0.0625rem 0.375rem;
+  color: var(--text-muted);
+  background: var(--bg-overlay);
+  border-radius: 999px;
+}
+
+.portal-tab.is-active .portal-tab-count {
+  color: var(--text-inverse);
+  background: var(--primary);
+}
+
 /* ── Assignment dialog ───────────────────────────────────────── */
 .assignment-detail {
   display: flex;
@@ -2280,6 +2346,15 @@ html.light .glass {
 
 .repo-notice.is-warning svg { color: var(--warning); }
 
+/* A closed deadline. Same construction as the warning, one step firmer. */
+.repo-notice.is-danger {
+  color: var(--text-primary);
+  border-color: color-mix(in srgb, var(--danger) 30%, transparent);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+
+.repo-notice.is-danger svg { color: var(--danger-text); }
+
 .repo-notice svg { flex: 0 0 auto; margin-top: 0.1rem; }
 
 @media (max-width: 640px) {
@@ -2293,6 +2368,298 @@ html.light .glass {
   :root {
     --space-page: 1.75rem 2rem 2.5rem;
   }
+}
+
+/* ── Date picker ─────────────────────────────────────────────── */
+/* Replaces `<input type="date">`, whose panel the OS draws in its own greys. */
+.datepicker {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.datepicker-trigger {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0 1rem;
+  font-size: 0.875rem;
+  text-align: left;
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+.datepicker-trigger:hover:not(:disabled) { border-color: var(--border-strong); }
+
+.datepicker-trigger.is-open,
+.datepicker-trigger:focus-visible {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-glow-soft);
+}
+
+.datepicker-trigger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.datepicker-trigger-icon {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  transition: color 0.18s ease;
+}
+
+.datepicker-trigger.is-open .datepicker-trigger-icon { color: var(--primary); }
+
+/* An unset date reads as a prompt, not as a value. */
+.datepicker-trigger.is-empty .datepicker-trigger-value { color: var(--text-muted); }
+
+.datepicker-trigger-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A long value would otherwise run underneath the clear button. */
+.datepicker:has(.datepicker-clear) .datepicker-trigger { padding-right: 2.5rem; }
+
+/* Inside the field rather than beside it, so clearing a date never widens the row. */
+.datepicker-clear {
+  position: absolute;
+  right: 0.5rem;
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.datepicker-clear:hover {
+  color: var(--text-primary);
+  background: var(--bg-overlay);
+}
+
+.datepicker-clear:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+/* Fixed: most of these fields live inside a modal whose body scrolls. */
+.datepicker-panel {
+  position: fixed;
+  z-index: 60;
+  padding: 0.75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-lg);
+  transform-origin: top center;
+  animation: select-panel-in 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.datepicker-panel.is-above { transform-origin: bottom center; }
+
+.calendar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.calendar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem;
+}
+
+.calendar-nav {
+  display: grid;
+  place-items: center;
+  width: 1.875rem;
+  height: 1.875rem;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.calendar-nav:hover {
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+}
+
+.calendar-nav:focus-visible,
+.calendar-title:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.calendar-title {
+  flex: 1 1 auto;
+  padding: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.calendar-title:hover { background: var(--bg-elevated); }
+.calendar-title.is-open { color: var(--primary); background: var(--primary-glow-soft); }
+
+.calendar-weekdays,
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.125rem;
+}
+
+.calendar-weekdays span {
+  padding-bottom: 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.calendar-day {
+  display: grid;
+  place-items: center;
+  height: 2.125rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.calendar-day:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+}
+
+.calendar-day:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.calendar-day.is-outside { color: var(--text-muted); opacity: 0.45; }
+
+.calendar-day:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+
+/* Today is a ring, the selection is a fill — they must differ when they land apart. */
+.calendar-day.is-today {
+  color: var(--primary);
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.calendar-day.is-selected {
+  color: var(--text-inverse);
+  font-weight: 700;
+  background: var(--primary);
+}
+
+.calendar-day.is-selected:hover { background: var(--primary-dark); color: var(--text-inverse); }
+
+.calendar-months {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.25rem;
+  padding: 0.25rem 0;
+}
+
+.calendar-month {
+  padding: 0.625rem 0;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.calendar-month:hover { color: var(--text-primary); background: var(--bg-elevated); }
+.calendar-month.is-current { color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
+.calendar-month.is-selected { color: var(--text-inverse); background: var(--primary); }
+
+.calendar-month:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.datepicker-time {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.datepicker-time-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.datepicker-time-fields {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* Beats the global `select` rule, which sizes for a full-width form field. */
+.datepicker-time-fields select {
+  width: auto;
+  padding: 0.3125rem 1.75rem 0.3125rem 0.5rem;
+  font-size: 0.8125rem;
+  background-position: right 0.4rem center;
+  background-size: 0.875rem;
+  background-color: var(--bg-elevated);
+}
+
+.datepicker-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  padding-top: 0.625rem;
+  border-top: 1px solid var(--border);
+}
+
+.datepicker-foot-action {
+  padding: 0.3125rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--primary);
+  border-radius: var(--radius-sm);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.datepicker-foot-action:hover { background: var(--primary-glow-soft); }
+.datepicker-foot-action.is-quiet { color: var(--text-muted); }
+.datepicker-foot-action.is-quiet:hover { color: var(--text-primary); background: var(--bg-elevated); }
+
+.datepicker-foot-action:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
 }
 
 /* ── Divider ─────────────────────────────────────────────────── */

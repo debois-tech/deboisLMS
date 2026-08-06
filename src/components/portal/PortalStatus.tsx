@@ -23,16 +23,19 @@ const enrollment: Record<MappingStatus, [string, Tone]> = {
   dropped: ['Finished', 'default'],
 };
 
-const submission: Record<'submitted' | 'pending', [string, Tone]> = {
+type SubmissionValue = 'submitted' | 'pending' | 'missed';
+
+const submission: Record<SubmissionValue, [string, Tone]> = {
   submitted: ['Submitted', 'success'],
   pending: ['To do', 'warning'],
+  missed: ['Missed', 'danger'],
 };
 
 type StatusProps =
   | { kind: 'attendance'; value: AttendanceStatus }
   | { kind: 'fee'; value: FeeStatus }
   | { kind: 'enrollment'; value: MappingStatus }
-  | { kind: 'submission'; value: 'submitted' | 'pending' };
+  | { kind: 'submission'; value: SubmissionValue };
 
 const maps = { attendance, fee, enrollment, submission };
 

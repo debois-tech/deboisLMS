@@ -31,19 +31,12 @@ Run these in the Supabase SQL editor, in order. All are idempotent.
 | File | What it does |
 |---|---|
 | `supabase/schema.sql` | Tables, enums and views — the source of truth for data shape |
-| `supabase/student_login_migration.sql` | Links students to auth users, defines the `is_admin()` / `current_student_id()` helpers, enables RLS everywhere |
-| `supabase/fee_migration.sql` | Fee payment logs |
-| `supabase/attendance_timestamp_migration.sql` | Attendance timestamp columns |
-| `supabase/fee_atomic_payment_migration.sql` | `record_fee_payment()` — payment log and running balance in one transaction |
-| `supabase/assignment_repo_migration.sql` | Per-student GitHub repo + student-writable policies |
-| `supabase/study_material_migration.sql` | Study material table, private storage bucket, RLS |
-| `supabase/study_material_v2_migration.sql` | Batch codes, tutor attribution, folder grouping, and the policy that lets students see material with no batch |
+| `supabase/core_migration.sql` | Links students to auth users, defines the `is_admin()` / `current_student_id()` helpers, enables RLS everywhere |
+| `supabase/fees_migration.sql` | Fee status, payment methods, and `record_fee_payment()` — payment log and running balance in one transaction |
+| `supabase/study_material_migration.sql` | Study material table, private storage bucket, batch codes, tutor attribution, RLS |
+| `supabase/assignments_migration.sql` | Per-student GitHub repo, deadlines (`assignments.due_at`), and the policies that stop a student submitting after one |
 
-`study_material_v2_migration.sql` is **not optional**. `schema.sql` already has its columns, but
-the read policy it replaces is the batch-only one from v1 — skip it and material uploaded for "All
-students" is written successfully and then visible to nobody.
-
-Edit the admin email in `student_login_migration.sql` before running it — that block is what tags
+Edit the admin email in `core_migration.sql` before running it — that block is what tags
 your account as an admin.
 
 ### Edge functions

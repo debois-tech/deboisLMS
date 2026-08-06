@@ -131,6 +131,7 @@ export interface Assignment {
   title: string;
   description?: string;
   assigned_date?: string;
+  due_at?: string | null;
   created_at: string;
 }
 

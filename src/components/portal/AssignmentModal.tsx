@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AlertTriangle, ExternalLink } from 'lucide-react';
+import { AlertTriangle, ExternalLink, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { FormField } from '@/components/ui/FormField';
@@ -7,15 +7,15 @@ import { InlineAlert } from '@/components/ui/InlineAlert';
 import { PortalStatus } from '@/components/portal/PortalStatus';
 import type { Assignment, AssignmentCompletion } from '@/lib/types';
 import { formatDate, formatDateTime } from '@/lib/utils/format';
+import { assignmentState, formatDeadline, formatDueLabel } from '@/lib/utils/deadline';
 import { errorMessage } from '@/lib/utils/errors';
 
 export type StudentAssignment = Assignment & { completion?: AssignmentCompletion };
 
 interface AssignmentModalProps {
-  /** The open assignment, or null when the dialog is closed. */
   assignment: StudentAssignment | null;
-  /** The student's saved repo, prefilled in the submit view. Undefined before their first submission. */
   repoUrl?: string;
+  now: number;
   onClose: () => void;
   onSubmit: (repoUrl: string) => Promise<void>;
 }
@@ -45,14 +45,16 @@ export function AssignmentModal(props: AssignmentModalProps) {
   return <AssignmentModalBody key={props.assignment?.id ?? 'closed'} {...props} />;
 }
 
-function AssignmentModalBody({ assignment, repoUrl, onClose, onSubmit }: AssignmentModalProps) {
+function AssignmentModalBody({ assignment, repoUrl, now, onClose, onSubmit }: AssignmentModalProps) {
   const [view, setView] = useState<'info' | 'submit'>('info');
   const [draftRepo, setDraftRepo] = useState(repoUrl ?? '');
   const [confirmed, setConfirmed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  const submitted = assignment?.completion?.submitted ?? false;
+  const state = assignment ? assignmentState(assignment, now) : 'todo';
+  const submitted = state === 'done';
+  const missed = state === 'missed';
   const trimmed = draftRepo.trim();
   const isReplacingRepo = Boolean(repoUrl) && trimmed !== repoUrl && trimmed.length > 0;
 
@@ -60,6 +62,10 @@ function AssignmentModalBody({ assignment, repoUrl, onClose, onSubmit }: Assignm
     const problem = validateRepoUrl(draftRepo);
     if (problem) {
       setError(problem);
+      return;
+    }
+    if (missed) {
+      setError('The deadline has passed. Talk to your tutor.');
       return;
     }
     setSubmitting(true);
@@ -82,7 +88,7 @@ function AssignmentModalBody({ assignment, repoUrl, onClose, onSubmit }: Assignm
         view === 'info' ? (
           <>
             <Button variant="ghost" onClick={onClose}>Close</Button>
-            {!submitted && (
+            {!submitted && !missed && (
               <Button className="action-button-compact" onClick={() => setView('submit')}>
                 Submit
               </Button>
@@ -95,7 +101,7 @@ function AssignmentModalBody({ assignment, repoUrl, onClose, onSubmit }: Assignm
               className="action-button-compact"
               onClick={handleSubmit}
               loading={submitting}
-              disabled={!confirmed || trimmed.length === 0}
+              disabled={!confirmed || trimmed.length === 0 || missed}
             >
               Submit
             </Button>
@@ -106,13 +112,23 @@ function AssignmentModalBody({ assignment, repoUrl, onClose, onSubmit }: Assignm
       {view === 'info' ? (
         <div className="assignment-detail">
           <div className="assignment-detail-meta">
-            <PortalStatus kind="submission" value={submitted ? 'submitted' : 'pending'} />
+            <PortalStatus kind="submission" value={submitted ? 'submitted' : missed ? 'missed' : 'pending'} />
             {assignment?.assigned_date && <span>Given {formatDate(assignment.assigned_date)}</span>}
+            {!submitted && <span>{formatDueLabel(assignment?.due_at, now)}</span>}
           </div>
 
           <p className={`assignment-detail-body ${assignment?.description ? '' : 'is-empty'}`}>
             {assignment?.description || 'No details added.'}
           </p>
+
+          {missed && (
+            <p className="repo-notice is-danger">
+              <Lock size={14} className="shrink-0" />
+              <span>
+                Submissions closed{assignment?.due_at ? ` on ${formatDeadline(assignment.due_at)}` : ''}.
+              </span>
+            </p>
+          )}
 
           {submitted && (
             <dl className="assignment-detail-facts">
@@ -139,6 +155,16 @@ function AssignmentModalBody({ assignment, repoUrl, onClose, onSubmit }: Assignm
       ) : (
         <div className="repo-submit-row">
           {error && <InlineAlert>{error}</InlineAlert>}
+
+          {assignment?.due_at && (
+            <p className={`repo-notice ${missed ? 'is-danger' : ''}`}>
+              <Lock size={14} className="shrink-0" />
+              <span>
+                {formatDueLabel(assignment.due_at, now)}.{' '}
+                {missed ? 'Nothing more can be handed in.' : 'Nothing can be handed in after that.'}
+              </span>
+            </p>
+          )}
 
           <FormField label="GitHub repo link" required>
             <input

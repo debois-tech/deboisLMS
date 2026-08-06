@@ -1,13 +1,8 @@
 -- ============================================================
 -- DeboisTech ERP — Supabase Schema
 -- ============================================================
--- Run this in Supabase SQL Editor (or via migration).
--- Assumes a single admin user is created manually in Supabase
--- Auth (Settings → Authentication → Users → Add User).
--- That user's id (from auth.users) is the admin reference for
--- any future admin-only RLS policy, though v1 has no student-
--- facing login so RLS can stay open or trivially restrict to
--- that single uid.
+-- Run first in the Supabase SQL Editor, then core_migration.sql.
+-- Assumes an admin user already exists in Supabase Auth.
 -- ============================================================
 
 -- -----------------------------------------------------------
@@ -245,12 +240,14 @@ grant execute on function public.record_fee_payment(uuid, numeric, date, payment
 -- -----------------------------------------------------------
 -- 11. ASSIGNMENTS (the assignment definition, per batch)
 -- -----------------------------------------------------------
+-- assigned_date is when the work was handed out; due_at is the deadline (null = none).
 create table assignments (
   id            uuid primary key default gen_random_uuid(),
   batch_id      uuid references batches(id) on delete cascade not null,
   title         text not null,
   description   text,
   assigned_date date default current_date,
+  due_at        timestamptz,
   created_at    timestamptz default now()
 );
 

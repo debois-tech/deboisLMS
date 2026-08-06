@@ -9,6 +9,7 @@ import { NotFound } from '@/components/ui/NotFound';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { FormField } from '@/components/ui/FormField';
 import { SearchSelect } from '@/components/ui/SearchSelect';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { getBatchById, updateBatch } from '@/lib/supabase';
 import type { Batch } from '@/lib/types';
 import { useToast } from '@/lib/context/ToastContext';
@@ -103,10 +104,11 @@ export default function EditBatchPage() {
             </p>
           </FormField>
           <FormField label="Start Date">
-            <input
-              type="date"
+            <DatePicker
               value={form.start_date ?? ''}
-              onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+              onChange={(start_date) => setForm({ ...form, start_date })}
+              placeholder="Pick a start date"
+              ariaLabel="Start date"
             />
           </FormField>
           <div className="flex gap-3 pt-2">

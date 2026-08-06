@@ -16,6 +16,8 @@ import { SearchSelect } from '@/components/ui/SearchSelect';
 import { FormField } from '@/components/ui/FormField';
 import { AttendanceRecordsTable } from '@/components/attendance/AttendanceRecordsTable';
 import { AssignmentSubmissionTable } from '@/components/assignments/AssignmentSubmissionTable';
+import { NewAssignmentModal } from '@/components/assignments/NewAssignmentModal';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { StudentLink } from '@/components/students/StudentLink';
 import { PaymentLogModal, type PaymentLogFormState } from '@/components/finance/PaymentLogModal';
 import { getBatchById } from '@/lib/supabase';
@@ -26,9 +28,10 @@ import { getBatchTutors, assignTutorToBatch, removeTutorFromBatch, getTutors } f
 import { getLecturesByBatch, createLecture, deleteLecture } from '@/lib/supabase';
 import { getAttendanceByLecture, setAttendanceApproved, bulkApproveAttendance } from '@/lib/supabase';
 import { getFeesByBatch, getFeePaymentLogs, addFeePaymentLog } from '@/lib/supabase';
-import { getAssignmentsByBatch, createAssignment } from '@/lib/supabase';
+import { getAssignmentsByBatch } from '@/lib/supabase';
 import type { Batch, Student, Tutor, Lecture, AttendanceRecord, StudentFee, FeePaymentLog, Assignment, BatchStudentMapping, TutorBatchMapping } from '@/lib/types';
 import { formatDate, formatCurrency } from '@/lib/utils/format';
+import { formatDeadline } from '@/lib/utils/deadline';
 import { StudentImportModal } from '@/components/students/StudentImportModal';
 import { toStudentInput } from '@/lib/utils/studentImport';
 import { useToast } from '@/lib/context/ToastContext';
@@ -455,7 +458,12 @@ function LecturesTab({ batchId }: { batchId: string }) {
       >
         <div className="popup-form-spaced">
           <FormField label="Date" required>
-            <input type="date" value={form.lecture_date} onChange={(e) => setForm({ ...form, lecture_date: e.target.value })} required />
+            <DatePicker
+              value={form.lecture_date}
+              onChange={(lecture_date) => setForm({ ...form, lecture_date })}
+              placeholder="Pick a date"
+              ariaLabel="Lecture date"
+            />
           </FormField>
           <FormField label="Meeting Code">
             <input value={form.meeting_code} onChange={(e) => setForm({ ...form, meeting_code: e.target.value })} placeholder="e.g. meet-xyz" />
@@ -713,27 +721,12 @@ function AssignmentsTab({ batchId }: { batchId: string }) {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [selectedAsgn, setSelectedAsgn] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
-  const [form, setForm] = useState({ title: '', description: '', assigned_date: '' });
 
   const fetchAssignments = useCallback(async () => {
     setAssignments(await getAssignmentsByBatch(batchId));
   }, [batchId]);
 
   const { error: loadError, reload: reloadAssignments } = useReloadableSection(fetchAssignments);
-
-  const { showToast } = useToast();
-
-  const handleCreate = async () => {
-    try {
-      await createAssignment({ ...form, batch_id: batchId });
-      setShowNew(false);
-      setForm({ title: '', description: '', assigned_date: '' });
-      void reloadAssignments();
-      showToast('Assignment created');
-    } catch (error) {
-      showToast(errorMessage(error, 'Failed to create assignment'), 'error');
-    }
-  };
 
   if (loadError) return <Card><ErrorState message={loadError} onRetry={reloadAssignments} /></Card>;
 
@@ -755,7 +748,8 @@ function AssignmentsTab({ batchId }: { batchId: string }) {
               >
                 <p className="text-sm font-medium text-[var(--text-primary)]">{a.title}</p>
                 <p className="text-xs text-[var(--text-muted)]">
-                  {a.description ?? 'No description'} • {a.assigned_date ? formatDate(a.assigned_date) : '—'}
+                  {a.description ?? 'No description'} •{' '}
+                  {a.due_at ? `Due ${formatDeadline(a.due_at)}` : 'No deadline'}
                 </p>
               </div>
             ))}
@@ -775,31 +769,12 @@ function AssignmentsTab({ batchId }: { batchId: string }) {
         </Card>
       )}
 
-      <Modal
+      <NewAssignmentModal
         open={showNew}
         onClose={() => setShowNew(false)}
-        title="New Assignment"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setShowNew(false)}>Cancel</Button>
-            <Button className="action-button-compact" onClick={handleCreate} disabled={!form.title.trim()}>
-              Create Assignment
-            </Button>
-          </>
-        }
-      >
-        <div className="popup-form-spaced">
-          <FormField label="Title" required>
-            <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
-          </FormField>
-          <FormField label="Description">
-            <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} />
-          </FormField>
-          <FormField label="Due Date">
-            <input type="date" value={form.assigned_date} onChange={(e) => setForm({ ...form, assigned_date: e.target.value })} />
-          </FormField>
-        </div>
-      </Modal>
+        batchId={batchId}
+        onCreated={reloadAssignments}
+      />
     </div>
   );
 }

@@ -1,21 +1,11 @@
--- ============================================================================
--- Study material — table, private storage bucket, RLS
--- ----------------------------------------------------------------------------
--- Run this in the Supabase SQL editor. It is idempotent: safe to re-run.
+-- Study material: table, view log, private storage bucket, RLS.
+-- Run after core_migration.sql — the policies use its is_admin() / current_student_id().
 --
--- Requires supabase/student_login_migration.sql to have been run first: the
--- policies below use its is_admin() and current_student_id() helpers rather than
--- re-inlining the same JWT and auth.uid() checks, so every table in the project
--- shares one definition of "admin" and "the signed-in student".
---
--- Model: the admin uploads one PDF per material and attaches it to a batch.
--- Students in that batch read it through the `watermark-material` edge function,
--- which stamps their name and phone onto every page before streaming it back.
--- The bucket is private — nothing here is ever publicly readable, and no student
--- is granted a storage policy, so the only path to the bytes is that function.
--- ============================================================================
+-- The bucket is private and no student gets a storage policy: the only path to
+-- the bytes is the `watermark-material` edge function, which stamps the tutor's
+-- name onto every page with the service role key.
 
--- ── Table ───────────────────────────────────────────────────────────────────
+-- ── 1. Tables ───────────────────────────────────────────────────────────────
 create table if not exists materials (
   id            uuid primary key default gen_random_uuid(),
   batch_id      uuid not null references batches(id) on delete cascade,
@@ -33,9 +23,7 @@ create table if not exists materials (
 create index if not exists materials_batch_id_idx on materials (batch_id);
 create index if not exists materials_created_at_idx on materials (created_at desc);
 
--- ── View log ────────────────────────────────────────────────────────────────
--- Who opened what, and when. This is what makes a watermarked leak traceable to
--- a person rather than just to a batch, so it is written on every open.
+-- Who opened what, and when — makes a watermarked leak traceable to a person.
 create table if not exists material_views (
   id           uuid primary key default gen_random_uuid(),
   material_id  uuid not null references materials(id) on delete cascade,
@@ -46,10 +34,31 @@ create table if not exists material_views (
 create index if not exists material_views_material_idx on material_views (material_id);
 create index if not exists material_views_student_idx on material_views (student_id);
 
--- ── Storage bucket ──────────────────────────────────────────────────────────
--- `public => false`. The 3rd argument caps uploads at 50 MB; the 4th restricts
--- the bucket to PDFs, so a non-PDF is rejected by storage itself and not only by
--- the upload form.
+-- ── 2. Extra columns ────────────────────────────────────────────────────────
+-- Free text on purpose: the shape (DBT-TEP<C|M>-<year>-D) is a convention, not a constraint.
+alter table batches add column if not exists batch_code text;
+
+comment on column batches.batch_code is
+  'Filename prefix for this batch''s study material, e.g. DBT-TEPC-2026-D. '
+  'Material titles are this plus an admin-entered suffix: DBT-TEPC-2026-D01.';
+
+-- The watermark names the tutor, not the reading student.
+alter table materials add column if not exists tutor_id uuid references tutors(id) on delete set null;
+
+create index if not exists materials_tutor_id_idx on materials (tutor_id);
+
+-- A folder upload stays one row per PDF; this is just the name they group under.
+alter table materials add column if not exists folder text;
+
+create index if not exists materials_folder_idx on materials (batch_id, folder);
+
+-- NULL batch_id = not tied to a batch = visible to every active student.
+-- Its storage path is `all/<uuid>.pdf`.
+alter table materials alter column batch_id drop not null;
+
+-- ── 3. Storage bucket ───────────────────────────────────────────────────────
+-- Private, PDF-only, 50 MB per file — the ceiling the watermarker can actually
+-- process, since it holds the whole document plus a copy in a ~256 MB budget.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('materials', 'materials', false, 52428800, array['application/pdf'])
 on conflict (id) do update
@@ -57,7 +66,11 @@ on conflict (id) do update
       file_size_limit    = excluded.file_size_limit,
       allowed_mime_types = excluded.allowed_mime_types;
 
--- ── RLS: materials ──────────────────────────────────────────────────────────
+update storage.buckets
+set file_size_limit = 52428800
+where id = 'materials';
+
+-- ── 4. RLS ──────────────────────────────────────────────────────────────────
 alter table materials enable row level security;
 alter table material_views enable row level security;
 
@@ -67,38 +80,31 @@ create policy "admin full access to materials" on materials
   using (is_admin())
   with check (is_admin());
 
--- A student sees the metadata of material for batches they are actively in.
 -- Metadata only — the file itself still requires the edge function.
 drop policy if exists "students read material for their batches" on materials;
 create policy "students read material for their batches" on materials
   for select
   using (
-    batch_id in (
+    batch_id is null
+    or batch_id in (
       select batch_id from batch_student_mapping
       where student_id = current_student_id() and status = 'active'
     )
   );
 
--- ── RLS: material_views ─────────────────────────────────────────────────────
 drop policy if exists "admin full access to material views" on material_views;
 create policy "admin full access to material views" on material_views
   for all
   using (is_admin())
   with check (is_admin());
 
--- A student may read and append their own view log, nothing else. The insert is
--- written by the edge function under the service role anyway; this policy exists
--- so the portal can show "last opened" without widening anything.
 drop policy if exists "students read own material views" on material_views;
 create policy "students read own material views" on material_views
   for select
   using (student_id = current_student_id());
 
--- ── RLS: storage.objects ────────────────────────────────────────────────────
--- Admins get full access to the bucket. Students get NO policy at all, on
--- purpose: with RLS enabled and no matching policy, every student request for
--- the raw object is denied. The edge function reaches the file with the service
--- role key, which bypasses RLS, and returns only a watermarked copy.
+-- Students get NO storage policy on purpose: with RLS on and no match, every
+-- direct request for the raw object is denied.
 drop policy if exists "admin manages material files" on storage.objects;
 create policy "admin manages material files" on storage.objects
   for all
