@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
+import { StatusPill } from '@/components/ui/StatusPill';
 import { Spinner } from '@/components/ui/Spinner';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
@@ -143,7 +143,7 @@ export default function FeesPage() {
                           {isPaid ? '—' : formatCurrency(remaining)}
                         </span>
                       </TD>
-                      <TD>{isPaid ? <Badge size="lg" variant="success">Paid</Badge> : <Badge size="lg" variant="warning">Due</Badge>}</TD>
+                      <TD><StatusPill kind="fee" value={isPaid ? 'paid' : 'due'} /></TD>
                       <TD>
                         <Button size="sm" className="action-button-compact" onClick={() => openPaymentLogs(fee)}>
                           <Plus size={14} /> Log Payment

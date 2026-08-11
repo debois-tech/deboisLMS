@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Layers, Search } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
+import { StatusPill } from '@/components/ui/StatusPill';
 import { Spinner } from '@/components/ui/Spinner';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -15,12 +15,6 @@ import type { Batch, BatchStatus } from '@/lib/types';
 import { formatDate } from '@/lib/utils/format';
 
 const STATUSES: BatchStatus[] = ['upcoming', 'ongoing', 'completed'];
-
-function statusVariant(status: BatchStatus) {
-  if (status === 'ongoing') return 'success' as const;
-  if (status === 'upcoming') return 'info' as const;
-  return 'default' as const;
-}
 
 export default function BatchesPage() {
   const [batches, setBatches] = useState<Batch[]>([]);
@@ -94,7 +88,7 @@ export default function BatchesPage() {
                     </TD>
                     <TD className="cell-secondary">{batch.track || '—'}</TD>
                     <TD>
-                      <Badge variant={statusVariant(batch.status)} dot>{batch.status}</Badge>
+                      <StatusPill kind="batch" value={batch.status} />
                     </TD>
                     <TD className="cell-muted">{batch.start_date ? formatDate(batch.start_date) : '—'}</TD>
                   </TR>

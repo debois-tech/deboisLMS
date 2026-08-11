@@ -2,7 +2,7 @@
 -- Run after core_migration.sql — the policies use its is_admin() / current_student_id().
 --
 -- The bucket is private and no student gets a storage policy: the only path to
--- the bytes is the `watermark-material` edge function, which stamps the tutor's
+-- the bytes is the `watermark-material` edge function, which stamps the company
 -- name onto every page with the service role key.
 
 -- ── 1. Tables ───────────────────────────────────────────────────────────────
@@ -42,7 +42,7 @@ comment on column batches.batch_code is
   'Filename prefix for this batch''s study material, e.g. DBT-TEPC-2026-D. '
   'Material titles are this plus an admin-entered suffix: DBT-TEPC-2026-D01.';
 
--- The watermark names the tutor, not the reading student.
+-- Who the material came from, for the listings. Not part of the watermark.
 alter table materials add column if not exists tutor_id uuid references tutors(id) on delete set null;
 
 create index if not exists materials_tutor_id_idx on materials (tutor_id);

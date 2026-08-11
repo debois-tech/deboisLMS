@@ -48,6 +48,9 @@ create table batches (
 -- -----------------------------------------------------------
 create table students (
   id           uuid primary key default gen_random_uuid(),
+  -- Permanent institution-wide ID, independent of every batch. Issued by the
+  -- database on insert; prefix and width: supabase/migration_2026_08_11.sql
+  student_code text unique not null default next_student_code(),
   name         text not null,
   phone        text,
   email        text,
@@ -94,7 +97,8 @@ create table lectures (
   lecture_date              date not null,
   session_type              session_type default 'online',
   meeting_code              text,
-  scheduled_duration_minutes int,
+  -- The denominator for every attendance percentage: >=90% present, >=65% partial.
+  scheduled_duration_minutes int default 120,
   created_at                timestamptz default now()
 );
 
@@ -286,14 +290,14 @@ create table student_repos (
 -- 12c. STUDY MATERIAL (PDF per batch, watermarked per student)
 -- -----------------------------------------------------------
 -- The file itself lives in the private `materials` storage bucket; only the
--- edge function (service role) can reach it, and it stamps the reading
--- student's name and phone onto every page before returning it.
+-- edge function (service role) can reach it, and it stamps the company name
+-- onto every page before returning it.
 -- Bucket, RLS and view-log policies: supabase/study_material_migration.sql
 create table materials (
   id           uuid primary key default gen_random_uuid(),
   -- NULL means the material is for every student, not one batch.
   batch_id     uuid references batches(id) on delete cascade,
-  -- Whose name the watermark carries, alongside the company phone number.
+  -- Who the material came from, for the listings. Not part of the watermark.
   tutor_id     uuid references tutors(id) on delete set null,
   title        text not null,
   description  text,

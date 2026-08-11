@@ -10,6 +10,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { BatchSelect } from '@/components/ui/BatchSelect';
 import { AssignmentSelect } from '@/components/ui/AssignmentSelect';
 import { AssignmentSubmissionTable } from '@/components/assignments/AssignmentSubmissionTable';
+import { AssignmentFiles } from '@/components/assignments/AssignmentFiles';
 import { NewAssignmentModal } from '@/components/assignments/NewAssignmentModal';
 import { getBatches, getAssignmentsByBatch } from '@/lib/supabase';
 import type { Batch, Assignment } from '@/lib/types';
@@ -62,6 +63,13 @@ export default function AssignmentsPage() {
           ) : (
             <AssignmentSelect assignments={assignments} value={selectedAsgn} onChange={setSelectedAsgn} />
           )}
+        </Card>
+      )}
+
+      {selectedBatch && selectedAsgn && (
+        <Card>
+          <CardHeader title="Files" />
+          <AssignmentFiles key={selectedAsgn} assignmentId={selectedAsgn} batchId={selectedBatch} />
         </Card>
       )}
 

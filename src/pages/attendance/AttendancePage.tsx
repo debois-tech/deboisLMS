@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { ClipboardCheck, Upload, Loader2, Plus } from 'lucide-react';
+import { ClipboardCheck, Upload, Loader2, Plus, AlertTriangle, PenLine } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
@@ -13,8 +13,10 @@ import { LectureSelect } from '@/components/ui/LectureSelect';
 import { FormField } from '@/components/ui/FormField';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { AttendanceRecordsTable } from '@/components/attendance/AttendanceRecordsTable';
+import { ManualAttendance } from '@/components/attendance/ManualAttendance';
+import { DEFAULT_LECTURE_MINUTES } from '@/lib/attendance/types';
 import { getLecturesByBatch, createLecture } from '@/lib/supabase';
-import { getAttendanceByLecture, insertUploadRows, processAttendance, setAttendanceApproved, bulkApproveAttendance } from '@/lib/supabase';
+import { getAttendanceByLecture, insertUploadRows, processAttendance, setAttendanceApproved, bulkApproveAttendance, updateLecture } from '@/lib/supabase';
 import type { ProcessingReport } from '@/lib/supabase';
 import { getBatches } from '@/lib/supabase';
 import type { Batch, Lecture, AttendanceRecord } from '@/lib/types';
@@ -22,6 +24,7 @@ import { parseCsv } from '@/lib/utils/csvParser';
 import type { CsvRow } from '@/lib/utils/csvParser';
 import { useToast } from '@/lib/context/ToastContext';
 import { errorMessage } from '@/lib/utils/errors';
+import { formatDate } from '@/lib/utils/format';
 
 export default function AttendancePage() {
   const [batches, setBatches] = useState<Batch[]>([]);
@@ -34,6 +37,9 @@ export default function AttendancePage() {
 
   const [csvRows, setCsvRows] = useState<CsvRow[]>([]);
   const [csvFileName, setCsvFileName] = useState('');
+  const [csvMeetingCode, setCsvMeetingCode] = useState('');
+  const [forceUpload, setForceUpload] = useState(false);
+  const [showManual, setShowManual] = useState(false);
   const [showNewLecture, setShowNewLecture] = useState(false);
   const [newLectureDate, setNewLectureDate] = useState('');
   const [newLectureMeeting, setNewLectureMeeting] = useState('');
@@ -52,8 +58,7 @@ export default function AttendancePage() {
     setSelectedBatch(batchId);
     setSelectedLecture(null);
     setRecords([]);
-    setCsvRows([]);
-    setCsvFileName('');
+    resetCsv();
     try {
       setLectures(await getLecturesByBatch(batchId));
     } catch (err) {
@@ -74,20 +79,49 @@ export default function AttendancePage() {
     setLoadingRecords(false);
   };
 
+  const resetCsv = () => {
+    setCsvRows([]);
+    setCsvFileName('');
+    setCsvMeetingCode('');
+    setForceUpload(false);
+    if (fileRef.current) fileRef.current.value = '';
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setCsvFileName(file.name);
+    setForceUpload(false);
 
     const reader = new FileReader();
     reader.onload = (ev) => {
       const text = ev.target?.result as string;
       const parsed = parseCsv(text);
-      setCsvRows(parsed);
+      setCsvRows(parsed.rows);
+      setCsvMeetingCode(parsed.meetingCode ?? '');
     };
     reader.readAsText(file);
   };
+
+  const lecture = lectures.find((l) => l.id === selectedLecture);
+
+  /*
+   * A re-upload of the same export is caught here rather than in the database:
+   * the pipeline upserts on (student, lecture), so a duplicate silently rewrites
+   * records an admin may already have corrected by hand. The signal is the
+   * meeting code the Meet export carries — if this lecture already has records
+   * and the code matches the one stored on it, this file has been through
+   * already. It is a warning, not a wall: "Upload anyway" is always there,
+   * because a genuinely corrected export deserves a second run.
+   */
+  const looksAlreadyUploaded = Boolean(
+    records.length > 0 &&
+    csvRows.length > 0 &&
+    csvMeetingCode &&
+    lecture?.meeting_code &&
+    csvMeetingCode.trim().toLowerCase() === lecture.meeting_code.trim().toLowerCase(),
+  );
 
   // Uploads the CSV into the `uploads` table, then immediately processes it into
   // attendance records and clears the uploads — one action end-to-end for the admin.
@@ -97,14 +131,20 @@ export default function AttendancePage() {
     setLastReport(null);
 
     try {
-      const lecture = lectures.find((l) => l.id === selectedLecture);
-      await insertUploadRows(selectedLecture, lecture?.meeting_code ?? '', lecture?.lecture_date, csvRows);
+      const code = lecture?.meeting_code || csvMeetingCode;
+      await insertUploadRows(selectedLecture, code, lecture?.lecture_date, csvRows);
       const report = await processAttendance(selectedLecture);
+
+      // Remember the code the export came with, so the next upload of the same
+      // file has something to be recognised against.
+      if (!lecture?.meeting_code && csvMeetingCode) {
+        await updateLecture(selectedLecture, { meeting_code: csvMeetingCode });
+        setLectures(await getLecturesByBatch(selectedBatch!));
+      }
+
       setLastReport(report);
       loadRecords(selectedLecture);
-      setCsvRows([]);
-      setCsvFileName('');
-      if (fileRef.current) fileRef.current.value = '';
+      resetCsv();
 
       const parts = [`${report.attendanceInserted} attendance records created`];
       if (report.tutorsDetected.length > 0) parts.push(`${report.tutorsDetected.length} tutor(s) detected`);
@@ -148,7 +188,7 @@ export default function AttendancePage() {
         lecture_date: newLectureDate,
         meeting_code: newLectureMeeting || undefined,
         session_type: 'online',
-        scheduled_duration_minutes: 90,
+        scheduled_duration_minutes: DEFAULT_LECTURE_MINUTES,
       });
       setShowNewLecture(false);
       setNewLectureDate('');
@@ -240,10 +280,31 @@ export default function AttendancePage() {
                 </div>
               )}
 
+              {looksAlreadyUploaded && (
+                <div className="repo-notice is-warning">
+                  <AlertTriangle size={14} className="shrink-0" />
+                  <span>
+                    This lecture already has attendance from meeting code{' '}
+                    <strong>{lecture?.meeting_code}</strong>, and this file carries the same one —
+                    it looks like it has been uploaded already. Re-processing overwrites records,
+                    including any you have corrected by hand.
+                  </span>
+                </div>
+              )}
+
               {showUploadAction && (
-                <Button onClick={handleUploadAndProcess} loading={processing}>
-                  <Upload size={16} /> Upload &amp; Process Attendance
-                </Button>
+                looksAlreadyUploaded && !forceUpload ? (
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="secondary" onClick={() => setForceUpload(true)}>
+                      Upload anyway
+                    </Button>
+                    <Button variant="ghost" onClick={resetCsv}>Choose another file</Button>
+                  </div>
+                ) : (
+                  <Button onClick={handleUploadAndProcess} loading={processing}>
+                    <Upload size={16} /> Upload &amp; Process Attendance
+                  </Button>
+                )
               )}
 
               {processing && (
@@ -256,7 +317,14 @@ export default function AttendancePage() {
           </Card>
 
           <Card>
-            <CardHeader title="Attendance records" />
+            <CardHeader
+              title="Attendance records"
+              action={
+                <Button size="sm" variant="secondary" className="action-button-compact" onClick={() => setShowManual(true)}>
+                  <PenLine size={14} /> Mark manually
+                </Button>
+              }
+            />
             {loadingRecords ? (
               <Spinner />
             ) : records.length === 0 ? (
@@ -272,6 +340,24 @@ export default function AttendancePage() {
           </Card>
         </>
       )}
+
+      <Modal
+        open={showManual}
+        onClose={() => setShowManual(false)}
+        title="Mark attendance"
+        description={lecture ? `${formatDate(lecture.lecture_date)}${lecture.meeting_code ? ` · ${lecture.meeting_code}` : ''}` : undefined}
+        size="xl"
+      >
+        {selectedLecture && selectedBatch && (
+          <ManualAttendance
+            key={selectedLecture}
+            lectureId={selectedLecture}
+            batchId={selectedBatch}
+            scheduledMinutes={lecture?.scheduled_duration_minutes ?? undefined}
+            onChanged={() => loadRecords(selectedLecture)}
+          />
+        )}
+      </Modal>
 
       <Modal
         open={showNewLecture}

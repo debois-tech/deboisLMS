@@ -32,12 +32,13 @@ export function Badge({ children, variant = 'default', size = 'md', dot }: Badge
   return (
     <span
       className={clsx(
-        'inline-flex items-center gap-1.5 rounded-full font-medium',
-        size === 'sm' ? 'px-2.5 py-1 text-[11px]' : size === 'md' ? 'px-3 py-1.5 text-xs' : 'px-3.5 py-2 text-sm',
+        // Padding comes from `.ui-badge*`, not from Tailwind — see globals.css.
+        'ui-badge inline-flex items-center gap-2 rounded-full font-medium leading-4',
+        size === 'sm' ? 'ui-badge-sm text-[11px]' : size === 'lg' ? 'ui-badge-lg text-sm' : 'text-xs',
         variants[variant]
       )}
     >
-      {dot && <span className={clsx('w-1.5 h-1.5 rounded-full', dotColors[variant])} />}
+      {dot && <span className={clsx('w-2 h-2 shrink-0 rounded-full', dotColors[variant])} />}
       {children}
     </span>
   );

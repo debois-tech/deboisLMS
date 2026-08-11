@@ -37,6 +37,8 @@ export interface Batch {
 
 export interface Student {
   id: string;
+  /** Permanent institution-wide ID, e.g. DBT0001. Issued by the database — never sent on insert. */
+  student_code?: string;
   name: string;
   phone?: string;
   email?: string;
@@ -172,7 +174,11 @@ export interface Material {
   id: string;
   /** Null means the material is for every student rather than one batch. */
   batch_id?: string | null;
-  /** Whose name the watermark carries, alongside the company phone number. */
+  /** Set when this is an assignment's handout rather than library material. */
+  assignment_id?: string | null;
+  /** Decides delivery: paged and watermarked, shown as text, or downloaded. */
+  mime_type?: string;
+  /** Who the material came from, for the listings. Not part of the watermark. */
   tutor_id?: string | null;
   title: string;
   description?: string;

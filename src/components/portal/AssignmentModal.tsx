@@ -5,6 +5,7 @@ import { Modal } from '@/components/ui/Modal';
 import { FormField } from '@/components/ui/FormField';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { PortalStatus } from '@/components/portal/PortalStatus';
+import { AssignmentFiles } from '@/components/assignments/AssignmentFiles';
 import type { Assignment, AssignmentCompletion } from '@/lib/types';
 import { formatDate, formatDateTime } from '@/lib/utils/format';
 import { assignmentState, formatDeadline, formatDueLabel } from '@/lib/utils/deadline';
@@ -120,6 +121,10 @@ function AssignmentModalBody({ assignment, repoUrl, now, onClose, onSubmit }: As
           <p className={`assignment-detail-body ${assignment?.description ? '' : 'is-empty'}`}>
             {assignment?.description || 'No details added.'}
           </p>
+
+          {assignment && (
+            <AssignmentFiles assignmentId={assignment.id} batchId={assignment.batch_id} readOnly />
+          )}
 
           {missed && (
             <p className="repo-notice is-danger">

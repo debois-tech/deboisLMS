@@ -16,6 +16,7 @@ export default function NewBatchPage() {
   const [form, setForm] = useState({
     name: '',
     track: '',
+    // Status is not picked by hand — it follows the start date.
     status: 'upcoming' as const,
     start_date: '',
     batch_code: '',
@@ -64,20 +65,6 @@ export default function NewBatchPage() {
               placeholder="Select track"
               searchPlaceholder="Search tracks"
               emptyText="No tracks found"
-            />
-          </FormField>
-          <FormField label="Status">
-            <SearchSelect
-              options={[
-                { value: 'upcoming', label: 'Upcoming' },
-                { value: 'ongoing', label: 'Ongoing' },
-                { value: 'completed', label: 'Completed' },
-              ]}
-              value={form.status}
-              onChange={(status) => setForm({ ...form, status: status as typeof form.status })}
-              placeholder="Select status"
-              searchPlaceholder="Search statuses"
-              emptyText="No statuses found"
             />
           </FormField>
           <FormField label="Batch Code">

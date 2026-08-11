@@ -17,15 +17,30 @@ const json = (body: unknown, status = 200, extraHeaders: Record<string, string> 
 const THROTTLE_SECONDS = 60;
 const THROTTLE_MAX_OPENS = 20;
 
-/** Shown on every page, under every tutor name. */
-const COMPANY_NAME = 'DeboisTech';
-const COMPANY_PHONE = '8263830296';
+/** The whole stamp: a shared copy still advertises where it came from. */
+const COMPANY_NAME = 'deboistech';
 
 /**
  * pdf-lib holds the whole document in memory, so past this size the function is
  * killed mid-render. Backstop for anything uploaded before the bucket limit was set.
  */
 const MAX_WATERMARK_BYTES = 50 * 1024 * 1024;
+
+const IMAGE_TYPES = ['image/png', 'image/jpeg'];
+
+/**
+ * An image becomes a one-page PDF sized to it, so the stamping and the paged
+ * reader below work on a photo exactly as they do on a document. WebP is absent
+ * because pdf-lib cannot embed it — the browser converts those to PNG on upload.
+ */
+async function imageToPdf(bytes: ArrayBuffer, mimeType: string): Promise<ArrayBuffer> {
+  const pdf = await PDFDocument.create();
+  const image = mimeType === 'image/png' ? await pdf.embedPng(bytes) : await pdf.embedJpg(bytes);
+  const page = pdf.addPage([image.width, image.height]);
+  page.drawImage(image, { x: 0, y: 0, width: image.width, height: image.height });
+  const saved = await pdf.save({ useObjectStreams: false });
+  return saved.buffer.slice(saved.byteOffset, saved.byteOffset + saved.byteLength) as ArrayBuffer;
+}
 
 /** Two layers: the tiled diagonal survives crops, the footer bar survives downscaled screenshots. */
 async function stamp(pdfBytes: ArrayBuffer, identity: string, issuedAt: string): Promise<Uint8Array> {
@@ -103,7 +118,7 @@ Deno.serve(async (req) => {
 
     const { data: material } = await admin
       .from('materials')
-      .select('id, batch_id, title, storage_path, size_bytes, tutor:tutors(name)')
+      .select('id, batch_id, title, storage_path, size_bytes, mime_type')
       .eq('id', material_id)
       .single();
 
@@ -115,10 +130,6 @@ Deno.serve(async (req) => {
         413,
       );
     }
-
-    // The stamp is the same for everyone — a shared copy still advertises where it came from.
-    const tutorName = (material.tutor as { name?: string } | null)?.name;
-    const identity = [tutorName, COMPANY_NAME, COMPANY_PHONE].filter(Boolean).join(' · ');
 
     const role = caller.app_metadata?.role;
     let studentId: string | null = null;
@@ -177,20 +188,34 @@ Deno.serve(async (req) => {
 
     if (downloadError || !file) return json({ error: 'The file is missing from storage.' }, 404);
 
-    const issuedAt = new Date().toISOString().slice(0, 16).replace('T', ' ');
-    const stamped = await stamp(await file.arrayBuffer(), identity, issuedAt);
-
+    // The view log is written for every kind, watermarked or not: it is the half
+    // of the trail that says who opened what, and a .zip needs that most.
     if (studentId) {
       await admin.from('material_views').insert({ material_id: material.id, student_id: studentId });
     }
 
+    const mimeType = material.mime_type ?? 'application/pdf';
+    const noStore = {
+      ...corsHeaders,
+      'Cache-Control': 'no-store, no-cache, must-revalidate, private',
+    };
+
+    // Anything the reader cannot page — text, sheets, decks, archives — goes back
+    // untouched. There is no way to stamp a .zip, and re-encoding one would only
+    // break it.
+    if (mimeType !== 'application/pdf' && !IMAGE_TYPES.includes(mimeType)) {
+      return new Response(await file.arrayBuffer(), {
+        headers: { ...noStore, 'Content-Type': mimeType, 'Content-Disposition': 'inline' },
+      });
+    }
+
+    const raw = await file.arrayBuffer();
+    const pdfBytes = IMAGE_TYPES.includes(mimeType) ? await imageToPdf(raw, mimeType) : raw;
+    const issuedAt = new Date().toISOString().slice(0, 16).replace('T', ' ');
+    const stamped = await stamp(pdfBytes, COMPANY_NAME, issuedAt);
+
     return new Response(stamped, {
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'application/pdf',
-        'Cache-Control': 'no-store, no-cache, must-revalidate, private',
-        'Content-Disposition': 'inline',
-      },
+      headers: { ...noStore, 'Content-Type': 'application/pdf', 'Content-Disposition': 'inline' },
     });
   } catch (err) {
     return json({ error: (err as Error).message }, 500);

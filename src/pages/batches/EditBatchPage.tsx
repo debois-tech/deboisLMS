@@ -76,20 +76,6 @@ export default function EditBatchPage() {
               emptyText="No tracks found"
             />
           </FormField>
-          <FormField label="Status">
-            <SearchSelect
-              options={[
-                { value: 'upcoming', label: 'Upcoming' },
-                { value: 'ongoing', label: 'Ongoing' },
-                { value: 'completed', label: 'Completed' },
-              ]}
-              value={form.status}
-              onChange={(status) => setForm({ ...form, status: status as Batch['status'] })}
-              placeholder="Select status"
-              searchPlaceholder="Search statuses"
-              emptyText="No statuses found"
-            />
-          </FormField>
           <FormField label="Batch Code">
             <input
               value={form.batch_code ?? ''}

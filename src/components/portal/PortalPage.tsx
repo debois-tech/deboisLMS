@@ -12,6 +12,8 @@ interface PortalPageProps {
   title: ReactNode;
   /** A single control that acts on the whole page, e.g. a search field. */
   action?: ReactNode;
+  /** A short identity fact that belongs beside the title, e.g. the student's ID. Not a control. */
+  meta?: ReactNode;
   loading?: boolean;
   /**
    * The load failed. Takes over the page, because the alternative is a student
@@ -25,11 +27,12 @@ interface PortalPageProps {
 }
 
 /** Frame for every portal section: title, optional control, loading placeholder, error state. */
-export function PortalPage({ title, action, loading, error, onRetry, shape = 'dashboard', children }: PortalPageProps) {
+export function PortalPage({ title, action, meta, loading, error, onRetry, shape = 'dashboard', children }: PortalPageProps) {
   return (
     <div className="portal-page">
       <div className="portal-page-head">
         <h1 className="portal-page-title">{title}</h1>
+        {meta}
         {action}
       </div>
       {loading ? <PortalLoading shape={shape} /> : error ? <PortalError onRetry={onRetry} /> : children}

@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Edit3, Users, GraduationCap, Layers, ClipboardCheck, FileText, Plus, Trash2, ChevronRight, CalendarDays, Upload } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
+import { StatusPill } from '@/components/ui/StatusPill';
 import { Tabs } from '@/components/ui/Tabs';
 import { Spinner } from '@/components/ui/Spinner';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -15,8 +15,11 @@ import { StudentMultiSelect } from '@/components/ui/StudentMultiSelect';
 import { SearchSelect } from '@/components/ui/SearchSelect';
 import { FormField } from '@/components/ui/FormField';
 import { AttendanceRecordsTable } from '@/components/attendance/AttendanceRecordsTable';
+import { DEFAULT_LECTURE_MINUTES } from '@/lib/attendance/types';
 import { AssignmentSubmissionTable } from '@/components/assignments/AssignmentSubmissionTable';
 import { NewAssignmentModal } from '@/components/assignments/NewAssignmentModal';
+import { AssignmentFiles } from '@/components/assignments/AssignmentFiles';
+import { BatchMaterials } from '@/components/materials/BatchMaterials';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { StudentLink } from '@/components/students/StudentLink';
 import { PaymentLogModal, type PaymentLogFormState } from '@/components/finance/PaymentLogModal';
@@ -62,7 +65,7 @@ export default function BatchDetailPage() {
         <div className="min-w-0">
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-xl font-bold text-[var(--text-primary)] tracking-tight truncate">{batch.name}</h1>
-            <Badge variant={batch.status === 'ongoing' ? 'success' : batch.status === 'upcoming' ? 'warning' : 'info'}>{batch.status}</Badge>
+            <StatusPill kind="batch" value={batch.status} />
           </div>
           <p className="text-sm text-[var(--text-muted)] mt-0.5">
             {batch.track} • Started {batch.start_date ? formatDate(batch.start_date) : 'N/A'}
@@ -82,6 +85,7 @@ export default function BatchDetailPage() {
           { label: 'Attendance', value: 'attendance' },
           { label: 'Finance', value: 'finance' },
           { label: 'Assignments', value: 'assignments' },
+          { label: 'Material', value: 'material' },
         ]}
         defaultValue="overview"
       >
@@ -94,6 +98,7 @@ export default function BatchDetailPage() {
             {active === 'attendance' && <AttendanceTab batchId={batch.id} />}
             {active === 'finance' && <FinanceTab batchId={batch.id} />}
             {active === 'assignments' && <AssignmentsTab batchId={batch.id} />}
+            {active === 'material' && <BatchMaterials batchId={batch.id} batchCode={batch.batch_code} />}
           </>
         )}
       </Tabs>
@@ -242,7 +247,7 @@ function StudentsTab({ batchId }: { batchId: string }) {
                 <p className="text-xs text-[var(--text-muted)]">{s.email ?? s.phone ?? '—'}</p>
               </div>
               <div className="flex items-center gap-2">
-                <Badge variant={s.mapping.status === 'active' ? 'success' : 'danger'}>{s.mapping.status}</Badge>
+                <StatusPill kind="enrollment" value={s.mapping.status} />
                 <button onClick={() => handleRemove(s.mapping.id, s.name)} aria-label={`Remove ${s.name} from batch`} className="text-[var(--text-muted)] hover:text-[var(--danger-text)] p-1">
                   <Trash2 size={14} />
                 </button>
@@ -377,7 +382,7 @@ function TutorsTab({ batchId }: { batchId: string }) {
 function LecturesTab({ batchId }: { batchId: string }) {
   const [lectures, setLectures] = useState<Lecture[]>([]);
   const [showNew, setShowNew] = useState(false);
-  const [form, setForm] = useState({ lecture_date: '', meeting_code: '', scheduled_duration_minutes: 90 });
+  const [form, setForm] = useState({ lecture_date: '', meeting_code: '', scheduled_duration_minutes: DEFAULT_LECTURE_MINUTES });
 
   const { showToast } = useToast();
   const confirm = useConfirm();
@@ -392,7 +397,7 @@ function LecturesTab({ batchId }: { batchId: string }) {
     try {
       await createLecture({ ...form, batch_id: batchId, session_type: 'online' });
       setShowNew(false);
-      setForm({ lecture_date: '', meeting_code: '', scheduled_duration_minutes: 90 });
+      setForm({ lecture_date: '', meeting_code: '', scheduled_duration_minutes: DEFAULT_LECTURE_MINUTES });
       void reloadLectures();
       showToast('Lecture created');
     } catch (error) {
@@ -650,7 +655,7 @@ function FinanceTab({ batchId }: { batchId: string }) {
       <div className="grid grid-cols-3 gap-4">
         <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Total Fees</p><p className="text-lg font-bold text-[var(--text-primary)] mt-1">{formatCurrency(totalFee)}</p></Card>
         <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Collected</p><p className="text-lg font-bold text-[var(--success-text)] mt-1">{formatCurrency(totalPaid)}</p></Card>
-        <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Outstanding</p><p className="text-lg font-bold text-[var(--danger-text)] mt-1">{formatCurrency(totalFee - totalPaid)}</p></Card>
+        <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Pending Due</p><p className="text-lg font-bold text-[var(--danger-text)] mt-1">{formatCurrency(totalFee - totalPaid)}</p></Card>
       </div>
 
       <Card>
@@ -687,7 +692,7 @@ function FinanceTab({ batchId }: { batchId: string }) {
                       </span>
                     </TD>
                     <TD>
-                      {remaining > 0 ? <Badge variant="warning">Due</Badge> : <Badge variant="success">Paid</Badge>}
+                      <StatusPill kind="fee" value={remaining > 0 ? 'due' : 'paid'} />
                     </TD>
                     <TD>
                       <Button size="sm" className="action-button-compact" onClick={() => openPaymentLogs(fee)}>
@@ -756,6 +761,13 @@ function AssignmentsTab({ batchId }: { batchId: string }) {
           </div>
         )}
       </Card>
+
+      {selectedAsgn && (
+        <Card>
+          <CardHeader title="Files" />
+          <AssignmentFiles key={selectedAsgn} assignmentId={selectedAsgn} batchId={batchId} />
+        </Card>
+      )}
 
       {selectedAsgn && (
         <Card>

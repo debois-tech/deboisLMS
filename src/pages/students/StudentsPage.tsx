@@ -54,6 +54,7 @@ export default function StudentsPage() {
     if (!query) return true;
     return (
       s.name.toLowerCase().includes(query) ||
+      (s.student_code ?? '').toLowerCase().includes(query) ||
       (s.phone ?? '').toLowerCase().includes(query) ||
       (s.email ?? '').toLowerCase().includes(query)
     );
@@ -108,7 +109,7 @@ export default function StudentsPage() {
             <SearchFilterBar
               value={search}
               onChange={setSearch}
-              placeholder="Search by name, phone, or email"
+              placeholder="Search by ID, name, phone, or email"
               filterLabel="Filter by batch"
               allLabel="All batches"
               filterValue={selectedBatchId}
@@ -124,6 +125,7 @@ export default function StudentsPage() {
               <THead>
                 <TR>
                   <TH>Student</TH>
+                  <TH>ID</TH>
                   <TH>Phone</TH>
                   <TH>Email</TH>
                 </TR>
@@ -137,6 +139,7 @@ export default function StudentsPage() {
                         <span className="font-semibold text-[var(--text-primary)] group-hover:text-[var(--primary)]">{s.name}</span>
                       </Link>
                     </TD>
+                    <TD className="cell-secondary font-mono">{s.student_code || '—'}</TD>
                     <TD className="cell-secondary">{s.phone || '—'}</TD>
                     <TD className="cell-muted">{s.email || '—'}</TD>
                   </TR>

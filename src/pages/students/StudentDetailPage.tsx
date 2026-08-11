@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Mail, Phone, Layers, CalendarDays, History } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
+import { StatusPill } from '@/components/ui/StatusPill';
 import { Spinner } from '@/components/ui/Spinner';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -10,6 +10,7 @@ import { NotFound } from '@/components/ui/NotFound';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import { StudentLoginCard } from '@/components/students/StudentLoginCard';
+import { StudentIdChip } from '@/components/students/StudentLink';
 import { getStudentById, getStudentBatches, getFeesByStudent, getLecturesByBatch, getFeePaymentLogsByStudent } from '@/lib/supabase';
 import type { Student, BatchStudentMapping, Batch, StudentFee, Lecture, FeePaymentLog } from '@/lib/types';
 import { formatDate, formatCurrency } from '@/lib/utils/format';
@@ -77,9 +78,12 @@ export default function StudentDetailPage() {
           <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[var(--radius-lg)] bg-[var(--primary)]/10 text-xl font-bold text-[var(--primary)]">
             {student.name.split(' ').map((n) => n[0]).slice(0, 2).join('')}
           </div>
-          <div className="min-w-0 flex-1">
-            <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)] break-words">{student.name}</h1>
-            <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[var(--text-muted)]">
+          <div className="student-identity min-w-0 flex-1">
+            <div className="student-identity-name">
+              <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)] break-words">{student.name}</h1>
+              <StudentIdChip code={student.student_code} showLabel={false} />
+            </div>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[var(--text-muted)]">
               {student.email && <span className="flex min-w-0 items-center gap-2"><Mail size={15} className="shrink-0 text-[var(--primary)]" /> <span className="break-all">{student.email}</span></span>}
               {student.email && student.phone && <span className="text-[var(--border-strong)]">|</span>}
               {student.phone && <span className="flex items-center gap-1"><Phone size={14} className="shrink-0" /> {student.phone}</span>}
@@ -169,7 +173,7 @@ export default function StudentDetailPage() {
                     <p className="mt-1 flex items-center gap-1 text-xs text-[var(--text-muted)]"><CalendarDays size={12} /> Joined {formatDate(m.joined_at)}</p>
                   </div>
                 </div>
-                <Badge size="lg" variant={m.status === 'active' ? 'success' : 'danger'} dot>{m.status}</Badge>
+                <StatusPill kind="enrollment" value={m.status} />
               </Link>
             ))}
           </div>

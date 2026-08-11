@@ -936,6 +936,83 @@ html.light .glass {
   .student-summary-card { min-height: 7.5rem; }
 }
 
+/* ── Student ID ──────────────────────────────────────────────── */
+/* Identity, not a stat, so it is a single line rather than a tile: quiet label,
+   the code itself in the strongest voice on the row, copy button on the end. Same
+   object on the admin record and on the student's own portal — the code an admin
+   reads out has to look like the one the student is looking at. */
+.student-id {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.375rem 0.375rem 0.375rem 0.875rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+}
+
+/* --text-secondary, not --text-muted: at this size the muted token lands at
+   4.4:1 on --bg-elevated in the light theme, under the floor. */
+.student-id-label {
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+
+/* Monospace because it is read and transcribed character by character, and the
+   digits have to line up between one student's code and the next. */
+.student-id-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-primary);
+}
+
+.student-id-copy {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  transition: color 0.15s, background-color 0.15s;
+}
+
+.student-id-copy:hover {
+  background: var(--bg-overlay);
+  color: var(--text-primary);
+}
+
+.student-id-copy:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Nothing to the left of the code, so the label's extra room comes back off. */
+.student-id.is-bare { padding-left: 0.75rem; }
+
+/* Name and ID on one line, contacts under them. Owns its own spacing because the
+   utility margins here never applied. */
+.student-identity {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.875rem;
+}
+
+.student-identity-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.875rem;
+}
+
 .credential-row {
   display: flex;
   align-items: center;
@@ -1060,6 +1137,13 @@ html.light .glass {
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--bg-elevated) 45%, transparent);
 }
+
+/* The reset above is unlayered, so it outranks Tailwind's `@layer utilities` and
+   its padding classes never reach a pill. Padding lives here instead, as it does
+   for the cards and the tabs. */
+.ui-badge    { padding: 0.5rem 1rem; }
+.ui-badge-sm { padding: 0.375rem 0.875rem; }
+.ui-badge-lg { padding: 0.625rem 1.25rem; }
 
 .batch-tabs-bar {
   padding: 0.5rem 0.625rem;
@@ -2082,6 +2166,264 @@ html.light .glass {
 }
 
 .material-viewer-status.is-error { color: var(--danger-text); }
+
+/* Markdown and plain text are shown as written — no parser, so a heading stays
+   `# Heading` and a fenced block stays fenced. Monospace and preserved
+   whitespace are the point: these files are usually commands to be copied. */
+.material-text {
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: 1.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8125rem;
+  line-height: 1.75;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  /* The body turns selection off for the canvas pages; text is there to be read
+     and copied, so it turns it back on. */
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* The handover, for a file no reader can show. Deliberately plain: it is a fact
+   about the file and one action, not a preview pretending to be one. */
+.material-handover {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  max-width: 26rem;
+  margin: 4rem auto 0;
+  padding: 2.5rem 2rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  text-align: center;
+}
+
+.material-handover-kind {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.material-handover-title {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.material-handover-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--radius-md);
+  background: var(--primary);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-inverse);
+  transition: background-color 0.15s, opacity 0.15s;
+}
+
+.material-handover-action:hover { background: var(--primary-dark); }
+.material-handover-action:disabled { opacity: 0.6; }
+
+.material-handover-action:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+}
+
+/* ── Manual attendance ───────────────────────────────────────── */
+/* The global form rules stretch every input to the full cell; inside a data row
+   a control should be the width of what it holds and no more. */
+.manual-attendance-field {
+  width: auto;
+  min-width: 7rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8125rem;
+  text-transform: capitalize;
+}
+
+.manual-attendance-field.is-minutes {
+  min-width: 5.5rem;
+  text-transform: none;
+}
+
+.manual-attendance-count {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.manual-attendance-note {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* ── Assignment files ────────────────────────────────────────── */
+/* One list, hairlines between rows — the same shape the portal uses everywhere,
+   so an attachment reads as a thing to open rather than as an inline control. */
+.assignment-files {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.assignment-files-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.assignment-files-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.assignment-files-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.875rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.assignment-files-add:hover {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.assignment-files-add.is-busy { cursor: progress; }
+
+.assignment-files-add:focus-within {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.assignment-files-empty {
+  font-size: 0.75rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+.assignment-files-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  list-style: none;
+  overflow: hidden;
+}
+
+.assignment-files-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-right: 0.5rem;
+}
+
+.assignment-files-row + .assignment-files-row {
+  border-top: 1px solid var(--border);
+}
+
+.assignment-files-open {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0.75rem 0.875rem;
+  text-align: left;
+  transition: background-color 0.15s;
+}
+
+.assignment-files-open:hover { background: var(--bg-elevated); }
+
+/* A file picked but not yet uploaded is a fact on the form, not something to
+   open — no hover, so it never offers a click it cannot honour. */
+.assignment-files-open.is-static { cursor: default; }
+.assignment-files-open.is-static:hover { background: none; }
+
+.assignment-files-open:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+/* Fixed width so the names below start on one line rather than stepping in and
+   out as the type changes. */
+.assignment-files-kind {
+  flex-shrink: 0;
+  width: 3.5rem;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.assignment-files-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assignment-files-size {
+  flex-shrink: 0;
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+}
+
+.assignment-files-remove {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  transition: color 0.15s, background-color 0.15s;
+}
+
+.assignment-files-remove:hover {
+  background: var(--bg-overlay);
+  color: var(--danger-text);
+}
+
+.assignment-files-remove:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
 
 .material-viewer-note {
   max-width: 52rem;

@@ -17,9 +17,20 @@ export async function getStudentById(id: string): Promise<Student | undefined> {
   );
 }
 
+/**
+ * `student_code` is the database's to issue and never to rewrite, so it is
+ * stripped from anything the app sends — a form that round-trips a whole student
+ * would otherwise put it back on the wire.
+ */
+function withoutCode(input: Partial<Student>): Partial<Student> {
+  const fields = { ...input };
+  delete fields.student_code;
+  return fields;
+}
+
 export async function createStudent(input: Omit<Student, 'id' | 'created_at'>): Promise<Student> {
   return row<Student>(
-    await supabase.from('students').insert(input).select().single(),
+    await supabase.from('students').insert(withoutCode(input)).select().single(),
     'Could not create the student',
   );
 }
@@ -71,7 +82,7 @@ export async function createOrReuseStudent(input: Omit<Student, 'id' | 'created_
 
 export async function updateStudent(id: string, input: Partial<Student>): Promise<Student | undefined> {
   return maybeRow<Student>(
-    await supabase.from('students').update(input).eq('id', id).select().single(),
+    await supabase.from('students').update(withoutCode(input)).eq('id', id).select().single(),
     'Could not save the student',
   );
 }

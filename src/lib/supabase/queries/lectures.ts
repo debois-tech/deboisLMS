@@ -27,6 +27,13 @@ export async function createLecture(input: Omit<Lecture, 'id' | 'created_at'>): 
   );
 }
 
+export async function updateLecture(id: string, input: Partial<Lecture>): Promise<Lecture | undefined> {
+  return maybeRow<Lecture>(
+    await supabase.from('lectures').update(input).eq('id', id).select().single(),
+    'Could not save the lecture',
+  );
+}
+
 export async function deleteLecture(id: string): Promise<void> {
   ok(await supabase.from('lectures').delete().eq('id', id), 'Could not delete the lecture');
 }

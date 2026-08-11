@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Loader2, ShieldAlert, X } from 'lucide-react';
+import { Download, Loader2, ShieldAlert, X } from 'lucide-react';
 import * as pdfjs from 'pdfjs-dist';
 import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-import { getWatermarkedMaterialUrl } from '@/lib/supabase';
+import { downloadMaterial, openMaterial } from '@/lib/supabase';
 import { useTheme } from '@/lib/context/ThemeContext';
 import type { Material } from '@/lib/types';
 import { errorMessage } from '@/lib/utils/errors';
+import { fileTypeLabel, materialKind } from '@/lib/utils/files';
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
 
@@ -29,14 +30,19 @@ function MaterialViewerBody({ material, onClose }: MaterialViewerProps) {
   const { theme } = useTheme();
   const pagesRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
-  const [loading, setLoading] = useState(Boolean(material));
+  const kind = materialKind(material?.mime_type);
+  const [loading, setLoading] = useState(Boolean(material) && kind !== 'download');
   const [error, setError] = useState('');
+  const [text, setText] = useState('');
+  const [saving, setSaving] = useState(false);
   // Blanked while the tab is in the background, which is what a naive screen
   // share or a switch to a recording app looks like from in here.
   const [hidden, setHidden] = useState(false);
 
   useEffect(() => {
-    if (!material) return;
+    // A file no reader can page is not fetched on open — it is fetched when the
+    // student asks to save it, so opening the row costs nothing.
+    if (!material || kind === 'download') return;
 
     let cancelled = false;
     let blobUrl = '';
@@ -44,7 +50,16 @@ function MaterialViewerBody({ material, onClose }: MaterialViewerProps) {
 
     (async () => {
       try {
-        blobUrl = await getWatermarkedMaterialUrl(material.id);
+        const opened = await openMaterial(material.id);
+        blobUrl = opened.url;
+
+        if (kind === 'text') {
+          if (cancelled) return;
+          setText(opened.text ?? '');
+          setLoading(false);
+          return;
+        }
+
         doc = await pdfjs.getDocument({ url: blobUrl }).promise;
         if (cancelled) return;
 
@@ -135,7 +150,7 @@ function MaterialViewerBody({ material, onClose }: MaterialViewerProps) {
       if (blobUrl) URL.revokeObjectURL(blobUrl);
       doc?.destroy();
     };
-  }, [material]);
+  }, [material, kind]);
 
   const handleKey = useCallback((event: KeyboardEvent) => {
     if (event.key === 'Escape') onClose();
@@ -207,10 +222,43 @@ function MaterialViewerBody({ material, onClose }: MaterialViewerProps) {
             {error}
           </p>
         )}
-        <div ref={pagesRef} className="material-pages" />
+
+        {/* Nothing in a browser renders a spreadsheet or an archive, so the
+            honest thing is to hand it over rather than fake a preview. */}
+        {kind === 'download' ? (
+          <div className="material-handover">
+            <p className="material-handover-kind">{fileTypeLabel(material.mime_type, material.storage_path)}</p>
+            <p className="material-handover-title">{material.title}</p>
+            <button
+              type="button"
+              className="material-handover-action"
+              onClick={async () => {
+                setSaving(true);
+                try {
+                  await downloadMaterial(material);
+                } catch (err) {
+                  setError(errorMessage(err, 'Could not download this file.'));
+                } finally {
+                  setSaving(false);
+                }
+              }}
+              disabled={saving}
+            >
+              {saving ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+              {saving ? 'Preparing' : 'Download'}
+            </button>
+          </div>
+        ) : kind === 'text' ? (
+          <pre className="material-text">{text}</pre>
+        ) : (
+          <div ref={pagesRef} className="material-pages" />
+        )}
+
         {!loading && !error && (
           <p className="material-viewer-note">
-            This copy is marked with your name and phone number.
+            {kind === 'paged'
+              ? 'This copy is watermarked and your opening of it is logged.'
+              : 'Your opening of this file is logged.'}
           </p>
         )}
       </div>

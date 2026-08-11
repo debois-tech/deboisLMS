@@ -32,11 +32,12 @@ import type {
   Student,
   StudentFee,
 } from '@/lib/types';
+import { StudentIdChip } from '@/components/students/StudentLink';
 import { useAuth } from '@/lib/context/AuthContext';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { useNow } from '@/lib/hooks/useNow';
 import { assignmentState } from '@/lib/utils/deadline';
-import { formatCurrency, formatDate, formatDayLabel } from '@/lib/utils/format';
+import { deriveBatchStatus, formatCurrency, formatDate, formatDayLabel } from '@/lib/utils/format';
 
 type Enrollment = BatchStudentMapping & { batch?: Batch };
 type StudentAssignment = Assignment & { completion?: AssignmentCompletion };
@@ -100,16 +101,24 @@ export default function PortalOverviewPage() {
   const handedIn = states.filter((state) => state === 'done').length;
   const pending = states.filter((state) => state === 'todo').length;
   const missed = states.filter((state) => state === 'missed').length;
-  // Totals across every batch, matching the Fees tab exactly.
-  const totalFee = fees.reduce((sum, fee) => sum + Number(fee.total_fee), 0);
-  const totalPaid = fees.reduce((sum, fee) => sum + Number(fee.paid_amount), 0);
-  const outstanding = totalFee - totalPaid;
+  // The balance across every batch, matching the Fees tab exactly. Nothing else
+  // about the fee is derived here, because nothing else is shown.
+  const outstanding = fees.reduce(
+    (sum, fee) => sum + Math.max(0, Number(fee.total_fee) - Number(fee.paid_amount)),
+    0,
+  );
 
   const name = student?.name ?? user?.full_name ?? 'there';
   const firstName = name.split(' ')[0];
 
   return (
-    <PortalPage title={`Hi, ${firstName}`} loading={loading} error={error} onRetry={retry}>
+    <PortalPage
+      title={`Hi, ${firstName}`}
+      meta={<StudentIdChip code={student?.student_code} />}
+      loading={loading}
+      error={error}
+      onRetry={retry}
+    >
       {!studentId ? (
         <PortalEmpty icon={UserPlus}>Student record not linked.</PortalEmpty>
       ) : (
@@ -151,17 +160,19 @@ export default function PortalOverviewPage() {
                       : 'All handed in'
               }
             />
+            {/* The balance only. What the fee adds up to, and what has been paid
+                against it so far, are not the student's number to act on. */}
             <PortalStat
-              label="Fees"
+              label="Fees due"
               icon={Wallet}
-              value={fees.length === 0 ? 'Not set' : outstanding > 0 ? formatCurrency(outstanding) : 'All paid'}
+              value={fees.length === 0 ? 'Not set' : outstanding > 0 ? formatCurrency(outstanding) : 'Nothing'}
               tone={fees.length === 0 ? 'default' : outstanding > 0 ? 'attention' : 'positive'}
               note={
                 fees.length === 0
                   ? 'Not set yet'
                   : outstanding > 0
-                    ? `of ${formatCurrency(totalFee)} total`
-                    : `${formatCurrency(totalFee)} paid`
+                    ? 'Pay your coordinator'
+                    : 'Fully paid up'
               }
             />
           </PortalStatGrid>
@@ -176,7 +187,12 @@ export default function PortalOverviewPage() {
                     key={enrollment.id}
                     primary={enrollment.batch?.name ?? 'Batch'}
                     secondary={`Joined ${formatDate(enrollment.joined_at)}`}
-                    trailing={<PortalStatus kind="enrollment" value={enrollment.status} />}
+                    trailing={
+                      // While enrolled, the batch's own calendar is what the student cares about.
+                      enrollment.status === 'active' && enrollment.batch
+                        ? <PortalStatus kind="batch" value={deriveBatchStatus(enrollment.batch)} />
+                        : <PortalStatus kind="enrollment" value={enrollment.status} />
+                    }
                   />
                 ))}
               </PortalList>

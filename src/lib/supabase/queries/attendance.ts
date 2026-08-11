@@ -1,6 +1,6 @@
 import { supabase } from '../client';
 import { maybeRow, rows as unwrapRows } from './result';
-import type { UploadRow, AttendanceRecord } from '@/lib/types';
+import type { UploadRow, AttendanceRecord, AttendanceStatus, AttendanceSource } from '@/lib/types';
 import { normalizeTimestampForDb } from '@/lib/utils/csvParser';
 
 export async function getUploadsByLecture(lectureId: string): Promise<UploadRow[]> {
@@ -58,6 +58,52 @@ export async function insertUploadRows(
 
   const { error } = await supabase.from('uploads').insert(records);
   if (error) throw new Error(`Failed to upload rows: ${error.message}`);
+}
+
+export interface ManualAttendanceInput {
+  studentId: string;
+  batchId: string;
+  lectureId: string;
+  status: AttendanceStatus;
+  minutes: number;
+  source: AttendanceSource;
+}
+
+/**
+ * Marks one student for one lecture by hand, already approved — an admin ticking
+ * the box *is* the human judgement the approval gate exists to capture, so asking
+ * them to approve their own entry afterwards would be a second click for nothing.
+ *
+ * Upserts on `(student_id, lecture_id)`, the same key the CSV pipeline uses, so
+ * marking a student who already has a record corrects it instead of failing.
+ */
+export async function markAttendance(input: ManualAttendanceInput): Promise<AttendanceRecord | undefined> {
+  return maybeRow<AttendanceRecord>(
+    await supabase
+      .from('attendance')
+      .upsert(
+        {
+          student_id: input.studentId,
+          batch_id: input.batchId,
+          lecture_id: input.lectureId,
+          status: input.status,
+          total_attended_minutes: input.minutes,
+          source: input.source,
+          approved: true,
+          approved_at: new Date().toISOString(),
+        },
+        { onConflict: 'student_id,lecture_id' },
+      )
+      .select('*, student:students(id, name, email, phone)')
+      .single(),
+    'Could not mark the attendance',
+  );
+}
+
+/** Unticking a marked student removes the record rather than leaving an unapproved one behind. */
+export async function deleteAttendance(id: string): Promise<void> {
+  const { error } = await supabase.from('attendance').delete().eq('id', id);
+  if (error) throw new Error(`Could not remove the attendance: ${error.message}`);
 }
 
 export async function approveAttendance(id: string): Promise<AttendanceRecord | undefined> {

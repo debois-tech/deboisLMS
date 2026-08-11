@@ -1,5 +1,12 @@
 import type { AttendanceSource, AttendanceStatus } from '@/lib/types';
 
+/**
+ * How long a session runs unless the lecture says otherwise. It is what a full
+ * attendance is measured against, so it lives here rather than being retyped by
+ * every form that creates a lecture.
+ */
+export const DEFAULT_LECTURE_MINUTES = 120;
+
 /** A single contiguous join → leave span for one participant, in epoch ms. */
 export interface ParsedInterval {
   start: number;

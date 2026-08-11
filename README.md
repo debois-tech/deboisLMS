@@ -47,7 +47,7 @@ Anything needing a secret runs server-side. Deploy each with
 | Function | Purpose | Secret |
 |---|---|---|
 | `create-student-login` | Creates/resets a student's portal login | `SECRET_SERVICE_ROLE_KEY` |
-| `watermark-material` | Stamps a student's name and phone onto every page of a PDF | `SECRET_SERVICE_ROLE_KEY` |
+| `watermark-material` | Serves a material: watermarks PDFs and images, passes other files through | `SECRET_SERVICE_ROLE_KEY` |
 | `match-name` | Gemini fuzzy name matching for attendance | `GEMINI_API_KEY` |
 
 ```bash
@@ -77,10 +77,17 @@ duration), then written as one row per student per lecture with `approved: false
 towards a dashboard or a student's portal until an admin approves it — the AI matching step is not
 treated as trustworthy on its own.
 
-**Study material** is view-only. The PDF lives in a private bucket that students have no storage
-policy for; the only path to it is the `watermark-material` function, which stamps the reading
-student's name and phone onto every page. Screenshots cannot be prevented in a browser — the
-watermark and the view log make a leak *traceable*, which is the actual goal.
+**Study material** accepts any file, and what happens to it depends on what it is. PDFs and images
+are watermarked and paged in the in-app reader, never downloadable — an image is wrapped into a
+one-page PDF first, so it takes the same path. Word files are converted to PDF in the browser before
+upload, which keeps the text but not the layout. Markdown and plain text are shown as written.
+Everything else — sheets, decks, archives — is downloaded, because no browser renders them.
+
+Every file lives in a private bucket that students have no storage policy for; the only path to the
+bytes is the `watermark-material` function. Screenshots cannot be prevented in a browser — the
+watermark says where a leaked copy came from and the view log, written for every kind including
+downloads, says who opened it. Assignment handouts are the same table with an `assignment_id`, so
+they inherit the reader, the log and the enrolment rule.
 
 **Portal logins** use a password derived from the student's phone (`Debois@<last4>`). Supabase Auth
 stores only a hash and this app stores no plaintext copy; the dashboard shows the current password

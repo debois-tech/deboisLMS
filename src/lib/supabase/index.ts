@@ -2,14 +2,14 @@ export { getBatches, getBatchById, createBatch, updateBatch, deleteBatch } from 
 export { getStudents, getStudentById, createStudent, createOrReuseStudent, findExistingStudent, updateStudent, getStudentBatches, getAllBatchStudentMappings, getBatchStudents, addStudentToBatch, removeStudentFromBatch, getStudentByAuthUserId, createStudentLogin, createStudentLoginsBulk } from './queries/students';
 export type { BulkLoginResult } from './queries/students';
 export { getTutors, getTutorById, createTutor, getTutorBatches, getBatchTutors, assignTutorToBatch, removeTutorFromBatch } from './queries/tutors';
-export { getLecturesByBatch, getLectureById, createLecture, deleteLecture } from './queries/lectures';
-export { getUploadsByLecture, getAttendanceByLecture, getApprovedAttendanceByStudent, insertUploadRows, approveAttendance, setAttendanceApproved, bulkApproveAttendance, getUnapprovedCount } from './queries/attendance';
+export { getLecturesByBatch, getLectureById, createLecture, updateLecture, deleteLecture } from './queries/lectures';
+export { getUploadsByLecture, getAttendanceByLecture, getApprovedAttendanceByStudent, insertUploadRows, markAttendance, deleteAttendance, approveAttendance, setAttendanceApproved, bulkApproveAttendance, getUnapprovedCount } from './queries/attendance';
 export { processAttendance, computeStatus, ATTENDANCE_PRESENT_PERCENT, ATTENDANCE_PARTIAL_PERCENT } from '@/lib/attendance/process';
 export type { ProcessingReport, ProcessOptions } from '@/lib/attendance/process';
 export { getFeesByBatch, updateFeePayment, getFeePaymentLogs, addFeePaymentLog, getBatchFeeSummary, getFeesByStudent, getFeePaymentLogsByStudent } from './queries/fees';
 export { getAssignmentsByBatch, getAssignmentsForStudent, createAssignment, getAssignmentSubmissions, getStudentRepo, saveStudentRepo, submitAssignmentFromPortal, markSubmission } from './queries/assignments';
 export type { AssignmentSubmissionRow } from './queries/assignments';
-export { getMaterialsByBatch, getMaterialsForEveryone, getMaterialsForStudent, getMaterialById, uploadMaterial, uploadMaterials, deleteMaterial, getMaterialViews, getWatermarkedMaterialUrl, MATERIAL_MAX_BYTES } from './queries/materials';
+export { getMaterialsByBatch, getMaterialsForEveryone, getMaterialsForStudent, getMaterialsByAssignment, getMaterialById, uploadMaterial, uploadMaterials, deleteMaterial, getMaterialViews, openMaterial, downloadMaterial, MATERIAL_MAX_BYTES } from './queries/materials';
 export type { UploadMaterialInput, BulkUploadResult } from './queries/materials';
 export { getDashboardStats, getRecentActivity } from './queries/dashboard';
 export type { DashboardStats, RecentActivity } from './queries/dashboard';
