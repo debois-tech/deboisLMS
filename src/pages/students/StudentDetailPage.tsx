@@ -67,6 +67,17 @@ export default function StudentDetailPage() {
 
   const batchNameById = new Map(batchMappings.map((m) => [m.batch_id, m.batch?.name ?? m.batch_id]));
 
+  // Only what this student actually has — an empty row says nothing worth a line.
+  const profileFacts = [
+    { label: 'Date of Birth', value: student.date_of_birth ? formatDate(student.date_of_birth) : '' },
+    { label: 'Gender', value: student.gender ?? '' },
+    { label: 'College', value: student.college ?? '' },
+    { label: 'Course', value: student.course ?? '' },
+    { label: 'Branch', value: student.branch ?? '' },
+    { label: 'Current Year', value: student.current_year ?? '' },
+    { label: 'Graduation Year', value: student.graduation_year ? String(student.graduation_year) : '' },
+  ].filter((fact) => fact.value);
+
   return (
     <div className="page-section">
       <Link to="/students" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center gap-1 w-fit">
@@ -142,6 +153,20 @@ export default function StudentDetailPage() {
           )}
         </Card>
       </div>
+
+      {profileFacts.length > 0 && (
+        <Card>
+          <CardHeader title="Profile" />
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
+            {profileFacts.map(({ label, value }) => (
+              <div key={label} className="min-w-0">
+                <dt className="text-xs text-[var(--text-muted)]">{label}</dt>
+                <dd className="mt-1 text-sm font-semibold text-[var(--text-primary)] break-words">{value}</dd>
+              </div>
+            ))}
+          </dl>
+        </Card>
+      )}
 
       <Card className="portal-login-card">
         <CardHeader title="Portal Login" className="portal-login-header" />

@@ -12,16 +12,16 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import { StudentImportModal } from '@/components/students/StudentImportModal';
 import { BulkLoginsModal } from '@/components/students/BulkLoginsModal';
-import { getStudents, getBatches, getAllBatchStudentMappings, createOrReuseStudent, createStudentLoginsBulk } from '@/lib/supabase';
+import { getStudents, getBatches, getAllBatchStudentMappings, createStudentLoginsBulk, getBatchPrograms, resolveProgramBatch, importStudentsIntoBatch } from '@/lib/supabase';
 import type { BulkLoginResult } from '@/lib/supabase';
-import type { Student, Batch, BatchStudentMapping } from '@/lib/types';
-import { toStudentInput } from '@/lib/utils/studentImport';
+import type { Student, Batch, BatchStudentMapping, BatchProgram, BatchProgramOption } from '@/lib/types';
 import { useToast } from '@/lib/context/ToastContext';
 
 export default function StudentsPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [mappings, setMappings] = useState<BatchStudentMapping[]>([]);
+  const [programs, setPrograms] = useState<BatchProgramOption[]>([]);
   const [search, setSearch] = useState('');
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [showImport, setShowImport] = useState(false);
@@ -29,14 +29,16 @@ export default function StudentsPage() {
   const { showToast } = useToast();
 
   const { loading, error, retry } = useInitialLoad(async () => {
-    const [studentData, batchData, mappingData] = await Promise.all([
+    const [studentData, batchData, mappingData, programData] = await Promise.all([
       getStudents(),
       getBatches(),
       getAllBatchStudentMappings(),
+      getBatchPrograms(),
     ]);
     setStudents(studentData);
     setBatches(batchData);
     setMappings(mappingData);
+    setPrograms(programData);
   });
 
 
@@ -64,9 +66,21 @@ export default function StudentsPage() {
     setSelectedBatchId(batchId);
   };
 
-  const handleImport = async (rows: Record<string, string>[], _fee?: number, createLogins?: boolean) => {
-    const imported = await Promise.all(rows.map((row) => createOrReuseStudent(toStudentInput(row))));
-    setStudents(await getStudents());
+  const handleImport = async (
+    rows: Record<string, string>[],
+    fallbackFee: number | undefined,
+    createLogins: boolean,
+    program: BatchProgram | undefined,
+  ) => {
+    if (!program) throw new Error('Choose the programme these students join.');
+
+    const programName = programs.find((p) => p.code === program)?.name ?? program;
+    const batch = resolveProgramBatch(batches, program, programName);
+    const imported = await importStudentsIntoBatch(rows, batch.id, fallbackFee);
+
+    const [studentData, mappingData] = await Promise.all([getStudents(), getAllBatchStudentMappings()]);
+    setStudents(studentData);
+    setMappings(mappingData);
 
     if (!createLogins) {
       showToast('Students imported');
@@ -153,6 +167,7 @@ export default function StudentsPage() {
       <StudentImportModal
         open={showImport}
         onClose={() => setShowImport(false)}
+        programs={programs}
         onImport={handleImport}
       />
 

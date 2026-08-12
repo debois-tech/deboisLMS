@@ -21,24 +21,35 @@ interface AssignmentModalProps {
   onSubmit: (repoUrl: string) => Promise<void>;
 }
 
-/** Lenient on purpose: rejects only what clearly isn't a GitHub repo, so a false rejection never stops a hand-in. */
-function validateRepoUrl(value: string): string | null {
+/**
+ * Lenient on what it accepts, strict on what it stores: anything recognisable as a
+ * GitHub repo passes, but only the canonical https://github.com/<owner>/<repo> is
+ * saved. The database rejects anything else outright — see migration_2026_08_12.sql.
+ */
+function validateRepoUrl(value: string): { url?: string; error?: string } {
   const trimmed = value.trim();
-  if (!trimmed) return 'Enter your GitHub repository link.';
+  if (!trimmed) return { error: 'Enter your GitHub repository link.' };
 
   let url: URL;
   try {
     url = new URL(trimmed.startsWith('http') ? trimmed : `https://${trimmed}`);
   } catch {
-    return 'Enter a link starting with https://github.com/';
+    return { error: 'Enter a link starting with https://github.com/' };
   }
   if (!/(^|\.)github\.com$/i.test(url.hostname)) {
-    return 'Use a GitHub link starting with https://github.com/';
+    return { error: 'Use a GitHub link starting with https://github.com/' };
   }
-  if (url.pathname.split('/').filter(Boolean).length < 2) {
-    return 'Link to the repository, e.g. https://github.com/your-name/your-repo';
+
+  const [owner, repo] = url.pathname.split('/').filter(Boolean);
+  if (!owner || !repo) {
+    return { error: 'Link to the repository, e.g. https://github.com/your-name/your-repo' };
   }
-  return null;
+  // Query strings, trailing slashes and www. are dropped: one repo, one stored form.
+  const canonical = `https://github.com/${owner}/${repo.replace(/\.git$/i, '')}`;
+  if (!/^https:\/\/github\.com\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(canonical)) {
+    return { error: 'That does not look like a repository link.' };
+  }
+  return { url: canonical };
 }
 
 /** Everything about one assignment — detail and submit form as two views of one dialog, so submitting never stacks a modal. */
@@ -60,9 +71,9 @@ function AssignmentModalBody({ assignment, repoUrl, now, onClose, onSubmit }: As
   const isReplacingRepo = Boolean(repoUrl) && trimmed !== repoUrl && trimmed.length > 0;
 
   const handleSubmit = async () => {
-    const problem = validateRepoUrl(draftRepo);
-    if (problem) {
-      setError(problem);
+    const { url, error: problem } = validateRepoUrl(draftRepo);
+    if (problem || !url) {
+      setError(problem ?? 'Enter your GitHub repository link.');
       return;
     }
     if (missed) {
@@ -72,7 +83,7 @@ function AssignmentModalBody({ assignment, repoUrl, now, onClose, onSubmit }: As
     setSubmitting(true);
     setError('');
     try {
-      await onSubmit(trimmed);
+      await onSubmit(url);
     } catch (err) {
       setError(errorMessage(err, 'Could not submit. Try again.'));
       setSubmitting(false);

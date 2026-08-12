@@ -5,7 +5,13 @@ export type SessionType = 'online' | 'offline';
 export type AttendanceStatus = 'present' | 'partial' | 'absent';
 export type AttendanceSource = 'manual' | 'automated';
 export type MappingStatus = 'active' | 'dropped';
-export type SubmissionChannel = 'whatsapp' | 'other' | 'portal';
+/** 'portal' = the student handed it in; 'github' = an admin recorded it. */
+export type SubmissionChannel = 'github' | 'portal';
+/**
+ * A programme abbreviation, e.g. PHR. Open rather than a fixed union: an admin
+ * mints new ones from the batch form, and the valid set lives in `batch_programs`.
+ */
+export type BatchProgram = string;
 export type FeeStatus = 'due' | 'paid';
 export type PaymentMethod = 'cash' | 'upi' | 'bank_transfer' | 'other';
 
@@ -20,10 +26,18 @@ export interface Profile {
   student_id?: string;
 }
 
+/** Abbreviation to display name, from the `batch_programs` table. */
+export interface BatchProgramOption {
+  code: BatchProgram;
+  name: string;
+  sort_order: number;
+}
+
 export interface Batch {
   id: string;
   name: string;
-  track?: string;
+  /** Which programme this batch runs. The UI shows the name, never the code. */
+  program?: BatchProgram;
   status: BatchStatus;
   start_date?: string;
   /**
@@ -40,8 +54,17 @@ export interface Student {
   /** Permanent institution-wide ID, e.g. DBT0001. Issued by the database — never sent on insert. */
   student_code?: string;
   name: string;
+  /** WhatsApp number. Also the source of the portal password suffix. */
   phone?: string;
   email?: string;
+  date_of_birth?: string;
+  gender?: string;
+  college?: string;
+  course?: string;
+  branch?: string;
+  /** Free text: "3rd", "Final year" and "2" all turn up in the sheets. */
+  current_year?: string;
+  graduation_year?: number;
   github_url?: string;
   linkedin_url?: string;
   created_at: string;

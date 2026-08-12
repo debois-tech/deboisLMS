@@ -122,7 +122,12 @@ export async function saveStudentRepo(studentId: string, repoUrl: string): Promi
   return data as StudentRepo;
 }
 
-/** A student submitting from the portal. The repo link is saved first so the admin table never shows a stale one. */
+/**
+ * A student submitting from the portal. The repo link is saved first so the admin
+ * table never shows a stale one. submitted_at, submitted_via and marked_by are
+ * not sent: the guard_assignment_completion trigger sets all three server-side,
+ * so anything the client claimed would be overwritten anyway.
+ */
 export async function submitAssignmentFromPortal(
   assignmentId: string,
   studentId: string,
@@ -136,7 +141,7 @@ export async function markSubmission(
   assignmentId: string,
   studentId: string,
   submitted: boolean,
-  submittedVia: SubmissionChannel = 'whatsapp',
+  submittedVia: SubmissionChannel = 'github',
 ): Promise<AssignmentCompletion> {
   const existing = await supabase
     .from('assignment_completions')

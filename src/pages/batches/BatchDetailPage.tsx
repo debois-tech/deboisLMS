@@ -23,8 +23,8 @@ import { BatchMaterials } from '@/components/materials/BatchMaterials';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { StudentLink } from '@/components/students/StudentLink';
 import { PaymentLogModal, type PaymentLogFormState } from '@/components/finance/PaymentLogModal';
-import { getBatchById } from '@/lib/supabase';
-import { getBatchStudents, addStudentToBatch, removeStudentFromBatch, getStudents, createOrReuseStudent, createStudentLoginsBulk } from '@/lib/supabase';
+import { getBatchById, getBatchPrograms } from '@/lib/supabase';
+import { getBatchStudents, addStudentToBatch, removeStudentFromBatch, getStudents, createStudentLoginsBulk, importStudentsIntoBatch } from '@/lib/supabase';
 import type { BulkLoginResult } from '@/lib/supabase';
 import { BulkLoginsModal } from '@/components/students/BulkLoginsModal';
 import { getBatchTutors, assignTutorToBatch, removeTutorFromBatch, getTutors } from '@/lib/supabase';
@@ -32,11 +32,10 @@ import { getLecturesByBatch, createLecture, deleteLecture } from '@/lib/supabase
 import { getAttendanceByLecture, setAttendanceApproved, bulkApproveAttendance } from '@/lib/supabase';
 import { getFeesByBatch, getFeePaymentLogs, addFeePaymentLog } from '@/lib/supabase';
 import { getAssignmentsByBatch } from '@/lib/supabase';
-import type { Batch, Student, Tutor, Lecture, AttendanceRecord, StudentFee, FeePaymentLog, Assignment, BatchStudentMapping, TutorBatchMapping } from '@/lib/types';
+import type { Batch, BatchProgram, BatchProgramOption, Student, Tutor, Lecture, AttendanceRecord, StudentFee, FeePaymentLog, Assignment, BatchStudentMapping, TutorBatchMapping } from '@/lib/types';
 import { formatDate, formatCurrency } from '@/lib/utils/format';
 import { formatDeadline } from '@/lib/utils/deadline';
 import { StudentImportModal } from '@/components/students/StudentImportModal';
-import { toStudentInput } from '@/lib/utils/studentImport';
 import { useToast } from '@/lib/context/ToastContext';
 import { useConfirm } from '@/lib/context/ConfirmContext';
 import { errorMessage } from '@/lib/utils/errors';
@@ -46,15 +45,20 @@ import { useInitialLoad, useReloadableSection } from '@/lib/hooks/useInitialLoad
 export default function BatchDetailPage() {
   const { batchId } = useParams();
   const [batch, setBatch] = useState<Batch | null>(null);
+  const [programs, setPrograms] = useState<BatchProgramOption[]>([]);
 
   const { loading, error, retry } = useInitialLoad(async () => {
     if (!batchId) return;
-    setBatch((await getBatchById(batchId)) ?? null);
+    const [batchRow, programRows] = await Promise.all([getBatchById(batchId), getBatchPrograms()]);
+    setBatch(batchRow ?? null);
+    setPrograms(programRows);
   });
 
   if (loading) return <Spinner centered />;
   if (error) return <ErrorState centered message={error} onRetry={retry} />;
   if (!batch) return <NotFound label="Batch" />;
+
+  const programLabel = programs.find((p) => p.code === batch.program)?.name;
 
   return (
     <div className="page-section">
@@ -68,7 +72,7 @@ export default function BatchDetailPage() {
             <StatusPill kind="batch" value={batch.status} />
           </div>
           <p className="text-sm text-[var(--text-muted)] mt-0.5">
-            {batch.track} • Started {batch.start_date ? formatDate(batch.start_date) : 'N/A'}
+            {programLabel ?? 'No programme'} • Started {batch.start_date ? formatDate(batch.start_date) : 'N/A'}
           </p>
         </div>
         <Link to={`/batches/${batch.id}/edit`} className="shrink-0">
@@ -91,8 +95,8 @@ export default function BatchDetailPage() {
       >
         {(active) => (
           <>
-            {active === 'overview' && <OverviewTab batch={batch} />}
-            {active === 'students' && <StudentsTab batchId={batch.id} />}
+            {active === 'overview' && <OverviewTab batch={batch} programLabel={programLabel} />}
+            {active === 'students' && <StudentsTab batchId={batch.id} program={batch.program} />}
             {active === 'tutors' && <TutorsTab batchId={batch.id} />}
             {active === 'lectures' && <LecturesTab batchId={batch.id} />}
             {active === 'attendance' && <AttendanceTab batchId={batch.id} />}
@@ -106,7 +110,7 @@ export default function BatchDetailPage() {
   );
 }
 
-function OverviewTab({ batch }: { batch: Batch }) {
+function OverviewTab({ batch, programLabel }: { batch: Batch; programLabel?: string }) {
   const [students, setStudents] = useState<(Student & { mapping: BatchStudentMapping })[]>([]);
   const [lectures, setLectures] = useState<Lecture[]>([]);
 
@@ -131,14 +135,14 @@ function OverviewTab({ batch }: { batch: Batch }) {
         <p className="text-lg font-bold text-[var(--text-primary)] mt-1">{lectures.length}</p>
       </Card>
       <Card padding="sm">
-        <p className="text-xs text-[var(--text-muted)]">Track</p>
-        <p className="text-lg font-bold text-[var(--text-primary)] mt-1 truncate">{batch.track ?? 'N/A'}</p>
+        <p className="text-xs text-[var(--text-muted)]">Programme</p>
+        <p className="text-lg font-bold text-[var(--text-primary)] mt-1 truncate">{programLabel ?? 'Not set'}</p>
       </Card>
     </div>
   );
 }
 
-function StudentsTab({ batchId }: { batchId: string }) {
+function StudentsTab({ batchId, program }: { batchId: string; program?: BatchProgram }) {
   const [students, setStudents] = useState<(Student & { mapping: BatchStudentMapping })[]>([]);
   const [allStudents, setAllStudents] = useState<Student[]>([]);
   const [showAdd, setShowAdd] = useState(false);
@@ -191,19 +195,14 @@ function StudentsTab({ batchId }: { batchId: string }) {
 
   const available = allStudents.filter((s) => !students.some((e) => e.id === s.id));
 
-  // Importing here also enrols: create-or-reuse the student, then add them to this
-  // batch at the given fee unless they are already on the roster.
-  const handleImport = async (rows: Record<string, string>[], fee?: number, createLogins?: boolean) => {
-    const enrolledStudents = await getBatchStudents(batchId);
-    const imported = await Promise.all(
-      rows.map(async (row) => {
-        const student = await createOrReuseStudent(toStudentInput(row));
-        if (!enrolledStudents.some((e) => e.id === student.id)) {
-          await addStudentToBatch(student.id, batchId, fee ?? 0);
-        }
-        return student;
-      }),
-    );
+  // Same routine as the students page, so a sheet imported from either place
+  // lands identically. The batch is this one; the CSV's own column only validates.
+  const handleImport = async (
+    rows: Record<string, string>[],
+    fallbackFee: number | undefined,
+    createLogins: boolean,
+  ) => {
+    const imported = await importStudentsIntoBatch(rows, batchId, fallbackFee);
     void reloadStudents();
 
     if (!createLogins) {
@@ -272,7 +271,7 @@ function StudentsTab({ batchId }: { batchId: string }) {
       <StudentImportModal
         open={showImport}
         onClose={() => setShowImport(false)}
-        requireFee
+        batchProgram={program}
         onImport={handleImport}
       />
 

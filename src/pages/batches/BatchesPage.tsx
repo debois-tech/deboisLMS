@@ -10,29 +10,38 @@ import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { SearchFilterBar } from '@/components/ui/SearchFilterBar';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
-import { getBatches } from '@/lib/supabase';
-import type { Batch, BatchStatus } from '@/lib/types';
+import { getBatches, getBatchPrograms } from '@/lib/supabase';
+import type { Batch, BatchProgramOption, BatchStatus } from '@/lib/types';
 import { formatDate } from '@/lib/utils/format';
 
 const STATUSES: BatchStatus[] = ['upcoming', 'ongoing', 'completed'];
 
 export default function BatchesPage() {
   const [batches, setBatches] = useState<Batch[]>([]);
+  const [programs, setPrograms] = useState<BatchProgramOption[]>([]);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<BatchStatus | null>(null);
 
   const { loading, error, retry } = useInitialLoad(async () => {
-    setBatches(await getBatches());
+    const [batchRows, programRows] = await Promise.all([getBatches(), getBatchPrograms()]);
+    setBatches(batchRows);
+    setPrograms(programRows);
   });
+
+  // Code in, name out — the table and the search box both read the label.
+  const programName = useMemo(
+    () => (batch: Batch) => programs.find((p) => p.code === batch.program)?.name ?? '',
+    [programs],
+  );
 
   const filteredBatches = useMemo(() => {
     const term = search.trim().toLowerCase();
     return batches.filter((batch) => {
       if (status && batch.status !== status) return false;
       if (!term) return true;
-      return `${batch.name} ${batch.track ?? ''}`.toLowerCase().includes(term);
+      return `${batch.name} ${programName(batch)} ${batch.program ?? ''}`.toLowerCase().includes(term);
     });
-  }, [batches, search, status]);
+  }, [batches, search, status, programName]);
 
   const selectStatus = (next: BatchStatus | null) => {
     setStatus(next);
@@ -86,7 +95,7 @@ export default function BatchesPage() {
                         <span className="font-semibold text-[var(--text-primary)] group-hover:text-[var(--primary)]">{batch.name}</span>
                       </Link>
                     </TD>
-                    <TD className="cell-secondary">{batch.track || '—'}</TD>
+                    <TD className="cell-secondary">{programName(batch) || '—'}</TD>
                     <TD>
                       <StatusPill kind="batch" value={batch.status} />
                     </TD>

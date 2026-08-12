@@ -2,6 +2,7 @@ import { supabase } from '../client';
 import { maybeRow, ok, row, rows } from './result';
 import type { Batch, Student, BatchStudentMapping, StudentCredentials } from '@/lib/types';
 import { errorMessage } from '@/lib/utils/errors';
+import { getImportFee, toStudentInput } from '@/lib/utils/studentImport';
 
 export async function getStudents(): Promise<Student[]> {
   return rows<Student>(
@@ -78,6 +79,27 @@ export async function createOrReuseStudent(input: Omit<Student, 'id' | 'created_
   const existing = await findExistingStudent(input);
   if (existing) return existing;
   return createStudent(input);
+}
+
+/**
+ * The one CSV import path, shared by the students page and a batch's students
+ * tab so both write the same fields. Every row is created-or-reused, then
+ * enrolled at its own fee; `fallbackFee` covers rows whose sheet left it blank.
+ * An enrolment that already exists is the goal, not an error.
+ */
+export async function importStudentsIntoBatch(
+  rows: Record<string, string>[],
+  batchId: string,
+  fallbackFee?: number,
+): Promise<Student[]> {
+  return Promise.all(
+    rows.map(async (row) => {
+      const student = await createOrReuseStudent(toStudentInput(row));
+      const fee = getImportFee(row) ?? fallbackFee ?? 0;
+      await addStudentToBatch(student.id, batchId, fee).catch(() => undefined);
+      return student;
+    }),
+  );
 }
 
 export async function updateStudent(id: string, input: Partial<Student>): Promise<Student | undefined> {
