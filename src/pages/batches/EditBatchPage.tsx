@@ -33,6 +33,10 @@ export default function EditBatchPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form) return;
+    if (!form.program) {
+      showToast('Select a programme for this batch', 'error');
+      return;
+    }
     setSaving(true);
     try {
       await updateBatch(form.id, form);

@@ -130,7 +130,8 @@ create table if not exists batches (
   -- Which programme this batch runs. Replaces the old free-text `track`, which
   -- allowed any spelling and could not be validated. No cascade delete: a
   -- programme still carrying batches must not vanish under them.
-  program    text references batch_programs(code),
+  -- Not null: a batch with no programme is invisible to the CSV importer.
+  program    text not null references batch_programs(code),
   status     batch_status default 'upcoming',
   start_date date,
   -- Filename prefix for this batch's study material, e.g. DBT-TEPC-2026-D.

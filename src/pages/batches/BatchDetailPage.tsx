@@ -24,7 +24,7 @@ import { DatePicker } from '@/components/ui/DatePicker';
 import { StudentLink } from '@/components/students/StudentLink';
 import { PaymentLogModal, type PaymentLogFormState } from '@/components/finance/PaymentLogModal';
 import { getBatchById, getBatchPrograms } from '@/lib/supabase';
-import { getBatchStudents, addStudentToBatch, removeStudentFromBatch, getStudents, createStudentLoginsBulk, importStudentsIntoBatch } from '@/lib/supabase';
+import { getBatchStudents, addStudentToBatch, removeStudentFromBatch, getStudents, createStudentLoginsBulk, importStudentsIntoBatch, getStudentBatches } from '@/lib/supabase';
 import type { BulkLoginResult } from '@/lib/supabase';
 import { BulkLoginsModal } from '@/components/students/BulkLoginsModal';
 import { getBatchTutors, assignTutorToBatch, removeTutorFromBatch, getTutors } from '@/lib/supabase';
@@ -175,10 +175,16 @@ function StudentsTab({ batchId, program }: { batchId: string; program?: BatchPro
     }
   };
 
-  const handleRemove = async (mappingId: string, name: string) => {
+  const handleRemove = async (mappingId: string, studentId: string, name: string) => {
+    // A student in no batch sees nothing in the portal, so say so before it happens.
+    const others = (await getStudentBatches(studentId).catch(() => []))
+      .filter((m) => m.status === 'active' && m.id !== mappingId);
+
     const ok = await confirm({
       title: `Remove ${name} from this batch?`,
-      message: 'The student keeps their record but loses access to this batch.',
+      message: others.length === 0
+        ? 'This is their only batch. They keep their record but will see nothing in the portal until they join another.'
+        : 'The student keeps their record but loses access to this batch.',
       confirmLabel: 'Remove',
       danger: true,
     });
@@ -247,7 +253,7 @@ function StudentsTab({ batchId, program }: { batchId: string; program?: BatchPro
               </div>
               <div className="flex items-center gap-2">
                 <StatusPill kind="enrollment" value={s.mapping.status} />
-                <button onClick={() => handleRemove(s.mapping.id, s.name)} aria-label={`Remove ${s.name} from batch`} className="text-[var(--text-muted)] hover:text-[var(--danger-text)] p-1">
+                <button onClick={() => handleRemove(s.mapping.id, s.id, s.name)} aria-label={`Remove ${s.name} from batch`} className="text-[var(--text-muted)] hover:text-[var(--danger-text)] p-1">
                   <Trash2 size={14} />
                 </button>
               </div>

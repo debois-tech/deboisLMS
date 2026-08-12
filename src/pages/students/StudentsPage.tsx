@@ -17,6 +17,9 @@ import type { BulkLoginResult } from '@/lib/supabase';
 import type { Student, Batch, BatchStudentMapping, BatchProgram, BatchProgramOption } from '@/lib/types';
 import { useToast } from '@/lib/context/ToastContext';
 
+/** Sentinel for the filter: students in no active batch, who see nothing in the portal. */
+const NO_BATCH = 'none';
+
 export default function StudentsPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
@@ -52,7 +55,9 @@ export default function StudentsPage() {
 
   const query = search.trim().toLowerCase();
   const filteredStudents = students.filter((s) => {
-    if (selectedBatchId && !(studentBatchIds.get(s.id) ?? []).includes(selectedBatchId)) return false;
+    const batchIds = studentBatchIds.get(s.id) ?? [];
+    if (selectedBatchId === NO_BATCH && batchIds.length > 0) return false;
+    if (selectedBatchId && selectedBatchId !== NO_BATCH && !batchIds.includes(selectedBatchId)) return false;
     if (!query) return true;
     return (
       s.name.toLowerCase().includes(query) ||
@@ -127,7 +132,10 @@ export default function StudentsPage() {
               filterLabel="Filter by batch"
               allLabel="All batches"
               filterValue={selectedBatchId}
-              filterOptions={batches.map((batch) => ({ value: batch.id, label: batch.name }))}
+              filterOptions={[
+                ...batches.map((batch) => ({ value: batch.id, label: batch.name })),
+                { value: NO_BATCH, label: 'No batch' },
+              ]}
               onFilterChange={selectBatch}
             />
           </div>
