@@ -83,25 +83,44 @@ export function fileTypeLabel(mimeType?: string | null, name?: string): string {
   return ext ? ext.toUpperCase() : 'File';
 }
 
-/**
- * Re-encodes a WebP as a PNG. pdf-lib embeds PNG and JPEG only, so a WebP that
- * reached storage as itself could never be watermarked.
- */
-export async function webpToPng(file: File): Promise<File> {
+/** Longest edge kept on upload. pdf-lib decodes PNG to raw RGBA, so a 12MP shot OOMs the watermarker. */
+export const MAX_IMAGE_EDGE = 2400;
+
+/** WebP to PNG (pdf-lib cannot embed WebP) and downscale past MAX_IMAGE_EDGE. Small PNG/JPEG passes through. */
+export async function prepareImageForUpload(file: File): Promise<File> {
+  const type = fileMimeType(file);
+  if (!IMAGE_TYPES.includes(type)) return file;
+
   const bitmap = await createImageBitmap(file);
+  const longest = Math.max(bitmap.width, bitmap.height);
+  const scale = longest > MAX_IMAGE_EDGE ? MAX_IMAGE_EDGE / longest : 1;
+
+  if (scale === 1 && type !== 'image/webp') {
+    bitmap.close();
+    return file;
+  }
+
   const canvas = document.createElement('canvas');
-  canvas.width = bitmap.width;
-  canvas.height = bitmap.height;
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
 
   const context = canvas.getContext('2d');
-  if (!context) throw new Error('Could not read that image.');
-  context.drawImage(bitmap, 0, 0);
+  if (!context) {
+    bitmap.close();
+    throw new Error('Could not read that image.');
+  }
+  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
   bitmap.close();
 
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+  // JPEG stays JPEG: pdf-lib embeds it without decoding, which is the cheap path.
+  const outType = type === 'image/jpeg' ? 'image/jpeg' : 'image/png';
+  const blob = await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob(resolve, outType, outType === 'image/jpeg' ? 0.92 : undefined),
+  );
   if (!blob) throw new Error(`Could not convert ${file.name}.`);
 
-  return new File([blob], file.name.replace(/\.webp$/i, '.png'), { type: 'image/png' });
+  const name = outType === 'image/png' ? file.name.replace(/\.webp$/i, '.png') : file.name;
+  return new File([blob], name, { type: outType });
 }
 
 /**

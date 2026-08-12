@@ -38,3 +38,9 @@ yarn-error.log*
 /skills/
 CLAUDE.md
 AGENTS.md
+
+# Supabase CLI scratch state — project ref and local versions, not source.
+/supabase/.temp/
+
+# Finished working notes — kept locally, not versioned.
+/completed md/

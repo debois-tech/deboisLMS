@@ -6,6 +6,9 @@ import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { FormField } from '@/components/ui/FormField';
 import { BatchSelect } from '@/components/ui/BatchSelect';
+import { DatePicker } from '@/components/ui/DatePicker';
+import { SearchSelect } from '@/components/ui/SearchSelect';
+import { GENDER_OPTIONS } from '@/lib/utils/studentImport';
 import { Spinner } from '@/components/ui/Spinner';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -117,10 +120,22 @@ export default function NewStudentPage() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <FormField label="Date of Birth">
-              <input type="date" value={form.date_of_birth} onChange={set('date_of_birth')} />
+              <DatePicker
+                value={form.date_of_birth}
+                onChange={(date_of_birth) => setForm({ ...form, date_of_birth })}
+                placeholder="Pick a date"
+                ariaLabel="Date of birth"
+              />
             </FormField>
             <FormField label="Gender">
-              <input value={form.gender} onChange={set('gender')} placeholder="e.g. Female" />
+              <SearchSelect
+                options={GENDER_OPTIONS.map((option) => ({ value: option, label: option }))}
+                value={form.gender || null}
+                onChange={(gender) => setForm({ ...form, gender })}
+                placeholder="Select gender"
+                searchPlaceholder="Search"
+                emptyText="No match"
+              />
             </FormField>
           </div>
           <div className="grid grid-cols-2 gap-4">

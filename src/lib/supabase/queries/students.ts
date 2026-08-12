@@ -81,12 +81,7 @@ export async function createOrReuseStudent(input: Omit<Student, 'id' | 'created_
   return createStudent(input);
 }
 
-/**
- * The one CSV import path, shared by the students page and a batch's students
- * tab so both write the same fields. Every row is created-or-reused, then
- * enrolled at its own fee; `fallbackFee` covers rows whose sheet left it blank.
- * An enrolment that already exists is the goal, not an error.
- */
+/** The one CSV import path, so both import screens write the same fields. */
 export async function importStudentsIntoBatch(
   rows: Record<string, string>[],
   batchId: string,
@@ -116,13 +111,10 @@ export async function getStudentByAuthUserId(authUserId: string): Promise<Studen
   );
 }
 
-/**
- * Creates (or resets) the student's portal login, via the `create-student-login`
- * edge function. The password is shown once and never stored — a lost one means a reset.
- */
-export async function createStudentLogin(studentId: string): Promise<StudentCredentials> {
+/** Create uses the derived password; `rotate` issues a random one. Shown once, never stored. */
+export async function createStudentLogin(studentId: string, rotate = false): Promise<StudentCredentials> {
   const { data, error } = await supabase.functions.invoke('create-student-login', {
-    body: { student_id: studentId },
+    body: { student_id: studentId, rotate },
   });
 
   if (error) {
@@ -223,9 +215,8 @@ export async function addStudentToBatch(studentId: string, batchId: string, tota
     'Could not add the student to the batch',
   );
 
-  // Re-adding a previously removed student leaves a stale student_fees row behind
-  // (removeStudentFromBatch only deletes the mapping) — upsert so the fee just
-  // entered always overwrites it.
+  // Upsert: removeStudentFromBatch drops only the mapping, so a re-add finds a stale fee row.
+  // The registration fee is logged by a trigger on insert — see schema.sql.
   ok(
     await supabase
       .from('student_fees')

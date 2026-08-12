@@ -70,11 +70,15 @@ export interface Student {
   created_at: string;
   /** auth.users id once a portal login has been created for this student. */
   auth_user_id?: string;
+  /** True once the password was reset to a random one — the derived rule no longer applies. */
+  password_rotated?: boolean;
 }
 
 export interface StudentCredentials {
   email: string;
   password: string;
+  /** True when this came from a reset, so it cannot be recomputed later. */
+  rotated?: boolean;
 }
 
 export interface Tutor {
@@ -170,6 +174,20 @@ export interface AssignmentCompletion {
   marked_by?: string;
   student?: Student;
   assignment?: Assignment;
+}
+
+/**
+ * What the portal is allowed to know about a fee: the balance, and nothing that
+ * would reveal what the student was charged. Backed by the `student_fee_dues`
+ * view, which is scoped to the caller in SQL.
+ */
+export interface StudentFeeDue {
+  id: string;
+  student_id: string;
+  batch_id: string;
+  amount_due: number;
+  status: FeeStatus;
+  updated_at?: string;
 }
 
 /** One GitHub repo per student — every assignment submission points at it. */

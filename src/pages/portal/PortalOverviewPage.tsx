@@ -17,7 +17,8 @@ import {
   ATTENDANCE_PARTIAL_PERCENT,
   getApprovedAttendanceByStudent,
   getAssignmentsForStudent,
-  getFeesByStudent,
+  getFeePaymentLogsByStudent,
+  getMyFeeDues,
   getLecturesByBatch,
   getStudentById,
   getStudentBatches,
@@ -28,9 +29,10 @@ import type {
   AttendanceRecord,
   Batch,
   BatchStudentMapping,
+  FeePaymentLog,
   Lecture,
   Student,
-  StudentFee,
+  StudentFeeDue,
 } from '@/lib/types';
 import { StudentIdChip } from '@/components/students/StudentLink';
 import { useAuth } from '@/lib/context/AuthContext';
@@ -38,6 +40,8 @@ import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { useNow } from '@/lib/hooks/useNow';
 import { assignmentState } from '@/lib/utils/deadline';
 import { deriveBatchStatus, formatCurrency, formatDate, formatDayLabel } from '@/lib/utils/format';
+import { countInstallmentPayments, dueInstallment, installmentLabel } from '@/lib/utils/installments';
+import type { InstallmentDue } from '@/lib/utils/installments';
 
 type Enrollment = BatchStudentMapping & { batch?: Batch };
 type StudentAssignment = Assignment & { completion?: AssignmentCompletion };
@@ -47,10 +51,11 @@ export default function PortalOverviewPage() {
   const { user } = useAuth();
   const [student, setStudent] = useState<Student | null>(null);
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
-  const [fees, setFees] = useState<StudentFee[]>([]);
+  const [fees, setFees] = useState<StudentFeeDue[]>([]);
   const [nextLecture, setNextLecture] = useState<Lecture | null>(null);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [assignments, setAssignments] = useState<StudentAssignment[]>([]);
+  const [payments, setPayments] = useState<FeePaymentLog[]>([]);
   const now = useNow();
   const { loading, error, retry } = useInitialLoad(async () => {
     if (!studentId) return;
@@ -58,12 +63,13 @@ export default function PortalOverviewPage() {
     // Fees are fetched for the student, not for one batch: Home used to show
     // the current batch's balance while the Fees tab showed the total across
     // every batch, so the same word meant two different numbers.
-    const [record, mappings, records, work, feeRows] = await Promise.all([
+    const [record, mappings, records, work, feeRows, paymentRows] = await Promise.all([
       getStudentById(studentId),
       getStudentBatches(studentId),
       getApprovedAttendanceByStudent(studentId),
       getAssignmentsForStudent(studentId),
-      getFeesByStudent(studentId),
+      getMyFeeDues(),
+      getFeePaymentLogsByStudent(studentId),
     ]);
 
     // Multiple active batches are possible; the most recently joined one is "current".
@@ -88,6 +94,7 @@ export default function PortalOverviewPage() {
     setNextLecture(upcoming);
     setAttendance(records);
     setAssignments(work);
+    setPayments(paymentRows);
   });
 
   const currentBatch = enrollments
@@ -103,10 +110,16 @@ export default function PortalOverviewPage() {
   const missed = states.filter((state) => state === 'missed').length;
   // The balance across every batch, matching the Fees tab exactly. Nothing else
   // about the fee is derived here, because nothing else is shown.
-  const outstanding = fees.reduce(
-    (sum, fee) => sum + Math.max(0, Number(fee.total_fee) - Number(fee.paid_amount)),
-    0,
-  );
+  const outstanding = fees.reduce((sum, fee) => sum + Math.max(0, Number(fee.amount_due)), 0);
+
+  const installment = currentBatch
+    ? dueInstallment(
+        currentBatch.start_date,
+        countInstallmentPayments(payments, currentBatch.id),
+        outstanding,
+        now,
+      )
+    : null;
 
   const name = student?.name ?? user?.full_name ?? 'there';
   const firstName = name.split(' ')[0];
@@ -128,6 +141,7 @@ export default function PortalOverviewPage() {
             lecture={nextLecture}
             pending={pending}
             outstanding={outstanding}
+            installment={installment}
             enrolled={Boolean(currentBatch)}
           />
 
@@ -204,23 +218,37 @@ export default function PortalOverviewPage() {
   );
 }
 
-/** The one thing worth acting on, picked in a student's order of concern: next class, work due, money owed. */
+/** The one thing worth acting on. A due instalment outranks everything; otherwise class, work, balance. */
 function NextUp({
   batchName,
   lecture,
   pending,
   outstanding,
+  installment,
   enrolled,
 }: {
   batchName?: string;
   lecture: Lecture | null;
   pending: number;
   outstanding: number;
+  installment: InstallmentDue | null;
   enrolled: boolean;
 }) {
   if (!enrolled) {
     return (
       <PortalFocus icon={UserPlus} title="Not in a batch yet" />
+    );
+  }
+
+  if (installment) {
+    return (
+      <PortalFocus
+        icon={Wallet}
+        tone={installment.missed ? 'attention' : 'default'}
+        title={installmentLabel(installment)}
+        detail={`Installment ${installment.index} · due ${formatDate(installment.dueDate)}`}
+        action={<Link to="/portal/fees" className="portal-focus-link">Details</Link>}
+      />
     );
   }
 

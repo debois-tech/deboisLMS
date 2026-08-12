@@ -45,12 +45,13 @@ do $$ begin create type submission_channel as enum ('github', 'portal');        
 do $$
 begin
   if to_regprocedure('student_code_year()') is null then
-    execute 'create function student_code_year() returns text language sql stable as $f$ select ''2026''::text $f$';
+    execute 'create function student_code_year() returns text language sql stable set search_path = public as $f$ select ''2026''::text $f$';
   end if;
 end $$;
 
 create or replace function student_code_prefix() returns text
   language sql stable
+  set search_path = public
   as $$ select 'DBT-INT-' || student_code_year() || '-' $$;
 
 -- Rolling the year, when the 2027 intake starts:
@@ -63,10 +64,11 @@ create or replace function student_code_prefix() returns text
 -- case outright, and the whole thing is one transaction.
 create or replace function set_student_code_year(new_year int) returns text
   language plpgsql
+  set search_path = public
   as $$
 begin
   execute format(
-    'create or replace function student_code_year() returns text language sql stable as $f$ select %L::text $f$',
+    'create or replace function student_code_year() returns text language sql stable set search_path = public as $f$ select %L::text $f$',
     new_year::text
   );
 
@@ -85,6 +87,7 @@ create sequence if not exists student_code_seq as bigint start 1;
 -- to -1000 rather than losing a digit.
 create or replace function next_student_code() returns text
   language sql volatile
+  set search_path = public
   as $$ select student_code_prefix() || lpad(nextval('student_code_seq')::text, 3, '0') $$;
 
 
@@ -155,6 +158,9 @@ create table if not exists students (
   graduation_year int,
   github_url      text,
   linkedin_url    text,
+  -- True once the portal password has been reset to a random one: the derived
+  -- Debois@<last4> rule no longer applies and the password is shown only at reset.
+  password_rotated boolean not null default false,
   -- Set once a portal login exists for this student.
   auth_user_id    uuid references auth.users(id) unique,
   created_at      timestamptz default now()
@@ -342,6 +348,36 @@ revoke all on function public.record_fee_payment(uuid, numeric, date, payment_me
 grant execute on function public.record_fee_payment(uuid, numeric, date, payment_method, text) to authenticated;
 
 
+-- Every student pays 1000 on joining a batch. Booked as a payment against the fee,
+-- not subtracted from the total, so the log and the balance agree.
+-- Fires on insert only: re-adding a dropped student reuses its fee row.
+create or replace function log_registration_fee()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+declare amount constant numeric := 1000;
+begin
+  insert into fee_payment_logs (
+    student_fee_id, student_id, batch_id, amount, payment_date, payment_method, notes
+  ) values (
+    new.id, new.student_id, new.batch_id, amount, current_date, 'upi', 'Registration fee'
+  );
+
+  update student_fees
+  set paid_amount = paid_amount + amount, updated_at = now()
+  where id = new.id;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists student_fees_registration_fee on student_fees;
+create trigger student_fees_registration_fee
+  after insert on student_fees
+  for each row execute function log_registration_fee();
+
+
 -- =============================================================================
 -- 6. ASSIGNMENTS
 -- =============================================================================
@@ -430,6 +466,7 @@ alter table student_repos add constraint student_repos_repo_url_github
 create or replace function touch_updated_at()
 returns trigger
 language plpgsql
+set search_path = public
 as $$
 begin
   new.updated_at = now();
@@ -500,7 +537,7 @@ values (
   'materials', 'materials', false, 52428800,
   array[
     'application/pdf',
-    'image/png', 'image/jpeg', 'image/webp',
+    'image/png', 'image/jpeg',
     'text/markdown', 'text/x-markdown', 'text/plain', 'text/csv',
     'application/json', 'application/zip',
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -550,6 +587,28 @@ group by b.id, b.name;
 alter view batch_fee_summary        set (security_invoker = on);
 alter view batch_attendance_summary set (security_invoker = on);
 
+-- This one is the exception, and deliberately keeps owner rights: it exists to
+-- show a student their balance WITHOUT showing them total_fee or paid_amount.
+-- Column-level grants cannot express that, because admins and students are both
+-- the `authenticated` role. Reaching past RLS is the point, so it carries its own
+-- `where` on current_student_id() instead.
+create or replace view student_fee_dues as
+select
+  sf.id,
+  sf.student_id,
+  sf.batch_id,
+  greatest(sf.total_fee - sf.paid_amount, 0) as amount_due,
+  sf.status,
+  sf.updated_at
+from student_fees sf
+where sf.student_id = current_student_id();
+
+grant select on student_fee_dues to authenticated;
+
+comment on view student_fee_dues is
+  'Portal-facing fee row: the outstanding balance only. total_fee and paid_amount '
+  'never leave the database for a student. Admin reads student_fees directly.';
+
 
 -- =============================================================================
 -- 9. AUTH HELPERS
@@ -564,6 +623,7 @@ create or replace function is_admin()
 returns boolean
 language sql
 stable
+set search_path = public
 as $$
   select coalesce((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin', false);
 $$;
@@ -572,6 +632,7 @@ create or replace function current_student_id()
 returns uuid
 language sql
 stable
+set search_path = public
 as $$
   select id from students where auth_user_id = auth.uid();
 $$;
@@ -645,9 +706,8 @@ drop policy if exists student_read_own on attendance;
 create policy student_read_own on attendance
   for select using (student_id = current_student_id() and approved = true);
 
-drop policy if exists student_read_own on student_fees;
-create policy student_read_own on student_fees
-  for select using (student_id = current_student_id());
+-- No student policy on student_fees: the portal reads student_fee_dues instead,
+-- which exposes the balance without total_fee or paid_amount. See section 8.
 
 drop policy if exists student_read_own on fee_payment_logs;
 create policy student_read_own on fee_payment_logs

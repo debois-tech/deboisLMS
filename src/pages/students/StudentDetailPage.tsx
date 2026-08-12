@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Mail, Phone, Layers, CalendarDays, History } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, Layers, CalendarDays, History, Edit3, ExternalLink } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
 import { StatusPill } from '@/components/ui/StatusPill';
 import { Spinner } from '@/components/ui/Spinner';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -80,38 +81,48 @@ export default function StudentDetailPage() {
 
   return (
     <div className="page-section">
-      <Link to="/students" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center gap-1 w-fit">
-        <ArrowLeft size={14} /> Back to Students
-      </Link>
+      <div className="detail-topbar">
+        <Link to="/students" className="detail-back-link">
+          <ArrowLeft size={14} /> Back to Students
+        </Link>
+        <Link to={`/students/${student.id}/edit`}>
+          <Button variant="outline" className="action-button-compact"><Edit3 size={14} /> Edit</Button>
+        </Link>
+      </div>
 
       <Card padding="lg">
-        <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[var(--radius-lg)] bg-[var(--primary)]/10 text-xl font-bold text-[var(--primary)]">
+        <div className="student-identity-row">
+          <div className="student-avatar">
             {student.name.split(' ').map((n) => n[0]).slice(0, 2).join('')}
           </div>
           <div className="student-identity min-w-0 flex-1">
             <div className="student-identity-name">
-              <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)] break-words">{student.name}</h1>
+              <h1 className="student-identity-title">{student.name}</h1>
               <StudentIdChip code={student.student_code} showLabel={false} />
             </div>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[var(--text-muted)]">
-              {student.email && <span className="flex min-w-0 items-center gap-2"><Mail size={15} className="shrink-0 text-[var(--primary)]" /> <span className="break-all">{student.email}</span></span>}
-              {student.email && student.phone && <span className="text-[var(--border-strong)]">|</span>}
-              {student.phone && <span className="flex items-center gap-1"><Phone size={14} className="shrink-0" /> {student.phone}</span>}
+            <div className="student-identity-meta">
+              {student.email && (
+                <span className="flex min-w-0 items-center gap-1.5"><Mail size={14} className="shrink-0" /> <span className="break-all">{student.email}</span></span>
+              )}
+              {student.phone && (
+                <span className="flex items-center gap-1.5"><Phone size={14} className="shrink-0" /> {student.phone}</span>
+              )}
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-3 sm:ml-auto">
+          {(student.github_url || student.linkedin_url) && (
+            <div className="student-identity-links">
               {student.github_url && (
-                <a href={student.github_url} target="_blank" rel="noreferrer" className="flex items-center gap-4 rounded-[var(--radius-md)] bg-[#24292f] text-sm font-semibold text-white transition-colors hover:bg-[#3b434b]" style={{ padding: '1rem 2rem' }}>
-                  GitHub
+                <a href={student.github_url} target="_blank" rel="noreferrer" className="student-link-chip">
+                  GitHub <ExternalLink size={12} className="shrink-0" />
                 </a>
               )}
               {student.linkedin_url && (
-                <a href={student.linkedin_url} target="_blank" rel="noreferrer" className="flex items-center gap-4 rounded-[var(--radius-md)] bg-[#0a66c2] text-sm font-semibold text-white transition-colors hover:bg-[#0b78df]" style={{ padding: '1rem 2rem' }}>
-                  LinkedIn
+                <a href={student.linkedin_url} target="_blank" rel="noreferrer" className="student-link-chip">
+                  LinkedIn <ExternalLink size={12} className="shrink-0" />
                 </a>
               )}
-          </div>
+            </div>
+          )}
         </div>
       </Card>
 
@@ -157,11 +168,11 @@ export default function StudentDetailPage() {
       {profileFacts.length > 0 && (
         <Card>
           <CardHeader title="Profile" />
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
+          <dl className="student-facts">
             {profileFacts.map(({ label, value }) => (
               <div key={label} className="min-w-0">
-                <dt className="text-xs text-[var(--text-muted)]">{label}</dt>
-                <dd className="mt-1 text-sm font-semibold text-[var(--text-primary)] break-words">{value}</dd>
+                <dt className="student-fact-label">{label}</dt>
+                <dd className="student-fact-value">{value}</dd>
               </div>
             ))}
           </dl>
@@ -175,6 +186,7 @@ export default function StudentDetailPage() {
           email={student.email}
           phone={student.phone}
           hasLogin={Boolean(student.auth_user_id)}
+          passwordRotated={student.password_rotated}
           onCreated={() => getStudentById(student.id).then((s) => setStudent(s ?? student))}
         />
       </Card>

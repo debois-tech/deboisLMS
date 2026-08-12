@@ -23,8 +23,8 @@ export const STUDENT_IMPORT_FIELDS = [
 const FEE_ALIASES = ['fees', 'fee', 'total fee', 'amount', 'fee amount'];
 const BATCH_ALIASES = ['batch', 'batch code', 'program', 'programme', 'course batch'];
 
-/** The abbreviations the CSV may carry. Mirrors the `batch_program` enum. */
-export const BATCH_PROGRAM_CODES: readonly BatchProgram[] = ['PHR', 'AML', 'MCL'];
+/** The gender values the form offers. Free text in the DB, so an import may carry others. */
+export const GENDER_OPTIONS = ['Female', 'Male', 'Other', 'Prefer not to say'] as const;
 
 export type StudentImportInput = Omit<Student, 'id' | 'created_at'>;
 
@@ -47,15 +47,9 @@ export function getImportFee(row: Record<string, string>): number | undefined {
   return Number.isFinite(amount) && amount > 0 ? amount : undefined;
 }
 
-/**
- * The row's programme abbreviation. `null` means the column was present but held
- * something that is not one of the three — worth reporting, unlike a blank.
- */
-export function getImportProgram(row: Record<string, string>): BatchProgram | null | undefined {
-  const raw = getImportValue(row, BATCH_ALIASES);
-  if (!raw) return undefined;
-  const code = raw.toUpperCase().trim();
-  return (BATCH_PROGRAM_CODES as readonly string[]).includes(code) ? (code as BatchProgram) : null;
+/** The row's programme abbreviation, normalised. Valid codes live in `batch_programs`. */
+export function getImportProgram(row: Record<string, string>): BatchProgram | undefined {
+  return getImportValue(row, BATCH_ALIASES)?.toUpperCase().trim();
 }
 
 export interface ParsedStudentCsv {

@@ -3,6 +3,8 @@ import type { LucideIcon } from 'lucide-react';
 
 interface PortalFocusProps {
   icon: LucideIcon;
+  /** `attention` for something the student is late on. */
+  tone?: 'default' | 'attention';
   /** A whole sentence — "Your next class is tomorrow" — not a label. */
   title: ReactNode;
   /** The facts behind the sentence: when, where, which code. */
@@ -12,9 +14,9 @@ interface PortalFocusProps {
 }
 
 /** The answer to "what do I do now?", heavier than any tile under it. At most one per page. */
-export function PortalFocus({ icon: Icon, title, detail, action }: PortalFocusProps) {
+export function PortalFocus({ icon: Icon, tone = 'default', title, detail, action }: PortalFocusProps) {
   return (
-    <div className="portal-focus">
+    <div className={`portal-focus${tone === 'attention' ? ' is-attention' : ''}`}>
       <span className="portal-focus-icon">
         <Icon size={20} aria-hidden="true" />
       </span>

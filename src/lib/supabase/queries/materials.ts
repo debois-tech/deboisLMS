@@ -1,6 +1,6 @@
 import { supabase } from '../client';
 import { maybeRow, ok, rows } from './result';
-import { DOCX_TYPE, docxToPdf, extensionOf, fileMimeType, webpToPng } from '@/lib/utils/files';
+import { DOCX_TYPE, docxToPdf, extensionOf, fileMimeType, prepareImageForUpload } from '@/lib/utils/files';
 import type { Material, MaterialView } from '@/lib/types';
 
 const BUCKET = 'materials';
@@ -91,8 +91,7 @@ export async function uploadMaterial(input: UploadMaterialInput): Promise<Materi
   const incoming = fileMimeType(input.file);
   const file =
     incoming === DOCX_TYPE ? await docxToPdf(input.file)
-    : incoming === 'image/webp' ? await webpToPng(input.file)
-    : input.file;
+    : await prepareImageForUpload(input.file);
 
   const mimeType = fileMimeType(file);
   const storagePath = storagePathFor(input.batchId, extensionOf(file.name));
