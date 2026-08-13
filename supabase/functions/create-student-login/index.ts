@@ -1,13 +1,7 @@
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
-/**
- * Origins allowed to call this function. Set the secret at deploy time:
- *
- *   supabase secrets set ALLOWED_ORIGINS="https://erp.deboistech.in" --project-ref <ref>
- *
- * Unset means '*', which is what this function did before the allowlist existed.
- */
+/** Origins allowed to call this. Unset means '*' — set ALLOWED_ORIGINS at deploy. */
 const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') ?? '')
   .split(',')
   .map((origin) => origin.trim())

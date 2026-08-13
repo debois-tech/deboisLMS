@@ -69,14 +69,7 @@ export interface ManualAttendanceInput {
   source: AttendanceSource;
 }
 
-/**
- * Marks one student for one lecture by hand, already approved — an admin ticking
- * the box *is* the human judgement the approval gate exists to capture, so asking
- * them to approve their own entry afterwards would be a second click for nothing.
- *
- * Upserts on `(student_id, lecture_id)`, the same key the CSV pipeline uses, so
- * marking a student who already has a record corrects it instead of failing.
- */
+/** Marked already-approved: the tick *is* the judgement. Upserts on `(student_id, lecture_id)`. */
 export async function markAttendance(input: ManualAttendanceInput): Promise<AttendanceRecord | undefined> {
   return maybeRow<AttendanceRecord>(
     await supabase

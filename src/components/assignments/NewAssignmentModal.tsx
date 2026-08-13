@@ -85,9 +85,7 @@ export function NewAssignmentModal({ open, onClose, batchId, onCreated }: NewAss
         due_at: form.noDeadline ? null : form.due_at,
       });
 
-      // The assignment exists from here on. A failed upload is reported against
-      // it rather than rolled back — losing a saved brief to a dropped
-      // connection would be worse than an assignment missing one handout.
+      // The assignment is saved by now; a failed upload is reported, not rolled back.
       if (files.length > 0) {
         setUploading({ done: 0, total: files.length });
         const result = await uploadMaterials(

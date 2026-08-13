@@ -1,10 +1,7 @@
 /** CSV writing for exports the admin shares outside the app. */
 type CsvCell = string | number | boolean | null | undefined;
 
-/**
- * Quote a cell per RFC 4180, and guard against CSV injection — a cell starting
- * with `=`, `+`, `-`, or `@` would be executed as a formula in Excel or Sheets.
- */
+/** RFC 4180 quoting, plus a guard: a cell starting =, +, - or @ runs as a formula in Excel. */
 function escapeCell(value: CsvCell): string {
   if (value === null || value === undefined) return '';
   let text = String(value);

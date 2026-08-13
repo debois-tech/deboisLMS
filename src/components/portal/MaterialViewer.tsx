@@ -16,12 +16,7 @@ interface MaterialViewerProps {
   onClose: () => void;
 }
 
-/**
- * Read-only reader for one material. Pages are rasterised to canvas and the blob
- * URL revoked once drawn, so the browser never holds a downloadable file. The
- * friction below (no context menu, no print, blank on tab-switch) is not real
- * protection — the watermark is what deters, because a leak names the person.
- */
+/** Read-only reader. The friction here only deters; the watermark is what names a leaker. */
 export function MaterialViewer(props: MaterialViewerProps) {
   return <MaterialViewerBody key={props.material?.id ?? 'closed'} {...props} />;
 }
@@ -72,12 +67,7 @@ function MaterialViewerBody({ material, onClose }: MaterialViewerProps) {
         const ratio = Math.min(window.devicePixelRatio || 1, 2);
         const targetWidth = container.clientWidth;
 
-        /*
-         * Pages are laid out at their real size but drawn only as they approach
-         * the viewport, so a big deck does not hold a full-resolution canvas per
-         * page. The placeholder carries the aspect ratio so the scrollbar is
-         * honest from the start.
-         */
+        // Drawn only near the viewport; the placeholder keeps the scrollbar honest.
         const drawPage = async (slot: HTMLElement, pageNumber: number) => {
           if (cancelled || !doc) return;
           const page = await doc.getPage(pageNumber);
@@ -187,10 +177,7 @@ function MaterialViewerBody({ material, onClose }: MaterialViewerProps) {
 
   if (!material) return null;
 
-  /*
-   * Rendered into <body>, not in place: `position: fixed` resolves against the
-   * nearest ancestor with a transform, and both shells leave a settled one behind.
-   */
+  // Into <body>: position:fixed resolves against any transformed ancestor.
   return createPortal(
     <div className="material-viewer" role="dialog" aria-modal="true" aria-label={material.title}>
       <header className="material-viewer-bar">

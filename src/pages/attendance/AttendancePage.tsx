@@ -106,15 +106,7 @@ export default function AttendancePage() {
 
   const lecture = lectures.find((l) => l.id === selectedLecture);
 
-  /*
-   * A re-upload of the same export is caught here rather than in the database:
-   * the pipeline upserts on (student, lecture), so a duplicate silently rewrites
-   * records an admin may already have corrected by hand. The signal is the
-   * meeting code the Meet export carries — if this lecture already has records
-   * and the code matches the one stored on it, this file has been through
-   * already. It is a warning, not a wall: "Upload anyway" is always there,
-   * because a genuinely corrected export deserves a second run.
-   */
+  // Re-upload guard: the pipeline upserts, so a duplicate would rewrite hand-corrected records. A warning, not a wall.
   const looksAlreadyUploaded = Boolean(
     records.length > 0 &&
     csvRows.length > 0 &&

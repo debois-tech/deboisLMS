@@ -1,10 +1,7 @@
 import { parseCsvTable } from '@/lib/utils/csvParser';
 import type { BatchProgram, Student } from '@/lib/types';
 
-/**
- * Add future student fields here. Matching uses headers, not column positions, so
- * a sheet can carry them in any order and spell them however the intake form did.
- */
+/** Add new fields here. Matched on headers, not column order. */
 export const STUDENT_IMPORT_FIELDS = [
   { key: 'name', aliases: ['name', 'full name', 'student name'] },
   { key: 'phone', aliases: ['phone', 'ph no', 'phone number', 'mobile', 'whatsapp', 'whatsapp number', 'whatsapp no'] },
@@ -73,11 +70,7 @@ export function parseStudentCsv(text: string): ParsedStudentCsv {
   };
 }
 
-/**
- * Rows whose Batch column names a programme other than the one being imported
- * into. Returned rather than thrown so the dialog can name them before anything
- * is written — a mixed sheet is the sign of the wrong file, not a bad row.
- */
+/** Rows naming another programme — returned, not thrown, so the dialog can list them first. */
 export function findProgramMismatches(
   rows: Record<string, string>[],
   target: BatchProgram,

@@ -18,12 +18,7 @@ export interface ProcessOptions {
 
 const LOG_PREFIX = '[attendance-parser]';
 
-/**
- * Process a lecture's raw upload rows into cleaned `attendance` records:
- * read uploads, merge sessions, match participants (tutors excluded), insert
- * (idempotent on student_id+lecture_id), then clear the uploads table — only
- * after the insert succeeded, so a failure leaves it re-runnable.
- */
+/** Uploads are cleared only after the insert succeeds, so a failure leaves it re-runnable. */
 export async function processAttendance(
   lectureId: string,
   options: ProcessOptions = {},

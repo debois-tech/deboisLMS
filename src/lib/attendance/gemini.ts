@@ -19,11 +19,7 @@ export interface GeminiMatchResult {
   confidence: number;
 }
 
-/**
- * Ask Gemini to find the closest roster entry for a participant name.
- *
- * Any failure returns `null` so the caller degrades to "flag for manual review".
- */
+/** Any failure returns null, so the caller degrades to manual review. */
 export async function matchNameWithGemini(
   rawName: string,
   candidates: string[],

@@ -3,10 +3,7 @@ import type { AttendanceStatus, BatchStatus, FeeStatus, MappingStatus } from '@/
 
 type Tone = 'default' | 'success' | 'warning' | 'danger' | 'info';
 
-/**
- * Every status a student sees, in their words rather than the database's.
- * The only place the schema → student-wording translation happens.
- */
+/** The only place schema values become student wording. */
 const attendance: Record<AttendanceStatus, [string, Tone]> = {
   present: ['Attended', 'success'],
   partial: ['Partly attended', 'warning'],

@@ -3,10 +3,7 @@ import type { AttendanceStatus, BatchStatus, FeeStatus, MappingStatus } from '@/
 
 type Tone = 'default' | 'success' | 'warning' | 'danger' | 'info';
 
-/**
- * Every admin-side status pill, so one status never shows two colours.
- * Pass the domain value — never a label or a variant.
- */
+/** Every admin status pill, so one status never shows two colours. Pass the domain value. */
 const batch: Record<BatchStatus, [string, Tone]> = {
   upcoming: ['Upcoming', 'info'],
   ongoing: ['Ongoing', 'success'],

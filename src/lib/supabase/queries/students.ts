@@ -18,11 +18,7 @@ export async function getStudentById(id: string): Promise<Student | undefined> {
   );
 }
 
-/**
- * `student_code` is the database's to issue and never to rewrite, so it is
- * stripped from anything the app sends — a form that round-trips a whole student
- * would otherwise put it back on the wire.
- */
+/** student_code is the database's to issue — strip it from anything the app sends. */
 function withoutCode(input: Partial<Student>): Partial<Student> {
   const fields = { ...input };
   delete fields.student_code;
@@ -38,11 +34,7 @@ export async function createStudent(input: Omit<Student, 'id' | 'created_at'>): 
 
 const normalizePhone = (phone: string | undefined | null) => (phone ?? '').replace(/\D/g, '');
 
-/**
- * Finds the student a CSV row refers to, by phone or email only. Name is
- * deliberately not an identity key — two students with the same name used to
- * collapse into one record on import, which is silent data loss.
- */
+/** Phone or email only. Name is not an identity key — same-name students used to collapse. */
 export async function findExistingStudent(input: { name?: string; phone?: string; email?: string }): Promise<Student | undefined> {
   const phone = normalizePhone(input.phone);
   const email = input.email?.trim().toLowerCase();
@@ -139,11 +131,7 @@ export interface BulkLoginResult {
   failed: { studentId: string; name: string; reason: string }[];
 }
 
-/**
- * Creates portal logins for a list of students, a few at a time rather than all at
- * once — each call creates an auth user, and firing eighty in parallel gets
- * rate-limited. One student's failure never stops the rest.
- */
+/** Four at a time: eighty parallel auth creations get rate-limited. One failure never stops the rest. */
 export async function createStudentLoginsBulk(
   students: { id: string; name: string }[],
   onProgress?: (done: number, total: number) => void,

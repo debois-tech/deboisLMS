@@ -191,11 +191,7 @@ export interface OpenedMaterial {
   text?: string;
 }
 
-/**
- * Opens a material through the edge function, the only path to the bytes. What
- * comes back depends on the file: a PDF or an image is a watermarked PDF, text
- * is itself, and anything else is the stored file for the browser to save.
- */
+/** PDFs and images come back watermarked, text as itself, everything else as the stored file. */
 export async function openMaterial(materialId: string): Promise<OpenedMaterial> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('You are signed out. Sign in again to open this.');

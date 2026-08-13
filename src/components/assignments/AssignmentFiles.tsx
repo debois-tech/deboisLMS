@@ -24,11 +24,7 @@ interface AssignmentFilesProps {
   readOnly?: boolean;
 }
 
-/**
- * The handouts attached to one assignment — the starter file, the commands to
- * run, the brief. Rows in `materials` with an `assignment_id`, so they open in
- * the same reader and obey the same enrolment rule as study material.
- */
+/** Handouts attached to one assignment: `materials` rows with an `assignment_id`. */
 export function AssignmentFiles({ assignmentId, batchId, readOnly }: AssignmentFilesProps) {
   const { user } = useAuth();
   const [files, setFiles] = useState<Material[]>([]);

@@ -1,7 +1,4 @@
-/**
- * The student portal widget kit. Portal pages import from here and nowhere else.
- * See ./README.md for the recipe for building a new portal page.
- */
+/** Portal widget kit. Portal pages import from here only — see ./README.md. */
 export { PortalPage, PortalLoading, usePortalStudentId } from './PortalPage';
 export { PortalSection } from './PortalSection';
 export { PortalFocus } from './PortalFocus';

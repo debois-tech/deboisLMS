@@ -55,11 +55,7 @@ export async function createAssignment(input: Omit<Assignment, 'id' | 'created_a
   return data as Assignment;
 }
 
-/**
- * The admin submission table for one assignment: every active student, whether
- * they have submitted, and the repo link they submit from. The CSV export ships
- * the same rows, so the file and the screen can never disagree.
- */
+/** Every active student and their submission. The CSV export ships these same rows. */
 export async function getAssignmentSubmissions(
   assignmentId: string,
   batchId: string,
@@ -122,12 +118,7 @@ export async function saveStudentRepo(studentId: string, repoUrl: string): Promi
   return data as StudentRepo;
 }
 
-/**
- * A student submitting from the portal. The repo link is saved first so the admin
- * table never shows a stale one. submitted_at, submitted_via and marked_by are
- * not sent: the guard_assignment_completion trigger sets all three server-side,
- * so anything the client claimed would be overwritten anyway.
- */
+/** submitted_at, submitted_via and marked_by are not sent — the guard trigger sets them. */
 export async function submitAssignmentFromPortal(
   assignmentId: string,
   studentId: string,
