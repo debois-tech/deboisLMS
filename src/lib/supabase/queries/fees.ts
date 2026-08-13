@@ -1,6 +1,6 @@
 import { supabase } from '../client';
 import { maybeRow, ok, row, rows } from './result';
-import type { StudentFee, BatchFeeSummary, FeePaymentLog, PaymentMethod } from '@/lib/types';
+import type { StudentFee, StudentFeeDue, BatchFeeSummary, FeePaymentLog, PaymentMethod } from '@/lib/types';
 
 /** Fees for a batch, backfilling a zeroed row for any active student who has none yet. */
 export async function getFeesByBatch(batchId: string): Promise<StudentFee[]> {
@@ -93,6 +93,19 @@ export async function getBatchFeeSummary(): Promise<BatchFeeSummary[]> {
   );
 }
 
+/**
+ * The portal's own fee read. Goes through `student_fee_dues`, which carries the
+ * balance but never total_fee or paid_amount, and scopes itself to the signed-in
+ * student in SQL — so no studentId argument, and none to get wrong.
+ */
+export async function getMyFeeDues(): Promise<StudentFeeDue[]> {
+  return rows<StudentFeeDue>(
+    await supabase.from('student_fee_dues').select('*').order('updated_at', { ascending: false }),
+    'Could not load your fees',
+  );
+}
+
+/** Admin-side: the full picture, straight off the table. */
 export async function getFeesByStudent(studentId: string): Promise<StudentFee[]> {
   return rows<StudentFee>(
     await supabase

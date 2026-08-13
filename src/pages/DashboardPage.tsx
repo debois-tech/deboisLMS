@@ -58,7 +58,7 @@ export default function DashboardPage() {
                 >
                   <div className="flex min-w-0 flex-1 items-center justify-between gap-4">
                     <p className="text-sm font-semibold leading-5 text-[var(--text-primary)] break-words">{batch.name}</p>
-                    <p className="shrink-0 text-right text-xs leading-4 text-[var(--text-muted)]">{batch.track}</p>
+                    <p className="shrink-0 text-right text-xs leading-4 text-[var(--text-muted)]">{batch.program ?? ''}</p>
                   </div>
                   <ArrowUpRight size={16} className="text-[var(--text-muted)] opacity-0 group-hover:opacity-100 transition-opacity" />
                 </Link>

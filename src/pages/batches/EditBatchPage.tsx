@@ -9,8 +9,9 @@ import { NotFound } from '@/components/ui/NotFound';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { FormField } from '@/components/ui/FormField';
 import { SearchSelect } from '@/components/ui/SearchSelect';
-import { getBatchById, updateBatch } from '@/lib/supabase';
-import type { Batch } from '@/lib/types';
+import { DatePicker } from '@/components/ui/DatePicker';
+import { getBatchById, getBatchPrograms, updateBatch } from '@/lib/supabase';
+import type { Batch, BatchProgram, BatchProgramOption } from '@/lib/types';
 import { useToast } from '@/lib/context/ToastContext';
 import { errorMessage } from '@/lib/utils/errors';
 
@@ -19,17 +20,23 @@ export default function EditBatchPage() {
   const navigate = useNavigate();
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<Batch | null>(null);
+  const [programs, setPrograms] = useState<BatchProgramOption[]>([]);
   const { showToast } = useToast();
 
   const { loading, error, retry } = useInitialLoad(async () => {
     if (!batchId) return;
-    const batch = await getBatchById(batchId);
+    const [batch, programRows] = await Promise.all([getBatchById(batchId), getBatchPrograms()]);
     if (batch) setForm(batch);
+    setPrograms(programRows);
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form) return;
+    if (!form.program) {
+      showToast('Select a programme for this batch', 'error');
+      return;
+    }
     setSaving(true);
     try {
       await updateBatch(form.id, form);
@@ -59,34 +66,14 @@ export default function EditBatchPage() {
               required
             />
           </FormField>
-          <FormField label="Track">
+          <FormField label="Programme" required>
             <SearchSelect
-              options={[
-                { value: '', label: 'Select track' },
-                { value: 'DevOps', label: 'DevOps' },
-                { value: 'AI/ML', label: 'AI/ML' },
-                { value: 'Full Stack', label: 'Full Stack' },
-                { value: 'Cloud', label: 'Cloud' },
-              ]}
-              value={form.track ?? ''}
-              onChange={(track) => setForm({ ...form, track })}
-              placeholder="Select track"
-              searchPlaceholder="Search tracks"
-              emptyText="No tracks found"
-            />
-          </FormField>
-          <FormField label="Status">
-            <SearchSelect
-              options={[
-                { value: 'upcoming', label: 'Upcoming' },
-                { value: 'ongoing', label: 'Ongoing' },
-                { value: 'completed', label: 'Completed' },
-              ]}
-              value={form.status}
-              onChange={(status) => setForm({ ...form, status: status as Batch['status'] })}
-              placeholder="Select status"
-              searchPlaceholder="Search statuses"
-              emptyText="No statuses found"
+              options={programs.map((option) => ({ value: option.code, label: `${option.name} (${option.code})` }))}
+              value={form.program ?? ''}
+              onChange={(program) => setForm({ ...form, program: program as BatchProgram })}
+              placeholder="Select programme"
+              searchPlaceholder="Search programmes"
+              emptyText="No programmes found"
             />
           </FormField>
           <FormField label="Batch Code">
@@ -103,10 +90,11 @@ export default function EditBatchPage() {
             </p>
           </FormField>
           <FormField label="Start Date">
-            <input
-              type="date"
+            <DatePicker
               value={form.start_date ?? ''}
-              onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+              onChange={(start_date) => setForm({ ...form, start_date })}
+              placeholder="Pick a start date"
+              ariaLabel="Start date"
             />
           </FormField>
           <div className="flex gap-3 pt-2">

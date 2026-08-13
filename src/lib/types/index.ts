@@ -5,7 +5,13 @@ export type SessionType = 'online' | 'offline';
 export type AttendanceStatus = 'present' | 'partial' | 'absent';
 export type AttendanceSource = 'manual' | 'automated';
 export type MappingStatus = 'active' | 'dropped';
-export type SubmissionChannel = 'whatsapp' | 'other' | 'portal';
+/** 'portal' = the student handed it in; 'github' = an admin recorded it. */
+export type SubmissionChannel = 'github' | 'portal';
+/**
+ * A programme abbreviation, e.g. PHR. Open rather than a fixed union: an admin
+ * mints new ones from the batch form, and the valid set lives in `batch_programs`.
+ */
+export type BatchProgram = string;
 export type FeeStatus = 'due' | 'paid';
 export type PaymentMethod = 'cash' | 'upi' | 'bank_transfer' | 'other';
 
@@ -20,10 +26,18 @@ export interface Profile {
   student_id?: string;
 }
 
+/** Abbreviation to display name, from the `batch_programs` table. */
+export interface BatchProgramOption {
+  code: BatchProgram;
+  name: string;
+  sort_order: number;
+}
+
 export interface Batch {
   id: string;
   name: string;
-  track?: string;
+  /** Which programme this batch runs. The UI shows the name, never the code. */
+  program?: BatchProgram;
   status: BatchStatus;
   start_date?: string;
   /**
@@ -37,19 +51,34 @@ export interface Batch {
 
 export interface Student {
   id: string;
+  /** Permanent institution-wide ID, e.g. DBT0001. Issued by the database — never sent on insert. */
+  student_code?: string;
   name: string;
+  /** WhatsApp number. Also the source of the portal password suffix. */
   phone?: string;
   email?: string;
+  date_of_birth?: string;
+  gender?: string;
+  college?: string;
+  course?: string;
+  branch?: string;
+  /** Free text: "3rd", "Final year" and "2" all turn up in the sheets. */
+  current_year?: string;
+  graduation_year?: number;
   github_url?: string;
   linkedin_url?: string;
   created_at: string;
   /** auth.users id once a portal login has been created for this student. */
   auth_user_id?: string;
+  /** True once the password was reset to a random one — the derived rule no longer applies. */
+  password_rotated?: boolean;
 }
 
 export interface StudentCredentials {
   email: string;
   password: string;
+  /** True when this came from a reset, so it cannot be recomputed later. */
+  rotated?: boolean;
 }
 
 export interface Tutor {
@@ -131,6 +160,7 @@ export interface Assignment {
   title: string;
   description?: string;
   assigned_date?: string;
+  due_at?: string | null;
   created_at: string;
 }
 
@@ -144,6 +174,20 @@ export interface AssignmentCompletion {
   marked_by?: string;
   student?: Student;
   assignment?: Assignment;
+}
+
+/**
+ * What the portal is allowed to know about a fee: the balance, and nothing that
+ * would reveal what the student was charged. Backed by the `student_fee_dues`
+ * view, which is scoped to the caller in SQL.
+ */
+export interface StudentFeeDue {
+  id: string;
+  student_id: string;
+  batch_id: string;
+  amount_due: number;
+  status: FeeStatus;
+  updated_at?: string;
 }
 
 /** One GitHub repo per student — every assignment submission points at it. */
@@ -171,7 +215,11 @@ export interface Material {
   id: string;
   /** Null means the material is for every student rather than one batch. */
   batch_id?: string | null;
-  /** Whose name the watermark carries, alongside the company phone number. */
+  /** Set when this is an assignment's handout rather than library material. */
+  assignment_id?: string | null;
+  /** Decides delivery: paged and watermarked, shown as text, or downloaded. */
+  mime_type?: string;
+  /** Who the material came from, for the listings. Not part of the watermark. */
   tutor_id?: string | null;
   title: string;
   description?: string;

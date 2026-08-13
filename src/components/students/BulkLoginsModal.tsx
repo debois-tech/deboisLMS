@@ -29,7 +29,7 @@ export function BulkLoginsModal({ result, onClose }: { result: BulkLoginResult |
       footer={
         <>
           {result.created.length > 0 && (
-            <Button variant="secondary" onClick={copyAll}>
+            <Button className = 'action-button-compact' variant="secondary" onClick={copyAll}>
               {copied ? <Check size={15} /> : <Copy size={15} />}
               {copied ? 'Copied' : 'Copy all'}
             </Button>

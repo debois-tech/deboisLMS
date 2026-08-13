@@ -12,19 +12,12 @@ export function PortalList({ children }: PortalListProps) {
 }
 
 interface PortalRowProps {
-  /** The thing itself — a name, a date, an amount. */
   primary: ReactNode;
-  /** One quiet line of context under it. */
   secondary?: ReactNode;
-  /** A status pill, an amount, anything that closes the row on the right. */
   trailing?: ReactNode;
-  /** Leading dot: outstanding work is amber, finished work is green. */
-  state?: 'todo' | 'done';
-  /** Dims the primary text — for rows that are settled and no longer need attention. */
+  state?: 'todo' | 'done' | 'missed';
   muted?: boolean;
-  /** Makes the row a real button with a chevron. Give it an `label` for screen readers. */
   onClick?: () => void;
-  /** Accessible name when the row is interactive and the visible text isn't enough. */
   label?: string;
 }
 
@@ -39,7 +32,12 @@ export function PortalRow({ primary, secondary, trailing, state, muted, onClick,
   const body = (
     <>
       <span className="portal-list-lead">
-        {state && <span className={clsx('portal-row-dot', state === 'done' && 'is-done')} aria-hidden="true" />}
+        {state && (
+          <span
+            className={clsx('portal-row-dot', state === 'done' && 'is-done', state === 'missed' && 'is-missed')}
+            aria-hidden="true"
+          />
+        )}
         <span className="min-w-0">
           <span className="portal-list-primary block">{primary}</span>
           {secondary && <span className="portal-list-secondary block">{secondary}</span>}

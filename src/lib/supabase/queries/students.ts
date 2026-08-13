@@ -2,6 +2,7 @@ import { supabase } from '../client';
 import { maybeRow, ok, row, rows } from './result';
 import type { Batch, Student, BatchStudentMapping, StudentCredentials } from '@/lib/types';
 import { errorMessage } from '@/lib/utils/errors';
+import { getImportFee, toStudentInput } from '@/lib/utils/studentImport';
 
 export async function getStudents(): Promise<Student[]> {
   return rows<Student>(
@@ -17,9 +18,20 @@ export async function getStudentById(id: string): Promise<Student | undefined> {
   );
 }
 
+/**
+ * `student_code` is the database's to issue and never to rewrite, so it is
+ * stripped from anything the app sends — a form that round-trips a whole student
+ * would otherwise put it back on the wire.
+ */
+function withoutCode(input: Partial<Student>): Partial<Student> {
+  const fields = { ...input };
+  delete fields.student_code;
+  return fields;
+}
+
 export async function createStudent(input: Omit<Student, 'id' | 'created_at'>): Promise<Student> {
   return row<Student>(
-    await supabase.from('students').insert(input).select().single(),
+    await supabase.from('students').insert(withoutCode(input)).select().single(),
     'Could not create the student',
   );
 }
@@ -69,9 +81,25 @@ export async function createOrReuseStudent(input: Omit<Student, 'id' | 'created_
   return createStudent(input);
 }
 
+/** The one CSV import path, so both import screens write the same fields. */
+export async function importStudentsIntoBatch(
+  rows: Record<string, string>[],
+  batchId: string,
+  fallbackFee?: number,
+): Promise<Student[]> {
+  return Promise.all(
+    rows.map(async (row) => {
+      const student = await createOrReuseStudent(toStudentInput(row));
+      const fee = getImportFee(row) ?? fallbackFee ?? 0;
+      await addStudentToBatch(student.id, batchId, fee).catch(() => undefined);
+      return student;
+    }),
+  );
+}
+
 export async function updateStudent(id: string, input: Partial<Student>): Promise<Student | undefined> {
   return maybeRow<Student>(
-    await supabase.from('students').update(input).eq('id', id).select().single(),
+    await supabase.from('students').update(withoutCode(input)).eq('id', id).select().single(),
     'Could not save the student',
   );
 }
@@ -83,13 +111,10 @@ export async function getStudentByAuthUserId(authUserId: string): Promise<Studen
   );
 }
 
-/**
- * Creates (or resets) the student's portal login, via the `create-student-login`
- * edge function. The password is shown once and never stored — a lost one means a reset.
- */
-export async function createStudentLogin(studentId: string): Promise<StudentCredentials> {
+/** Create uses the derived password; `rotate` issues a random one. Shown once, never stored. */
+export async function createStudentLogin(studentId: string, rotate = false): Promise<StudentCredentials> {
   const { data, error } = await supabase.functions.invoke('create-student-login', {
-    body: { student_id: studentId },
+    body: { student_id: studentId, rotate },
   });
 
   if (error) {
@@ -190,9 +215,8 @@ export async function addStudentToBatch(studentId: string, batchId: string, tota
     'Could not add the student to the batch',
   );
 
-  // Re-adding a previously removed student leaves a stale student_fees row behind
-  // (removeStudentFromBatch only deletes the mapping) — upsert so the fee just
-  // entered always overwrites it.
+  // Upsert: removeStudentFromBatch drops only the mapping, so a re-add finds a stale fee row.
+  // The registration fee is logged by a trigger on insert — see schema.sql.
   ok(
     await supabase
       .from('student_fees')

@@ -12,16 +12,19 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import { StudentImportModal } from '@/components/students/StudentImportModal';
 import { BulkLoginsModal } from '@/components/students/BulkLoginsModal';
-import { getStudents, getBatches, getAllBatchStudentMappings, createOrReuseStudent, createStudentLoginsBulk } from '@/lib/supabase';
+import { getStudents, getBatches, getAllBatchStudentMappings, createStudentLoginsBulk, getBatchPrograms, resolveProgramBatch, importStudentsIntoBatch } from '@/lib/supabase';
 import type { BulkLoginResult } from '@/lib/supabase';
-import type { Student, Batch, BatchStudentMapping } from '@/lib/types';
-import { toStudentInput } from '@/lib/utils/studentImport';
+import type { Student, Batch, BatchStudentMapping, BatchProgram, BatchProgramOption } from '@/lib/types';
 import { useToast } from '@/lib/context/ToastContext';
+
+/** Sentinel for the filter: students in no active batch, who see nothing in the portal. */
+const NO_BATCH = 'none';
 
 export default function StudentsPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [mappings, setMappings] = useState<BatchStudentMapping[]>([]);
+  const [programs, setPrograms] = useState<BatchProgramOption[]>([]);
   const [search, setSearch] = useState('');
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [showImport, setShowImport] = useState(false);
@@ -29,14 +32,16 @@ export default function StudentsPage() {
   const { showToast } = useToast();
 
   const { loading, error, retry } = useInitialLoad(async () => {
-    const [studentData, batchData, mappingData] = await Promise.all([
+    const [studentData, batchData, mappingData, programData] = await Promise.all([
       getStudents(),
       getBatches(),
       getAllBatchStudentMappings(),
+      getBatchPrograms(),
     ]);
     setStudents(studentData);
     setBatches(batchData);
     setMappings(mappingData);
+    setPrograms(programData);
   });
 
 
@@ -50,10 +55,13 @@ export default function StudentsPage() {
 
   const query = search.trim().toLowerCase();
   const filteredStudents = students.filter((s) => {
-    if (selectedBatchId && !(studentBatchIds.get(s.id) ?? []).includes(selectedBatchId)) return false;
+    const batchIds = studentBatchIds.get(s.id) ?? [];
+    if (selectedBatchId === NO_BATCH && batchIds.length > 0) return false;
+    if (selectedBatchId && selectedBatchId !== NO_BATCH && !batchIds.includes(selectedBatchId)) return false;
     if (!query) return true;
     return (
       s.name.toLowerCase().includes(query) ||
+      (s.student_code ?? '').toLowerCase().includes(query) ||
       (s.phone ?? '').toLowerCase().includes(query) ||
       (s.email ?? '').toLowerCase().includes(query)
     );
@@ -63,9 +71,21 @@ export default function StudentsPage() {
     setSelectedBatchId(batchId);
   };
 
-  const handleImport = async (rows: Record<string, string>[], _fee?: number, createLogins?: boolean) => {
-    const imported = await Promise.all(rows.map((row) => createOrReuseStudent(toStudentInput(row))));
-    setStudents(await getStudents());
+  const handleImport = async (
+    rows: Record<string, string>[],
+    fallbackFee: number | undefined,
+    createLogins: boolean,
+    program: BatchProgram | undefined,
+  ) => {
+    if (!program) throw new Error('Choose the programme these students join.');
+
+    const programName = programs.find((p) => p.code === program)?.name ?? program;
+    const batch = resolveProgramBatch(batches, program, programName);
+    const imported = await importStudentsIntoBatch(rows, batch.id, fallbackFee);
+
+    const [studentData, mappingData] = await Promise.all([getStudents(), getAllBatchStudentMappings()]);
+    setStudents(studentData);
+    setMappings(mappingData);
 
     if (!createLogins) {
       showToast('Students imported');
@@ -108,11 +128,14 @@ export default function StudentsPage() {
             <SearchFilterBar
               value={search}
               onChange={setSearch}
-              placeholder="Search by name, phone, or email"
+              placeholder="Search by ID, name, phone, or email"
               filterLabel="Filter by batch"
               allLabel="All batches"
               filterValue={selectedBatchId}
-              filterOptions={batches.map((batch) => ({ value: batch.id, label: batch.name }))}
+              filterOptions={[
+                ...batches.map((batch) => ({ value: batch.id, label: batch.name })),
+                { value: NO_BATCH, label: 'No batch' },
+              ]}
               onFilterChange={selectBatch}
             />
           </div>
@@ -124,6 +147,7 @@ export default function StudentsPage() {
               <THead>
                 <TR>
                   <TH>Student</TH>
+                  <TH>ID</TH>
                   <TH>Phone</TH>
                   <TH>Email</TH>
                 </TR>
@@ -137,6 +161,7 @@ export default function StudentsPage() {
                         <span className="font-semibold text-[var(--text-primary)] group-hover:text-[var(--primary)]">{s.name}</span>
                       </Link>
                     </TD>
+                    <TD className="cell-secondary font-mono">{s.student_code || '—'}</TD>
                     <TD className="cell-secondary">{s.phone || '—'}</TD>
                     <TD className="cell-muted">{s.email || '—'}</TD>
                   </TR>
@@ -150,6 +175,7 @@ export default function StudentsPage() {
       <StudentImportModal
         open={showImport}
         onClose={() => setShowImport(false)}
+        programs={programs}
         onImport={handleImport}
       />
 

@@ -1,5 +1,6 @@
 import { CheckCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
+import { StatusPill } from '@/components/ui/StatusPill';
 import { Button } from '@/components/ui/Button';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import type { AttendanceRecord } from '@/lib/types';
@@ -10,12 +11,6 @@ interface AttendanceRecordsTableProps {
   /** Renders the Approve All toolbar above the table, only while rows await approval. */
   onApproveAll?: () => void;
   maxHeight?: string;
-}
-
-function statusVariant(status: AttendanceRecord['status']) {
-  if (status === 'present') return 'success' as const;
-  if (status === 'partial') return 'warning' as const;
-  return 'danger' as const;
 }
 
 export function AttendanceRecordsTable({
@@ -57,7 +52,7 @@ export function AttendanceRecordsTable({
               )}
             </TD>
             <TD>
-              <Badge variant={statusVariant(r.status)}>{r.status}</Badge>
+              <StatusPill kind="attendance" value={r.status} />
             </TD>
             <TD className="cell-secondary">
               {r.total_attended_minutes != null ? `${r.total_attended_minutes} min` : '—'}

@@ -6,13 +6,13 @@ import { Spinner } from '@/components/ui/Spinner';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
-import { Modal } from '@/components/ui/Modal';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { BatchSelect } from '@/components/ui/BatchSelect';
 import { AssignmentSelect } from '@/components/ui/AssignmentSelect';
-import { FormField } from '@/components/ui/FormField';
 import { AssignmentSubmissionTable } from '@/components/assignments/AssignmentSubmissionTable';
-import { getBatches, getAssignmentsByBatch, createAssignment } from '@/lib/supabase';
+import { AssignmentFiles } from '@/components/assignments/AssignmentFiles';
+import { NewAssignmentModal } from '@/components/assignments/NewAssignmentModal';
+import { getBatches, getAssignmentsByBatch } from '@/lib/supabase';
 import type { Batch, Assignment } from '@/lib/types';
 import { useToast } from '@/lib/context/ToastContext';
 import { errorMessage } from '@/lib/utils/errors';
@@ -23,7 +23,6 @@ export default function AssignmentsPage() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [selectedAsgn, setSelectedAsgn] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
-  const [form, setForm] = useState({ title: '', description: '', assigned_date: '' });
   const { showToast } = useToast();
 
   const { loading, error, retry } = useInitialLoad(async () => {
@@ -38,19 +37,6 @@ export default function AssignmentsPage() {
     } catch (err) {
       setAssignments([]);
       showToast(errorMessage(err, 'Failed to load assignments for this batch'), 'error');
-    }
-  };
-
-  const handleCreate = async () => {
-    if (!selectedBatch) return;
-    try {
-      await createAssignment({ ...form, batch_id: selectedBatch });
-      setShowNew(false);
-      setForm({ title: '', description: '', assigned_date: '' });
-      await fetchBatchData(selectedBatch);
-      showToast('Assignment created');
-    } catch (err) {
-      showToast(errorMessage(err, 'Failed to create assignment'), 'error');
     }
   };
 
@@ -82,6 +68,13 @@ export default function AssignmentsPage() {
 
       {selectedBatch && selectedAsgn && (
         <Card>
+          <CardHeader title="Files" />
+          <AssignmentFiles key={selectedAsgn} assignmentId={selectedAsgn} batchId={selectedBatch} />
+        </Card>
+      )}
+
+      {selectedBatch && selectedAsgn && (
+        <Card>
           <CardHeader title="Submission Status" />
           <AssignmentSubmissionTable
             key={selectedAsgn}
@@ -92,31 +85,14 @@ export default function AssignmentsPage() {
         </Card>
       )}
 
-      <Modal
-        open={showNew}
-        onClose={() => setShowNew(false)}
-        title="New Assignment"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setShowNew(false)}>Cancel</Button>
-            <Button className="action-button-compact" onClick={handleCreate} disabled={!form.title.trim()}>
-              Create Assignment
-            </Button>
-          </>
-        }
-      >
-        <div className="popup-form-spaced">
-          <FormField label="Title" required>
-            <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
-          </FormField>
-          <FormField label="Description">
-            <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} />
-          </FormField>
-          <FormField label="Due Date">
-            <input type="date" value={form.assigned_date} onChange={(e) => setForm({ ...form, assigned_date: e.target.value })} />
-          </FormField>
-        </div>
-      </Modal>
+      {selectedBatch && (
+        <NewAssignmentModal
+          open={showNew}
+          onClose={() => setShowNew(false)}
+          batchId={selectedBatch}
+          onCreated={() => fetchBatchData(selectedBatch)}
+        />
+      )}
     </div>
   );
 }

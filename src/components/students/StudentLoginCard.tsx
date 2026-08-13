@@ -13,31 +13,33 @@ interface StudentLoginCardProps {
   email?: string;
   phone?: string;
   hasLogin: boolean;
+  /** True once the password was reset to a random one, which cannot be recomputed. */
+  passwordRotated?: boolean;
   onCreated?: () => void;
 }
 
-/**
- * The student's portal login: current password (recomputed from the phone, since
- * Auth stores only a hash) and the reset that rotates it.
- */
-export function StudentLoginCard({ studentId, email, phone, hasLogin, onCreated }: StudentLoginCardProps) {
+/** Create uses the derived password; reset issues a random one, shown once. */
+export function StudentLoginCard({
+  studentId, email, phone, hasLogin, passwordRotated, onCreated,
+}: StudentLoginCardProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [fresh, setFresh] = useState<StudentCredentials | null>(null);
 
   const derived = derivePortalPassword(phone);
-  // A just-returned password is authoritative; otherwise fall back to the rule.
-  const password = fresh?.password ?? derived;
+  // Derived password only holds until a reset; after that there is nothing to recompute.
+  const rotated = fresh?.rotated ?? passwordRotated ?? false;
+  const password = fresh?.password ?? (rotated ? null : derived);
 
-  const run = async () => {
+  const run = async (rotate = false) => {
     setLoading(true);
     setError('');
     try {
-      const result = await createStudentLogin(studentId);
+      const result = await createStudentLogin(studentId, rotate);
       setFresh(result);
       onCreated?.();
     } catch (err) {
-      setError(errorMessage(err, 'Failed to create login'));
+      setError(errorMessage(err, rotate ? 'Failed to reset the password' : 'Failed to create login'));
     } finally {
       setLoading(false);
     }
@@ -55,13 +57,19 @@ export function StudentLoginCard({ studentId, email, phone, hasLogin, onCreated 
     return (
       <div className="flex flex-col items-start gap-3">
         {error && <InlineAlert>{error}</InlineAlert>}
-        <Button className="action-button-compact" variant="secondary" onClick={run} loading={loading}>
+        <Button className="action-button-compact" variant="secondary" onClick={() => run()} loading={loading}>
           <KeyRound size={15} />
           Create login
         </Button>
       </div>
     );
   }
+
+  const resetButton = (
+    <button type="button" onClick={() => run(true)} disabled={loading} className="credential-reset">
+      {loading ? 'Resetting…' : 'Reset'}
+    </button>
+  );
 
   return (
     <div className="flex flex-col gap-3">
@@ -70,26 +78,24 @@ export function StudentLoginCard({ studentId, email, phone, hasLogin, onCreated 
       <CredentialRow label="Email" value={email} />
 
       {password ? (
-        <CredentialRow
-          label="Password"
-          value={password}
-          action={(
-            <button type="button" onClick={run} disabled={loading} className="credential-reset">
-              Reset
-            </button>
-          )}
-        />
+        <CredentialRow label="Password" value={password} action={resetButton} />
       ) : (
         <div className="credential-row">
           <div className="min-w-0">
             <p className="credential-label">Password</p>
             <p className="mt-1 text-xs text-[var(--text-muted)]">
-              Random password. Reset to generate a new one.
+              Reset to a random password, shown once. Reset again to issue a new one.
             </p>
           </div>
+          <div className="flex shrink-0 items-center gap-1">{resetButton}</div>
         </div>
       )}
 
+      {fresh?.rotated && (
+        <p className="text-xs text-[var(--text-muted)]">
+          New password — copy it now. It is not stored and cannot be shown again.
+        </p>
+      )}
     </div>
   );
 }

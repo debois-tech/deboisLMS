@@ -14,6 +14,7 @@ const EditBatchPage = lazy(() => import('@/pages/batches/EditBatchPage'));
 const StudentsPage = lazy(() => import('@/pages/students/StudentsPage'));
 const NewStudentPage = lazy(() => import('@/pages/students/NewStudentPage'));
 const StudentDetailPage = lazy(() => import('@/pages/students/StudentDetailPage'));
+const EditStudentPage = lazy(() => import('@/pages/students/EditStudentPage'));
 const TutorsPage = lazy(() => import('@/pages/tutors/TutorsPage'));
 const NewTutorPage = lazy(() => import('@/pages/tutors/NewTutorPage'));
 const TutorDetailPage = lazy(() => import('@/pages/tutors/TutorDetailPage'));
@@ -60,6 +61,7 @@ export default function App() {
               <Route path="students" element={<StudentsPage />} />
               <Route path="students/new" element={<NewStudentPage />} />
               <Route path="students/:studentId" element={<StudentDetailPage />} />
+              <Route path="students/:studentId/edit" element={<EditStudentPage />} />
               <Route path="tutors" element={<TutorsPage />} />
               <Route path="tutors/new" element={<NewTutorPage />} />
               <Route path="tutors/:tutorId" element={<TutorDetailPage />} />

@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Edit3, Users, GraduationCap, Layers, ClipboardCheck, FileText, Plus, Trash2, ChevronRight, CalendarDays, Upload } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
+import { StatusPill } from '@/components/ui/StatusPill';
 import { Tabs } from '@/components/ui/Tabs';
 import { Spinner } from '@/components/ui/Spinner';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -15,22 +15,27 @@ import { StudentMultiSelect } from '@/components/ui/StudentMultiSelect';
 import { SearchSelect } from '@/components/ui/SearchSelect';
 import { FormField } from '@/components/ui/FormField';
 import { AttendanceRecordsTable } from '@/components/attendance/AttendanceRecordsTable';
+import { DEFAULT_LECTURE_MINUTES } from '@/lib/attendance/types';
 import { AssignmentSubmissionTable } from '@/components/assignments/AssignmentSubmissionTable';
+import { NewAssignmentModal } from '@/components/assignments/NewAssignmentModal';
+import { AssignmentFiles } from '@/components/assignments/AssignmentFiles';
+import { BatchMaterials } from '@/components/materials/BatchMaterials';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { StudentLink } from '@/components/students/StudentLink';
 import { PaymentLogModal, type PaymentLogFormState } from '@/components/finance/PaymentLogModal';
-import { getBatchById } from '@/lib/supabase';
-import { getBatchStudents, addStudentToBatch, removeStudentFromBatch, getStudents, createOrReuseStudent, createStudentLoginsBulk } from '@/lib/supabase';
+import { getBatchById, getBatchPrograms } from '@/lib/supabase';
+import { getBatchStudents, addStudentToBatch, removeStudentFromBatch, getStudents, createStudentLoginsBulk, importStudentsIntoBatch, getStudentBatches } from '@/lib/supabase';
 import type { BulkLoginResult } from '@/lib/supabase';
 import { BulkLoginsModal } from '@/components/students/BulkLoginsModal';
 import { getBatchTutors, assignTutorToBatch, removeTutorFromBatch, getTutors } from '@/lib/supabase';
 import { getLecturesByBatch, createLecture, deleteLecture } from '@/lib/supabase';
 import { getAttendanceByLecture, setAttendanceApproved, bulkApproveAttendance } from '@/lib/supabase';
 import { getFeesByBatch, getFeePaymentLogs, addFeePaymentLog } from '@/lib/supabase';
-import { getAssignmentsByBatch, createAssignment } from '@/lib/supabase';
-import type { Batch, Student, Tutor, Lecture, AttendanceRecord, StudentFee, FeePaymentLog, Assignment, BatchStudentMapping, TutorBatchMapping } from '@/lib/types';
+import { getAssignmentsByBatch } from '@/lib/supabase';
+import type { Batch, BatchProgram, BatchProgramOption, Student, Tutor, Lecture, AttendanceRecord, StudentFee, FeePaymentLog, Assignment, BatchStudentMapping, TutorBatchMapping } from '@/lib/types';
 import { formatDate, formatCurrency } from '@/lib/utils/format';
+import { formatDeadline } from '@/lib/utils/deadline';
 import { StudentImportModal } from '@/components/students/StudentImportModal';
-import { toStudentInput } from '@/lib/utils/studentImport';
 import { useToast } from '@/lib/context/ToastContext';
 import { useConfirm } from '@/lib/context/ConfirmContext';
 import { errorMessage } from '@/lib/utils/errors';
@@ -40,15 +45,20 @@ import { useInitialLoad, useReloadableSection } from '@/lib/hooks/useInitialLoad
 export default function BatchDetailPage() {
   const { batchId } = useParams();
   const [batch, setBatch] = useState<Batch | null>(null);
+  const [programs, setPrograms] = useState<BatchProgramOption[]>([]);
 
   const { loading, error, retry } = useInitialLoad(async () => {
     if (!batchId) return;
-    setBatch((await getBatchById(batchId)) ?? null);
+    const [batchRow, programRows] = await Promise.all([getBatchById(batchId), getBatchPrograms()]);
+    setBatch(batchRow ?? null);
+    setPrograms(programRows);
   });
 
   if (loading) return <Spinner centered />;
   if (error) return <ErrorState centered message={error} onRetry={retry} />;
   if (!batch) return <NotFound label="Batch" />;
+
+  const programLabel = programs.find((p) => p.code === batch.program)?.name;
 
   return (
     <div className="page-section">
@@ -59,10 +69,10 @@ export default function BatchDetailPage() {
         <div className="min-w-0">
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-xl font-bold text-[var(--text-primary)] tracking-tight truncate">{batch.name}</h1>
-            <Badge variant={batch.status === 'ongoing' ? 'success' : batch.status === 'upcoming' ? 'warning' : 'info'}>{batch.status}</Badge>
+            <StatusPill kind="batch" value={batch.status} />
           </div>
           <p className="text-sm text-[var(--text-muted)] mt-0.5">
-            {batch.track} • Started {batch.start_date ? formatDate(batch.start_date) : 'N/A'}
+            {programLabel ?? 'No programme'} • Started {batch.start_date ? formatDate(batch.start_date) : 'N/A'}
           </p>
         </div>
         <Link to={`/batches/${batch.id}/edit`} className="shrink-0">
@@ -79,18 +89,20 @@ export default function BatchDetailPage() {
           { label: 'Attendance', value: 'attendance' },
           { label: 'Finance', value: 'finance' },
           { label: 'Assignments', value: 'assignments' },
+          { label: 'Material', value: 'material' },
         ]}
         defaultValue="overview"
       >
         {(active) => (
           <>
-            {active === 'overview' && <OverviewTab batch={batch} />}
-            {active === 'students' && <StudentsTab batchId={batch.id} />}
+            {active === 'overview' && <OverviewTab batch={batch} programLabel={programLabel} />}
+            {active === 'students' && <StudentsTab batchId={batch.id} program={batch.program} />}
             {active === 'tutors' && <TutorsTab batchId={batch.id} />}
             {active === 'lectures' && <LecturesTab batchId={batch.id} />}
             {active === 'attendance' && <AttendanceTab batchId={batch.id} />}
             {active === 'finance' && <FinanceTab batchId={batch.id} />}
             {active === 'assignments' && <AssignmentsTab batchId={batch.id} />}
+            {active === 'material' && <BatchMaterials batchId={batch.id} batchCode={batch.batch_code} />}
           </>
         )}
       </Tabs>
@@ -98,7 +110,7 @@ export default function BatchDetailPage() {
   );
 }
 
-function OverviewTab({ batch }: { batch: Batch }) {
+function OverviewTab({ batch, programLabel }: { batch: Batch; programLabel?: string }) {
   const [students, setStudents] = useState<(Student & { mapping: BatchStudentMapping })[]>([]);
   const [lectures, setLectures] = useState<Lecture[]>([]);
 
@@ -123,14 +135,14 @@ function OverviewTab({ batch }: { batch: Batch }) {
         <p className="text-lg font-bold text-[var(--text-primary)] mt-1">{lectures.length}</p>
       </Card>
       <Card padding="sm">
-        <p className="text-xs text-[var(--text-muted)]">Track</p>
-        <p className="text-lg font-bold text-[var(--text-primary)] mt-1 truncate">{batch.track ?? 'N/A'}</p>
+        <p className="text-xs text-[var(--text-muted)]">Programme</p>
+        <p className="text-lg font-bold text-[var(--text-primary)] mt-1 truncate">{programLabel ?? 'Not set'}</p>
       </Card>
     </div>
   );
 }
 
-function StudentsTab({ batchId }: { batchId: string }) {
+function StudentsTab({ batchId, program }: { batchId: string; program?: BatchProgram }) {
   const [students, setStudents] = useState<(Student & { mapping: BatchStudentMapping })[]>([]);
   const [allStudents, setAllStudents] = useState<Student[]>([]);
   const [showAdd, setShowAdd] = useState(false);
@@ -163,10 +175,16 @@ function StudentsTab({ batchId }: { batchId: string }) {
     }
   };
 
-  const handleRemove = async (mappingId: string, name: string) => {
+  const handleRemove = async (mappingId: string, studentId: string, name: string) => {
+    // A student in no batch sees nothing in the portal, so say so before it happens.
+    const others = (await getStudentBatches(studentId).catch(() => []))
+      .filter((m) => m.status === 'active' && m.id !== mappingId);
+
     const ok = await confirm({
       title: `Remove ${name} from this batch?`,
-      message: 'The student keeps their record but loses access to this batch.',
+      message: others.length === 0
+        ? 'This is their only batch. They keep their record but will see nothing in the portal until they join another.'
+        : 'The student keeps their record but loses access to this batch.',
       confirmLabel: 'Remove',
       danger: true,
     });
@@ -183,19 +201,14 @@ function StudentsTab({ batchId }: { batchId: string }) {
 
   const available = allStudents.filter((s) => !students.some((e) => e.id === s.id));
 
-  // Importing here also enrols: create-or-reuse the student, then add them to this
-  // batch at the given fee unless they are already on the roster.
-  const handleImport = async (rows: Record<string, string>[], fee?: number, createLogins?: boolean) => {
-    const enrolledStudents = await getBatchStudents(batchId);
-    const imported = await Promise.all(
-      rows.map(async (row) => {
-        const student = await createOrReuseStudent(toStudentInput(row));
-        if (!enrolledStudents.some((e) => e.id === student.id)) {
-          await addStudentToBatch(student.id, batchId, fee ?? 0);
-        }
-        return student;
-      }),
-    );
+  // Same routine as the students page, so a sheet imported from either place
+  // lands identically. The batch is this one; the CSV's own column only validates.
+  const handleImport = async (
+    rows: Record<string, string>[],
+    fallbackFee: number | undefined,
+    createLogins: boolean,
+  ) => {
+    const imported = await importStudentsIntoBatch(rows, batchId, fallbackFee);
     void reloadStudents();
 
     if (!createLogins) {
@@ -239,8 +252,8 @@ function StudentsTab({ batchId }: { batchId: string }) {
                 <p className="text-xs text-[var(--text-muted)]">{s.email ?? s.phone ?? '—'}</p>
               </div>
               <div className="flex items-center gap-2">
-                <Badge variant={s.mapping.status === 'active' ? 'success' : 'danger'}>{s.mapping.status}</Badge>
-                <button onClick={() => handleRemove(s.mapping.id, s.name)} aria-label={`Remove ${s.name} from batch`} className="text-[var(--text-muted)] hover:text-[var(--danger-text)] p-1">
+                <StatusPill kind="enrollment" value={s.mapping.status} />
+                <button onClick={() => handleRemove(s.mapping.id, s.id, s.name)} aria-label={`Remove ${s.name} from batch`} className="text-[var(--text-muted)] hover:text-[var(--danger-text)] p-1">
                   <Trash2 size={14} />
                 </button>
               </div>
@@ -264,7 +277,7 @@ function StudentsTab({ batchId }: { batchId: string }) {
       <StudentImportModal
         open={showImport}
         onClose={() => setShowImport(false)}
-        requireFee
+        batchProgram={program}
         onImport={handleImport}
       />
 
@@ -374,7 +387,7 @@ function TutorsTab({ batchId }: { batchId: string }) {
 function LecturesTab({ batchId }: { batchId: string }) {
   const [lectures, setLectures] = useState<Lecture[]>([]);
   const [showNew, setShowNew] = useState(false);
-  const [form, setForm] = useState({ lecture_date: '', meeting_code: '', scheduled_duration_minutes: 90 });
+  const [form, setForm] = useState({ lecture_date: '', meeting_code: '', scheduled_duration_minutes: DEFAULT_LECTURE_MINUTES });
 
   const { showToast } = useToast();
   const confirm = useConfirm();
@@ -389,7 +402,7 @@ function LecturesTab({ batchId }: { batchId: string }) {
     try {
       await createLecture({ ...form, batch_id: batchId, session_type: 'online' });
       setShowNew(false);
-      setForm({ lecture_date: '', meeting_code: '', scheduled_duration_minutes: 90 });
+      setForm({ lecture_date: '', meeting_code: '', scheduled_duration_minutes: DEFAULT_LECTURE_MINUTES });
       void reloadLectures();
       showToast('Lecture created');
     } catch (error) {
@@ -455,7 +468,12 @@ function LecturesTab({ batchId }: { batchId: string }) {
       >
         <div className="popup-form-spaced">
           <FormField label="Date" required>
-            <input type="date" value={form.lecture_date} onChange={(e) => setForm({ ...form, lecture_date: e.target.value })} required />
+            <DatePicker
+              value={form.lecture_date}
+              onChange={(lecture_date) => setForm({ ...form, lecture_date })}
+              placeholder="Pick a date"
+              ariaLabel="Lecture date"
+            />
           </FormField>
           <FormField label="Meeting Code">
             <input value={form.meeting_code} onChange={(e) => setForm({ ...form, meeting_code: e.target.value })} placeholder="e.g. meet-xyz" />
@@ -642,7 +660,7 @@ function FinanceTab({ batchId }: { batchId: string }) {
       <div className="grid grid-cols-3 gap-4">
         <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Total Fees</p><p className="text-lg font-bold text-[var(--text-primary)] mt-1">{formatCurrency(totalFee)}</p></Card>
         <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Collected</p><p className="text-lg font-bold text-[var(--success-text)] mt-1">{formatCurrency(totalPaid)}</p></Card>
-        <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Outstanding</p><p className="text-lg font-bold text-[var(--danger-text)] mt-1">{formatCurrency(totalFee - totalPaid)}</p></Card>
+        <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Pending Due</p><p className="text-lg font-bold text-[var(--danger-text)] mt-1">{formatCurrency(totalFee - totalPaid)}</p></Card>
       </div>
 
       <Card>
@@ -679,7 +697,7 @@ function FinanceTab({ batchId }: { batchId: string }) {
                       </span>
                     </TD>
                     <TD>
-                      {remaining > 0 ? <Badge variant="warning">Due</Badge> : <Badge variant="success">Paid</Badge>}
+                      <StatusPill kind="fee" value={remaining > 0 ? 'due' : 'paid'} />
                     </TD>
                     <TD>
                       <Button size="sm" className="action-button-compact" onClick={() => openPaymentLogs(fee)}>
@@ -713,27 +731,12 @@ function AssignmentsTab({ batchId }: { batchId: string }) {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [selectedAsgn, setSelectedAsgn] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
-  const [form, setForm] = useState({ title: '', description: '', assigned_date: '' });
 
   const fetchAssignments = useCallback(async () => {
     setAssignments(await getAssignmentsByBatch(batchId));
   }, [batchId]);
 
   const { error: loadError, reload: reloadAssignments } = useReloadableSection(fetchAssignments);
-
-  const { showToast } = useToast();
-
-  const handleCreate = async () => {
-    try {
-      await createAssignment({ ...form, batch_id: batchId });
-      setShowNew(false);
-      setForm({ title: '', description: '', assigned_date: '' });
-      void reloadAssignments();
-      showToast('Assignment created');
-    } catch (error) {
-      showToast(errorMessage(error, 'Failed to create assignment'), 'error');
-    }
-  };
 
   if (loadError) return <Card><ErrorState message={loadError} onRetry={reloadAssignments} /></Card>;
 
@@ -755,13 +758,21 @@ function AssignmentsTab({ batchId }: { batchId: string }) {
               >
                 <p className="text-sm font-medium text-[var(--text-primary)]">{a.title}</p>
                 <p className="text-xs text-[var(--text-muted)]">
-                  {a.description ?? 'No description'} • {a.assigned_date ? formatDate(a.assigned_date) : '—'}
+                  {a.description ?? 'No description'} •{' '}
+                  {a.due_at ? `Due ${formatDeadline(a.due_at)}` : 'No deadline'}
                 </p>
               </div>
             ))}
           </div>
         )}
       </Card>
+
+      {selectedAsgn && (
+        <Card>
+          <CardHeader title="Files" />
+          <AssignmentFiles key={selectedAsgn} assignmentId={selectedAsgn} batchId={batchId} />
+        </Card>
+      )}
 
       {selectedAsgn && (
         <Card>
@@ -775,31 +786,12 @@ function AssignmentsTab({ batchId }: { batchId: string }) {
         </Card>
       )}
 
-      <Modal
+      <NewAssignmentModal
         open={showNew}
         onClose={() => setShowNew(false)}
-        title="New Assignment"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setShowNew(false)}>Cancel</Button>
-            <Button className="action-button-compact" onClick={handleCreate} disabled={!form.title.trim()}>
-              Create Assignment
-            </Button>
-          </>
-        }
-      >
-        <div className="popup-form-spaced">
-          <FormField label="Title" required>
-            <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
-          </FormField>
-          <FormField label="Description">
-            <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} />
-          </FormField>
-          <FormField label="Due Date">
-            <input type="date" value={form.assigned_date} onChange={(e) => setForm({ ...form, assigned_date: e.target.value })} />
-          </FormField>
-        </div>
-      </Modal>
+        batchId={batchId}
+        onCreated={reloadAssignments}
+      />
     </div>
   );
 }

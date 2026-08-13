@@ -1,3 +1,21 @@
+import type { Batch, BatchStatus } from '@/lib/types';
+
+/** Today as `YYYY-MM-DD` in local time — `toISOString` rolls over a day early in IST. */
+function todayISO(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Batch status follows the calendar: a batch turns ongoing on its start date.
+ * `completed` is set by hand, so it is never re-opened by a date.
+ */
+export function deriveBatchStatus(batch: Pick<Partial<Batch>, 'status' | 'start_date'>): BatchStatus {
+  if (batch.status === 'completed') return 'completed';
+  if (!batch.start_date) return 'upcoming';
+  return batch.start_date.slice(0, 10) <= todayISO() ? 'ongoing' : 'upcoming';
+}
+
 export function formatCurrency(amount: number): string {
   return `₹${amount.toLocaleString('en-IN')}`;
 }

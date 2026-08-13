@@ -105,9 +105,18 @@ function toNaiveLocal(date: Date): string {
   );
 }
 
-export function parseCsv(text: string): CsvRow[] {
+export interface ParsedAttendanceCsv {
+  rows: CsvRow[];
+  /**
+   * The meeting code the export carries, when it has one. Used to recognise a
+   * CSV that has already been processed for a lecture.
+   */
+  meetingCode?: string;
+}
+
+export function parseCsv(text: string): ParsedAttendanceCsv {
   const lines = text.trim().split('\n');
-  if (lines.length < 2) return [];
+  if (lines.length < 2) return { rows: [] };
 
   const header = lines[0].toLowerCase();
   const colMap: Record<string, number> = {};
@@ -123,10 +132,19 @@ export function parseCsv(text: string): CsvRow[] {
   });
 
   const rows: CsvRow[] = [];
+  let meetingCode: string | undefined;
+
   for (let i = 1; i < lines.length; i++) {
     const cols = lines[i].split(',');
     const name = cols[colMap.name]?.trim().replace(/^"(.*)"$/, '$1') ?? '';
     if (!name) continue;
+
+    // Every row repeats the same code; the first non-empty one is the meeting.
+    if (!meetingCode && colMap.meeting !== undefined) {
+      const code = cols[colMap.meeting]?.trim().replace(/^"(.*)"$/, '$1');
+      if (code) meetingCode = code;
+    }
+
     rows.push({
       sno: i,
       participant_name_raw: name,
@@ -138,5 +156,5 @@ export function parseCsv(text: string): CsvRow[] {
     });
   }
 
-  return rows;
+  return { rows, meetingCode };
 }

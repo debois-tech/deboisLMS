@@ -1,43 +1,55 @@
 import { useState } from 'react';
-import { AlertTriangle, ExternalLink } from 'lucide-react';
+import { AlertTriangle, ExternalLink, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { FormField } from '@/components/ui/FormField';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { PortalStatus } from '@/components/portal/PortalStatus';
+import { AssignmentFiles } from '@/components/assignments/AssignmentFiles';
 import type { Assignment, AssignmentCompletion } from '@/lib/types';
 import { formatDate, formatDateTime } from '@/lib/utils/format';
+import { assignmentState, formatDeadline, formatDueLabel } from '@/lib/utils/deadline';
 import { errorMessage } from '@/lib/utils/errors';
 
 export type StudentAssignment = Assignment & { completion?: AssignmentCompletion };
 
 interface AssignmentModalProps {
-  /** The open assignment, or null when the dialog is closed. */
   assignment: StudentAssignment | null;
-  /** The student's saved repo, prefilled in the submit view. Undefined before their first submission. */
   repoUrl?: string;
+  now: number;
   onClose: () => void;
   onSubmit: (repoUrl: string) => Promise<void>;
 }
 
-/** Lenient on purpose: rejects only what clearly isn't a GitHub repo, so a false rejection never stops a hand-in. */
-function validateRepoUrl(value: string): string | null {
+/**
+ * Lenient on what it accepts, strict on what it stores: anything recognisable as a
+ * GitHub repo passes, but only the canonical https://github.com/<owner>/<repo> is
+ * saved. The database rejects anything else outright — see migration_2026_08_12.sql.
+ */
+function validateRepoUrl(value: string): { url?: string; error?: string } {
   const trimmed = value.trim();
-  if (!trimmed) return 'Enter your GitHub repository link.';
+  if (!trimmed) return { error: 'Enter your GitHub repository link.' };
 
   let url: URL;
   try {
     url = new URL(trimmed.startsWith('http') ? trimmed : `https://${trimmed}`);
   } catch {
-    return 'Enter a link starting with https://github.com/';
+    return { error: 'Enter a link starting with https://github.com/' };
   }
   if (!/(^|\.)github\.com$/i.test(url.hostname)) {
-    return 'Use a GitHub link starting with https://github.com/';
+    return { error: 'Use a GitHub link starting with https://github.com/' };
   }
-  if (url.pathname.split('/').filter(Boolean).length < 2) {
-    return 'Link to the repository, e.g. https://github.com/your-name/your-repo';
+
+  const [owner, repo] = url.pathname.split('/').filter(Boolean);
+  if (!owner || !repo) {
+    return { error: 'Link to the repository, e.g. https://github.com/your-name/your-repo' };
   }
-  return null;
+  // Query strings, trailing slashes and www. are dropped: one repo, one stored form.
+  const canonical = `https://github.com/${owner}/${repo.replace(/\.git$/i, '')}`;
+  if (!/^https:\/\/github\.com\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(canonical)) {
+    return { error: 'That does not look like a repository link.' };
+  }
+  return { url: canonical };
 }
 
 /** Everything about one assignment — detail and submit form as two views of one dialog, so submitting never stacks a modal. */
@@ -45,27 +57,33 @@ export function AssignmentModal(props: AssignmentModalProps) {
   return <AssignmentModalBody key={props.assignment?.id ?? 'closed'} {...props} />;
 }
 
-function AssignmentModalBody({ assignment, repoUrl, onClose, onSubmit }: AssignmentModalProps) {
+function AssignmentModalBody({ assignment, repoUrl, now, onClose, onSubmit }: AssignmentModalProps) {
   const [view, setView] = useState<'info' | 'submit'>('info');
   const [draftRepo, setDraftRepo] = useState(repoUrl ?? '');
   const [confirmed, setConfirmed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  const submitted = assignment?.completion?.submitted ?? false;
+  const state = assignment ? assignmentState(assignment, now) : 'todo';
+  const submitted = state === 'done';
+  const missed = state === 'missed';
   const trimmed = draftRepo.trim();
   const isReplacingRepo = Boolean(repoUrl) && trimmed !== repoUrl && trimmed.length > 0;
 
   const handleSubmit = async () => {
-    const problem = validateRepoUrl(draftRepo);
-    if (problem) {
-      setError(problem);
+    const { url, error: problem } = validateRepoUrl(draftRepo);
+    if (problem || !url) {
+      setError(problem ?? 'Enter your GitHub repository link.');
+      return;
+    }
+    if (missed) {
+      setError('The deadline has passed. Talk to your tutor.');
       return;
     }
     setSubmitting(true);
     setError('');
     try {
-      await onSubmit(trimmed);
+      await onSubmit(url);
     } catch (err) {
       setError(errorMessage(err, 'Could not submit. Try again.'));
       setSubmitting(false);
@@ -82,7 +100,7 @@ function AssignmentModalBody({ assignment, repoUrl, onClose, onSubmit }: Assignm
         view === 'info' ? (
           <>
             <Button variant="ghost" onClick={onClose}>Close</Button>
-            {!submitted && (
+            {!submitted && !missed && (
               <Button className="action-button-compact" onClick={() => setView('submit')}>
                 Submit
               </Button>
@@ -95,7 +113,7 @@ function AssignmentModalBody({ assignment, repoUrl, onClose, onSubmit }: Assignm
               className="action-button-compact"
               onClick={handleSubmit}
               loading={submitting}
-              disabled={!confirmed || trimmed.length === 0}
+              disabled={!confirmed || trimmed.length === 0 || missed}
             >
               Submit
             </Button>
@@ -106,13 +124,27 @@ function AssignmentModalBody({ assignment, repoUrl, onClose, onSubmit }: Assignm
       {view === 'info' ? (
         <div className="assignment-detail">
           <div className="assignment-detail-meta">
-            <PortalStatus kind="submission" value={submitted ? 'submitted' : 'pending'} />
+            <PortalStatus kind="submission" value={submitted ? 'submitted' : missed ? 'missed' : 'pending'} />
             {assignment?.assigned_date && <span>Given {formatDate(assignment.assigned_date)}</span>}
+            {!submitted && <span>{formatDueLabel(assignment?.due_at, now)}</span>}
           </div>
 
           <p className={`assignment-detail-body ${assignment?.description ? '' : 'is-empty'}`}>
             {assignment?.description || 'No details added.'}
           </p>
+
+          {assignment && (
+            <AssignmentFiles assignmentId={assignment.id} batchId={assignment.batch_id} readOnly />
+          )}
+
+          {missed && (
+            <p className="repo-notice is-danger">
+              <Lock size={14} className="shrink-0" />
+              <span>
+                Submissions closed{assignment?.due_at ? ` on ${formatDeadline(assignment.due_at)}` : ''}.
+              </span>
+            </p>
+          )}
 
           {submitted && (
             <dl className="assignment-detail-facts">
@@ -139,6 +171,16 @@ function AssignmentModalBody({ assignment, repoUrl, onClose, onSubmit }: Assignm
       ) : (
         <div className="repo-submit-row">
           {error && <InlineAlert>{error}</InlineAlert>}
+
+          {assignment?.due_at && (
+            <p className={`repo-notice ${missed ? 'is-danger' : ''}`}>
+              <Lock size={14} className="shrink-0" />
+              <span>
+                {formatDueLabel(assignment.due_at, now)}.{' '}
+                {missed ? 'Nothing more can be handed in.' : 'Nothing can be handed in after that.'}
+              </span>
+            </p>
+          )}
 
           <FormField label="GitHub repo link" required>
             <input

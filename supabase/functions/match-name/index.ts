@@ -1,30 +1,49 @@
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+/**
+ * Origins allowed to call this function. Set the secret at deploy time:
+ *
+ *   supabase secrets set ALLOWED_ORIGINS="https://erp.deboistech.in" --project-ref <ref>
+ *
+ * Unset means '*', which is what this function did before the allowlist existed.
+ */
+const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') ?? '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+function corsFor(req: Request): Record<string, string> {
+  const origin = req.headers.get('Origin') ?? '';
+  const allow = ALLOWED_ORIGINS.length === 0
+    ? '*'
+    : ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  return {
+    'Access-Control-Allow-Origin': allow,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    ...(ALLOWED_ORIGINS.length === 0 ? {} : { Vary: 'Origin' }),
+  };
+}
 
 const MODEL = Deno.env.get('GEMINI_MODEL') ?? 'gemini-2.0-flash';
 const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
 
-const json = (body: unknown, status = 200, extraHeaders: Record<string, string> = {}) =>
+const json = (req: Request, body: unknown, status = 200, extraHeaders: Record<string, string> = {}) =>
   new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json', ...extraHeaders },
+    headers: { ...corsFor(req), 'Content-Type': 'application/json', ...extraHeaders },
   });
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { headers: corsFor(req) });
   }
 
   try {
     const { raw_name, candidates } = await req.json();
 
     if (typeof raw_name !== 'string' || !Array.isArray(candidates) || candidates.length === 0) {
-      return json({ error: 'raw_name and a non-empty candidates array are required' }, 400);
+      return json(req, { error: 'raw_name and a non-empty candidates array are required' }, 400);
     }
 
     const callerClient = createClient(
@@ -34,12 +53,12 @@ Deno.serve(async (req) => {
     );
     const { data: { user: caller } } = await callerClient.auth.getUser();
     if (!caller || caller.app_metadata?.role !== 'admin') {
-      return json({ error: 'Admin only' }, 403);
+      return json(req, { error: 'Admin only' }, 403);
     }
 
     const apiKey = Deno.env.get('GEMINI_API_KEY');
     // 501, not 500: "not configured" is something the client should stop retrying on.
-    if (!apiKey) return json({ error: 'GEMINI_API_KEY is not set', configured: false }, 501);
+    if (!apiKey) return json(req, { error: 'GEMINI_API_KEY is not set', configured: false }, 501);
 
     const prompt = [
       'You are a name-matching assistant for a Google Meet attendance export.',
@@ -61,10 +80,13 @@ Deno.serve(async (req) => {
     });
 
     if (!response.ok) {
+      // Google's body can carry key and quota detail; it belongs in the log only.
       const detail = await response.text().catch(() => '');
+      console.error('[match-name] Gemini error', response.status, detail.slice(0, 500));
       const retryAfter = response.headers.get('retry-after');
       return json(
-        { error: `Gemini API error ${response.status}${detail ? ` — ${detail.slice(0, 200)}` : ''}` },
+        req,
+        { error: `AI name matching is unavailable (${response.status}).` },
         response.status,
         retryAfter ? { 'retry-after': retryAfter } : {},
       );
@@ -72,13 +94,13 @@ Deno.serve(async (req) => {
 
     const data = await response.json();
     const text: string | undefined = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) return json({ error: 'Gemini returned an empty response' }, 502);
+    if (!text) return json(req, { error: 'Gemini returned an empty response' }, 502);
 
     let parsed: any;
     try {
       parsed = JSON.parse(text.replace(/^```json\s*/i, '').replace(/```$/, '').trim());
     } catch {
-      return json({ error: 'Gemini returned a malformed match response' }, 502);
+      return json(req, { error: 'Gemini returned a malformed match response' }, 502);
     }
 
     if (
@@ -90,11 +112,12 @@ Deno.serve(async (req) => {
       parsed.confidence >= 0 &&
       parsed.confidence <= 1
     ) {
-      return json({ matched: true, index: parsed.index, confidence: parsed.confidence });
+      return json(req, { matched: true, index: parsed.index, confidence: parsed.confidence });
     }
 
-    return json({ matched: false });
+    return json(req, { matched: false });
   } catch (err) {
-    return json({ error: (err as Error).message }, 500);
+    console.error('[match-name]', err);
+    return json(req, { error: 'AI name matching failed. Match this name by hand.' }, 500);
   }
 });

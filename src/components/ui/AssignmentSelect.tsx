@@ -1,7 +1,7 @@
 import { ClipboardCheck } from 'lucide-react';
 import { SearchSelect } from '@/components/ui/SearchSelect';
 import type { Assignment } from '@/lib/types';
-import { formatDate } from '@/lib/utils/format';
+import { formatDeadline } from '@/lib/utils/deadline';
 
 interface AssignmentSelectProps {
   assignments: Assignment[];
@@ -17,7 +17,7 @@ export function AssignmentSelect({ assignments, value, onChange }: AssignmentSel
         label: assignment.title,
         searchText: `${assignment.title} ${assignment.assigned_date ?? ''} ${assignment.description ?? ''}`,
         icon: <ClipboardCheck size={15} className="shrink-0 text-[var(--primary)]" />,
-        meta: assignment.assigned_date ? formatDate(assignment.assigned_date) : '—',
+        meta: assignment.due_at ? `Due ${formatDeadline(assignment.due_at)}` : 'No deadline',
       }))}
       value={value}
       onChange={onChange}

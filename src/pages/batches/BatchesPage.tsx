@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Layers, Search } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
+import { StatusPill } from '@/components/ui/StatusPill';
 import { Spinner } from '@/components/ui/Spinner';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -10,35 +10,38 @@ import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { SearchFilterBar } from '@/components/ui/SearchFilterBar';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
-import { getBatches } from '@/lib/supabase';
-import type { Batch, BatchStatus } from '@/lib/types';
+import { getBatches, getBatchPrograms } from '@/lib/supabase';
+import type { Batch, BatchProgramOption, BatchStatus } from '@/lib/types';
 import { formatDate } from '@/lib/utils/format';
 
 const STATUSES: BatchStatus[] = ['upcoming', 'ongoing', 'completed'];
 
-function statusVariant(status: BatchStatus) {
-  if (status === 'ongoing') return 'success' as const;
-  if (status === 'upcoming') return 'info' as const;
-  return 'default' as const;
-}
-
 export default function BatchesPage() {
   const [batches, setBatches] = useState<Batch[]>([]);
+  const [programs, setPrograms] = useState<BatchProgramOption[]>([]);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<BatchStatus | null>(null);
 
   const { loading, error, retry } = useInitialLoad(async () => {
-    setBatches(await getBatches());
+    const [batchRows, programRows] = await Promise.all([getBatches(), getBatchPrograms()]);
+    setBatches(batchRows);
+    setPrograms(programRows);
   });
+
+  // Code in, name out — the table and the search box both read the label.
+  const programName = useMemo(
+    () => (batch: Batch) => programs.find((p) => p.code === batch.program)?.name ?? '',
+    [programs],
+  );
 
   const filteredBatches = useMemo(() => {
     const term = search.trim().toLowerCase();
     return batches.filter((batch) => {
       if (status && batch.status !== status) return false;
       if (!term) return true;
-      return `${batch.name} ${batch.track ?? ''}`.toLowerCase().includes(term);
+      return `${batch.name} ${programName(batch)} ${batch.program ?? ''}`.toLowerCase().includes(term);
     });
-  }, [batches, search, status]);
+  }, [batches, search, status, programName]);
 
   const selectStatus = (next: BatchStatus | null) => {
     setStatus(next);
@@ -92,9 +95,9 @@ export default function BatchesPage() {
                         <span className="font-semibold text-[var(--text-primary)] group-hover:text-[var(--primary)]">{batch.name}</span>
                       </Link>
                     </TD>
-                    <TD className="cell-secondary">{batch.track || '—'}</TD>
+                    <TD className="cell-secondary">{programName(batch) || '—'}</TD>
                     <TD>
-                      <Badge variant={statusVariant(batch.status)} dot>{batch.status}</Badge>
+                      <StatusPill kind="batch" value={batch.status} />
                     </TD>
                     <TD className="cell-muted">{batch.start_date ? formatDate(batch.start_date) : '—'}</TD>
                   </TR>

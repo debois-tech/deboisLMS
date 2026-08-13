@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase/client';
+import { DEFAULT_LECTURE_MINUTES } from './types';
 import type {
   AttendanceInsertPayload,
   ProcessingContext,
@@ -57,7 +58,7 @@ export async function loadProcessingContext(lectureId: string): Promise<Processi
     lectureId,
     batchId: lecture.batch_id,
     lectureDate: lecture.lecture_date,
-    scheduledMinutes: lecture.scheduled_duration_minutes ?? 90,
+    scheduledMinutes: lecture.scheduled_duration_minutes ?? DEFAULT_LECTURE_MINUTES,
     meetingCode: lecture.meeting_code,
     roster,
     tutors,

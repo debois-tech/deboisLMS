@@ -1,41 +1,74 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { FileSpreadsheet } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { FormField } from '@/components/ui/FormField';
 import { InlineAlert } from '@/components/ui/InlineAlert';
-import { parseStudentCsv } from '@/lib/utils/studentImport';
+import { SearchSelect } from '@/components/ui/SearchSelect';
+import { findProgramMismatches, getImportFee, parseStudentCsv } from '@/lib/utils/studentImport';
 import { errorMessage } from '@/lib/utils/errors';
+import type { BatchProgram, BatchProgramOption } from '@/lib/types';
 
 interface StudentImportModalProps {
   open: boolean;
   onClose: () => void;
-  /** Batch enrolment needs a per-student fee; the global students list does not. */
-  requireFee?: boolean;
+  /**
+   * Pass the programme list where the caller has no batch of its own — the
+   * students page. The dropdown shows the names; the abbreviation behind it is
+   * what the CSV is checked against.
+   */
+  programs?: BatchProgramOption[];
+  /** Pass the batch's own programme instead, from a batch page. Rows are checked against it. */
+  batchProgram?: BatchProgram;
   /**
    * Throw to surface a message in the dialog; the modal owns the busy state.
    * `createLogins` reflects the checkbox — the caller decides what that means,
    * since only it knows which students the rows resolved to.
    */
-  onImport: (rows: Record<string, string>[], fee?: number, createLogins?: boolean) => Promise<void>;
+  onImport: (
+    rows: Record<string, string>[],
+    fallbackFee: number | undefined,
+    createLogins: boolean,
+    program: BatchProgram | undefined,
+  ) => Promise<void>;
 }
 
 const PREVIEW_ROWS = 5;
 
 /** The one CSV import dialog, shared by the students list and a batch's students tab. */
-export function StudentImportModal({ open, onClose, requireFee, onImport }: StudentImportModalProps) {
+export function StudentImportModal({ open, onClose, programs, batchProgram, onImport }: StudentImportModalProps) {
   const [rows, setRows] = useState<Record<string, string>[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
   const [fee, setFee] = useState('');
+  const [program, setProgram] = useState<BatchProgram | null>(batchProgram ?? null);
   const [createLogins, setCreateLogins] = useState(true);
   const [error, setError] = useState('');
   const [importing, setImporting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // The batch page already knows its programme; the students page asks for one.
+  const target = batchProgram ?? program;
+  const needsProgram = Boolean(programs) && !batchProgram;
+
+  // The sheet carries a fee per student now. The field below only covers rows
+  // that left it blank, so a complete sheet never has to answer it.
+  const missingFee = useMemo(() => rows.filter((row) => getImportFee(row) === undefined).length, [rows]);
+  const mismatches = useMemo(
+    () => (target ? findProgramMismatches(rows, target) : []),
+    [rows, target],
+  );
+
+  const incomplete =
+    !rows.length ||
+    (needsProgram && !program) ||
+    (missingFee > 0 && (!fee || Number(fee) < 0)) ||
+    mismatches.length > 0;
+
   const reset = () => {
     setRows([]);
     setHeaders([]);
     setFee('');
+    setProgram(batchProgram ?? null);
     setCreateLogins(true);
     setError('');
     setImporting(false);
@@ -62,14 +95,18 @@ export function StudentImportModal({ open, onClose, requireFee, onImport }: Stud
 
   const handleImport = async () => {
     if (!rows.length) return;
-    if (requireFee && (!fee || Number(fee) <= 0)) {
-      setError('Total fee per student is required to import.');
+    if (needsProgram && !program) {
+      setError('Choose the programme these students join.');
+      return;
+    }
+    if (missingFee > 0 && !fee) {
+      setError(`${missingFee} rows have no fee. Enter one to cover them.`);
       return;
     }
     setImporting(true);
     setError('');
     try {
-      await onImport(rows, requireFee ? Number(fee) : undefined, createLogins);
+      await onImport(rows, fee ? Number(fee) : undefined, createLogins, target ?? undefined);
       reset();
       onClose();
     } catch (err) {
@@ -116,17 +153,46 @@ export function StudentImportModal({ open, onClose, requireFee, onImport }: Stud
           </div>
         )}
 
-        {requireFee && (
-          <FormField label="Fee per student" required>
+        {needsProgram && programs && (
+          <FormField label="Programme" required>
+            <SearchSelect
+              options={programs.map((option) => ({ value: option.code, label: option.name }))}
+              value={program}
+              onChange={(code) => { setProgram(code as BatchProgram); setError(''); }}
+              placeholder="Select programme"
+              searchPlaceholder="Search programmes"
+              emptyText="No programmes found"
+            />
+            <p className="field-hint">Students join the open batch running this programme.</p>
+          </FormField>
+        )}
+
+        {/* Only asked when the sheet left it out, so a complete file skips it. */}
+        {missingFee > 0 && (
+          <FormField label={missingFee === rows.length ? 'Fee per student' : 'Fee for rows without one'} required>
             <input
               type="number"
-              min="1"
+              min="0"
               value={fee}
               onChange={(event) => setFee(event.target.value)}
               placeholder="e.g. 15000"
               disabled={importing}
             />
+            <p className="field-hint">
+              {missingFee === rows.length
+                ? 'No Fees column found in this file.'
+                : `${missingFee} of ${rows.length} rows have no fee.`}
+            </p>
           </FormField>
+        )}
+
+        {mismatches.length > 0 && (
+          <InlineAlert>
+            {mismatches.length} {mismatches.length === 1 ? 'row belongs' : 'rows belong'} to another
+            programme — {mismatches.slice(0, 3).map((r) => `${r.name} (${r.found})`).join(', ')}
+            {mismatches.length > 3 ? `, and ${mismatches.length - 3} more` : ''}. Import that
+            programme separately, or remove those rows.
+          </InlineAlert>
         )}
 
         {/* Default on: an imported student with no login cannot use the portal. */}
@@ -154,7 +220,7 @@ export function StudentImportModal({ open, onClose, requireFee, onImport }: Stud
             className="action-button-import"
             onClick={handleImport}
             loading={importing}
-            disabled={!rows.length || (requireFee && (!fee || Number(fee) <= 0))}
+            disabled={incomplete}
           >
             Import
           </Button>

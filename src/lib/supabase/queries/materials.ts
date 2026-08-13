@@ -1,23 +1,26 @@
 import { supabase } from '../client';
 import { maybeRow, ok, rows } from './result';
+import { DOCX_TYPE, docxToPdf, extensionOf, fileMimeType, prepareImageForUpload } from '@/lib/utils/files';
 import type { Material, MaterialView } from '@/lib/types';
 
 const BUCKET = 'materials';
 
-/** Per-file upload limit, matching the bucket and the watermark function. */
-export const MATERIAL_MAX_BYTES = 50 * 1024 * 1024;
+export { MATERIAL_MAX_BYTES } from '@/lib/utils/files';
 
 /** `null` batchId = material for every student, stored under `all/`. */
-function storagePathFor(batchId: string | null): string {
-  return `${batchId ?? 'all'}/${crypto.randomUUID()}.pdf`;
+function storagePathFor(batchId: string | null, extension: string): string {
+  return `${batchId ?? 'all'}/${crypto.randomUUID()}${extension ? `.${extension}` : ''}`;
 }
+
+const SELECT = '*, batch:batches(*), tutor:tutors(*)';
 
 export async function getMaterialsByBatch(batchId: string): Promise<Material[]> {
   return rows<Material>(
     await supabase
       .from('materials')
-      .select('*, batch:batches(*), tutor:tutors(*)')
+      .select(SELECT)
       .eq('batch_id', batchId)
+      .is('assignment_id', null)
       .order('created_at', { ascending: false }),
     'Could not load study material',
   );
@@ -28,8 +31,9 @@ export async function getMaterialsForEveryone(): Promise<Material[]> {
   return rows<Material>(
     await supabase
       .from('materials')
-      .select('*, batch:batches(*), tutor:tutors(*)')
+      .select(SELECT)
       .is('batch_id', null)
+      .is('assignment_id', null)
       .order('created_at', { ascending: false }),
     'Could not load study material',
   );
@@ -40,9 +44,22 @@ export async function getMaterialsForStudent(): Promise<Material[]> {
   return rows<Material>(
     await supabase
       .from('materials')
-      .select('*, batch:batches(*), tutor:tutors(*)')
+      .select(SELECT)
+      .is('assignment_id', null)
       .order('created_at', { ascending: false }),
     'Could not load your study material',
+  );
+}
+
+/** An assignment's handouts. Same table, same access rule as the batch's material. */
+export async function getMaterialsByAssignment(assignmentId: string): Promise<Material[]> {
+  return rows<Material>(
+    await supabase
+      .from('materials')
+      .select(SELECT)
+      .eq('assignment_id', assignmentId)
+      .order('created_at', { ascending: false }),
+    'Could not load the assignment files',
   );
 }
 
@@ -56,6 +73,8 @@ export async function getMaterialById(id: string): Promise<Material | undefined>
 export interface UploadMaterialInput {
   /** null = for every student. */
   batchId: string | null;
+  /** Set to attach the file to an assignment instead of the material library. */
+  assignmentId?: string | null;
   title: string;
   description?: string;
   tutorId?: string | null;
@@ -67,15 +86,19 @@ export interface UploadMaterialInput {
 
 /** Uploads the file first and only then writes the row; a failed insert removes the orphaned object. */
 export async function uploadMaterial(input: UploadMaterialInput): Promise<Material> {
-  if (input.file.type !== 'application/pdf') {
-    throw new Error(`${input.file.name} is not a PDF.`);
-  }
+  // Converted here rather than on the way out: as a PDF or a PNG the file
+  // inherits the watermark and the paged reader instead of needing its own path.
+  const incoming = fileMimeType(input.file);
+  const file =
+    incoming === DOCX_TYPE ? await docxToPdf(input.file)
+    : await prepareImageForUpload(input.file);
 
-  const storagePath = storagePathFor(input.batchId);
+  const mimeType = fileMimeType(file);
+  const storagePath = storagePathFor(input.batchId, extensionOf(file.name));
 
   const { error: uploadError } = await supabase.storage
     .from(BUCKET)
-    .upload(storagePath, input.file, { contentType: 'application/pdf', upsert: false });
+    .upload(storagePath, file, { contentType: mimeType, upsert: false });
 
   if (uploadError) throw new Error(uploadError.message);
 
@@ -83,12 +106,14 @@ export async function uploadMaterial(input: UploadMaterialInput): Promise<Materi
     .from('materials')
     .insert({
       batch_id: input.batchId,
+      assignment_id: input.assignmentId ?? null,
       tutor_id: input.tutorId || null,
       title: input.title,
       description: input.description || null,
       folder: input.folder || null,
       storage_path: storagePath,
-      size_bytes: input.file.size,
+      mime_type: mimeType,
+      size_bytes: file.size,
       uploaded_by: input.uploadedBy ?? null,
     })
     .select()
@@ -107,7 +132,7 @@ export interface BulkUploadResult {
   failed: { name: string; reason: string }[];
 }
 
-/** Uploads a folder's worth of PDFs, one material per file. One file's failure never stops the rest. */
+/** Uploads a folder's worth of files, one material per file. One file's failure never stops the rest. */
 export async function uploadMaterials(
   files: File[],
   base: Omit<UploadMaterialInput, 'file' | 'title'> & { title: (file: File, index: number) => string },
@@ -115,7 +140,7 @@ export async function uploadMaterials(
 ): Promise<BulkUploadResult> {
   const result: BulkUploadResult = { uploaded: [], failed: [] };
 
-  // Sequential on purpose: parallel uploads of large PDFs saturate the connection.
+  // Sequential on purpose: parallel uploads of large files saturate the connection.
   for (const [index, file] of files.entries()) {
     try {
       result.uploaded.push(
@@ -157,11 +182,21 @@ export async function getMaterialViews(materialId: string): Promise<MaterialView
   );
 }
 
+export interface OpenedMaterial {
+  /** Blob URL. The caller owns it and must `URL.revokeObjectURL` it. */
+  url: string;
+  /** What came back, which is not always what was uploaded: an image arrives as a PDF. */
+  type: string;
+  /** Present only for text, already decoded — the reader needs the string, not the blob. */
+  text?: string;
+}
+
 /**
- * Fetches the watermarked copy as a blob URL; the raw file is never exposed.
- * The caller owns the returned URL and must `URL.revokeObjectURL` it.
+ * Opens a material through the edge function, the only path to the bytes. What
+ * comes back depends on the file: a PDF or an image is a watermarked PDF, text
+ * is itself, and anything else is the stored file for the browser to save.
  */
-export async function getWatermarkedMaterialUrl(materialId: string): Promise<string> {
+export async function openMaterial(materialId: string): Promise<OpenedMaterial> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('You are signed out. Sign in again to open this.');
 
@@ -178,10 +213,29 @@ export async function getWatermarkedMaterialUrl(materialId: string): Promise<str
   );
 
   if (!response.ok) {
-    // The function answers with JSON on failure and a PDF on success.
+    // The function answers with JSON on failure and the file on success.
     const message = await response.json().catch(() => null);
     throw new Error(message?.error ?? 'Could not open this material.');
   }
 
-  return URL.createObjectURL(await response.blob());
+  const blob = await response.blob();
+  const type = response.headers.get('Content-Type') ?? blob.type;
+  return {
+    url: URL.createObjectURL(blob),
+    type,
+    text: type.startsWith('text/') ? await blob.text() : undefined,
+  };
+}
+
+/** Saves a material to the visitor's device. Only for files no reader can show. */
+export async function downloadMaterial(material: Material): Promise<void> {
+  const opened = await openMaterial(material.id);
+  try {
+    const link = document.createElement('a');
+    link.href = opened.url;
+    link.download = `${material.title}.${extensionOf(material.storage_path) || 'file'}`;
+    link.click();
+  } finally {
+    URL.revokeObjectURL(opened.url);
+  }
 }
