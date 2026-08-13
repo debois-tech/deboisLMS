@@ -15,10 +15,7 @@ interface PortalPageProps {
   /** A short identity fact that belongs beside the title, e.g. the student's ID. Not a control. */
   meta?: ReactNode;
   loading?: boolean;
-  /**
-   * The load failed. Takes over the page, because the alternative is a student
-   * reading "No classes yet." when the classes are there but unreachable.
-   */
+  /** Takes over the page — "No classes yet" would be a lie when the fetch failed. */
   error?: string | null;
   onRetry?: () => void;
   /** Shape of the loading placeholder — match it to what the page actually renders. */

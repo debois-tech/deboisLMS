@@ -27,10 +27,7 @@ import { errorMessage } from '@/lib/utils/errors';
 import { useReloadableSection } from '@/lib/hooks/useInitialLoad';
 import { formatDateTime, formatFileSize } from '@/lib/utils/format';
 
-/**
- * One batch's study material — list, upload, preview and open-log. Used by the
- * Study Material page after a batch is picked, and by the batch's own tab.
- */
+/** One batch's study material: list, upload, preview, open-log. */
 export function BatchMaterials({
   batchId,
   batchCode,
@@ -206,11 +203,7 @@ function UploadModal({
     onClose();
   };
 
-  /**
-   * A folder keeps its own filenames — renaming twelve handouts would throw away
-   * the only thing that said which was which. Individual files are named from the
-   * batch code plus the typed suffix, numbered if there is more than one.
-   */
+  // Folder uploads keep their filenames; single files are renamed from the batch code.
   const dropExtension = (name: string) => name.replace(/\.[a-z0-9]+$/i, '');
 
   const titleFor = (file: File, index: number) => {
@@ -226,11 +219,7 @@ function UploadModal({
     setError('');
     const chosen = [...(event.target.files ?? [])];
 
-    /*
-     * A folder pick sets `webkitRelativePath` to "Folder/Sub/file.pdf" on every
-     * entry; the first segment is the folder the admin chose, stored per row so
-     * listings can group them.
-     */
+    // A folder pick reports "Folder/Sub/file.pdf"; the first segment is the chosen folder.
     const relative = (chosen[0] as File & { webkitRelativePath?: string })?.webkitRelativePath;
     setFolder(relative ? relative.split('/')[0] : null);
 

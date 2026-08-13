@@ -6,10 +6,7 @@ function todayISO(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-/**
- * Batch status follows the calendar: a batch turns ongoing on its start date.
- * `completed` is set by hand, so it is never re-opened by a date.
- */
+/** Ongoing on its start date. `completed` is set by hand and never re-opened by a date. */
 export function deriveBatchStatus(batch: Pick<Partial<Batch>, 'status' | 'start_date'>): BatchStatus {
   if (batch.status === 'completed') return 'completed';
   if (!batch.start_date) return 'upcoming';

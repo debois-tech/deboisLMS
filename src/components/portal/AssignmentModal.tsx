@@ -21,11 +21,7 @@ interface AssignmentModalProps {
   onSubmit: (repoUrl: string) => Promise<void>;
 }
 
-/**
- * Lenient on what it accepts, strict on what it stores: anything recognisable as a
- * GitHub repo passes, but only the canonical https://github.com/<owner>/<repo> is
- * saved. The database rejects anything else outright — see migration_2026_08_12.sql.
- */
+/** Accepts any recognisable GitHub repo, stores only the canonical form. The DB rejects the rest. */
 function validateRepoUrl(value: string): { url?: string; error?: string } {
   const trimmed = value.trim();
   if (!trimmed) return { error: 'Enter your GitHub repository link.' };

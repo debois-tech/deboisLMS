@@ -1,9 +1,6 @@
 import type { PostgrestError } from '@supabase/supabase-js';
 
-/**
- * How every query handles a Postgrest response: a failure throws, so an empty
- * array can only ever mean "no rows" — never an RLS denial or dropped connection.
- */
+/** A failure throws, so an empty array only ever means "no rows" — never an RLS denial. */
 interface Result<T> {
   data: T | null;
   error: PostgrestError | null;

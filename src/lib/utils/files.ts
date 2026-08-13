@@ -1,17 +1,4 @@
-/**
- * What a material file is, and what can be done with it.
- *
- * Three fates, decided by MIME type at upload:
- *  - `paged`    PDFs and images. Rendered page by page in the reader, watermarked
- *               server-side. Images become a one-page PDF on the way out, so the
- *               watermark and the no-download reader work on them unchanged.
- *  - `text`     Markdown and plain text. Shown as-is in the reader, unwatermarked.
- *  - `download` Everything else. Nothing in a browser renders .xlsx or .zip, so
- *               these are handed over as files. Logged, but not watermarked.
- *
- * .docx is absent on purpose: it is converted to a PDF before upload, so by the
- * time a row exists it is `paged` like any other PDF.
- */
+/** Three fates by MIME type: `paged` (watermarked), `text` (as-is), `download` (everything else). */
 export type MaterialKind = 'paged' | 'text' | 'download';
 
 const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
@@ -19,11 +6,7 @@ const TEXT_TYPES = ['text/markdown', 'text/plain', 'text/x-markdown'];
 
 export const DOCX_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
-/**
- * Everything the pipeline takes. Extensions rather than MIME types because a
- * folder pick reports half of these as an empty string, and `accept` matches on
- * extension anyway.
- */
+/** Extensions, not MIME types: a folder pick reports half of these as an empty string. */
 export const ACCEPTED_EXTENSIONS = [
   'pdf', 'png', 'jpg', 'jpeg', 'webp', 'md', 'txt', 'docx',
   'xlsx', 'pptx', 'csv', 'json', 'zip',
@@ -37,10 +20,7 @@ export const ACCEPTED_FILE_ACCEPT = ACCEPTED_EXTENSIONS.map((ext) => `.${ext}`).
 /** Per-file upload limit, matching the bucket and what the watermarker can hold. */
 export const MATERIAL_MAX_BYTES = 50 * 1024 * 1024;
 
-/**
- * Browsers report `.md` as an empty type and `.csv` inconsistently, so the
- * extension decides whenever the MIME type is missing or generic.
- */
+/** Extension decides whenever the MIME type is missing or generic. */
 export function fileMimeType(file: File): string {
   if (file.type && file.type !== 'application/octet-stream') return file.type;
   const ext = extensionOf(file.name);
@@ -123,16 +103,7 @@ export async function prepareImageForUpload(file: File): Promise<File> {
   return new File([blob], name, { type: outType });
 }
 
-/**
- * Turns a .docx into a PDF in the browser, so it reaches storage as something the
- * watermarker and the reader already understand.
- *
- * Text only — mammoth reads the document body, and the PDF is rebuilt from that
- * text rather than from Word's layout. Headings, tables and images do not
- * survive; the words, their order and their paragraph breaks do. Both libraries
- * are imported here rather than at module scope so a page that never touches a
- * .docx never pays for them.
- */
+/** Text only — rebuilt from mammoth's raw text, not Word's layout. Libraries imported lazily. */
 export async function docxToPdf(file: File): Promise<File> {
   const [{ default: mammoth }, { PDFDocument, StandardFonts }] = await Promise.all([
     import('mammoth/mammoth.browser'),

@@ -66,10 +66,7 @@ export async function loadProcessingContext(lectureId: string): Promise<Processi
   };
 }
 
-/**
- * Insert cleaned attendance records, idempotent on `(student_id, lecture_id)` so
- * a re-run cannot create duplicates. Returns the number of rows written.
- */
+/** Idempotent on `(student_id, lecture_id)`, so a re-run cannot duplicate. Returns rows written. */
 export async function insertAttendance(payloads: AttendanceInsertPayload[]): Promise<number> {
   if (payloads.length === 0) return 0;
 

@@ -34,10 +34,7 @@ function parseTimeOnly(value: string): number | null {
   return date.getTime();
 }
 
-/**
- * Collapse overlapping or near-overlapping intervals into continuous clusters, so
- * a second device or a reconnect glitch is counted once and not double-counted.
- */
+/** Collapse overlapping intervals, so a reconnect is not counted twice. */
 function clusterIntervals(intervals: ParsedInterval[]): ParsedInterval[] {
   if (intervals.length === 0) return [];
 
@@ -61,11 +58,7 @@ function intervalMinutes(interval: ParsedInterval): number {
   return Math.round((interval.end - interval.start) / 60000);
 }
 
-/**
- * Merge raw upload rows into one entry per participant: sessions summed, and
- * identical/overlapping rows from a second device counted once. Rows without
- * usable timestamps fall back to the CSV's `attended_minutes`.
- */
+/** One entry per participant, sessions summed. Falls back to the CSV's `attended_minutes`. */
 export function mergeSessions(rows: RawUploadRow[]): MergedParticipant[] {
   const grouped = new Map<
     string,

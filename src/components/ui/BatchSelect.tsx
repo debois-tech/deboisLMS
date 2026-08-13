@@ -5,10 +5,7 @@ interface BatchSelectProps {
   batches: Batch[];
   value: string | null;
   onChange: (batchId: string) => void;
-  /**
-   * Choices that are not batches, pinned above the list — e.g. "All students" on
-   * the study material page. Their ids are sentinels the caller understands.
-   */
+  /** Non-batch choices pinned above the list; their ids are caller-defined sentinels. */
   extraOptions?: { id: string; name: string }[];
   placeholder?: string;
 }

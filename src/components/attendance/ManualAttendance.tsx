@@ -29,14 +29,7 @@ interface ManualAttendanceProps {
   onChanged?: () => void;
 }
 
-/**
- * Marking attendance by hand, for the lecture that never produced a Meet export.
- *
- * Deliberately the same shape as the approval table: a roster, a row each, one
- * tick box. Ticking writes the record *and* approves it in one move — there is
- * no half-marked state to come back to, because an admin sitting with the
- * register has already made the judgement the second step would ask for.
- */
+/** Marking attendance by hand. Ticking writes and approves at once — the admin already judged. */
 export function ManualAttendance({ lectureId, batchId, scheduledMinutes, onChanged }: ManualAttendanceProps) {
   const fullMinutes = scheduledMinutes ?? DEFAULT_LECTURE_MINUTES;
 

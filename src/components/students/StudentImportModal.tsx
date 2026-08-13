@@ -12,19 +12,11 @@ import type { BatchProgram, BatchProgramOption } from '@/lib/types';
 interface StudentImportModalProps {
   open: boolean;
   onClose: () => void;
-  /**
-   * Pass the programme list where the caller has no batch of its own — the
-   * students page. The dropdown shows the names; the abbreviation behind it is
-   * what the CSV is checked against.
-   */
+  /** Programme list for a caller with no batch of its own. Shows names, validates on the code. */
   programs?: BatchProgramOption[];
   /** Pass the batch's own programme instead, from a batch page. Rows are checked against it. */
   batchProgram?: BatchProgram;
-  /**
-   * Throw to surface a message in the dialog; the modal owns the busy state.
-   * `createLogins` reflects the checkbox — the caller decides what that means,
-   * since only it knows which students the rows resolved to.
-   */
+  /** Throw to show a message; the modal owns the busy state. */
   onImport: (
     rows: Record<string, string>[],
     fallbackFee: number | undefined,

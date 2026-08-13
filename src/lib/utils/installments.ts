@@ -23,10 +23,7 @@ export function countInstallmentPayments(
   return logs.filter((log) => log.batch_id === batchId && log.notes !== REGISTRATION_NOTE).length;
 }
 
-/**
- * Instalments fall 20 and 40 days after the batch starts, two at most.
- * Returns a value only inside the 3-day window before one, or once it is missed.
- */
+/** 20 and 40 days after the batch starts, two at most. Only inside the 3-day window, or once missed. */
 export function dueInstallment(
   startDate: string | null | undefined,
   paidCount: number,

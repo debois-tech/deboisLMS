@@ -16,11 +16,7 @@ export function StudentLink({ studentId, name, className }: StudentLinkProps) {
   );
 }
 
-/**
- * The student's permanent ID. One component for both sides on purpose: the code a
- * student reads on their portal and the code an admin quotes back must look like
- * the same thing. Copyable, because it gets typed into messages and forms.
- */
+/** The student's permanent ID — one component both sides, so admin and student see the same thing. */
 export function StudentIdChip({ code, showLabel = true }: { code?: string; showLabel?: boolean }) {
   const [copied, setCopied] = useState(false);
 

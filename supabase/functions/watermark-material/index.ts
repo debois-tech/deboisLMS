@@ -2,15 +2,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { degrees, PDFDocument, rgb, StandardFonts } from 'npm:pdf-lib@1.17.1';
 
-/**
- * Origins allowed to call this function. Set the secret at deploy time:
- *
- *   supabase secrets set ALLOWED_ORIGINS="https://erp.deboistech.in" --project-ref <ref>
- *
- * Unset means '*', which is what this function did before the allowlist existed —
- * these calls carry a bearer token and no cookie, so a wide origin is not CSRF.
- * Setting it is still worth doing once the real hostname exists.
- */
+/** Origins allowed to call this. Unset means '*' — set ALLOWED_ORIGINS at deploy. */
 const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') ?? '')
   .split(',')
   .map((origin) => origin.trim())
@@ -41,28 +33,15 @@ const THROTTLE_MAX_OPENS = 20;
 /** The whole stamp: a shared copy still advertises where it came from. */
 const COMPANY_NAME = 'deboistech';
 
-/**
- * pdf-lib holds the whole document in memory, so past this size the function is
- * killed mid-render. Backstop for anything uploaded before the bucket limit was set.
- */
+/** pdf-lib holds the whole document in memory; past this the function is killed mid-render. */
 const MAX_WATERMARK_BYTES = 50 * 1024 * 1024;
 
-/**
- * PNG is decoded to raw RGBA to be embedded — four bytes per pixel, several times
- * over while pdf-lib splits the alpha channel out. Past this the function runs out
- * of memory and dies with an allocation error rather than a usable message. The
- * uploader downscales to well under it; this catches anything older.
- */
+/** PNG decodes to raw RGBA several times over — past this the function runs out of memory. */
 const MAX_IMAGE_PIXELS = 12_000_000;
 
 const IMAGE_TYPES = ['image/png', 'image/jpeg'];
 
-/**
- * Two layers: the tiled diagonal survives crops, the footer bar survives downscaled
- * screenshots. Mutates the document it is given rather than round-tripping through
- * save/load — an image page is the size of the image in points, and re-parsing a
- * 4000-point page was what exhausted memory.
- */
+/** Tiled diagonal survives crops, footer bar survives screenshots. No save/load round trip. */
 async function stamp(pdf: PDFDocument, identity: string, issuedAt: string): Promise<void> {
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
@@ -70,12 +49,7 @@ async function stamp(pdf: PDFDocument, identity: string, issuedAt: string): Prom
   for (const page of pdf.getPages()) {
     const { width, height } = page.getSize();
 
-    /*
-     * Everything scales with the page instead of sitting at a fixed 15pt. On A4
-     * this lands within a point of the old numbers; on a photo-sized page it keeps
-     * the watermark legible and, more importantly, keeps the tile count in the
-     * hundreds. Fixed steps across a 4000pt page meant ~4000 draw calls per page.
-     */
+    // Scales with the page: fixed 15pt steps meant ~4000 draw calls on a photo-sized page.
     const size = Math.min(Math.max(Math.min(width, height) / 40, 12), 48);
     const textWidth = font.widthOfTextAtSize(identity, size);
     const stepX = textWidth + size * 7;
@@ -116,12 +90,7 @@ async function stamp(pdf: PDFDocument, identity: string, issuedAt: string): Prom
   }
 }
 
-/**
- * An image becomes a one-page PDF sized to it, so the stamping and the paged reader
- * work on a photo exactly as they do on a document. WebP is absent because pdf-lib
- * cannot embed it — the browser converts those to PNG on upload, and the bucket no
- * longer accepts WebP either.
- */
+/** An image becomes a one-page PDF. WebP absent: pdf-lib cannot embed it. */
 async function imageToPdf(bytes: ArrayBuffer, mimeType: string): Promise<PDFDocument> {
   const pdf = await PDFDocument.create();
   const image = mimeType === 'image/png' ? await pdf.embedPng(bytes) : await pdf.embedJpg(bytes);
@@ -186,10 +155,7 @@ Deno.serve(async (req) => {
 
       if (!student) return json(req, { error: 'This login is not linked to a student record.' }, 403);
 
-      /*
-       * Enrolment is re-checked here because this function runs as the service
-       * role and bypasses RLS.
-       */
+      // Re-checked because this runs as the service role and bypasses RLS.
       if (material.batch_id) {
         const { data: mapping } = await admin
           .from('batch_student_mapping')
@@ -202,10 +168,7 @@ Deno.serve(async (req) => {
         if (!mapping) return json(req, { error: 'This material is not for your batch.' }, 403);
       }
 
-      /*
-       * Throttle: every call downloads and re-stamps the whole file, and the view
-       * log doubles as the rate-limit store — it is already written on every open.
-       */
+      // The view log doubles as the rate-limit store; it is written on every open anyway.
       const since = new Date(Date.now() - THROTTLE_SECONDS * 1000).toISOString();
       const { count: recentOpens } = await admin
         .from('material_views')
@@ -243,9 +206,7 @@ Deno.serve(async (req) => {
       'Cache-Control': 'no-store, no-cache, must-revalidate, private',
     };
 
-    // Anything the reader cannot page — text, sheets, decks, archives — goes back
-    // untouched. There is no way to stamp a .zip, and re-encoding one would only
-    // break it.
+    // Unpageable kinds go back untouched — a .zip cannot be stamped, only broken.
     if (mimeType !== 'application/pdf' && !IMAGE_TYPES.includes(mimeType)) {
       return new Response(await file.arrayBuffer(), {
         headers: { ...noStore, 'Content-Type': mimeType, 'Content-Disposition': 'inline' },
@@ -255,11 +216,7 @@ Deno.serve(async (req) => {
     const raw = await file.arrayBuffer();
     const issuedAt = new Date().toISOString().slice(0, 16).replace('T', ' ');
 
-    /*
-     * One document, start to finish. This used to build the image PDF, save it,
-     * copy the buffer, and parse the result back in — three full copies of a
-     * decoded image live at once, which is what ran the function out of memory.
-     */
+    // One document throughout: the old save/copy/reload held three copies of a decoded image.
     let pdf: PDFDocument;
     try {
       pdf = IMAGE_TYPES.includes(mimeType)

@@ -16,12 +16,7 @@ interface FuzzyCandidate {
   name: string;
 }
 
-/**
- * Match a CSV participant name against the batch roster. Tutors match first
- * (they must never be recorded as students), then exact/token/fuzzy student
- * matches, then Gemini. Anything not matched confidently is returned as
- * `unmatched` for manual review.
- */
+/** Tutors first (never recorded as students), then exact/token/fuzzy, then Gemini. */
 export async function matchParticipant(
   name: string,
   roster: RosterEntry[],

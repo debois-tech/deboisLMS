@@ -93,11 +93,7 @@ export async function getBatchFeeSummary(): Promise<BatchFeeSummary[]> {
   );
 }
 
-/**
- * The portal's own fee read. Goes through `student_fee_dues`, which carries the
- * balance but never total_fee or paid_amount, and scopes itself to the signed-in
- * student in SQL — so no studentId argument, and none to get wrong.
- */
+/** Reads `student_fee_dues`: balance only, scoped to the caller in SQL. */
 export async function getMyFeeDues(): Promise<StudentFeeDue[]> {
   return rows<StudentFeeDue>(
     await supabase.from('student_fee_dues').select('*').order('updated_at', { ascending: false }),

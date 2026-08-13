@@ -60,9 +60,7 @@ export default function PortalOverviewPage() {
   const { loading, error, retry } = useInitialLoad(async () => {
     if (!studentId) return;
 
-    // Fees are fetched for the student, not for one batch: Home used to show
-    // the current batch's balance while the Fees tab showed the total across
-    // every batch, so the same word meant two different numbers.
+    // Fees across every batch, matching the Fees tab — one batch's balance meant a different number.
     const [record, mappings, records, work, feeRows, paymentRows] = await Promise.all([
       getStudentById(studentId),
       getStudentBatches(studentId),

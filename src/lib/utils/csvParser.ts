@@ -64,11 +64,7 @@ function parseDuration(raw: string): number {
   return total;
 }
 
-/**
- * Convert a CSV time cell into a value Postgres accepts for a `timestamp` column.
- * The Meet export uses time-only values Postgres rejects; those are combined with
- * the lecture's date. Always a naive local `YYYY-MM-DDTHH:MM:SS`.
- */
+/** Meet exports time-only values Postgres rejects; combined with the lecture date, naive local. */
 export function normalizeTimestampForDb(
   value: string | undefined,
   fallbackDate?: string,
@@ -107,10 +103,7 @@ function toNaiveLocal(date: Date): string {
 
 export interface ParsedAttendanceCsv {
   rows: CsvRow[];
-  /**
-   * The meeting code the export carries, when it has one. Used to recognise a
-   * CSV that has already been processed for a lecture.
-   */
+  /** The export's meeting code, used to spot a CSV already processed for this lecture. */
   meetingCode?: string;
 }
 

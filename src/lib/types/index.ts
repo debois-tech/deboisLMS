@@ -7,10 +7,7 @@ export type AttendanceSource = 'manual' | 'automated';
 export type MappingStatus = 'active' | 'dropped';
 /** 'portal' = the student handed it in; 'github' = an admin recorded it. */
 export type SubmissionChannel = 'github' | 'portal';
-/**
- * A programme abbreviation, e.g. PHR. Open rather than a fixed union: an admin
- * mints new ones from the batch form, and the valid set lives in `batch_programs`.
- */
+/** Open, not a union: admins mint new codes and the valid set lives in `batch_programs`. */
 export type BatchProgram = string;
 export type FeeStatus = 'due' | 'paid';
 export type PaymentMethod = 'cash' | 'upi' | 'bank_transfer' | 'other';
@@ -40,10 +37,7 @@ export interface Batch {
   program?: BatchProgram;
   status: BatchStatus;
   start_date?: string;
-  /**
-   * Filename prefix for this batch's study material, e.g. `DBT-TEPC-2026-D`.
-   * A material's title is this plus an admin-entered suffix: `DBT-TEPC-2026-D01`.
-   */
+  /** Filename prefix for this batch's material, e.g. `DBT-TEPC-2026-D`. */
   batch_code?: string;
   created_at: string;
   student_count?: number;
@@ -176,11 +170,7 @@ export interface AssignmentCompletion {
   assignment?: Assignment;
 }
 
-/**
- * What the portal is allowed to know about a fee: the balance, and nothing that
- * would reveal what the student was charged. Backed by the `student_fee_dues`
- * view, which is scoped to the caller in SQL.
- */
+/** Balance only — nothing that reveals what the student was charged. From `student_fee_dues`. */
 export interface StudentFeeDue {
   id: string;
   student_id: string;
@@ -206,11 +196,7 @@ export interface BatchStudentMapping {
   status: MappingStatus;
 }
 
-/**
- * One PDF attached to a batch. The row is metadata only — the file lives in the
- * private `materials` storage bucket and is only ever handed to a student as a
- * watermarked copy produced by the `watermark-material` edge function.
- */
+/** Metadata only; the file lives in the private bucket and is served watermarked. */
 export interface Material {
   id: string;
   /** Null means the material is for every student rather than one batch. */

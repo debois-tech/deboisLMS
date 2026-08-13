@@ -3,11 +3,7 @@ import { maybeRow, ok, row, rows } from './result';
 import { deriveBatchStatus } from '@/lib/utils/format';
 import type { Batch, BatchProgram, BatchProgramOption } from '@/lib/types';
 
-/**
- * The status column follows the calendar, so a row that has since started is
- * corrected on read. The write is best-effort — students may read batches but
- * not update them — and the returned row carries the right status either way.
- */
+/** Status follows the calendar, corrected on read. Best-effort write — students cannot update. */
 function syncStatus(batch: Batch): Batch {
   const status = deriveBatchStatus(batch);
   if (status === batch.status) return batch;
@@ -60,11 +56,7 @@ export async function getBatchPrograms(): Promise<BatchProgramOption[]> {
 /** The shape the database enforces on a code, checked here so the error is readable. */
 export const PROGRAM_CODE_PATTERN = /^[A-Z]{2,6}$/;
 
-/**
- * Adds a programme, or renames the one already holding that code. Called when a
- * batch is created under an abbreviation that does not exist yet, so the list
- * grows from ordinary use rather than from a migration.
- */
+/** Adds or renames a programme, when a batch names a code that does not exist yet. */
 export async function saveBatchProgram(
   code: string,
   name: string,
@@ -89,12 +81,7 @@ export async function saveBatchProgram(
   );
 }
 
-/**
- * The live batch running a programme. Completed batches are never targeted, so
- * last year's intake cannot absorb this year's students. Throws when the answer
- * is not exactly one batch — silently picking would put students somewhere the
- * admin did not choose.
- */
+/** The one open batch for a programme. Throws rather than guess when it is not exactly one. */
 export function resolveProgramBatch(batches: Batch[], program: BatchProgram, programName: string): Batch {
   const live = batches.filter((b) => b.program === program && b.status !== 'completed');
   if (live.length === 1) return live[0];
