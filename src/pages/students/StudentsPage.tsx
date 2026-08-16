@@ -12,36 +12,47 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import { StudentImportModal } from '@/components/students/StudentImportModal';
 import { BulkLoginsModal } from '@/components/students/BulkLoginsModal';
-import { getStudents, getBatches, getAllBatchStudentMappings, createStudentLoginsBulk, getBatchPrograms, resolveProgramBatch, importStudentsIntoBatch } from '@/lib/supabase';
+import { getStudents, getBatches, getAllBatchStudentMappings, createStudentLoginsBulk, importStudentsIntoBatch } from '@/lib/supabase';
 import type { BulkLoginResult } from '@/lib/supabase';
-import type { Student, Batch, BatchStudentMapping, BatchProgram, BatchProgramOption } from '@/lib/types';
+import type { Student, Batch, BatchStudentMapping } from '@/lib/types';
 import { useToast } from '@/lib/context/ToastContext';
 
-/** Sentinel for the filter: students in no active batch, who see nothing in the portal. */
 const NO_BATCH = 'none';
+
+type SortKey = 'newest' | 'az' | 'za';
+
+//newest first is what the query already returns 
+const DEFAULT_SORT: SortKey = 'newest';
+
+const SORT_OPTIONS = [
+  { value: 'newest', label: 'Newest first' },
+  { value: 'az', label: 'Name (A–Z)' },
+  { value: 'za', label: 'Name (Z–A)' },
+];
+
+// Ref IDs get typed with any or none of their dashes — match on the bare characters
+const refKey = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
 
 export default function StudentsPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [mappings, setMappings] = useState<BatchStudentMapping[]>([]);
-  const [programs, setPrograms] = useState<BatchProgramOption[]>([]);
   const [search, setSearch] = useState('');
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
+  const [sort, setSort] = useState<SortKey>(DEFAULT_SORT);
   const [showImport, setShowImport] = useState(false);
   const [bulkLogins, setBulkLogins] = useState<BulkLoginResult | null>(null);
   const { showToast } = useToast();
 
   const { loading, error, retry } = useInitialLoad(async () => {
-    const [studentData, batchData, mappingData, programData] = await Promise.all([
+    const [studentData, batchData, mappingData] = await Promise.all([
       getStudents(),
       getBatches(),
       getAllBatchStudentMappings(),
-      getBatchPrograms(),
     ]);
     setStudents(studentData);
     setBatches(batchData);
     setMappings(mappingData);
-    setPrograms(programData);
   });
 
 
@@ -54,6 +65,7 @@ export default function StudentsPage() {
   }
 
   const query = search.trim().toLowerCase();
+  const queryRef = refKey(query);
   const filteredStudents = students.filter((s) => {
     const batchIds = studentBatchIds.get(s.id) ?? [];
     if (selectedBatchId === NO_BATCH && batchIds.length > 0) return false;
@@ -61,27 +73,33 @@ export default function StudentsPage() {
     if (!query) return true;
     return (
       s.name.toLowerCase().includes(query) ||
-      (s.student_code ?? '').toLowerCase().includes(query) ||
+      (queryRef !== '' && refKey(s.student_code ?? '').includes(queryRef)) ||
       (s.phone ?? '').toLowerCase().includes(query) ||
       (s.email ?? '').toLowerCase().includes(query)
     );
   });
 
+  if (sort !== 'newest') {
+    const direction = sort === 'az' ? 1 : -1;
+    filteredStudents.sort((a, b) => direction * a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+  }
+
   const selectBatch = (batchId: string | null) => {
     setSelectedBatchId(batchId);
   };
 
+  // The batch is chosen in the dialog, so there is nothing to resolve and no way
+  // for two live batches under one programme to be ambiguous.
   const handleImport = async (
     rows: Record<string, string>[],
-    fallbackFee: number | undefined,
     createLogins: boolean,
-    program: BatchProgram | undefined,
+    batch: Batch,
   ) => {
-    if (!program) throw new Error('Choose the programme these students join.');
+    if (batch.base_fee == null) {
+      throw new Error(`${batch.name} has no base fee. Set one on the batch, then import.`);
+    }
 
-    const programName = programs.find((p) => p.code === program)?.name ?? program;
-    const batch = resolveProgramBatch(batches, program, programName);
-    const imported = await importStudentsIntoBatch(rows, batch.id, fallbackFee);
+    const imported = await importStudentsIntoBatch(rows, batch.id, batch.base_fee);
 
     const [studentData, mappingData] = await Promise.all([getStudents(), getAllBatchStudentMappings()]);
     setStudents(studentData);
@@ -128,8 +146,8 @@ export default function StudentsPage() {
             <SearchFilterBar
               value={search}
               onChange={setSearch}
-              placeholder="Search by ID, name, phone, or email"
-              filterLabel="Filter by batch"
+              placeholder="Search by ref ID, name, phone, or email"
+              filterLabel="Batch"
               allLabel="All batches"
               filterValue={selectedBatchId}
               filterOptions={[
@@ -137,6 +155,11 @@ export default function StudentsPage() {
                 { value: NO_BATCH, label: 'No batch' },
               ]}
               onFilterChange={selectBatch}
+              sortLabel="Sort"
+              sortValue={sort}
+              sortOptions={SORT_OPTIONS}
+              onSortChange={(value) => setSort(value as SortKey)}
+              defaultSortValue={DEFAULT_SORT}
             />
           </div>
 
@@ -175,7 +198,7 @@ export default function StudentsPage() {
       <StudentImportModal
         open={showImport}
         onClose={() => setShowImport(false)}
-        programs={programs}
+        batches={batches}
         onImport={handleImport}
       />
 

@@ -37,6 +37,10 @@ export default function EditBatchPage() {
       showToast('Select a programme for this batch', 'error');
       return;
     }
+    if (form.base_fee == null || form.base_fee < 0) {
+      showToast('Set a base fee for this batch', 'error');
+      return;
+    }
     setSaving(true);
     try {
       await updateBatch(form.id, form);
@@ -76,18 +80,23 @@ export default function EditBatchPage() {
               emptyText="No programmes found"
             />
           </FormField>
+          <FormField label="Base Fee" required>
+            <input
+              type="number"
+              min="0"
+              value={form.base_fee ?? ''}
+              onChange={(e) => setForm({ ...form, base_fee: e.target.value === '' ? null : Number(e.target.value) })}
+              required
+            />
+          </FormField>
+
           <FormField label="Batch Code">
             <input
               value={form.batch_code ?? ''}
               onChange={(e) => setForm({ ...form, batch_code: e.target.value })}
-              placeholder="e.g. DBT-TEPC-2026-D"
               autoCapitalize="characters"
               spellCheck={false}
             />
-            <p className="field-hint">
-              Prefix for this batch's study material. Uploads add a suffix to it, e.g.
-              DBT-TEPC-2026-D01.
-            </p>
           </FormField>
           <FormField label="Start Date">
             <DatePicker

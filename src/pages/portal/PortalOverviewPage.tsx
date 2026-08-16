@@ -106,8 +106,9 @@ export default function PortalOverviewPage() {
   const handedIn = states.filter((state) => state === 'done').length;
   const pending = states.filter((state) => state === 'todo').length;
   const missed = states.filter((state) => state === 'missed').length;
-  // The balance across every batch, matching the Fees tab exactly. Nothing else
-  // about the fee is derived here, because nothing else is shown.
+  // The balance across every batch. Home no longer states it — the profile owns
+  // that number now — but an instalment falling due is still the day's one thing,
+  // and it cannot be worked out without this.
   const outstanding = fees.reduce((sum, fee) => sum + Math.max(0, Number(fee.amount_due)), 0);
 
   const installment = currentBatch
@@ -172,21 +173,6 @@ export default function PortalOverviewPage() {
                       : 'All handed in'
               }
             />
-            {/* The balance only. What the fee adds up to, and what has been paid
-                against it so far, are not the student's number to act on. */}
-            <PortalStat
-              label="Fees due"
-              icon={Wallet}
-              value={fees.length === 0 ? 'Not set' : outstanding > 0 ? formatCurrency(outstanding) : 'Nothing'}
-              tone={fees.length === 0 ? 'default' : outstanding > 0 ? 'attention' : 'positive'}
-              note={
-                fees.length === 0
-                  ? 'Not set yet'
-                  : outstanding > 0
-                    ? 'Pay your coordinator'
-                    : 'Fully paid up'
-              }
-            />
           </PortalStatGrid>
 
           <PortalSection title="Batches">
@@ -245,7 +231,7 @@ function NextUp({
         tone={installment.missed ? 'attention' : 'default'}
         title={installmentLabel(installment)}
         detail={`Installment ${installment.index} · due ${formatDate(installment.dueDate)}`}
-        action={<Link to="/portal/fees" className="portal-focus-link">Details</Link>}
+        action={<Link to="/portal/profile" className="portal-focus-link">Details</Link>}
       />
     );
   }
@@ -281,7 +267,7 @@ function NextUp({
       <PortalFocus
         icon={Wallet}
         title={`${formatCurrency(outstanding)} due`}
-        action={<Link to="/portal/fees" className="portal-focus-link">Details</Link>}
+        action={<Link to="/portal/profile" className="portal-focus-link">Details</Link>}
       />
     );
   }

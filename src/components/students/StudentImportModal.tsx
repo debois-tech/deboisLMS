@@ -4,63 +4,89 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { FormField } from '@/components/ui/FormField';
 import { InlineAlert } from '@/components/ui/InlineAlert';
-import { SearchSelect } from '@/components/ui/SearchSelect';
-import { findProgramMismatches, getImportFee, parseStudentCsv } from '@/lib/utils/studentImport';
+import { BatchSelect } from '@/components/ui/BatchSelect';
+import {
+  findDiscountProblems,
+  findProgramMismatches,
+  getImportDiscount,
+  parseStudentCsv,
+} from '@/lib/utils/studentImport';
 import { errorMessage } from '@/lib/utils/errors';
-import type { BatchProgram, BatchProgramOption } from '@/lib/types';
+import { feeFromDiscount, formatCurrency, formatDate } from '@/lib/utils/format';
+import type { Batch } from '@/lib/types';
 
 interface StudentImportModalProps {
   open: boolean;
   onClose: () => void;
-  /** Programme list for a caller with no batch of its own. Shows names, validates on the code. */
-  programs?: BatchProgramOption[];
-  /** Pass the batch's own programme instead, from a batch page. Rows are checked against it. */
-  batchProgram?: BatchProgram;
+  /**
+   * Batches a caller with none of its own may import into. The admin names the
+   * batch outright rather than a programme the app then has to resolve — two live
+   * batches under one programme used to make that resolution impossible.
+   */
+  batches?: Batch[];
+  /** The caller's own batch, from a batch page. Nothing to choose. */
+  batch?: Batch;
   /** Throw to show a message; the modal owns the busy state. */
   onImport: (
     rows: Record<string, string>[],
-    fallbackFee: number | undefined,
     createLogins: boolean,
-    program: BatchProgram | undefined,
+    batch: Batch,
   ) => Promise<void>;
 }
 
 const PREVIEW_ROWS = 5;
 
 /** The one CSV import dialog, shared by the students list and a batch's students tab. */
-export function StudentImportModal({ open, onClose, programs, batchProgram, onImport }: StudentImportModalProps) {
+export function StudentImportModal({ open, onClose, batches, batch, onImport }: StudentImportModalProps) {
   const [rows, setRows] = useState<Record<string, string>[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
-  const [fee, setFee] = useState('');
-  const [program, setProgram] = useState<BatchProgram | null>(batchProgram ?? null);
+  const [pickedId, setPickedId] = useState<string | null>(null);
   const [createLogins, setCreateLogins] = useState(true);
   const [error, setError] = useState('');
   const [importing, setImporting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // The batch page already knows its programme; the students page asks for one.
-  const target = batchProgram ?? program;
-  const needsProgram = Boolean(programs) && !batchProgram;
+  // A finished batch is not something to import a new intake into.
+  const options = useMemo(() => (batches ?? []).filter((b) => b.status !== 'completed'), [batches]);
+  const needsBatch = Boolean(batches) && !batch;
 
-  // The sheet carries a fee per student now. The field below only covers rows
-  // that left it blank, so a complete sheet never has to answer it.
-  const missingFee = useMemo(() => rows.filter((row) => getImportFee(row) === undefined).length, [rows]);
+  // Everything below hangs off one known batch: its fee, its programme, its id.
+  const target = batch ?? options.find((b) => b.id === pickedId) ?? null;
+  const base = target?.base_fee ?? null;
+  const blocker = target && base === null
+    ? `${target.name} has no base fee, so the discounts have nothing to come off. Set one on the batch, then import.`
+    : '';
+
   const mismatches = useMemo(
-    () => (target ? findProgramMismatches(rows, target) : []),
+    () => (target?.program ? findProgramMismatches(rows, target.program) : []),
     [rows, target],
   );
+  const discountProblems = useMemo(() => findDiscountProblems(rows), [rows]);
+
+  // What the sheet actually does to the money, before anyone commits to it.
+  const outcome = useMemo(() => {
+    if (base === null) return null;
+    const fees = rows.map((row) => feeFromDiscount(base, getImportDiscount(row)));
+    return {
+      discounted: fees.filter((fee) => fee < base).length,
+      free: fees.filter((fee) => fee === 0).length,
+      // No Discount column, or every cell blank. Legitimate, but a silent
+      // full-price import is not something to find out about afterwards.
+      noDiscounts: rows.every((row) => getImportDiscount(row) === undefined),
+    };
+  }, [rows, base]);
 
   const incomplete =
     !rows.length ||
-    (needsProgram && !program) ||
-    (missingFee > 0 && (!fee || Number(fee) < 0)) ||
+    !target ||
+    base === null ||
+    discountProblems.length > 0 ||
     mismatches.length > 0;
 
   const reset = () => {
     setRows([]);
     setHeaders([]);
-    setFee('');
-    setProgram(batchProgram ?? null);
+    setPickedId(null);
     setCreateLogins(true);
     setError('');
     setImporting(false);
@@ -87,18 +113,18 @@ export function StudentImportModal({ open, onClose, programs, batchProgram, onIm
 
   const handleImport = async () => {
     if (!rows.length) return;
-    if (needsProgram && !program) {
-      setError('Choose the programme these students join.');
+    if (!target) {
+      setError('Choose the batch these students join.');
       return;
     }
-    if (missingFee > 0 && !fee) {
-      setError(`${missingFee} rows have no fee. Enter one to cover them.`);
+    if (base === null) {
+      setError(blocker);
       return;
     }
     setImporting(true);
     setError('');
     try {
-      await onImport(rows, fee ? Number(fee) : undefined, createLogins, target ?? undefined);
+      await onImport(rows, createLogins, target);
       reset();
       onClose();
     } catch (err) {
@@ -116,22 +142,53 @@ export function StudentImportModal({ open, onClose, programs, batchProgram, onIm
           <input ref={fileRef} type="file" accept=".csv,text/csv" onChange={handleFile} className="hidden" />
         </label>
 
+        {needsBatch && (
+          <FormField label="Batch" required>
+            <BatchSelect
+              batches={options}
+              value={pickedId}
+              onChange={(id) => { setPickedId(id); setError(''); }}
+              // Two batches under one programme are often near-namesakes, and this
+              // is the one screen where picking the wrong one misfiles an intake.
+              label={(option) => [
+                option.name,
+                option.start_date ? formatDate(option.start_date) : 'No start date',
+              ].join(' · ')}
+            />
+          </FormField>
+        )}
+
         {headers.length > 0 && rows.length > 0 && (
           <div className="space-y-2">
-            <p className="text-sm font-semibold text-[var(--text-primary)]">
-              Preview ({rows.length} students)
+            {/* The whole point of the preview: what each row will be charged, before
+                anyone commits to it. The Fee column is derived, never read. */}
+            <p className="import-summary">
+              {base === null ? (
+                <span>{rows.length} students</span>
+              ) : (
+                <>
+                  <span><strong>{formatCurrency(base)}</strong> base fee</span>
+                  <span>{rows.length} students</span>
+                  {outcome && outcome.discounted > 0 && <span>{outcome.discounted} discounted</span>}
+                  {outcome && outcome.free > 0 && <span>{outcome.free} pay nothing</span>}
+                </>
+              )}
             </p>
             <div className="import-preview">
               <table>
                 <thead>
                   <tr>
                     {headers.map((header) => <th key={header}>{header}</th>)}
+                    <th className="import-preview-derived">Fee</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.slice(0, PREVIEW_ROWS).map((row, index) => (
                     <tr key={index}>
                       {headers.map((header) => <td key={header}>{row[header] || '—'}</td>)}
+                      <td className="import-preview-derived">
+                        {base === null ? '—' : formatCurrency(feeFromDiscount(base, getImportDiscount(row)))}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -142,40 +199,26 @@ export function StudentImportModal({ open, onClose, programs, batchProgram, onIm
                 Showing {PREVIEW_ROWS} of {rows.length} rows.
               </p>
             )}
+            {base !== null && outcome?.noDiscounts && (
+              <p className="text-xs text-[var(--text-muted)]">
+                No discounts in this file — every student is charged the full {formatCurrency(base)}.
+              </p>
+            )}
           </div>
         )}
 
-        {needsProgram && programs && (
-          <FormField label="Programme" required>
-            <SearchSelect
-              options={programs.map((option) => ({ value: option.code, label: option.name }))}
-              value={program}
-              onChange={(code) => { setProgram(code as BatchProgram); setError(''); }}
-              placeholder="Select programme"
-              searchPlaceholder="Search programmes"
-              emptyText="No programmes found"
-            />
-            <p className="field-hint">Students join the open batch running this programme.</p>
-          </FormField>
-        )}
+        {/* Every fee comes off the batch's own number, so there is nothing to import
+            into without one. Said as soon as it is known, not swallowed as zeroes. */}
+        {blocker && <InlineAlert>{blocker}</InlineAlert>}
 
-        {/* Only asked when the sheet left it out, so a complete file skips it. */}
-        {missingFee > 0 && (
-          <FormField label={missingFee === rows.length ? 'Fee per student' : 'Fee for rows without one'} required>
-            <input
-              type="number"
-              min="0"
-              value={fee}
-              onChange={(event) => setFee(event.target.value)}
-              placeholder="e.g. 15000"
-              disabled={importing}
-            />
-            <p className="field-hint">
-              {missingFee === rows.length
-                ? 'No Fees column found in this file.'
-                : `${missingFee} of ${rows.length} rows have no fee.`}
-            </p>
-          </FormField>
+        {discountProblems.length > 0 && (
+          <InlineAlert>
+            {discountProblems.length} {discountProblems.length === 1 ? 'row has' : 'rows have'} a
+            discount that is not a percentage between 0 and 100 —{' '}
+            {discountProblems.slice(0, 3).map((r) => `${r.name} (${r.found})`).join(', ')}
+            {discountProblems.length > 3 ? `, and ${discountProblems.length - 3} more` : ''}. Fix
+            those cells and choose the file again. A blank cell is full price.
+          </InlineAlert>
         )}
 
         {mismatches.length > 0 && (

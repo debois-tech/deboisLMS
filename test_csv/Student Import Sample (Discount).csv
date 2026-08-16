@@ -1,0 +1,6 @@
+Name,Phone,Email,DOB,Gender,College,Course,Branch,Current Year,Graduation Year,Batch,Discount %
+Aarav Mehta,9812345670,aarav.mehta@example.com,14/03/2004,Male,VIT Pune,B.Tech,Computer Engineering,3rd,2027,TEPC,0
+Diya Sharma,9812345671,diya.sharma@example.com,02/11/2003,Female,COEP,B.Tech,IT,Final year,2026,TEPC,25
+Kabir Nair,9812345672,kabir.nair@example.com,2004-07-19,Male,MIT WPU,B.Tech,Mechanical,2,2028,TEPC,50
+Ishita Rao,9812345673,ishita.rao@example.com,30/01/2004,Female,PICT,B.Tech,ENTC,3rd,2027,TEPC,100
+Rohan Desai,9812345674,rohan.desai@example.com,,Male,Symbiosis,BCA,,Final year,2026,TEPC,

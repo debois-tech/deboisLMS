@@ -1,9 +1,10 @@
 /** Portal widget kit. Portal pages import from here only — see ./README.md. */
-export { PortalPage, PortalLoading, usePortalStudentId } from './PortalPage';
+export { PortalPage, PortalLoading, PortalIdentity, usePortalStudentId } from './PortalPage';
 export { PortalSection } from './PortalSection';
 export { PortalFocus } from './PortalFocus';
-export { PortalStat, PortalStatGrid } from './PortalStat';
-export { PortalList, PortalRow } from './PortalList';
+export { PortalStat, PortalStatGrid, PortalAmount } from './PortalStat';
+export { PortalList, PortalRow, PortalFacts } from './PortalList';
+export type { PortalFact } from './PortalList';
 export { PortalTabs } from './PortalTabs';
 export type { PortalTab } from './PortalTabs';
 export { PortalStatus, statusLabel } from './PortalStatus';

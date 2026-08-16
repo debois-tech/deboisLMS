@@ -39,6 +39,8 @@ export interface Batch {
   start_date?: string;
   /** Filename prefix for this batch's material, e.g. `DBT-TEPC-2026-D`. */
   batch_code?: string;
+  /** The batch's full fee. Each imported student's fee is this less their discount. */
+  base_fee?: number | null;
   created_at: string;
   student_count?: number;
 }

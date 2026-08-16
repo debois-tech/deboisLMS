@@ -80,7 +80,7 @@ export function PaymentLogModal({
               />
             </FormField>
             <FormField label="Notes">
-              <textarea value={form.notes} onChange={(event) => onFormChange({ ...form, notes: event.target.value })} placeholder="Optional note" />
+              <textarea value={form.notes} onChange={(event) => onFormChange({ ...form, notes: event.target.value })} />
             </FormField>
             <div className="flex justify-end">
               <Button className="action-button-compact" onClick={onSubmit} loading={submitting} disabled={!form.amount || Number(form.amount) <= 0}>

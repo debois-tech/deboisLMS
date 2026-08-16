@@ -1,6 +1,6 @@
-export { getBatches, getBatchById, createBatch, updateBatch, deleteBatch, getBatchPrograms, resolveProgramBatch, saveBatchProgram, PROGRAM_CODE_PATTERN } from './queries/batches';
-export { getStudents, getStudentById, createStudent, createOrReuseStudent, findExistingStudent, updateStudent, getStudentBatches, getAllBatchStudentMappings, getBatchStudents, addStudentToBatch, removeStudentFromBatch, getStudentByAuthUserId, createStudentLogin, createStudentLoginsBulk, importStudentsIntoBatch } from './queries/students';
-export type { BulkLoginResult } from './queries/students';
+export { getBatches, getBatchById, createBatch, updateBatch, deleteBatch, getBatchPrograms, saveBatchProgram, PROGRAM_CODE_PATTERN } from './queries/batches';
+export { getStudents, getStudentById, createStudent, createOrReuseStudent, findExistingStudent, updateStudent, getStudentBatches, getAllBatchStudentMappings, getBatchStudents, addStudentToBatch, removeStudentFromBatch, getStudentByAuthUserId, createStudentLogin, createStudentLoginsBulk, sendCredentialsEmail, importStudentsIntoBatch } from './queries/students';
+export type { BulkLoginResult, CredentialEmailResult } from './queries/students';
 export { getTutors, getTutorById, createTutor, getTutorBatches, getBatchTutors, assignTutorToBatch, removeTutorFromBatch } from './queries/tutors';
 export { getLecturesByBatch, getLectureById, createLecture, updateLecture, deleteLecture } from './queries/lectures';
 export { getUploadsByLecture, getAttendanceByLecture, getApprovedAttendanceByStudent, insertUploadRows, markAttendance, deleteAttendance, approveAttendance, setAttendanceApproved, bulkApproveAttendance, getUnapprovedCount } from './queries/attendance';

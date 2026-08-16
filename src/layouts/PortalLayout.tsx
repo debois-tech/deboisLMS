@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
-import { ChevronDown, LogOut, Moon, Sun } from 'lucide-react';
+import { ChevronDown, LogOut, Menu, Moon, Sun } from 'lucide-react';
 import { PortalNav } from '@/components/layout/PortalNav';
 import { useAuth } from '@/lib/context/AuthContext';
 import { useTheme } from '@/lib/context/ThemeContext';
@@ -11,6 +11,7 @@ export default function PortalLayout() {
   const { theme, toggle } = useTheme();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -31,11 +32,23 @@ export default function PortalLayout() {
   return (
     <div className="min-h-screen bg-[var(--bg-base)]">
       <header className="portal-topbar">
-        <img
-          src={theme === 'dark' ? '/logo-dark.png' : '/logo.png'}
-          alt="Deboistech"
-          className="h-8 w-auto select-none"
-        />
+        <div className="flex min-w-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setNavOpen(true)}
+            className="portal-menu-button"
+            aria-label="Open menu"
+            aria-expanded={navOpen}
+            aria-controls="portal-menu"
+          >
+            <Menu size={18} />
+          </button>
+          <img
+            src={theme === 'dark' ? '/logo-dark.png' : '/logo.png'}
+            alt="Deboistech"
+            className="h-8 w-auto select-none"
+          />
+        </div>
 
         <div className="relative" ref={menuRef}>
           <button
@@ -92,7 +105,7 @@ export default function PortalLayout() {
         </div>
       </header>
 
-      <PortalNav />
+      <PortalNav open={navOpen} onClose={() => setNavOpen(false)} />
 
       <main className="portal-main animate-fade-in">
         <Outlet />

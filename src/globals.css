@@ -437,38 +437,146 @@ html.light .glass {
   backdrop-filter: blur(12px);
 }
 
-.portal-nav {
-  display: flex;
-  gap: 0.25rem;
-  overflow-x: auto;
-  padding: 0 1.5rem;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-surface);
-  scrollbar-width: none;
-}
-
-.portal-nav::-webkit-scrollbar { display: none; }
-
-.portal-nav-link {
-  position: relative;
+.portal-menu-button {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
   flex: 0 0 auto;
-  padding: 0.875rem 0.875rem;
+  border-radius: var(--radius-md);
   color: var(--text-muted);
-  font-size: 0.8125rem;
-  font-weight: 500;
-  white-space: nowrap;
-  border-bottom: 2px solid transparent;
-  transition: color 0.2s, border-color 0.2s;
+  transition: color 0.2s, background-color 0.2s;
 }
 
-.portal-nav-link:hover { color: var(--text-primary); }
+.portal-menu-button:hover {
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+}
+
+.portal-menu-button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* ── Portal menu drawer ──────────────────────────────────────── */
+/* The portal has five sections and no other chrome, so they live behind one
+   control at every width rather than a tab strip that has to scroll on a phone
+   and looks abandoned on a desktop. Always in the DOM: `visibility` is what
+   takes the links out of the tab order when closed, which also lets the panel
+   animate on the way out instead of vanishing. */
+.portal-drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  visibility: hidden;
+  /* Held visible for the length of the slide-out, or the panel would vanish
+     rather than leave. Opening is instant so the first frame is already live. */
+  transition: visibility 0s linear 0.28s;
+}
+
+.portal-drawer.is-open {
+  visibility: visible;
+  transition: visibility 0s linear 0s;
+}
+
+.portal-drawer-scrim {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: rgb(0 0 0 / 0.5);
+  transition: opacity 0.24s ease-out;
+}
+
+.portal-drawer.is-open .portal-drawer-scrim { opacity: 1; }
+
+.portal-drawer-panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  width: min(17rem, 82vw);
+  height: 100%;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border);
+  box-shadow: 0 18px 48px -12px rgb(0 0 0 / 0.45);
+  transform: translateX(-100%);
+  /* Exponential ease-out: quick off the edge, settled by the time it lands. */
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.portal-drawer.is-open .portal-drawer-panel { transform: translateX(0); }
+
+.portal-drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  height: var(--navbar-h);
+  padding: 0 0.75rem 0 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.portal-drawer-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.portal-drawer-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  transition: color 0.2s, background-color 0.2s;
+}
+
+.portal-drawer-close:hover {
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+}
+
+.portal-drawer-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.75rem;
+}
+
+.portal-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6875rem 0.875rem;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: color 0.2s, background-color 0.2s;
+}
+
+.portal-nav-link:hover {
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+}
 
 .portal-nav-link.is-active {
-  color: var(--primary);
-  border-bottom-color: var(--primary);
+  color: #fff;
+  background: var(--primary);
+}
+
+.portal-drawer-close:focus-visible,
+.portal-nav-link:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 .portal-main {
@@ -528,6 +636,131 @@ html.light .glass {
   text-transform: uppercase;
   color: var(--text-muted);
 }
+
+/* ── Profile masthead ────────────────────────────────────────── */
+/* The one place the portal states who the student is. A rule under it rather than
+   a card, so the labelled cards below read as details of this person instead of a
+   fourth box in a stack of identical ones. */
+.portal-identity {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+/* The topbar avatar's exact treatment, at the size this page can afford. Seeing
+   the same mark you clicked to get here is what says "this is you". */
+.portal-monogram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--primary-glow-soft);
+  color: var(--primary);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.portal-identity-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3125rem;
+  min-width: 0;
+}
+
+/* The ID chip sits on the name's baseline row, not under it — it is part of the
+   name, the way a badge number is. */
+.portal-identity-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+.portal-identity-name {
+  font-size: 1.375rem;
+  font-weight: 650;
+  line-height: 1.15;
+  letter-spacing: -0.022em;
+  color: var(--text-primary);
+}
+
+.portal-identity-contact {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.portal-identity-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.125rem;
+}
+
+.portal-identity-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.portal-identity-link:hover {
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+
+.portal-identity-link:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Facts, not rows: a definition grid rather than a list, because none of these is
+   a record you can open. Same card as PortalList so the page holds together, and
+   `minmax` sized so a three-column reading never strands one fact on its own row
+   at the widths this page is actually read at. */
+.portal-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12.5rem, 1fr));
+  gap: 1.375rem 1.75rem;
+  padding: 1.375rem 1.375rem 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+}
+
+.portal-fact { min-width: 0; }
+
+.portal-fact-label {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* Dates and years line up column-wise between adjacent facts without the value
+   type having to be monospaced to do it. */
+.portal-fact-value {
+  margin-top: 0.3125rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
 
 /* ── Focus card ──────────────────────────────────────────────── */
 /* The single next thing a student should do, given more weight than any tile so
@@ -671,6 +904,33 @@ html.light .glass {
   overflow: hidden;
 }
 
+/* The figure the rows under it add up to, inside the same card rather than
+   floating above it — the total and its breakdown are one object. Sunk a shade
+   so the rows below read as its detail. */
+.portal-list-head {
+  padding: 1.25rem 1.25rem 1.125rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+
+.portal-amount-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.portal-amount-value.is-positive  { color: var(--success-text); }
+.portal-amount-value.is-attention { color: var(--warning-text); }
+
+.portal-amount-note {
+  margin-top: 0.375rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
 .portal-list-row {
   display: flex;
   align-items: center;
@@ -749,9 +1009,18 @@ html.light .glass {
   color: var(--text-secondary);
 }
 
+/* Wraps rather than truncates — a payment's note is the line that tells a student
+   which payment this was, so losing its end to an ellipsis loses the point. Two
+   lines is the ceiling before the row stops being a row. */
 .portal-list-secondary {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   margin-top: 0.2rem;
+  overflow: hidden;
   font-size: 0.75rem;
+  line-height: 1.45;
   color: var(--text-secondary);
 }
 
@@ -945,6 +1214,10 @@ html.light .glass {
   gap: 0.5rem;
 }
 
+/* Filled to match `.student-id` sitting beside it. Two chips on one row with the
+   same border and radius, one of them see-through, reads as an oversight rather
+   than a hierarchy. Neutral, not GitHub black and LinkedIn blue: two borrowed
+   brand colours in an identity row pull rank over the student's own name. */
 .student-link-chip {
   display: inline-flex;
   align-items: center;
@@ -952,15 +1225,22 @@ html.light .glass {
   padding: 0.4rem 0.75rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
+  background: var(--bg-elevated);
   font-size: 0.8125rem;
   font-weight: 550;
   color: var(--text-secondary);
-  transition: border-color 0.15s ease, color 0.15s ease;
+  transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
 }
 
 .student-link-chip:hover {
   border-color: var(--border-strong);
+  background: var(--bg-overlay);
   color: var(--text-primary);
+}
+
+.student-link-chip:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 .student-facts {
@@ -1166,11 +1446,19 @@ html.light .glass {
 
 @media (max-width: 640px) {
   .portal-main { padding: 1.75rem 1rem 3rem; }
-  .portal-topbar, .portal-nav { padding-left: 1rem; padding-right: 1rem; }
+  .portal-topbar { padding-left: 1rem; padding-right: 1rem; }
   .portal-page-title { font-size: 1.375rem; }
   .portal-focus { padding: 1.25rem; }
   .portal-list-row { padding: 0.9375rem 1rem; }
   .portal-stat { padding: 1rem 1.125rem; }
+  .portal-list-head { padding: 1.125rem 1rem 1rem; }
+  /* Column count is left to auto-fit — 12.5rem tracks already collapse to one
+     column inside a phone-width card. Only the breathing room changes here. */
+  .portal-facts { padding: 1.125rem 1rem 1.25rem; gap: 1.125rem 1.25rem; }
+  .portal-identity { gap: 0.875rem; padding-bottom: 1.25rem; }
+  .portal-monogram { width: 2.75rem; height: 2.75rem; font-size: 0.875rem; }
+  .portal-identity-name { font-size: 1.1875rem; }
+  .portal-amount-value { font-size: 1.5rem; }
 }
 
 /* Legacy wrappers still used on some pages — strip double padding */
@@ -1569,6 +1857,103 @@ html.light .glass {
 
 .import-preview tbody tr:last-child td { border-bottom: none; }
 
+/* Per-row send. Sticky so the action stays reachable when the credential columns
+   push the table into a horizontal scroll. */
+.import-preview th.bulk-send-col,
+.import-preview td.bulk-send-col {
+  position: sticky;
+  right: 0;
+  width: 1%;
+  /* The column shrinks to its button, so a left-aligned "Send" would sit off to
+     one side of the control it labels. Centre both. */
+  text-align: center;
+  white-space: nowrap;
+  border-left: 1px solid var(--border);
+  background: var(--bg-surface);
+}
+
+.import-preview th.bulk-send-col { background: var(--bg-elevated); }
+
+.bulk-send {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.3125rem 0.625rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+}
+
+.bulk-send:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-overlay);
+  color: var(--text-primary);
+}
+
+.bulk-send:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Sent is a fact, not a control — no border, no hover, nothing to press again. */
+.bulk-sent {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.3125rem 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--success-text);
+}
+
+.bulk-sent.is-busy { color: var(--text-muted); }
+
+/* The Fee column is worked out from the batch's base fee and the row's discount —
+   it is in no CSV. Held apart by a rule and its own weight so nobody reads it as
+   something the sheet supplied. */
+.import-preview th.import-preview-derived,
+.import-preview td.import-preview-derived {
+  position: sticky;
+  right: 0;
+  text-align: right;
+  border-left: 1px solid var(--border);
+  background: var(--bg-surface);
+}
+
+.import-preview th.import-preview-derived { background: var(--bg-elevated); }
+
+.import-preview td.import-preview-derived {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+/* Facts about the sheet, before it is committed to. Middots between, not commas,
+   so each clause reads as its own count. */
+.import-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.375rem 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.import-summary span + span::before {
+  content: '·';
+  margin-right: 0.75rem;
+  color: var(--text-muted);
+}
+
+.import-summary strong {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
 /* ── Search bar ──────────────────────────────────────────────── */
 /* One field, three sizes. Height, gutter, icon and control size all scale
    together — the app previously had six hand-rolled variants that disagreed
@@ -1784,6 +2169,23 @@ html.light .glass {
   color: var(--primary);
   font-weight: 600;
   background: var(--primary-glow-soft);
+}
+
+/* Groups inside one panel — a rule rather than a gap, so neither list reads as
+   a stray continuation of the other. */
+.searchbar-panel-group + .searchbar-panel-group {
+  margin-top: 0.3125rem;
+  padding-top: 0.3125rem;
+  border-top: 1px solid var(--border);
+}
+
+.searchbar-panel-heading {
+  padding: 0.25rem 0.75rem 0.375rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
 
 .select-panel-empty,

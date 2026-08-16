@@ -21,6 +21,7 @@ export default function NewBatchPage() {
   const [program, setProgram] = useState<string | null>(null);
   const [newCode, setNewCode] = useState('');
   const [newName, setNewName] = useState('');
+  const [baseFee, setBaseFee] = useState('');
   const [form, setForm] = useState({
     name: '',
     // Status is not picked by hand — it follows the start date.
@@ -36,8 +37,9 @@ export default function NewBatchPage() {
 
   const addingProgram = program === NEW_PROGRAM;
   const codeReady = PROGRAM_CODE_PATTERN.test(newCode.trim().toUpperCase());
+  const feeReady = baseFee.trim() !== '' && Number(baseFee) >= 0;
   const incomplete =
-    !form.name.trim() || !program || (addingProgram && (!codeReady || !newName.trim()));
+    !form.name.trim() || !program || !feeReady || (addingProgram && (!codeReady || !newName.trim()));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,7 +55,7 @@ export default function NewBatchPage() {
         setPrograms([...programs, saved]);
       }
 
-      const batch = await createBatch({ ...form, program: code });
+      const batch = await createBatch({ ...form, program: code, base_fee: Number(baseFee) });
       showToast('Batch created');
       navigate(`/batches/${batch.id}`);
     } catch (error) {
@@ -73,7 +75,6 @@ export default function NewBatchPage() {
             <input
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="e.g. DevOps Batch 4"
               required
             />
           </FormField>
@@ -90,9 +91,6 @@ export default function NewBatchPage() {
               searchPlaceholder="Search programmes"
               emptyText="No programmes yet"
             />
-            <p className="field-hint">
-              The abbreviation is what the import CSV carries in its Batch column.
-            </p>
           </FormField>
 
           {addingProgram && (
@@ -101,7 +99,6 @@ export default function NewBatchPage() {
                 <input
                   value={newCode}
                   onChange={(e) => setNewCode(e.target.value.toUpperCase())}
-                  placeholder="PHR"
                   maxLength={6}
                   autoCapitalize="characters"
                   spellCheck={false}
@@ -112,30 +109,33 @@ export default function NewBatchPage() {
                 <input
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  placeholder="e.g. DevOps Prahar"
                   required
                 />
               </FormField>
-              <p className="field-hint col-span-2">
-                {newCode && !codeReady
-                  ? 'Use 2 to 6 capital letters, e.g. PHR.'
-                  : 'Added to the programme list for every future batch and import.'}
-              </p>
+              {/* Only when the code is wrong. The valid case says nothing. */}
+              {newCode && !codeReady && (
+                <p className="field-hint col-span-2">Use 2 to 6 capital letters.</p>
+              )}
             </div>
           )}
+
+          <FormField label="Base Fee" required>
+            <input
+              type="number"
+              min="0"
+              value={baseFee}
+              onChange={(e) => setBaseFee(e.target.value)}
+              required
+            />
+          </FormField>
 
           <FormField label="Batch Code">
             <input
               value={form.batch_code}
               onChange={(e) => setForm({ ...form, batch_code: e.target.value })}
-              placeholder="e.g. DBT-TEPC-2026-D"
               autoCapitalize="characters"
               spellCheck={false}
             />
-            <p className="field-hint">
-              Prefix for this batch's study material. Uploads add a suffix to it, e.g.
-              DBT-TEPC-2026-D01.
-            </p>
           </FormField>
 
           <FormField label="Start Date">

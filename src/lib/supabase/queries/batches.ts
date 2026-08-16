@@ -1,7 +1,7 @@
 import { supabase } from '../client';
 import { maybeRow, ok, row, rows } from './result';
 import { deriveBatchStatus } from '@/lib/utils/format';
-import type { Batch, BatchProgram, BatchProgramOption } from '@/lib/types';
+import type { Batch, BatchProgramOption } from '@/lib/types';
 
 /** Status follows the calendar, corrected on read. Best-effort write — students cannot update. */
 function syncStatus(batch: Batch): Batch {
@@ -78,16 +78,5 @@ export async function saveBatchProgram(
       .select()
       .single(),
     'Could not save the programme',
-  );
-}
-
-/** The one open batch for a programme. Throws rather than guess when it is not exactly one. */
-export function resolveProgramBatch(batches: Batch[], program: BatchProgram, programName: string): Batch {
-  const live = batches.filter((b) => b.program === program && b.status !== 'completed');
-  if (live.length === 1) return live[0];
-  throw new Error(
-    live.length === 0
-      ? `No open batch for ${programName}. Create one, or reopen the finished batch.`
-      : `${programName} has ${live.length} open batches. Import from the batch's own page instead.`,
   );
 }

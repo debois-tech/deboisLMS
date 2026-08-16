@@ -26,18 +26,12 @@ npm run dev
 
 ### Database
 
-Run these in the Supabase SQL editor, in order. All are idempotent.
+`supabase/schema.sql` is the whole database — tables, enums, views, functions, storage buckets
+and row-level security. Paste it into the Supabase SQL editor and run it. It is idempotent, so
+running it again on a live project is safe and changes nothing.
 
-| File | What it does |
-|---|---|
-| `supabase/schema.sql` | Tables, enums and views — the source of truth for data shape |
-| `supabase/core_migration.sql` | Links students to auth users, defines the `is_admin()` / `current_student_id()` helpers, enables RLS everywhere |
-| `supabase/fees_migration.sql` | Fee status, payment methods, and `record_fee_payment()` — payment log and running balance in one transaction |
-| `supabase/study_material_migration.sql` | Study material table, private storage bucket, batch codes, tutor attribution, RLS |
-| `supabase/assignments_migration.sql` | Per-student GitHub repo, deadlines (`assignments.due_at`), and the policies that stop a student submitting after one |
-
-Edit the admin email in `core_migration.sql` before running it — that block is what tags
-your account as an admin.
+Before running it on a new project, edit the admin email in section 9 — that `update auth.users`
+block is what tags your account as an admin, and the account must already exist in Supabase Auth.
 
 ### Edge functions
 
@@ -49,10 +43,32 @@ Anything needing a secret runs server-side. Deploy each with
 | `create-student-login` | Creates/resets a student's portal login | `SECRET_SERVICE_ROLE_KEY` |
 | `watermark-material` | Serves a material: watermarks PDFs and images, passes other files through | `SECRET_SERVICE_ROLE_KEY` |
 | `match-name` | Gemini fuzzy name matching for attendance | `GEMINI_API_KEY` |
+| `send-credentials` | Emails a student their portal login, one or a whole import | `RESEND_API_KEY` |
 
 ```bash
 supabase secrets set SECRET_SERVICE_ROLE_KEY=... --project-ref <ref>
 supabase secrets set GEMINI_API_KEY=...          --project-ref <ref>   # optional
+
+# send-credentials. Refuses to send until all three are set, and names the missing one.
+supabase secrets set \
+  RESEND_API_KEY=re_xxx \
+  CREDENTIALS_FROM_EMAIL="Deboistech <no-reply@deboistech.in>" \
+  PORTAL_URL=https://lms.deboistech.in/auth/login/user \
+  CREDENTIALS_REPLY_TO=connect@deboistech.in \
+  --project-ref <ref>
+```
+
+`CREDENTIALS_FROM_EMAIL` must be on a domain verified in Resend. `PORTAL_URL` is the student
+sign-in page, not `/portal` — an unauthenticated visitor to `/portal` lands on the admin/student
+choice screen. `CREDENTIALS_REPLY_TO` is optional; without it, replies to a noreply address bounce.
+
+The `\` above is bash. On PowerShell put the whole command on one line — a backslash there is read
+as a literal and the next line fails with `Missing expression after unary operator '--'`.
+
+Every function also reads `ALLOWED_ORIGINS`. Unset means any origin may call them:
+
+```bash
+supabase secrets set ALLOWED_ORIGINS=https://lms.deboistech.in --project-ref <ref>
 ```
 
 Without `GEMINI_API_KEY`, attendance still works — it falls back to deterministic name matching and
@@ -95,7 +111,6 @@ by recomputing it from the same rule.
 
 ## Docs
 
-- `completed md/deboistech erp prd.md` — product scope and DB schema, the source of truth
-- `completed md/plan_steps.md` — the LMS → ERP migration plan this repo followed
-- `THEME.md` — design tokens and the visual system
-- `src/components/portal/README.md` — the portal widget kit and its rules
+- `supabase/schema.sql` — the data model, commented where a choice is not obvious
+- `src/globals.css` — design tokens and every shared component class
+- `src/components/portal/README.md` — the portal widget kit and the rules that keep it consistent

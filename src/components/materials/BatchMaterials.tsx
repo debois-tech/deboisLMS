@@ -366,7 +366,6 @@ function UploadModal({
               <input
                 value={suffix}
                 onChange={(event) => setSuffix(event.target.value)}
-                placeholder="01"
                 disabled={busy}
                 required
               />

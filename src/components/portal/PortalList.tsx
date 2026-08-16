@@ -3,12 +3,19 @@ import { ChevronRight } from 'lucide-react';
 import { clsx } from 'clsx';
 
 interface PortalListProps {
+  /** The one figure the rows below add up to, e.g. a `PortalAmount`. Not a row. */
+  head?: ReactNode;
   children: ReactNode;
 }
 
 /** One card, hairlines inside it. Put `PortalRow`s in here, nothing else. */
-export function PortalList({ children }: PortalListProps) {
-  return <div className="portal-list">{children}</div>;
+export function PortalList({ head, children }: PortalListProps) {
+  return (
+    <div className="portal-list">
+      {head && <div className="portal-list-head">{head}</div>}
+      {children}
+    </div>
+  );
 }
 
 interface PortalRowProps {
@@ -60,5 +67,30 @@ export function PortalRow({ primary, secondary, trailing, state, muted, onClick,
     <button type="button" onClick={onClick} aria-label={label} className={className}>
       {body}
     </button>
+  );
+}
+
+export interface PortalFact {
+  label: string;
+  value: ReactNode;
+}
+
+/**
+ * Facts the student cannot change — a college, a date of birth. Anything blank is
+ * dropped rather than shown as a dash: a row that says nothing is not a fact.
+ */
+export function PortalFacts({ facts }: { facts: PortalFact[] }) {
+  const present = facts.filter(({ value }) => value !== undefined && value !== null && value !== '');
+  if (present.length === 0) return null;
+
+  return (
+    <dl className="portal-facts">
+      {present.map(({ label, value }) => (
+        <div key={label} className="portal-fact">
+          <dt className="portal-fact-label">{label}</dt>
+          <dd className="portal-fact-value">{value}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
