@@ -12,11 +12,10 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import { StudentImportModal } from '@/components/students/StudentImportModal';
 import { BulkLoginsModal } from '@/components/students/BulkLoginsModal';
-import { getStudents, getBatches, getAllBatchStudentMappings, createStudentLoginsBulk, getBatchPrograms, resolveProgramBatch, importStudentsIntoBatch } from '@/lib/supabase';
+import { getStudents, getBatches, getAllBatchStudentMappings, createStudentLoginsBulk, importStudentsIntoBatch } from '@/lib/supabase';
 import type { BulkLoginResult } from '@/lib/supabase';
-import type { Student, Batch, BatchStudentMapping, BatchProgram, BatchProgramOption } from '@/lib/types';
+import type { Student, Batch, BatchStudentMapping } from '@/lib/types';
 import { useToast } from '@/lib/context/ToastContext';
-import { errorMessage } from '@/lib/utils/errors';
 
 const NO_BATCH = 'none';
 
@@ -38,7 +37,6 @@ export default function StudentsPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [mappings, setMappings] = useState<BatchStudentMapping[]>([]);
-  const [programs, setPrograms] = useState<BatchProgramOption[]>([]);
   const [search, setSearch] = useState('');
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [sort, setSort] = useState<SortKey>(DEFAULT_SORT);
@@ -47,16 +45,14 @@ export default function StudentsPage() {
   const { showToast } = useToast();
 
   const { loading, error, retry } = useInitialLoad(async () => {
-    const [studentData, batchData, mappingData, programData] = await Promise.all([
+    const [studentData, batchData, mappingData] = await Promise.all([
       getStudents(),
       getBatches(),
       getAllBatchStudentMappings(),
-      getBatchPrograms(),
     ]);
     setStudents(studentData);
     setBatches(batchData);
     setMappings(mappingData);
-    setPrograms(programData);
   });
 
 
@@ -92,30 +88,13 @@ export default function StudentsPage() {
     setSelectedBatchId(batchId);
   };
 
-  /** What a programme's open batch charges, or why the import cannot go ahead. */
-  const importBaseFee = (program: BatchProgram | undefined) => {
-    if (!program) return { problem: 'Choose the programme these students join.' };
-    const programName = programs.find((p) => p.code === program)?.name ?? program;
-    try {
-      const batch = resolveProgramBatch(batches, program, programName);
-      return batch.base_fee == null
-        ? { problem: `${batch.name} has no base fee. Set one on the batch, then import.` }
-        : { fee: batch.base_fee };
-    } catch (error) {
-      return { problem: errorMessage(error, 'There is no batch to import these students into.') };
-    }
-  };
-
+  // The batch is chosen in the dialog, so there is nothing to resolve and no way
+  // for two live batches under one programme to be ambiguous.
   const handleImport = async (
     rows: Record<string, string>[],
     createLogins: boolean,
-    program: BatchProgram | undefined,
+    batch: Batch,
   ) => {
-    if (!program) throw new Error('Choose the programme these students join.');
-
-    const programName = programs.find((p) => p.code === program)?.name ?? program;
-    // Not targetBatch(): this one must say *why* there is no single batch.
-    const batch = resolveProgramBatch(batches, program, programName);
     if (batch.base_fee == null) {
       throw new Error(`${batch.name} has no base fee. Set one on the batch, then import.`);
     }
@@ -219,8 +198,7 @@ export default function StudentsPage() {
       <StudentImportModal
         open={showImport}
         onClose={() => setShowImport(false)}
-        programs={programs}
-        baseFee={importBaseFee}
+        batches={batches}
         onImport={handleImport}
       />
 

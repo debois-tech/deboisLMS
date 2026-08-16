@@ -2,7 +2,8 @@ import { supabase } from '../client';
 import { maybeRow, ok, row, rows } from './result';
 import type { Batch, Student, BatchStudentMapping, StudentCredentials } from '@/lib/types';
 import { errorMessage } from '@/lib/utils/errors';
-import { feeFromDiscount, getImportDiscount, toStudentInput } from '@/lib/utils/studentImport';
+import { getImportDiscount, toStudentInput } from '@/lib/utils/studentImport';
+import { feeFromDiscount } from '@/lib/utils/format';
 
 export async function getStudents(): Promise<Student[]> {
   return rows<Student>(
@@ -128,6 +129,41 @@ export async function createStudentLogin(studentId: string, rotate = false): Pro
   if (data?.error) throw new Error(data.error);
 
   return data as StudentCredentials;
+}
+
+export interface CredentialEmailResult {
+  /** Student ids the email went out for. */
+  sent: string[];
+  failed: { studentId: string; reason: string }[];
+}
+
+/**
+ * Mails each student the login shown on screen. The password is passed back
+ * because it was never stored — see the edge function. The address is not: the
+ * server reads that from the student's own row.
+ */
+export async function sendCredentialsEmail(
+  recipients: { studentId: string; password: string }[],
+): Promise<CredentialEmailResult> {
+  const { data, error } = await supabase.functions.invoke('send-credentials', {
+    body: { recipients: recipients.map((r) => ({ student_id: r.studentId, password: r.password })) },
+  });
+
+  if (error) {
+    // Non-2xx surfaces as a generic message; the useful reason is on error.context.
+    let detail: string | undefined;
+    const response = (error as { context?: Response }).context;
+    if (response && typeof response.json === 'function') {
+      detail = await response
+        .json()
+        .then((body: { error?: string } | null) => body?.error)
+        .catch(() => undefined);
+    }
+    throw new Error(detail ?? error.message ?? 'Could not send the emails');
+  }
+  if (data?.error) throw new Error(data.error);
+
+  return data as CredentialEmailResult;
 }
 
 export interface BulkLoginResult {

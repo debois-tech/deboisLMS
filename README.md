@@ -43,10 +43,32 @@ Anything needing a secret runs server-side. Deploy each with
 | `create-student-login` | Creates/resets a student's portal login | `SECRET_SERVICE_ROLE_KEY` |
 | `watermark-material` | Serves a material: watermarks PDFs and images, passes other files through | `SECRET_SERVICE_ROLE_KEY` |
 | `match-name` | Gemini fuzzy name matching for attendance | `GEMINI_API_KEY` |
+| `send-credentials` | Emails a student their portal login, one or a whole import | `RESEND_API_KEY` |
 
 ```bash
 supabase secrets set SECRET_SERVICE_ROLE_KEY=... --project-ref <ref>
 supabase secrets set GEMINI_API_KEY=...          --project-ref <ref>   # optional
+
+# send-credentials. Refuses to send until all three are set, and names the missing one.
+supabase secrets set \
+  RESEND_API_KEY=re_xxx \
+  CREDENTIALS_FROM_EMAIL="Deboistech <no-reply@deboistech.in>" \
+  PORTAL_URL=https://lms.deboistech.in/auth/login/user \
+  CREDENTIALS_REPLY_TO=connect@deboistech.in \
+  --project-ref <ref>
+```
+
+`CREDENTIALS_FROM_EMAIL` must be on a domain verified in Resend. `PORTAL_URL` is the student
+sign-in page, not `/portal` — an unauthenticated visitor to `/portal` lands on the admin/student
+choice screen. `CREDENTIALS_REPLY_TO` is optional; without it, replies to a noreply address bounce.
+
+The `\` above is bash. On PowerShell put the whole command on one line — a backslash there is read
+as a literal and the next line fails with `Missing expression after unary operator '--'`.
+
+Every function also reads `ALLOWED_ORIGINS`. Unset means any origin may call them:
+
+```bash
+supabase secrets set ALLOWED_ORIGINS=https://lms.deboistech.in --project-ref <ref>
 ```
 
 Without `GEMINI_API_KEY`, attendance still works — it falls back to deterministic name matching and

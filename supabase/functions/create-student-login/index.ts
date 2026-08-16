@@ -3,7 +3,9 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 /** Origins allowed to call this. Unset means '*' — set ALLOWED_ORIGINS at deploy. */
 const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') ?? '')
-  .split(',')
+  // Comma or whitespace: a space-separated value used to fall through as one
+  // long 'origin', which the browser then rejected as multiple values in the header.
+  .split(/[\s,]+/)
   .map((origin) => origin.trim())
   .filter(Boolean);
 

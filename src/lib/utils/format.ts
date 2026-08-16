@@ -17,6 +17,17 @@ export function formatCurrency(amount: number): string {
   return `₹${amount.toLocaleString('en-IN')}`;
 }
 
+/**
+ * A batch's fee less one student's discount — the one formula, used by the CSV
+ * importer and by both hand-entry forms so a student costs the same however they
+ * were added. A missing discount is full price; 100% is nothing, which is what
+ * suppresses their registration fee log (see log_registration_fee in schema.sql).
+ */
+export function feeFromDiscount(baseFee: number, discount: number | undefined): number {
+  const percent = Math.min(Math.max(discount ?? 0, 0), 100);
+  return Math.round(baseFee * (1 - percent / 100));
+}
+
 export function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;

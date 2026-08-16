@@ -32,8 +32,9 @@ import { getLecturesByBatch, createLecture, deleteLecture } from '@/lib/supabase
 import { getAttendanceByLecture, setAttendanceApproved, bulkApproveAttendance } from '@/lib/supabase';
 import { getFeesByBatch, getFeePaymentLogs, addFeePaymentLog } from '@/lib/supabase';
 import { getAssignmentsByBatch } from '@/lib/supabase';
-import type { Batch, BatchProgram, BatchProgramOption, Student, Tutor, Lecture, AttendanceRecord, StudentFee, FeePaymentLog, Assignment, BatchStudentMapping, TutorBatchMapping } from '@/lib/types';
-import { formatDate, formatCurrency } from '@/lib/utils/format';
+import type { Batch, BatchProgramOption, Student, Tutor, Lecture, AttendanceRecord, StudentFee, FeePaymentLog, Assignment, BatchStudentMapping, TutorBatchMapping } from '@/lib/types';
+import { formatDate, formatCurrency, feeFromDiscount } from '@/lib/utils/format';
+import { InlineAlert } from '@/components/ui/InlineAlert';
 import { formatDeadline } from '@/lib/utils/deadline';
 import { StudentImportModal } from '@/components/students/StudentImportModal';
 import { useToast } from '@/lib/context/ToastContext';
@@ -96,7 +97,7 @@ export default function BatchDetailPage() {
         {(active) => (
           <>
             {active === 'overview' && <OverviewTab batch={batch} programLabel={programLabel} />}
-            {active === 'students' && <StudentsTab batchId={batch.id} program={batch.program} baseFee={batch.base_fee ?? null} />}
+            {active === 'students' && <StudentsTab batch={batch} />}
             {active === 'tutors' && <TutorsTab batchId={batch.id} />}
             {active === 'lectures' && <LecturesTab batchId={batch.id} />}
             {active === 'attendance' && <AttendanceTab batchId={batch.id} />}
@@ -148,14 +149,15 @@ function OverviewTab({ batch, programLabel }: { batch: Batch; programLabel?: str
   );
 }
 
-function StudentsTab({ batchId, program, baseFee }: { batchId: string; program?: BatchProgram; baseFee: number | null }) {
+function StudentsTab({ batch }: { batch: Batch }) {
+  const batchId = batch.id;
+  const baseFee = batch.base_fee ?? null;
   const [students, setStudents] = useState<(Student & { mapping: BatchStudentMapping })[]>([]);
   const [allStudents, setAllStudents] = useState<Student[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
-  // Prefilled from the batch: adding one student by hand charges the same as the rest.
-  const feeDefault = baseFee == null ? '' : String(baseFee);
-  const [totalFee, setTotalFee] = useState(feeDefault);
+  // A discount, not an amount — same as the CSV. The fee comes off the batch.
+  const [discount, setDiscount] = useState('');
   const [showImport, setShowImport] = useState(false);
   const [bulkLogins, setBulkLogins] = useState<BulkLoginResult | null>(null);
   const { showToast } = useToast();
@@ -169,12 +171,14 @@ function StudentsTab({ batchId, program, baseFee }: { batchId: string; program?:
 
   const { error: loadError, reload: reloadStudents } = useReloadableSection(fetchStudents);
 
+  const payable = baseFee === null ? null : feeFromDiscount(baseFee, Number(discount) || 0);
+
   const handleAdd = async () => {
-    if (!selectedStudents.length || !totalFee || Number(totalFee) <= 0) return;
+    if (!selectedStudents.length || payable === null) return;
     try {
-      await Promise.all(selectedStudents.map((studentId) => addStudentToBatch(studentId, batchId, Number(totalFee))));
+      await Promise.all(selectedStudents.map((studentId) => addStudentToBatch(studentId, batchId, payable)));
       setSelectedStudents([]);
-      setTotalFee(feeDefault);
+      setDiscount('');
       setShowAdd(false);
       void reloadStudents();
       showToast('Students added');
@@ -273,20 +277,43 @@ function StudentsTab({ batchId, program, baseFee }: { batchId: string; program?:
           <FormField label="Select Students">
             <StudentMultiSelect students={available} value={selectedStudents} onChange={setSelectedStudents} />
           </FormField>
-          <FormField label="Total Fee per Student">
-            <input type="number" min="1" value={totalFee} onChange={(event) => setTotalFee(event.target.value)} required />
-          </FormField>
-          <Button className="action-button-compact" onClick={handleAdd} disabled={!selectedStudents.length || !totalFee || Number(totalFee) <= 0}>Add Selected</Button>
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="Discount %">
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={discount}
+                onChange={(event) => setDiscount(event.target.value)}
+              />
+            </FormField>
+            {/* Read-only: worked out from the batch, never typed. */}
+            <FormField label="Fee each">
+              <input value={payable === null ? '—' : formatCurrency(payable)} readOnly disabled />
+            </FormField>
+          </div>
+
+          {baseFee === null && (
+            <InlineAlert>
+              This batch has no base fee, so a discount has nothing to come off. Set one on
+              the batch, then add students.
+            </InlineAlert>
+          )}
+
+          <Button
+            className="action-button-compact"
+            onClick={handleAdd}
+            disabled={!selectedStudents.length || payable === null}
+          >
+            Add Selected
+          </Button>
         </div>
       </Modal>
 
       <StudentImportModal
         open={showImport}
         onClose={() => setShowImport(false)}
-        batchProgram={program}
-        baseFee={() => (baseFee == null
-          ? { problem: 'This batch has no base fee, so the discounts have nothing to come off. Set one on the batch, then import.' }
-          : { fee: baseFee })}
+        batch={batch}
         onImport={handleImport}
       />
 

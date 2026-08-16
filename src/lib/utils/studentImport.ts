@@ -47,12 +47,6 @@ export function getImportDiscount(row: Record<string, string>): number | undefin
   return Number.isFinite(percent) ? percent : undefined;
 }
 
-/** The batch fee less this row's discount. A blank Discount cell is full price. */
-export function feeFromDiscount(baseFee: number, discount: number | undefined): number {
-  const percent = Math.min(Math.max(discount ?? 0, 0), 100);
-  return Math.round(baseFee * (1 - percent / 100));
-}
-
 /** Rows whose Discount cell is filled but isn't a percentage — returned, not thrown. */
 export function findDiscountProblems(
   rows: Record<string, string>[],

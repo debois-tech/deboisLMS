@@ -1214,6 +1214,10 @@ html.light .glass {
   gap: 0.5rem;
 }
 
+/* Filled to match `.student-id` sitting beside it. Two chips on one row with the
+   same border and radius, one of them see-through, reads as an oversight rather
+   than a hierarchy. Neutral, not GitHub black and LinkedIn blue: two borrowed
+   brand colours in an identity row pull rank over the student's own name. */
 .student-link-chip {
   display: inline-flex;
   align-items: center;
@@ -1221,15 +1225,22 @@ html.light .glass {
   padding: 0.4rem 0.75rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
+  background: var(--bg-elevated);
   font-size: 0.8125rem;
   font-weight: 550;
   color: var(--text-secondary);
-  transition: border-color 0.15s ease, color 0.15s ease;
+  transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
 }
 
 .student-link-chip:hover {
   border-color: var(--border-strong);
+  background: var(--bg-overlay);
   color: var(--text-primary);
+}
+
+.student-link-chip:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 .student-facts {
@@ -1845,6 +1856,61 @@ html.light .glass {
 }
 
 .import-preview tbody tr:last-child td { border-bottom: none; }
+
+/* Per-row send. Sticky so the action stays reachable when the credential columns
+   push the table into a horizontal scroll. */
+.import-preview th.bulk-send-col,
+.import-preview td.bulk-send-col {
+  position: sticky;
+  right: 0;
+  width: 1%;
+  /* The column shrinks to its button, so a left-aligned "Send" would sit off to
+     one side of the control it labels. Centre both. */
+  text-align: center;
+  white-space: nowrap;
+  border-left: 1px solid var(--border);
+  background: var(--bg-surface);
+}
+
+.import-preview th.bulk-send-col { background: var(--bg-elevated); }
+
+.bulk-send {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.3125rem 0.625rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+}
+
+.bulk-send:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-overlay);
+  color: var(--text-primary);
+}
+
+.bulk-send:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Sent is a fact, not a control — no border, no hover, nothing to press again. */
+.bulk-sent {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.3125rem 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--success-text);
+}
+
+.bulk-sent.is-busy { color: var(--text-muted); }
 
 /* The Fee column is worked out from the batch's base fee and the row's discount —
    it is in no CSV. Held apart by a rule and its own weight so nobody reads it as

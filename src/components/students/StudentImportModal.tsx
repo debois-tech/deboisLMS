@@ -4,61 +4,61 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { FormField } from '@/components/ui/FormField';
 import { InlineAlert } from '@/components/ui/InlineAlert';
-import { SearchSelect } from '@/components/ui/SearchSelect';
+import { BatchSelect } from '@/components/ui/BatchSelect';
 import {
-  feeFromDiscount,
   findDiscountProblems,
   findProgramMismatches,
   getImportDiscount,
   parseStudentCsv,
 } from '@/lib/utils/studentImport';
 import { errorMessage } from '@/lib/utils/errors';
-import { formatCurrency } from '@/lib/utils/format';
-import type { BatchProgram, BatchProgramOption } from '@/lib/types';
+import { feeFromDiscount, formatCurrency, formatDate } from '@/lib/utils/format';
+import type { Batch } from '@/lib/types';
 
 interface StudentImportModalProps {
   open: boolean;
   onClose: () => void;
-  /** Programme list for a caller with no batch of its own. Shows names, validates on the code. */
-  programs?: BatchProgramOption[];
-  /** Pass the batch's own programme instead, from a batch page. Rows are checked against it. */
-  batchProgram?: BatchProgram;
   /**
-   * The target batch's full fee, which every row's Discount % comes off. Returns
-   * `problem` instead when there is none to apply — no batch resolved, or a batch
-   * with no base fee set. The import blocks on that sentence rather than running
-   * every row at zero, so the caller owns the wording of its own failure.
+   * Batches a caller with none of its own may import into. The admin names the
+   * batch outright rather than a programme the app then has to resolve — two live
+   * batches under one programme used to make that resolution impossible.
    */
-  baseFee: (program: BatchProgram | undefined) => { fee: number } | { problem: string };
+  batches?: Batch[];
+  /** The caller's own batch, from a batch page. Nothing to choose. */
+  batch?: Batch;
   /** Throw to show a message; the modal owns the busy state. */
   onImport: (
     rows: Record<string, string>[],
     createLogins: boolean,
-    program: BatchProgram | undefined,
+    batch: Batch,
   ) => Promise<void>;
 }
 
 const PREVIEW_ROWS = 5;
 
 /** The one CSV import dialog, shared by the students list and a batch's students tab. */
-export function StudentImportModal({ open, onClose, programs, batchProgram, baseFee, onImport }: StudentImportModalProps) {
+export function StudentImportModal({ open, onClose, batches, batch, onImport }: StudentImportModalProps) {
   const [rows, setRows] = useState<Record<string, string>[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
-  const [program, setProgram] = useState<BatchProgram | null>(batchProgram ?? null);
+  const [pickedId, setPickedId] = useState<string | null>(null);
   const [createLogins, setCreateLogins] = useState(true);
   const [error, setError] = useState('');
   const [importing, setImporting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // The batch page already knows its programme; the students page asks for one.
-  const target = batchProgram ?? program;
-  const needsProgram = Boolean(programs) && !batchProgram;
-  const resolved = target ? baseFee(target) : null;
-  const base = resolved && 'fee' in resolved ? resolved.fee : null;
-  const blocker = resolved && 'problem' in resolved ? resolved.problem : '';
+  // A finished batch is not something to import a new intake into.
+  const options = useMemo(() => (batches ?? []).filter((b) => b.status !== 'completed'), [batches]);
+  const needsBatch = Boolean(batches) && !batch;
+
+  // Everything below hangs off one known batch: its fee, its programme, its id.
+  const target = batch ?? options.find((b) => b.id === pickedId) ?? null;
+  const base = target?.base_fee ?? null;
+  const blocker = target && base === null
+    ? `${target.name} has no base fee, so the discounts have nothing to come off. Set one on the batch, then import.`
+    : '';
 
   const mismatches = useMemo(
-    () => (target ? findProgramMismatches(rows, target) : []),
+    () => (target?.program ? findProgramMismatches(rows, target.program) : []),
     [rows, target],
   );
   const discountProblems = useMemo(() => findDiscountProblems(rows), [rows]);
@@ -78,7 +78,7 @@ export function StudentImportModal({ open, onClose, programs, batchProgram, base
 
   const incomplete =
     !rows.length ||
-    (needsProgram && !program) ||
+    !target ||
     base === null ||
     discountProblems.length > 0 ||
     mismatches.length > 0;
@@ -86,7 +86,7 @@ export function StudentImportModal({ open, onClose, programs, batchProgram, base
   const reset = () => {
     setRows([]);
     setHeaders([]);
-    setProgram(batchProgram ?? null);
+    setPickedId(null);
     setCreateLogins(true);
     setError('');
     setImporting(false);
@@ -113,18 +113,18 @@ export function StudentImportModal({ open, onClose, programs, batchProgram, base
 
   const handleImport = async () => {
     if (!rows.length) return;
-    if (needsProgram && !program) {
-      setError('Choose the programme these students join.');
+    if (!target) {
+      setError('Choose the batch these students join.');
       return;
     }
     if (base === null) {
-      setError(blocker || 'There is no base fee to take these discounts off.');
+      setError(blocker);
       return;
     }
     setImporting(true);
     setError('');
     try {
-      await onImport(rows, createLogins, target ?? undefined);
+      await onImport(rows, createLogins, target);
       reset();
       onClose();
     } catch (err) {
@@ -142,15 +142,18 @@ export function StudentImportModal({ open, onClose, programs, batchProgram, base
           <input ref={fileRef} type="file" accept=".csv,text/csv" onChange={handleFile} className="hidden" />
         </label>
 
-        {needsProgram && programs && (
-          <FormField label="Programme" required>
-            <SearchSelect
-              options={programs.map((option) => ({ value: option.code, label: option.name }))}
-              value={program}
-              onChange={(code) => { setProgram(code as BatchProgram); setError(''); }}
-              placeholder="Select programme"
-              searchPlaceholder="Search programmes"
-              emptyText="No programmes found"
+        {needsBatch && (
+          <FormField label="Batch" required>
+            <BatchSelect
+              batches={options}
+              value={pickedId}
+              onChange={(id) => { setPickedId(id); setError(''); }}
+              // Two batches under one programme are often near-namesakes, and this
+              // is the one screen where picking the wrong one misfiles an intake.
+              label={(option) => [
+                option.name,
+                option.start_date ? formatDate(option.start_date) : 'No start date',
+              ].join(' · ')}
             />
           </FormField>
         )}

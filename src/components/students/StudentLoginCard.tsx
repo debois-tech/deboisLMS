@@ -1,12 +1,62 @@
 import { ReactNode, useState } from 'react';
-import { Check, Copy, KeyRound } from 'lucide-react';
+import { Check, Copy, KeyRound, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { InlineAlert } from '@/components/ui/InlineAlert';
-import { createStudentLogin } from '@/lib/supabase';
+import { createStudentLogin, sendCredentialsEmail } from '@/lib/supabase';
 import type { StudentCredentials } from '@/lib/types';
 import { derivePortalPassword } from '@/lib/utils/portalPassword';
 import { errorMessage } from '@/lib/utils/errors';
+
+interface EmailCredentialsButtonProps {
+  studentId: string;
+  password: string;
+  size?: 'sm' | 'md';
+}
+
+/**
+ * Mails one student the login on screen. Locks once it has succeeded: a second
+ * press would send a second copy of the same password with nothing on screen
+ * admitting it happened twice. The import dialog runs its own, per row.
+ */
+export function EmailCredentialsButton({ studentId, password, size = 'md' }: EmailCredentialsButtonProps) {
+  const [sending, setSending] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState('');
+
+  const send = async () => {
+    setSending(true);
+    setError('');
+    try {
+      const result = await sendCredentialsEmail([{ studentId, password }]);
+      // The function answers per recipient, so one that came back in `failed`
+      // must not light up as sent.
+      if (result.sent.includes(studentId)) setDone(true);
+      else setError(result.failed[0]?.reason ?? 'Could not send the email');
+    } catch (err) {
+      setError(errorMessage(err, 'Could not send the email'));
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <>
+      {error && <InlineAlert>{error}</InlineAlert>}
+      <Button
+        className="action-button-compact"
+        variant="secondary"
+        size={size}
+        onClick={send}
+        loading={sending}
+        disabled={done}
+      >
+        {done ? <Check size={15} /> : <Mail size={15} />}
+        {done ? 'Emailed' : 'Email'}
+      </Button>
+    </>
+  );
+}
 
 interface StudentLoginCardProps {
   studentId: string;
@@ -96,15 +146,25 @@ export function StudentLoginCard({
           New password — copy it now. It is not stored and cannot be shown again.
         </p>
       )}
+
+      {/* Keyed on the password so a reset re-arms the button rather than leaving
+          it stuck on "Emailed" beside a password that was never sent. */}
+      {password && (
+        <div className="flex justify-start">
+          <EmailCredentialsButton key={password} size="sm" studentId={studentId} password={password} />
+        </div>
+      )}
     </div>
   );
 }
 
 export function CredentialsModal({
   credentials,
+  studentId,
   onClose,
 }: {
   credentials: StudentCredentials | null;
+  studentId: string | null;
   onClose: () => void;
 }) {
   return (
@@ -112,7 +172,14 @@ export function CredentialsModal({
       open={credentials !== null}
       onClose={onClose}
       title="Portal login ready"
-      footer={<Button className="action-button-compact" onClick={onClose}>Done</Button>}
+      footer={
+        <>
+          {credentials && studentId && (
+            <EmailCredentialsButton studentId={studentId} password={credentials.password} />
+          )}
+          <Button className="action-button-compact" onClick={onClose}>Done</Button>
+        </>
+      }
     >
       {credentials && (
         <div className="flex flex-col gap-3">
