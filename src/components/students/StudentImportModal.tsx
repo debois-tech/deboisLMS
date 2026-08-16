@@ -5,8 +5,15 @@ import { Modal } from '@/components/ui/Modal';
 import { FormField } from '@/components/ui/FormField';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { SearchSelect } from '@/components/ui/SearchSelect';
-import { findProgramMismatches, getImportFee, parseStudentCsv } from '@/lib/utils/studentImport';
+import {
+  feeFromDiscount,
+  findDiscountProblems,
+  findProgramMismatches,
+  getImportDiscount,
+  parseStudentCsv,
+} from '@/lib/utils/studentImport';
 import { errorMessage } from '@/lib/utils/errors';
+import { formatCurrency } from '@/lib/utils/format';
 import type { BatchProgram, BatchProgramOption } from '@/lib/types';
 
 interface StudentImportModalProps {
@@ -16,10 +23,16 @@ interface StudentImportModalProps {
   programs?: BatchProgramOption[];
   /** Pass the batch's own programme instead, from a batch page. Rows are checked against it. */
   batchProgram?: BatchProgram;
+  /**
+   * The target batch's full fee, which every row's Discount % comes off. Returns
+   * `problem` instead when there is none to apply — no batch resolved, or a batch
+   * with no base fee set. The import blocks on that sentence rather than running
+   * every row at zero, so the caller owns the wording of its own failure.
+   */
+  baseFee: (program: BatchProgram | undefined) => { fee: number } | { problem: string };
   /** Throw to show a message; the modal owns the busy state. */
   onImport: (
     rows: Record<string, string>[],
-    fallbackFee: number | undefined,
     createLogins: boolean,
     program: BatchProgram | undefined,
   ) => Promise<void>;
@@ -28,10 +41,9 @@ interface StudentImportModalProps {
 const PREVIEW_ROWS = 5;
 
 /** The one CSV import dialog, shared by the students list and a batch's students tab. */
-export function StudentImportModal({ open, onClose, programs, batchProgram, onImport }: StudentImportModalProps) {
+export function StudentImportModal({ open, onClose, programs, batchProgram, baseFee, onImport }: StudentImportModalProps) {
   const [rows, setRows] = useState<Record<string, string>[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
-  const [fee, setFee] = useState('');
   const [program, setProgram] = useState<BatchProgram | null>(batchProgram ?? null);
   const [createLogins, setCreateLogins] = useState(true);
   const [error, setError] = useState('');
@@ -41,25 +53,39 @@ export function StudentImportModal({ open, onClose, programs, batchProgram, onIm
   // The batch page already knows its programme; the students page asks for one.
   const target = batchProgram ?? program;
   const needsProgram = Boolean(programs) && !batchProgram;
+  const resolved = target ? baseFee(target) : null;
+  const base = resolved && 'fee' in resolved ? resolved.fee : null;
+  const blocker = resolved && 'problem' in resolved ? resolved.problem : '';
 
-  // The sheet carries a fee per student now. The field below only covers rows
-  // that left it blank, so a complete sheet never has to answer it.
-  const missingFee = useMemo(() => rows.filter((row) => getImportFee(row) === undefined).length, [rows]);
   const mismatches = useMemo(
     () => (target ? findProgramMismatches(rows, target) : []),
     [rows, target],
   );
+  const discountProblems = useMemo(() => findDiscountProblems(rows), [rows]);
+
+  // What the sheet actually does to the money, before anyone commits to it.
+  const outcome = useMemo(() => {
+    if (base === null) return null;
+    const fees = rows.map((row) => feeFromDiscount(base, getImportDiscount(row)));
+    return {
+      discounted: fees.filter((fee) => fee < base).length,
+      free: fees.filter((fee) => fee === 0).length,
+      // No Discount column, or every cell blank. Legitimate, but a silent
+      // full-price import is not something to find out about afterwards.
+      noDiscounts: rows.every((row) => getImportDiscount(row) === undefined),
+    };
+  }, [rows, base]);
 
   const incomplete =
     !rows.length ||
     (needsProgram && !program) ||
-    (missingFee > 0 && (!fee || Number(fee) < 0)) ||
+    base === null ||
+    discountProblems.length > 0 ||
     mismatches.length > 0;
 
   const reset = () => {
     setRows([]);
     setHeaders([]);
-    setFee('');
     setProgram(batchProgram ?? null);
     setCreateLogins(true);
     setError('');
@@ -91,14 +117,14 @@ export function StudentImportModal({ open, onClose, programs, batchProgram, onIm
       setError('Choose the programme these students join.');
       return;
     }
-    if (missingFee > 0 && !fee) {
-      setError(`${missingFee} rows have no fee. Enter one to cover them.`);
+    if (base === null) {
+      setError(blocker || 'There is no base fee to take these discounts off.');
       return;
     }
     setImporting(true);
     setError('');
     try {
-      await onImport(rows, fee ? Number(fee) : undefined, createLogins, target ?? undefined);
+      await onImport(rows, createLogins, target ?? undefined);
       reset();
       onClose();
     } catch (err) {
@@ -116,35 +142,6 @@ export function StudentImportModal({ open, onClose, programs, batchProgram, onIm
           <input ref={fileRef} type="file" accept=".csv,text/csv" onChange={handleFile} className="hidden" />
         </label>
 
-        {headers.length > 0 && rows.length > 0 && (
-          <div className="space-y-2">
-            <p className="text-sm font-semibold text-[var(--text-primary)]">
-              Preview ({rows.length} students)
-            </p>
-            <div className="import-preview">
-              <table>
-                <thead>
-                  <tr>
-                    {headers.map((header) => <th key={header}>{header}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.slice(0, PREVIEW_ROWS).map((row, index) => (
-                    <tr key={index}>
-                      {headers.map((header) => <td key={header}>{row[header] || '—'}</td>)}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {rows.length > PREVIEW_ROWS && (
-              <p className="text-xs text-[var(--text-muted)]">
-                Showing {PREVIEW_ROWS} of {rows.length} rows.
-              </p>
-            )}
-          </div>
-        )}
-
         {needsProgram && programs && (
           <FormField label="Programme" required>
             <SearchSelect
@@ -155,27 +152,70 @@ export function StudentImportModal({ open, onClose, programs, batchProgram, onIm
               searchPlaceholder="Search programmes"
               emptyText="No programmes found"
             />
-            <p className="field-hint">Students join the open batch running this programme.</p>
           </FormField>
         )}
 
-        {/* Only asked when the sheet left it out, so a complete file skips it. */}
-        {missingFee > 0 && (
-          <FormField label={missingFee === rows.length ? 'Fee per student' : 'Fee for rows without one'} required>
-            <input
-              type="number"
-              min="0"
-              value={fee}
-              onChange={(event) => setFee(event.target.value)}
-              placeholder="e.g. 15000"
-              disabled={importing}
-            />
-            <p className="field-hint">
-              {missingFee === rows.length
-                ? 'No Fees column found in this file.'
-                : `${missingFee} of ${rows.length} rows have no fee.`}
+        {headers.length > 0 && rows.length > 0 && (
+          <div className="space-y-2">
+            {/* The whole point of the preview: what each row will be charged, before
+                anyone commits to it. The Fee column is derived, never read. */}
+            <p className="import-summary">
+              {base === null ? (
+                <span>{rows.length} students</span>
+              ) : (
+                <>
+                  <span><strong>{formatCurrency(base)}</strong> base fee</span>
+                  <span>{rows.length} students</span>
+                  {outcome && outcome.discounted > 0 && <span>{outcome.discounted} discounted</span>}
+                  {outcome && outcome.free > 0 && <span>{outcome.free} pay nothing</span>}
+                </>
+              )}
             </p>
-          </FormField>
+            <div className="import-preview">
+              <table>
+                <thead>
+                  <tr>
+                    {headers.map((header) => <th key={header}>{header}</th>)}
+                    <th className="import-preview-derived">Fee</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.slice(0, PREVIEW_ROWS).map((row, index) => (
+                    <tr key={index}>
+                      {headers.map((header) => <td key={header}>{row[header] || '—'}</td>)}
+                      <td className="import-preview-derived">
+                        {base === null ? '—' : formatCurrency(feeFromDiscount(base, getImportDiscount(row)))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {rows.length > PREVIEW_ROWS && (
+              <p className="text-xs text-[var(--text-muted)]">
+                Showing {PREVIEW_ROWS} of {rows.length} rows.
+              </p>
+            )}
+            {base !== null && outcome?.noDiscounts && (
+              <p className="text-xs text-[var(--text-muted)]">
+                No discounts in this file — every student is charged the full {formatCurrency(base)}.
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Every fee comes off the batch's own number, so there is nothing to import
+            into without one. Said as soon as it is known, not swallowed as zeroes. */}
+        {blocker && <InlineAlert>{blocker}</InlineAlert>}
+
+        {discountProblems.length > 0 && (
+          <InlineAlert>
+            {discountProblems.length} {discountProblems.length === 1 ? 'row has' : 'rows have'} a
+            discount that is not a percentage between 0 and 100 —{' '}
+            {discountProblems.slice(0, 3).map((r) => `${r.name} (${r.found})`).join(', ')}
+            {discountProblems.length > 3 ? `, and ${discountProblems.length - 3} more` : ''}. Fix
+            those cells and choose the file again. A blank cell is full price.
+          </InlineAlert>
         )}
 
         {mismatches.length > 0 && (

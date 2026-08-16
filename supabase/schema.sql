@@ -122,6 +122,12 @@ create table if not exists batches (
   -- Filename prefix for this batch's study material, e.g. DBT-TEPC-2026-D.
   -- Material titles are this plus an admin-entered suffix: DBT-TEPC-2026-D01.
   batch_code text,
+  -- The batch's full fee before any discount. Student imports carry a Discount %
+  -- per row and write base_fee * (1 - discount/100) into student_fees.total_fee;
+  -- the discount itself is never stored, only the amount it produced. Nullable
+  -- for batches created before the column existed — the form requires it now and
+  -- the importer refuses a batch without one rather than importing zeroes.
+  base_fee   numeric check (base_fee is null or base_fee >= 0),
   created_at timestamptz default now()
 );
 
@@ -333,13 +339,23 @@ grant execute on function public.record_fee_payment(uuid, numeric, date, payment
 -- Every student pays 1000 on joining a batch. Booked as a payment against the fee,
 -- not subtracted from the total, so the log and the balance agree.
 -- Fires on insert only: re-adding a dropped student reuses its fee row.
+--
+-- Nothing is logged for a student charged nothing — a 100% discount produces a
+-- total_fee of 0, and a registration payment against 0 is not a fact. A fee
+-- under 1000 logs only what was charged, so the log never exceeds the total.
 create or replace function log_registration_fee()
 returns trigger
 language plpgsql
 set search_path = public
 as $$
-declare amount constant numeric := 1000;
+declare amount numeric;
 begin
+  if new.total_fee is null or new.total_fee <= 0 then
+    return new;
+  end if;
+
+  amount := least(1000, new.total_fee);
+
   insert into fee_payment_logs (
     student_fee_id, student_id, batch_id, amount, payment_date, payment_method, notes
   ) values (

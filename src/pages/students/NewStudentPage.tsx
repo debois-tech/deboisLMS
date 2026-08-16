@@ -108,14 +108,14 @@ export default function NewStudentPage() {
       <Card padding="lg">
         <form onSubmit={handleSubmit} className="space-y-4">
           <FormField label="Full Name" required>
-            <input value={form.name} onChange={set('name')} placeholder="e.g. John Doe" required />
+            <input value={form.name} onChange={set('name')} required />
           </FormField>
           <div className="grid grid-cols-2 gap-4">
             <FormField label="Batch" required>
               <BatchSelect batches={batches} value={batchId} onChange={setBatchId} />
             </FormField>
             <FormField label="Total Fee" required>
-              <input type="number" min="0" value={fee} onChange={(e) => setFee(e.target.value)} placeholder="e.g. 15000" required />
+              <input type="number" min="0" value={fee} onChange={(e) => setFee(e.target.value)} required />
             </FormField>
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -140,37 +140,36 @@ export default function NewStudentPage() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <FormField label="WhatsApp Number">
-              <input value={form.phone} onChange={set('phone')} placeholder="+91-9876543210" />
+              <input value={form.phone} onChange={set('phone')} />
             </FormField>
             <FormField label="Email" required>
-              <input type="email" value={form.email} onChange={set('email')} placeholder="student@email.com" required />
+              <input type="email" value={form.email} onChange={set('email')} required />
             </FormField>
           </div>
-          <p className="field-hint">Used for portal login.</p>
           <FormField label="College / University">
-            <input value={form.college} onChange={set('college')} placeholder="e.g. Pune Institute of Technology" />
+            <input value={form.college} onChange={set('college')} />
           </FormField>
           <div className="grid grid-cols-2 gap-4">
             <FormField label="Course / Degree">
-              <input value={form.course} onChange={set('course')} placeholder="e.g. B.Tech" />
+              <input value={form.course} onChange={set('course')} />
             </FormField>
             <FormField label="Branch / Specialization">
-              <input value={form.branch} onChange={set('branch')} placeholder="e.g. Computer Science" />
+              <input value={form.branch} onChange={set('branch')} />
             </FormField>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <FormField label="Current Year">
-              <input value={form.current_year} onChange={set('current_year')} placeholder="e.g. 3rd" />
+              <input value={form.current_year} onChange={set('current_year')} />
             </FormField>
             <FormField label="Graduation Year">
-              <input type="number" min="1900" max="2200" value={form.graduation_year} onChange={set('graduation_year')} placeholder="e.g. 2027" />
+              <input type="number" min="1900" max="2200" value={form.graduation_year} onChange={set('graduation_year')} />
             </FormField>
           </div>
           <FormField label="GitHub URL">
-            <input value={form.github_url} onChange={set('github_url')} placeholder="https://github.com/username" />
+            <input value={form.github_url} onChange={set('github_url')} />
           </FormField>
           <FormField label="LinkedIn URL">
-            <input value={form.linkedin_url} onChange={set('linkedin_url')} placeholder="https://linkedin.com/in/username" />
+            <input value={form.linkedin_url} onChange={set('linkedin_url')} />
           </FormField>
           <div className="flex gap-3 pt-2">
             <Button className="action-button" type="submit" loading={loading}>Add Student</Button>

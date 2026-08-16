@@ -2,7 +2,7 @@ import { supabase } from '../client';
 import { maybeRow, ok, row, rows } from './result';
 import type { Batch, Student, BatchStudentMapping, StudentCredentials } from '@/lib/types';
 import { errorMessage } from '@/lib/utils/errors';
-import { getImportFee, toStudentInput } from '@/lib/utils/studentImport';
+import { feeFromDiscount, getImportDiscount, toStudentInput } from '@/lib/utils/studentImport';
 
 export async function getStudents(): Promise<Student[]> {
   return rows<Student>(
@@ -73,16 +73,20 @@ export async function createOrReuseStudent(input: Omit<Student, 'id' | 'created_
   return createStudent(input);
 }
 
-/** The one CSV import path, so both import screens write the same fields. */
+/**
+ * The one CSV import path, so both import screens write the same fields.
+ * The sheet carries a Discount % and never an amount — `baseFee` is the batch's
+ * own fee, and each student is charged that less their discount.
+ */
 export async function importStudentsIntoBatch(
   rows: Record<string, string>[],
   batchId: string,
-  fallbackFee?: number,
+  baseFee: number,
 ): Promise<Student[]> {
   return Promise.all(
     rows.map(async (row) => {
       const student = await createOrReuseStudent(toStudentInput(row));
-      const fee = getImportFee(row) ?? fallbackFee ?? 0;
+      const fee = feeFromDiscount(baseFee, getImportDiscount(row));
       await addStudentToBatch(student.id, batchId, fee).catch(() => undefined);
       return student;
     }),

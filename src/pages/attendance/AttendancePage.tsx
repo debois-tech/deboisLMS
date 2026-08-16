@@ -374,7 +374,7 @@ export default function AttendancePage() {
             />
           </FormField>
           <FormField label="Meeting Code">
-            <input value={newLectureMeeting} onChange={(e) => setNewLectureMeeting(e.target.value)} placeholder="e.g. meet-xyz" />
+            <input value={newLectureMeeting} onChange={(e) => setNewLectureMeeting(e.target.value)} />
           </FormField>
         </div>
       </Modal>

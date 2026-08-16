@@ -16,6 +16,7 @@ import { getStudents, getBatches, getAllBatchStudentMappings, createStudentLogin
 import type { BulkLoginResult } from '@/lib/supabase';
 import type { Student, Batch, BatchStudentMapping, BatchProgram, BatchProgramOption } from '@/lib/types';
 import { useToast } from '@/lib/context/ToastContext';
+import { errorMessage } from '@/lib/utils/errors';
 
 const NO_BATCH = 'none';
 
@@ -91,17 +92,35 @@ export default function StudentsPage() {
     setSelectedBatchId(batchId);
   };
 
+  /** What a programme's open batch charges, or why the import cannot go ahead. */
+  const importBaseFee = (program: BatchProgram | undefined) => {
+    if (!program) return { problem: 'Choose the programme these students join.' };
+    const programName = programs.find((p) => p.code === program)?.name ?? program;
+    try {
+      const batch = resolveProgramBatch(batches, program, programName);
+      return batch.base_fee == null
+        ? { problem: `${batch.name} has no base fee. Set one on the batch, then import.` }
+        : { fee: batch.base_fee };
+    } catch (error) {
+      return { problem: errorMessage(error, 'There is no batch to import these students into.') };
+    }
+  };
+
   const handleImport = async (
     rows: Record<string, string>[],
-    fallbackFee: number | undefined,
     createLogins: boolean,
     program: BatchProgram | undefined,
   ) => {
     if (!program) throw new Error('Choose the programme these students join.');
 
     const programName = programs.find((p) => p.code === program)?.name ?? program;
+    // Not targetBatch(): this one must say *why* there is no single batch.
     const batch = resolveProgramBatch(batches, program, programName);
-    const imported = await importStudentsIntoBatch(rows, batch.id, fallbackFee);
+    if (batch.base_fee == null) {
+      throw new Error(`${batch.name} has no base fee. Set one on the batch, then import.`);
+    }
+
+    const imported = await importStudentsIntoBatch(rows, batch.id, batch.base_fee);
 
     const [studentData, mappingData] = await Promise.all([getStudents(), getAllBatchStudentMappings()]);
     setStudents(studentData);
@@ -201,6 +220,7 @@ export default function StudentsPage() {
         open={showImport}
         onClose={() => setShowImport(false)}
         programs={programs}
+        baseFee={importBaseFee}
         onImport={handleImport}
       />
 

@@ -79,14 +79,14 @@ export default function EditStudentPage() {
       <Card padding="lg">
         <form onSubmit={handleSubmit} className="space-y-4">
           <FormField label="Full Name" required>
-            <input value={form.name} onChange={set('name')} placeholder="e.g. John Doe" required />
+            <input value={form.name} onChange={set('name')} required />
           </FormField>
           <div className="grid grid-cols-2 gap-4">
             <FormField label="WhatsApp Number">
-              <input value={form.phone} onChange={set('phone')} placeholder="+91-9876543210" />
+              <input value={form.phone} onChange={set('phone')} />
             </FormField>
             <FormField label="Email" required>
-              <input type="email" value={form.email} onChange={set('email')} placeholder="student@email.com" required />
+              <input type="email" value={form.email} onChange={set('email')} required />
             </FormField>
           </div>
           <p className="field-hint">
@@ -114,9 +114,6 @@ export default function EditStudentPage() {
           <p className="flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
             <Lock size={14} className="shrink-0 text-[var(--text-muted)]" />
             Fixed on this record
-          </p>
-          <p className="field-hint">
-            Issued by the database or taken from the intake sheet. Re-import the student to change them.
           </p>
           <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
             {locked.map((fact) => (

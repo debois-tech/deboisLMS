@@ -96,7 +96,7 @@ export default function BatchDetailPage() {
         {(active) => (
           <>
             {active === 'overview' && <OverviewTab batch={batch} programLabel={programLabel} />}
-            {active === 'students' && <StudentsTab batchId={batch.id} program={batch.program} />}
+            {active === 'students' && <StudentsTab batchId={batch.id} program={batch.program} baseFee={batch.base_fee ?? null} />}
             {active === 'tutors' && <TutorsTab batchId={batch.id} />}
             {active === 'lectures' && <LecturesTab batchId={batch.id} />}
             {active === 'attendance' && <AttendanceTab batchId={batch.id} />}
@@ -125,7 +125,7 @@ function OverviewTab({ batch, programLabel }: { batch: Batch; programLabel?: str
   if (error) return <ErrorState message={error} onRetry={reload} />;
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
       <Card padding="sm">
         <p className="text-xs text-[var(--text-muted)]">Total Students</p>
         <p className="text-lg font-bold text-[var(--text-primary)] mt-1">{students.filter((s) => s.mapping.status === 'active').length}</p>
@@ -138,16 +138,24 @@ function OverviewTab({ batch, programLabel }: { batch: Batch; programLabel?: str
         <p className="text-xs text-[var(--text-muted)]">Programme</p>
         <p className="text-lg font-bold text-[var(--text-primary)] mt-1 truncate">{programLabel ?? 'Not set'}</p>
       </Card>
+      <Card padding="sm">
+        <p className="text-xs text-[var(--text-muted)]">Base Fee</p>
+        <p className="text-lg font-bold text-[var(--text-primary)] mt-1">
+          {batch.base_fee == null ? 'Not set' : formatCurrency(batch.base_fee)}
+        </p>
+      </Card>
     </div>
   );
 }
 
-function StudentsTab({ batchId, program }: { batchId: string; program?: BatchProgram }) {
+function StudentsTab({ batchId, program, baseFee }: { batchId: string; program?: BatchProgram; baseFee: number | null }) {
   const [students, setStudents] = useState<(Student & { mapping: BatchStudentMapping })[]>([]);
   const [allStudents, setAllStudents] = useState<Student[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
-  const [totalFee, setTotalFee] = useState('');
+  // Prefilled from the batch: adding one student by hand charges the same as the rest.
+  const feeDefault = baseFee == null ? '' : String(baseFee);
+  const [totalFee, setTotalFee] = useState(feeDefault);
   const [showImport, setShowImport] = useState(false);
   const [bulkLogins, setBulkLogins] = useState<BulkLoginResult | null>(null);
   const { showToast } = useToast();
@@ -166,7 +174,7 @@ function StudentsTab({ batchId, program }: { batchId: string; program?: BatchPro
     try {
       await Promise.all(selectedStudents.map((studentId) => addStudentToBatch(studentId, batchId, Number(totalFee))));
       setSelectedStudents([]);
-      setTotalFee('');
+      setTotalFee(feeDefault);
       setShowAdd(false);
       void reloadStudents();
       showToast('Students added');
@@ -203,12 +211,10 @@ function StudentsTab({ batchId, program }: { batchId: string; program?: BatchPro
 
   // Same routine as the students page, so a sheet imported from either place
   // lands identically. The batch is this one; the CSV's own column only validates.
-  const handleImport = async (
-    rows: Record<string, string>[],
-    fallbackFee: number | undefined,
-    createLogins: boolean,
-  ) => {
-    const imported = await importStudentsIntoBatch(rows, batchId, fallbackFee);
+  const handleImport = async (rows: Record<string, string>[], createLogins: boolean) => {
+    if (baseFee == null) throw new Error('This batch has no base fee. Set one on the batch, then import.');
+
+    const imported = await importStudentsIntoBatch(rows, batchId, baseFee);
     void reloadStudents();
 
     if (!createLogins) {
@@ -268,7 +274,7 @@ function StudentsTab({ batchId, program }: { batchId: string; program?: BatchPro
             <StudentMultiSelect students={available} value={selectedStudents} onChange={setSelectedStudents} />
           </FormField>
           <FormField label="Total Fee per Student">
-            <input type="number" min="1" value={totalFee} onChange={(event) => setTotalFee(event.target.value)} placeholder="e.g. 15000" required />
+            <input type="number" min="1" value={totalFee} onChange={(event) => setTotalFee(event.target.value)} required />
           </FormField>
           <Button className="action-button-compact" onClick={handleAdd} disabled={!selectedStudents.length || !totalFee || Number(totalFee) <= 0}>Add Selected</Button>
         </div>
@@ -278,6 +284,9 @@ function StudentsTab({ batchId, program }: { batchId: string; program?: BatchPro
         open={showImport}
         onClose={() => setShowImport(false)}
         batchProgram={program}
+        baseFee={() => (baseFee == null
+          ? { problem: 'This batch has no base fee, so the discounts have nothing to come off. Set one on the batch, then import.' }
+          : { fee: baseFee })}
         onImport={handleImport}
       />
 
@@ -476,7 +485,7 @@ function LecturesTab({ batchId }: { batchId: string }) {
             />
           </FormField>
           <FormField label="Meeting Code">
-            <input value={form.meeting_code} onChange={(e) => setForm({ ...form, meeting_code: e.target.value })} placeholder="e.g. meet-xyz" />
+            <input value={form.meeting_code} onChange={(e) => setForm({ ...form, meeting_code: e.target.value })} />
           </FormField>
           <FormField label="Duration (minutes)">
             <input type="number" value={form.scheduled_duration_minutes} onChange={(e) => setForm({ ...form, scheduled_duration_minutes: Number(e.target.value) })} />

@@ -1,5 +1,5 @@
 import { Suspense, lazy } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import DashboardLayout from '@/layouts/DashboardLayout';
 import PortalLayout from '@/layouts/PortalLayout';
 import ProtectedRoute from '@/components/layout/ProtectedRoute';
@@ -30,7 +30,7 @@ const PortalOverviewPage = lazy(() => import('@/pages/portal/PortalOverviewPage'
 const PortalAttendancePage = lazy(() => import('@/pages/portal/PortalAttendancePage'));
 const PortalAssignmentsPage = lazy(() => import('@/pages/portal/PortalAssignmentsPage'));
 const PortalMaterialsPage = lazy(() => import('@/pages/portal/PortalMaterialsPage'));
-const PortalFeesPage = lazy(() => import('@/pages/portal/PortalFeesPage'));
+const PortalProfilePage = lazy(() => import('@/pages/portal/PortalProfilePage'));
 
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
 
@@ -79,7 +79,9 @@ export default function App() {
               <Route path="attendance" element={<PortalAttendancePage />} />
               <Route path="assignments" element={<PortalAssignmentsPage />} />
               <Route path="materials" element={<PortalMaterialsPage />} />
-              <Route path="fees" element={<PortalFeesPage />} />
+              <Route path="profile" element={<PortalProfilePage />} />
+              {/* Fees moved inside the profile. Kept so a bookmark still lands somewhere. */}
+              <Route path="fees" element={<Navigate to="/portal/profile" replace />} />
               <Route path="*" element={<NotFoundPage />} />
             </Route>
           </Route>

@@ -55,3 +55,33 @@ export function PortalStat({ label, icon: Icon, value, note, progress, tone = 'd
 export function PortalStatGrid({ children }: { children: ReactNode }) {
   return <div className="portal-stat-grid">{children}</div>;
 }
+
+interface PortalAmountProps {
+  /** Already formatted — the widget sets the type, never the currency. */
+  value: ReactNode;
+  /** What the figure covers, in as few words as possible. */
+  note?: ReactNode;
+  tone?: 'default' | 'positive' | 'attention';
+}
+
+/**
+ * One sum of money given the weight of the answer it is. For the head of a
+ * `PortalList`, where a stat tile alone in a grid would look like a tile missing
+ * its neighbours and a section label alone would understate the number.
+ */
+export function PortalAmount({ value, note, tone = 'default' }: PortalAmountProps) {
+  return (
+    <div className="portal-amount">
+      <p
+        className={clsx(
+          'portal-amount-value',
+          tone === 'positive' && 'is-positive',
+          tone === 'attention' && 'is-attention',
+        )}
+      >
+        {value}
+      </p>
+      {note && <p className="portal-amount-note">{note}</p>}
+    </div>
+  );
+}

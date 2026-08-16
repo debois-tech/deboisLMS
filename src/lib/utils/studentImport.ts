@@ -17,7 +17,10 @@ export const STUDENT_IMPORT_FIELDS = [
   { key: 'linkedin_url', aliases: ['linkedin', 'linkedin link', 'linkedin url', 'linkedinlink', 'linkedin profile', 'linkedin profile url'] },
 ] as const;
 
-const FEE_ALIASES = ['fees', 'fee', 'total fee', 'amount', 'fee amount'];
+const DISCOUNT_ALIASES = [
+  'discount', 'discount %', 'discount percent', 'discount percentage',
+  'disc', 'disc %', 'concession', 'waiver', 'scholarship',
+];
 const BATCH_ALIASES = ['batch', 'batch code', 'program', 'programme', 'course batch'];
 
 /** The gender values the form offers. Free text in the DB, so an import may carry others. */
@@ -35,13 +38,35 @@ export function getImportValue(row: Record<string, string>, aliases: readonly st
   return entry?.[1]?.trim() || undefined;
 }
 
-/** The row's fee, or undefined when the column is absent or not a number. */
-export function getImportFee(row: Record<string, string>): number | undefined {
-  const raw = getImportValue(row, FEE_ALIASES);
+/** The row's discount as a percentage. Undefined when the cell is blank or unreadable. */
+export function getImportDiscount(row: Record<string, string>): number | undefined {
+  const raw = getImportValue(row, DISCOUNT_ALIASES);
   if (!raw) return undefined;
-  // Sheets export "₹15,000" and "15000.00" alike.
-  const amount = Number(raw.replace(/[^0-9.]/g, ''));
-  return Number.isFinite(amount) && amount > 0 ? amount : undefined;
+  // Sheets export "50%", "50", and "12.5" alike.
+  const percent = Number(raw.replace(/[^0-9.]/g, ''));
+  return Number.isFinite(percent) ? percent : undefined;
+}
+
+/** The batch fee less this row's discount. A blank Discount cell is full price. */
+export function feeFromDiscount(baseFee: number, discount: number | undefined): number {
+  const percent = Math.min(Math.max(discount ?? 0, 0), 100);
+  return Math.round(baseFee * (1 - percent / 100));
+}
+
+/** Rows whose Discount cell is filled but isn't a percentage — returned, not thrown. */
+export function findDiscountProblems(
+  rows: Record<string, string>[],
+): { name: string; found: string }[] {
+  return rows.flatMap((row) => {
+    const raw = getImportValue(row, DISCOUNT_ALIASES);
+    if (!raw) return [];
+    const percent = getImportDiscount(row);
+    if (percent !== undefined && percent >= 0 && percent <= 100) return [];
+    return [{
+      name: getImportValue(row, ['name', 'full name', 'student name']) ?? 'Unnamed row',
+      found: raw,
+    }];
+  });
 }
 
 /** The row's programme abbreviation, normalised. Valid codes live in `batch_programs`. */
