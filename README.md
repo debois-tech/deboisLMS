@@ -26,18 +26,12 @@ npm run dev
 
 ### Database
 
-Run these in the Supabase SQL editor, in order. All are idempotent.
+`supabase/schema.sql` is the whole database — tables, enums, views, functions, storage buckets
+and row-level security. Paste it into the Supabase SQL editor and run it. It is idempotent, so
+running it again on a live project is safe and changes nothing.
 
-| File | What it does |
-|---|---|
-| `supabase/schema.sql` | Tables, enums and views — the source of truth for data shape |
-| `supabase/core_migration.sql` | Links students to auth users, defines the `is_admin()` / `current_student_id()` helpers, enables RLS everywhere |
-| `supabase/fees_migration.sql` | Fee status, payment methods, and `record_fee_payment()` — payment log and running balance in one transaction |
-| `supabase/study_material_migration.sql` | Study material table, private storage bucket, batch codes, tutor attribution, RLS |
-| `supabase/assignments_migration.sql` | Per-student GitHub repo, deadlines (`assignments.due_at`), and the policies that stop a student submitting after one |
-
-Edit the admin email in `core_migration.sql` before running it — that block is what tags
-your account as an admin.
+Before running it on a new project, edit the admin email in section 9 — that `update auth.users`
+block is what tags your account as an admin, and the account must already exist in Supabase Auth.
 
 ### Edge functions
 
@@ -95,7 +89,6 @@ by recomputing it from the same rule.
 
 ## Docs
 
-- `completed md/deboistech erp prd.md` — product scope and DB schema, the source of truth
-- `completed md/plan_steps.md` — the LMS → ERP migration plan this repo followed
-- `THEME.md` — design tokens and the visual system
-- `src/components/portal/README.md` — the portal widget kit and its rules
+- `supabase/schema.sql` — the data model, commented where a choice is not obvious
+- `src/globals.css` — design tokens and every shared component class
+- `src/components/portal/README.md` — the portal widget kit and the rules that keep it consistent

@@ -17,8 +17,21 @@ import type { BulkLoginResult } from '@/lib/supabase';
 import type { Student, Batch, BatchStudentMapping, BatchProgram, BatchProgramOption } from '@/lib/types';
 import { useToast } from '@/lib/context/ToastContext';
 
-/** Sentinel for the filter: students in no active batch, who see nothing in the portal. */
 const NO_BATCH = 'none';
+
+type SortKey = 'newest' | 'az' | 'za';
+
+//newest first is what the query already returns 
+const DEFAULT_SORT: SortKey = 'newest';
+
+const SORT_OPTIONS = [
+  { value: 'newest', label: 'Newest first' },
+  { value: 'az', label: 'Name (A–Z)' },
+  { value: 'za', label: 'Name (Z–A)' },
+];
+
+// Ref IDs get typed with any or none of their dashes — match on the bare characters
+const refKey = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
 
 export default function StudentsPage() {
   const [students, setStudents] = useState<Student[]>([]);
@@ -27,6 +40,7 @@ export default function StudentsPage() {
   const [programs, setPrograms] = useState<BatchProgramOption[]>([]);
   const [search, setSearch] = useState('');
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
+  const [sort, setSort] = useState<SortKey>(DEFAULT_SORT);
   const [showImport, setShowImport] = useState(false);
   const [bulkLogins, setBulkLogins] = useState<BulkLoginResult | null>(null);
   const { showToast } = useToast();
@@ -54,6 +68,7 @@ export default function StudentsPage() {
   }
 
   const query = search.trim().toLowerCase();
+  const queryRef = refKey(query);
   const filteredStudents = students.filter((s) => {
     const batchIds = studentBatchIds.get(s.id) ?? [];
     if (selectedBatchId === NO_BATCH && batchIds.length > 0) return false;
@@ -61,11 +76,16 @@ export default function StudentsPage() {
     if (!query) return true;
     return (
       s.name.toLowerCase().includes(query) ||
-      (s.student_code ?? '').toLowerCase().includes(query) ||
+      (queryRef !== '' && refKey(s.student_code ?? '').includes(queryRef)) ||
       (s.phone ?? '').toLowerCase().includes(query) ||
       (s.email ?? '').toLowerCase().includes(query)
     );
   });
+
+  if (sort !== 'newest') {
+    const direction = sort === 'az' ? 1 : -1;
+    filteredStudents.sort((a, b) => direction * a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+  }
 
   const selectBatch = (batchId: string | null) => {
     setSelectedBatchId(batchId);
@@ -128,8 +148,8 @@ export default function StudentsPage() {
             <SearchFilterBar
               value={search}
               onChange={setSearch}
-              placeholder="Search by ID, name, phone, or email"
-              filterLabel="Filter by batch"
+              placeholder="Search by ref ID, name, phone, or email"
+              filterLabel="Batch"
               allLabel="All batches"
               filterValue={selectedBatchId}
               filterOptions={[
@@ -137,6 +157,11 @@ export default function StudentsPage() {
                 { value: NO_BATCH, label: 'No batch' },
               ]}
               onFilterChange={selectBatch}
+              sortLabel="Sort"
+              sortValue={sort}
+              sortOptions={SORT_OPTIONS}
+              onSortChange={(value) => setSort(value as SortKey)}
+              defaultSortValue={DEFAULT_SORT}
             />
           </div>
 

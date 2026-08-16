@@ -1,21 +1,10 @@
--- =============================================================================
--- DeboisTech ERP — Baseline Schema
--- =============================================================================
--- Everything shipped up to 11 Aug 2026, consolidated into one file. It replaces
--- core_migration.sql, fees_migration.sql, assignments_migration.sql,
--- study_material_migration.sql and migration_2026_08_11.sql, which are gone.
---
--- Run this first on a fresh project, then migration_2026_08_12.sql.
--- Assumes an admin user already exists in Supabase Auth.
---
--- Re-runnable: every statement is guarded, and nothing here rewrites data that
--- has already been issued.
--- =============================================================================
+-- DeboisTech ERP — schema
+-- The whole database in one file: run it on a fresh project and nothing else.
+-- Assumes an admin user already exists in Supabase Auth — edit the email in §9.
+-- Re-runnable: every statement is guarded and nothing rewrites issued data.
 
 
--- =============================================================================
 -- 1. TYPES
--- =============================================================================
 do $$ begin create type batch_status       as enum ('upcoming', 'ongoing', 'completed');      exception when duplicate_object then null; end $$;
 do $$ begin create type session_type       as enum ('online', 'offline');                     exception when duplicate_object then null; end $$;
 do $$ begin create type attendance_status  as enum ('present', 'partial', 'absent');          exception when duplicate_object then null; end $$;
@@ -31,9 +20,7 @@ do $$ begin create type submission_channel as enum ('github', 'portal');        
 -- Programmes are NOT an enum — see the batch_programs table below for why.
 
 
--- =============================================================================
 -- 2. STUDENT CODES
--- =============================================================================
 -- One permanent ID per student, independent of every batch. Postgres issues it,
 -- not the app: students are created from a form, from two CSV importers that
 -- insert every row at once, and by hand in SQL. Anything app-side that reads the
@@ -91,9 +78,7 @@ create or replace function next_student_code() returns text
   as $$ select student_code_prefix() || lpad(nextval('student_code_seq')::text, 3, '0') $$;
 
 
--- =============================================================================
 -- 3. CORE TABLES
--- =============================================================================
 create table if not exists tutors (
   id         uuid primary key default gen_random_uuid(),
   name       text not null,
@@ -195,9 +180,7 @@ create index if not exists idx_tbm_tutor on tutor_batch_mapping(tutor_id);
 create index if not exists idx_tbm_batch on tutor_batch_mapping(batch_id);
 
 
--- =============================================================================
 -- 4. ATTENDANCE
--- =============================================================================
 create table if not exists lectures (
   id                         uuid primary key default gen_random_uuid(),
   batch_id                   uuid references batches(id) on delete cascade not null,
@@ -258,9 +241,7 @@ create index if not exists idx_attendance_lecture on attendance(lecture_id);
 create index if not exists idx_attendance_student on attendance(student_id);
 
 
--- =============================================================================
 -- 5. FEES
--- =============================================================================
 create table if not exists student_fees (
   id          uuid primary key default gen_random_uuid(),
   student_id  uuid references students(id) on delete cascade not null,
@@ -379,9 +360,7 @@ create trigger student_fees_registration_fee
   for each row execute function log_registration_fee();
 
 
--- =============================================================================
 -- 6. ASSIGNMENTS
--- =============================================================================
 -- assigned_date is when the work was handed out; due_at is the deadline.
 create table if not exists assignments (
   id            uuid primary key default gen_random_uuid(),
@@ -481,9 +460,7 @@ create trigger student_repos_touch_updated_at
   for each row execute function touch_updated_at();
 
 
--- =============================================================================
 -- 7. STUDY MATERIAL
--- =============================================================================
 -- The file itself lives in the private `materials` bucket; only the edge
 -- function (service role) can reach it, and it stamps every page before
 -- returning it.
@@ -553,9 +530,7 @@ on conflict (id) do update
       allowed_mime_types = excluded.allowed_mime_types;
 
 
--- =============================================================================
 -- 8. VIEWS
--- =============================================================================
 create or replace view batch_fee_summary as
 select
   b.id as batch_id,
@@ -611,9 +586,7 @@ comment on view student_fee_dues is
   'never leave the database for a student. Admin reads student_fees directly.';
 
 
--- =============================================================================
 -- 9. AUTH HELPERS
--- =============================================================================
 -- Policies trust app_metadata.role, which only the service role can write.
 -- EDIT the email before running on a new project.
 update auth.users
@@ -639,9 +612,7 @@ as $$
 $$;
 
 
--- =============================================================================
 -- 10. ROW LEVEL SECURITY
--- =============================================================================
 alter table tutors                 enable row level security;
 alter table batches                enable row level security;
 alter table students               enable row level security;

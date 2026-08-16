@@ -179,13 +179,6 @@ export default function PortalOverviewPage() {
               icon={Wallet}
               value={fees.length === 0 ? 'Not set' : outstanding > 0 ? formatCurrency(outstanding) : 'Nothing'}
               tone={fees.length === 0 ? 'default' : outstanding > 0 ? 'attention' : 'positive'}
-              note={
-                fees.length === 0
-                  ? 'Not set yet'
-                  : outstanding > 0
-                    ? 'Pay your coordinator'
-                    : 'Fully paid up'
-              }
             />
           </PortalStatGrid>
 

@@ -59,7 +59,6 @@ export default function PortalFeesPage() {
             <PortalFocus
               icon={Wallet}
               title={`${formatCurrency(outstanding)} to pay`}
-              detail="Pay your coordinator. Payments show here once they are recorded."
             />
           ) : (
             <PortalFocus icon={PartyPopper} title="Nothing to pay" detail="You are fully paid up." />
