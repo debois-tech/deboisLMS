@@ -114,7 +114,7 @@ export function credentialsEmail(
   <!-- Header / Logo -->
   <tr>
     <td align="center" class="mobile-padding" style="padding:32px 10px 10px 10px;">
-      <img src="https://ik.imagekit.io/deboistech26/Assets/Assets/Header.png" alt="deboistech" width="450" class="fluid-img" style="display:block; width:100%; max-width:450px; height:auto;">
+      <img src="https://res.cloudinary.com/uxbtmcpx/image/upload/v1786885876/deboistech_email_id.png" alt="deboistech" width="450" class="fluid-img" style="display:block; width:100%; max-width:450px; height:auto;">
     </td>
   </tr>
 
