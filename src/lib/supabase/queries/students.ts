@@ -258,6 +258,23 @@ export async function addStudentToBatch(studentId: string, batchId: string, tota
   return mapping;
 }
 
+export interface TerminationResult {
+  instalments_due: number;
+  settlement: number;
+  login_revoked: boolean;
+}
+
+/** Cuts the fee to what was owed, logs the settlement and deletes the login. One transaction. */
+export async function terminateEnrolment(mappingId: string, leftOn?: string): Promise<TerminationResult> {
+  return row<TerminationResult>(
+    await supabase.rpc('terminate_enrolment', {
+      p_mapping_id: mappingId,
+      ...(leftOn ? { p_left_on: leftOn } : {}),
+    }),
+    'Could not terminate this student',
+  );
+}
+
 export async function removeStudentFromBatch(mappingId: string): Promise<void> {
   ok(
     await supabase.from('batch_student_mapping').delete().eq('id', mappingId),

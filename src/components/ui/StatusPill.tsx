@@ -1,5 +1,5 @@
 import { Badge } from '@/components/ui/Badge';
-import type { AttendanceStatus, BatchStatus, FeeStatus, MappingStatus } from '@/lib/types';
+import type { AttendanceStatus, BatchStatus, FeeStatus, FeedbackStatus, MappingStatus } from '@/lib/types';
 
 type Tone = 'default' | 'success' | 'warning' | 'danger' | 'info';
 
@@ -12,7 +12,8 @@ const batch: Record<BatchStatus, [string, Tone]> = {
 
 const enrollment: Record<MappingStatus, [string, Tone]> = {
   active: ['Active', 'success'],
-  dropped: ['Dropped', 'danger'],
+  dropped: ['Dropped', 'default'],
+  terminated: ['Terminated', 'danger'],
 };
 
 const fee: Record<FeeStatus, [string, Tone]> = {
@@ -30,9 +31,15 @@ type StatusProps =
   | { kind: 'batch'; value: BatchStatus }
   | { kind: 'enrollment'; value: MappingStatus }
   | { kind: 'fee'; value: FeeStatus }
-  | { kind: 'attendance'; value: AttendanceStatus };
+  | { kind: 'attendance'; value: AttendanceStatus }
+  | { kind: 'feedback'; value: FeedbackStatus };
 
-const maps = { batch, enrollment, fee, attendance };
+const feedback: Record<FeedbackStatus, [string, Tone]> = {
+  open: ['Open', 'warning'],
+  resolved: ['Resolved', 'success'],
+};
+
+const maps = { batch, enrollment, fee, attendance, feedback };
 
 export function StatusPill(props: StatusProps) {
   const [label, tone] = (maps[props.kind] as Record<string, [string, Tone]>)[props.value];

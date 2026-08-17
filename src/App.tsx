@@ -22,6 +22,7 @@ const AttendancePage = lazy(() => import('@/pages/attendance/AttendancePage'));
 const FeesPage = lazy(() => import('@/pages/fees/FeesPage'));
 const AssignmentsPage = lazy(() => import('@/pages/assignments/AssignmentsPage'));
 const MaterialsPage = lazy(() => import('@/pages/materials/MaterialsPage'));
+const FeedbackPage = lazy(() => import('@/pages/feedback/FeedbackPage'));
 const LoginPage = lazy(() => import('@/pages/auth/LoginPage'));
 const LoginChoicePage = lazy(() => import('@/pages/auth/LoginChoicePage'));
 const UserLoginPage = lazy(() => import('@/pages/auth/UserLoginPage'));
@@ -30,6 +31,7 @@ const PortalOverviewPage = lazy(() => import('@/pages/portal/PortalOverviewPage'
 const PortalAttendancePage = lazy(() => import('@/pages/portal/PortalAttendancePage'));
 const PortalAssignmentsPage = lazy(() => import('@/pages/portal/PortalAssignmentsPage'));
 const PortalMaterialsPage = lazy(() => import('@/pages/portal/PortalMaterialsPage'));
+const PortalFeedbackPage = lazy(() => import('@/pages/portal/PortalFeedbackPage'));
 const PortalProfilePage = lazy(() => import('@/pages/portal/PortalProfilePage'));
 
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
@@ -69,6 +71,7 @@ export default function App() {
               <Route path="fees" element={<FeesPage />} />
               <Route path="assignments" element={<AssignmentsPage />} />
               <Route path="materials" element={<MaterialsPage />} />
+              <Route path="feedback" element={<FeedbackPage />} />
               <Route path="*" element={<NotFoundPage />} />
             </Route>
           </Route>
@@ -80,6 +83,7 @@ export default function App() {
               <Route path="assignments" element={<PortalAssignmentsPage />} />
               <Route path="materials" element={<PortalMaterialsPage />} />
               <Route path="profile" element={<PortalProfilePage />} />
+              <Route path="feedback" element={<PortalFeedbackPage />} />
               {/* Fees moved inside the profile. Kept so a bookmark still lands somewhere. */}
               <Route path="fees" element={<Navigate to="/portal/profile" replace />} />
               <Route path="*" element={<NotFoundPage />} />

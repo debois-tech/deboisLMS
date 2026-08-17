@@ -25,7 +25,7 @@ export default function FeesPage() {
   const [summary, setSummary] = useState<BatchFeeSummary[]>([]);
   const [loggingFee, setLoggingFee] = useState<StudentFee | null>(null);
   const [paymentLogs, setPaymentLogs] = useState<FeePaymentLog[]>([]);
-  const [logForm, setLogForm] = useState<PaymentLogFormState>({ amount: '', payment_date: new Date().toISOString().slice(0, 10), payment_method: 'other', notes: '' });
+  const [logForm, setLogForm] = useState<PaymentLogFormState>({ amount: '', payment_date: new Date().toISOString().slice(0, 10), payment_method: 'upi', notes: '' });
   const [logging, setLogging] = useState(false);
   const { showToast } = useToast();
 
@@ -51,7 +51,7 @@ export default function FeesPage() {
 
   const openPaymentLogs = async (fee: StudentFee) => {
     setLoggingFee(fee);
-    setLogForm({ amount: '', payment_date: new Date().toISOString().slice(0, 10), payment_method: 'other', notes: '' });
+    setLogForm({ amount: '', payment_date: new Date().toISOString().slice(0, 10), payment_method: 'upi', notes: '' });
     try {
       setPaymentLogs(await getFeePaymentLogs(fee.id));
     } catch (err) {
@@ -75,7 +75,7 @@ export default function FeesPage() {
         setLoggingFee(result.fee);
         setPaymentLogs((prev) => [result.log, ...prev]);
         setFees((prev) => prev.map((f) => (f.id === result.fee.id ? result.fee : f)));
-        setLogForm({ amount: '', payment_date: new Date().toISOString().slice(0, 10), payment_method: 'other', notes: '' });
+        setLogForm({ amount: '', payment_date: new Date().toISOString().slice(0, 10), payment_method: 'upi', notes: '' });
         getBatchFeeSummary().then(setSummary);
         showToast('Payment logged');
       }

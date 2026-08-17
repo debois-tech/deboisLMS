@@ -4,13 +4,16 @@ export type BatchStatus = 'upcoming' | 'ongoing' | 'completed';
 export type SessionType = 'online' | 'offline';
 export type AttendanceStatus = 'present' | 'partial' | 'absent';
 export type AttendanceSource = 'manual' | 'automated';
-export type MappingStatus = 'active' | 'dropped';
+/** 'dropped' = batch finished and grace window passed. 'terminated' = left mid-batch. */
+export type MappingStatus = 'active' | 'dropped' | 'terminated';
 /** 'portal' = the student handed it in; 'github' = an admin recorded it. */
 export type SubmissionChannel = 'github' | 'portal';
 /** Open, not a union: admins mint new codes and the valid set lives in `batch_programs`. */
 export type BatchProgram = string;
 export type FeeStatus = 'due' | 'paid';
 export type PaymentMethod = 'cash' | 'upi' | 'bank_transfer' | 'other';
+export type FeedbackKind = 'bug' | 'request';
+export type FeedbackStatus = 'open' | 'resolved';
 
 export interface Profile {
   id: string;
@@ -39,6 +42,8 @@ export interface Batch {
   start_date?: string;
   /** Filename prefix for this batch's material, e.g. `DBT-TEPC-2026-D`. */
   batch_code?: string;
+  /** Set when the batch was ended. Starts the 30-day countdown on its logins. */
+  ended_at?: string | null;
   /** The batch's full fee. Each imported student's fee is this less their discount. */
   base_fee?: number | null;
   created_at: string;
@@ -148,6 +153,19 @@ export interface FeePaymentLog {
   payment_method?: PaymentMethod;
   notes?: string;
   created_at: string;
+}
+
+export interface Feedback {
+  id: string;
+  student_id: string;
+  kind: FeedbackKind;
+  message: string;
+  page?: string;
+  user_agent?: string;
+  status: FeedbackStatus;
+  created_at: string;
+  resolved_at?: string | null;
+  student?: Student;
 }
 
 export interface Assignment {

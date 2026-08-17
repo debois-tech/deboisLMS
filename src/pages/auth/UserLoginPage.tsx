@@ -5,6 +5,7 @@ export default function UserLoginPage() {
     <LoginPanel
       title="Student login"
       emailPlaceholder="you@email.com"
+      expectedRole="student"
       hint="Use the credentials from your coordinator."
     />
   );

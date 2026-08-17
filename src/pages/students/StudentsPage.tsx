@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Users, Upload, Search } from 'lucide-react';
 import { SearchFilterBar } from '@/components/ui/SearchFilterBar';
+import { FilterTabs } from '@/components/ui/FilterTabs';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -14,15 +15,20 @@ import { StudentImportModal } from '@/components/students/StudentImportModal';
 import { BulkLoginsModal } from '@/components/students/BulkLoginsModal';
 import { getStudents, getBatches, getAllBatchStudentMappings, createStudentLoginsBulk, importStudentsIntoBatch } from '@/lib/supabase';
 import type { BulkLoginResult } from '@/lib/supabase';
-import type { Student, Batch, BatchStudentMapping } from '@/lib/types';
+import type { Student, Batch, BatchStudentMapping, MappingStatus } from '@/lib/types';
 import { useToast } from '@/lib/context/ToastContext';
 
 const NO_BATCH = 'none';
 
 type SortKey = 'newest' | 'az' | 'za' | 'idasc' | 'iddesc';
 
-//newest first is what the query already returns
-const DEFAULT_SORT: SortKey = 'newest';
+const DEFAULT_SORT: SortKey = 'idasc';
+
+const ENROLMENT_TABS: { value: MappingStatus; label: string }[] = [
+  { value: 'active', label: 'Active' },
+  { value: 'dropped', label: 'Dropped' },
+  { value: 'terminated', label: 'Terminated' },
+];
 
 const SORT_OPTIONS = [
   { value: 'newest', label: 'Newest first' },
@@ -50,6 +56,7 @@ export default function StudentsPage() {
   const [search, setSearch] = useState('');
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [sort, setSort] = useState<SortKey>(DEFAULT_SORT);
+  const [enrolment, setEnrolment] = useState<MappingStatus>('active');
   const [showImport, setShowImport] = useState(false);
   const [bulkLogins, setBulkLogins] = useState<BulkLoginResult | null>(null);
   const { showToast } = useToast();
@@ -74,9 +81,18 @@ export default function StudentsPage() {
     studentBatchIds.set(mapping.student_id, ids);
   }
 
+  // A student is whatever their best enrolment is: still active anywhere beats
+  // dropped, which beats terminated. Nobody with a live batch sits under Terminated.
+  const enrolmentOf = (studentId: string): MappingStatus => {
+    const mine = mappings.filter((m) => m.student_id === studentId);
+    if (mine.some((m) => m.status === 'active')) return 'active';
+    if (mine.some((m) => m.status === 'dropped')) return 'dropped';
+    return mine.length ? 'terminated' : 'active';
+  };
+
   const query = search.trim().toLowerCase();
   const queryRef = refKey(query);
-  const filteredStudents = students.filter((s) => {
+  const matches = (s: Student) => {
     const batchIds = studentBatchIds.get(s.id) ?? [];
     if (selectedBatchId === NO_BATCH && batchIds.length > 0) return false;
     if (selectedBatchId && selectedBatchId !== NO_BATCH && !batchIds.includes(selectedBatchId)) return false;
@@ -87,7 +103,15 @@ export default function StudentsPage() {
       (s.phone ?? '').toLowerCase().includes(query) ||
       (s.email ?? '').toLowerCase().includes(query)
     );
-  });
+  };
+
+  const searched = students.filter(matches);
+  const tabs = ENROLMENT_TABS.map((tab) => ({
+    ...tab,
+    count: searched.filter((s) => enrolmentOf(s.id) === tab.value).length,
+  }));
+
+  const filteredStudents = searched.filter((s) => enrolmentOf(s.id) === enrolment);
 
   if (sort === 'az' || sort === 'za') {
     const direction = sort === 'az' ? 1 : -1;
@@ -181,8 +205,12 @@ export default function StudentsPage() {
             />
           </div>
 
+          <div className="mb-4">
+            <FilterTabs tabs={tabs} value={enrolment} onChange={setEnrolment} label="Enrolment" />
+          </div>
+
           {filteredStudents.length === 0 ? (
-            <EmptyState icon={<Search size={32} />} title="No matching students" />
+            <EmptyState icon={<Search size={32} />} title={`No ${enrolment} students`} />
           ) : (
             <Table maxHeight="none">
               <THead>
