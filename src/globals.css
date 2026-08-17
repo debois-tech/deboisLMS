@@ -730,6 +730,59 @@ html.light .glass {
    a record you can open. Same card as PortalList so the page holds together, and
    `minmax` sized so a three-column reading never strands one fact on its own row
    at the widths this page is actually read at. */
+/* The report is the row's subject, so it wraps rather than truncating to a
+   sentence fragment nobody can act on. */
+.feedback-message {
+  max-width: 26rem;
+  min-width: 14rem;
+  white-space: normal;
+}
+
+/* ── Feedback form ───────────────────────────────────────────── */
+.feedback-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+}
+
+.feedback-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* Two choices, so they are shown rather than hidden behind a select. */
+.feedback-kind {
+  padding: 0.4375rem 0.875rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  font-size: 0.8125rem;
+  font-weight: 550;
+  color: var(--text-secondary);
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.feedback-kind:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.feedback-kind.is-active {
+  color: var(--primary);
+  border-color: var(--primary);
+  background: var(--primary-glow-soft);
+}
+
+.feedback-kind:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
 .portal-facts {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(12.5rem, 1fr));
@@ -1856,6 +1909,172 @@ html.light .glass {
 }
 
 .import-preview tbody tr:last-child td { border-bottom: none; }
+
+/* Outline button that admits what it does. Quiet until hover, like Edit beside
+   it — a permanently red button in a header reads as an alarm, not an action. */
+.action-button-danger {
+  color: var(--danger-text);
+  border-color: color-mix(in srgb, var(--danger-text) 35%, var(--border));
+}
+
+.action-button-danger:hover:not(:disabled) {
+  border-color: var(--danger-text);
+  background: color-mix(in srgb, var(--danger-text) 10%, transparent);
+}
+
+/* ── Roster row actions ──────────────────────────────────────── */
+/* Both destroy something, and they used to be two bare glyphs hovering to the
+   same red — the only difference between deleting a login and detaching a row
+   was which 14px icon you happened to hit. Chrome, separate hover identities and
+   a real target instead. */
+.roster-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.roster-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+
+/* Amber: the mapping detaches, the fee row survives and they can be re-added. */
+.roster-action.is-remove:hover {
+  color: var(--warning-text);
+  border-color: color-mix(in srgb, var(--warning-text) 45%, var(--border));
+  background: color-mix(in srgb, var(--warning-text) 10%, var(--bg-surface));
+}
+
+/* Red: the login is deleted and the fees settled. Nothing here comes back. */
+.roster-action.is-terminate:hover {
+  color: var(--danger-text);
+  border-color: color-mix(in srgb, var(--danger-text) 45%, var(--border));
+  background: color-mix(in srgb, var(--danger-text) 10%, var(--bg-surface));
+}
+
+.roster-action:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* ── Filter tabs ─────────────────────────────────────────────── */
+/* An underline, not the portal's filled pills — these sit above a table and a
+   filled chip there competes with every status pill in the rows below. */
+.filter-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 0.25rem;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+  scrollbar-width: none;
+}
+
+.filter-tabs::-webkit-scrollbar { display: none; }
+
+.filter-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 0 0 auto;
+  padding: 0.625rem 0.875rem;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--text-muted);
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.filter-tab:hover { color: var(--text-primary); }
+
+.filter-tab.is-active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+.filter-tab:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.filter-tab-count {
+  padding: 0.0625rem 0.375rem;
+  border-radius: 999px;
+  background: var(--bg-overlay);
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+.filter-tab.is-active .filter-tab-count {
+  background: var(--primary-glow-soft);
+  color: var(--primary);
+}
+
+/* ── Pager ───────────────────────────────────────────────────── */
+/* Sits under the list it moves. `padding`, not `margin`, for the gap above: the
+   import dialog wraps this in a Tailwind `space-y-*`, whose own margin rule wins
+   on specificity and would swallow a margin-top set here. */
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.375rem;
+  padding-top: 0.875rem;
+}
+
+/* Between the arrows, and wide enough to hold "46–47" so the buttons do not
+   shuffle sideways as the numbers gain a digit. */
+.pager-range {
+  min-width: 3.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+/* Square, so the two sit as a matched pair rather than one being wider than the
+   other on the strength of its word. */
+.pager-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+}
+
+.pager-button:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: var(--bg-overlay);
+  color: var(--text-primary);
+}
+
+/* Dimmed rather than hidden: an end of the list you can see is easier to trust
+   than a control that vanishes when you reach it. */
+.pager-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.pager-button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
 
 /* Per-row send. Sticky so the action stays reachable when the credential columns
    push the table into a horizontal scroll. */

@@ -41,6 +41,14 @@ export async function updateBatch(id: string, input: Partial<Batch>): Promise<Ba
   );
 }
 
+/** Marks the batch finished and dates it. Logins survive 30 more days. */
+export async function endBatch(id: string): Promise<Batch> {
+  return row<Batch>(
+    await supabase.rpc('end_batch', { p_batch_id: id }),
+    'Could not end this batch',
+  );
+}
+
 export async function deleteBatch(id: string): Promise<void> {
   ok(await supabase.from('batches').delete().eq('id', id), 'Could not delete the batch');
 }

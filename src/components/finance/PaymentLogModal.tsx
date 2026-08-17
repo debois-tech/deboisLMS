@@ -2,6 +2,7 @@ import { History, Plus } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { FormField } from '@/components/ui/FormField';
+import { InlineAlert } from '@/components/ui/InlineAlert';
 import { SearchSelect } from '@/components/ui/SearchSelect';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
@@ -30,6 +31,8 @@ export function PaymentLogModal({
   fee, studentName, paymentLogs, form, onFormChange, onClose, onSubmit, submitting,
 }: PaymentLogModalProps) {
   const remaining = fee ? Math.max(0, fee.total_fee - fee.paid_amount) : 0;
+  // Nobody pays more than they owe. The RPC refuses it too.
+  const overpaying = Number(form.amount) > remaining;
 
   return (
     <Modal open={!!fee} onClose={onClose} title="Payment Log" size="xl">
@@ -52,7 +55,14 @@ export function PaymentLogModal({
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <FormField label="Amount (₹)" required>
-                <input type="number" min="1" value={form.amount} onChange={(event) => onFormChange({ ...form, amount: event.target.value })} />
+                <input
+                  type="number"
+                  min="1"
+                  max={remaining}
+                  value={form.amount}
+                  onChange={(event) => onFormChange({ ...form, amount: event.target.value })}
+                />
+                {overpaying && <InlineAlert>Max {formatCurrency(remaining)}</InlineAlert>}
               </FormField>
               <FormField label="Payment Date" required>
                 <DatePicker
@@ -83,7 +93,7 @@ export function PaymentLogModal({
               <textarea value={form.notes} onChange={(event) => onFormChange({ ...form, notes: event.target.value })} />
             </FormField>
             <div className="flex justify-end">
-              <Button className="action-button-compact" onClick={onSubmit} loading={submitting} disabled={!form.amount || Number(form.amount) <= 0}>
+              <Button className="action-button-compact" onClick={onSubmit} loading={submitting} disabled={!form.amount || Number(form.amount) <= 0 || overpaying}>
                 <Plus size={14} /> Add Log
               </Button>
             </div>

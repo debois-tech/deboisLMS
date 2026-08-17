@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Mail, Phone, Layers, CalendarDays, History, Edit3, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, Layers, CalendarDays, History, Edit3, ExternalLink, UserMinus } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { StatusPill } from '@/components/ui/StatusPill';
@@ -12,9 +12,12 @@ import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import { StudentLoginCard } from '@/components/students/StudentLoginCard';
 import { StudentIdChip } from '@/components/students/StudentLink';
-import { getStudentById, getStudentBatches, getFeesByStudent, getLecturesByBatch, getFeePaymentLogsByStudent } from '@/lib/supabase';
+import { getStudentById, getStudentBatches, getFeesByStudent, getLecturesByBatch, getFeePaymentLogsByStudent, terminateEnrolment } from '@/lib/supabase';
 import type { Student, BatchStudentMapping, Batch, StudentFee, Lecture, FeePaymentLog } from '@/lib/types';
 import { formatDate, formatCurrency } from '@/lib/utils/format';
+import { useToast } from '@/lib/context/ToastContext';
+import { useConfirm } from '@/lib/context/ConfirmContext';
+import { errorMessage } from '@/lib/utils/errors';
 
 export default function StudentDetailPage() {
   const { studentId } = useParams();
@@ -23,6 +26,9 @@ export default function StudentDetailPage() {
   const [currentFee, setCurrentFee] = useState<StudentFee | null>(null);
   const [nextLecture, setNextLecture] = useState<Lecture | null>(null);
   const [paymentLogs, setPaymentLogs] = useState<FeePaymentLog[]>([]);
+  const [terminating, setTerminating] = useState(false);
+  const { showToast } = useToast();
+  const confirm = useConfirm();
 
   const { loading, error, retry } = useInitialLoad(async () => {
     if (!studentId) return;
@@ -62,9 +68,38 @@ export default function StudentDetailPage() {
   if (!student) return <NotFound label="Student" />;
 
   const activeMappings = batchMappings.filter((m) => m.status === 'active');
-  const currentBatch = activeMappings.sort(
+  const currentMapping = activeMappings.sort(
     (a, b) => new Date(b.joined_at).getTime() - new Date(a.joined_at).getTime()
-  )[0]?.batch;
+  )[0];
+  const currentBatch = currentMapping?.batch;
+
+  // Terminates the current enrolment only. The batch is named in the dialog so
+  // there is no doubt which one when a student sits on more than one.
+  const handleTerminate = async () => {
+    if (!currentMapping) return;
+    const ok = await confirm({
+      title: `Terminate ${student.name}?`,
+      message: `Leaving ${currentBatch?.name ?? 'this batch'}. Any instalment already due is settled and their login is deleted. Records stay.`,
+      confirmLabel: 'Terminate',
+      danger: true,
+    });
+    if (!ok) return;
+
+    setTerminating(true);
+    try {
+      const result = await terminateEnrolment(currentMapping.id);
+      showToast(
+        result.settlement > 0
+          ? `Terminated — ${formatCurrency(result.settlement)} settled`
+          : 'Terminated',
+      );
+      retry();
+    } catch (err) {
+      showToast(errorMessage(err, 'Could not terminate this student'), 'error');
+    } finally {
+      setTerminating(false);
+    }
+  };
 
   const batchNameById = new Map(batchMappings.map((m) => [m.batch_id, m.batch?.name ?? m.batch_id]));
 
@@ -85,9 +120,21 @@ export default function StudentDetailPage() {
         <Link to="/students" className="detail-back-link">
           <ArrowLeft size={14} /> Back to Students
         </Link>
-        <Link to={`/students/${student.id}/edit`}>
-          <Button variant="outline" className="action-button-compact"><Edit3 size={14} /> Edit</Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link to={`/students/${student.id}/edit`}>
+            <Button variant="outline" className="action-button-compact"><Edit3 size={14} /> Edit</Button>
+          </Link>
+          {currentMapping && (
+            <Button
+              variant="outline"
+              className="action-button-compact action-button-danger"
+              onClick={handleTerminate}
+              loading={terminating}
+            >
+              <UserMinus size={14} /> Terminate
+            </Button>
+          )}
+        </div>
       </div>
 
       <Card padding="lg">

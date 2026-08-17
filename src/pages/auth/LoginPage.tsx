@@ -8,19 +8,27 @@ import { useAuth } from '@/lib/context/AuthContext';
 import { profileFromUser } from '@/lib/context/AuthContext';
 import { useTheme } from '@/lib/context/ThemeContext';
 import { supabase } from '@/lib/supabase/client';
+import type { Role } from '@/lib/types';
 
 export default function LoginPage() {
-  return <LoginPanel title="Admin login" emailPlaceholder="admin@deboistech.in" />;
+  return <LoginPanel title="Admin login" emailPlaceholder="admin@deboistech.in" expectedRole="admin" />;
 }
 
 interface LoginPanelProps {
   title: string;
   emailPlaceholder: string;
+  /** The only role this door opens for. Anything else is signed straight back out. */
+  expectedRole: Role;
   hint?: string;
 }
 
-/** Shared by the admin and student login routes. Which dashboard you land on comes from the session role. */
-export function LoginPanel({ title, emailPlaceholder, hint }: LoginPanelProps) {
+const WRONG_DOOR: Record<Role, string> = {
+  admin: 'Not an admin account. Use the student login.',
+  student: 'Not a student account. Use the admin login.',
+};
+
+/** Shared by the admin and student login routes, but each one only admits its own role. */
+export function LoginPanel({ title, emailPlaceholder, expectedRole, hint }: LoginPanelProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -45,8 +53,19 @@ export function LoginPanel({ title, emailPlaceholder, hint }: LoginPanelProps) {
 
     if (data.user) {
       const profile = await profileFromUser(data.user);
+
+      // Credentials were right but for the other door. Drop the session — leaving
+      // it would let the next page load in as whatever they actually are.
+      if (profile.role !== expectedRole) {
+        await supabase.auth.signOut();
+        setUser(null);
+        setError(WRONG_DOOR[expectedRole]);
+        setLoading(false);
+        return;
+      }
+
       setUser(profile);
-      navigate(profile.role === 'admin' ? '/' : '/portal');
+      navigate(expectedRole === 'admin' ? '/' : '/portal');
     }
     setLoading(false);
   };

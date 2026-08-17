@@ -9,6 +9,7 @@ import {
   DollarSign,
   FileText,
   BookOpen,
+  MessageSquare,
   Plus,
   X,
   PanelLeft,
@@ -23,6 +24,7 @@ const navItems = [
   { label: 'Finance', to: '/fees', icon: DollarSign },
   { label: 'Assignments', to: '/assignments', icon: FileText },
   { label: 'Study Material', to: '/materials', icon: BookOpen },
+  { label: 'Feedback', to: '/feedback', icon: MessageSquare },
 ];
 
 interface SidebarProps {

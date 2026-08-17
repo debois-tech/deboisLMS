@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Edit3, Users, GraduationCap, Layers, ClipboardCheck, FileText, Plus, Trash2, ChevronRight, CalendarDays, Upload } from 'lucide-react';
+import { Archive, ArrowLeft, Edit3, UserMinus, Users, GraduationCap, Layers, ClipboardCheck, FileText, Plus, Trash2, ChevronRight, CalendarDays, Upload } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { StatusPill } from '@/components/ui/StatusPill';
@@ -23,8 +23,8 @@ import { BatchMaterials } from '@/components/materials/BatchMaterials';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { StudentLink } from '@/components/students/StudentLink';
 import { PaymentLogModal, type PaymentLogFormState } from '@/components/finance/PaymentLogModal';
-import { getBatchById, getBatchPrograms } from '@/lib/supabase';
-import { getBatchStudents, addStudentToBatch, removeStudentFromBatch, getStudents, createStudentLoginsBulk, importStudentsIntoBatch, getStudentBatches } from '@/lib/supabase';
+import { getBatchById, getBatchPrograms, endBatch } from '@/lib/supabase';
+import { getBatchStudents, addStudentToBatch, removeStudentFromBatch, terminateEnrolment, getStudents, createStudentLoginsBulk, importStudentsIntoBatch, getStudentBatches } from '@/lib/supabase';
 import type { BulkLoginResult } from '@/lib/supabase';
 import { BulkLoginsModal } from '@/components/students/BulkLoginsModal';
 import { getBatchTutors, assignTutorToBatch, removeTutorFromBatch, getTutors } from '@/lib/supabase';
@@ -47,6 +47,9 @@ export default function BatchDetailPage() {
   const { batchId } = useParams();
   const [batch, setBatch] = useState<Batch | null>(null);
   const [programs, setPrograms] = useState<BatchProgramOption[]>([]);
+  const [ending, setEnding] = useState(false);
+  const { showToast } = useToast();
+  const confirm = useConfirm();
 
   const { loading, error, retry } = useInitialLoad(async () => {
     if (!batchId) return;
@@ -54,6 +57,27 @@ export default function BatchDetailPage() {
     setBatch(batchRow ?? null);
     setPrograms(programRows);
   });
+
+  const handleEnd = async () => {
+    if (!batch) return;
+    const ok = await confirm({
+      title: `End ${batch.name}?`,
+      message: 'Students keep their logins for 30 days, then the logins are deleted. Their records stay.',
+      confirmLabel: 'End batch',
+      danger: true,
+    });
+    if (!ok) return;
+
+    setEnding(true);
+    try {
+      setBatch(await endBatch(batch.id));
+      showToast('Batch ended');
+    } catch (err) {
+      showToast(errorMessage(err, 'Could not end this batch'), 'error');
+    } finally {
+      setEnding(false);
+    }
+  };
 
   if (loading) return <Spinner centered />;
   if (error) return <ErrorState centered message={error} onRetry={retry} />;
@@ -76,9 +100,16 @@ export default function BatchDetailPage() {
             {programLabel ?? 'No programme'} • Started {batch.start_date ? formatDate(batch.start_date) : 'N/A'}
           </p>
         </div>
-        <Link to={`/batches/${batch.id}/edit`} className="shrink-0">
-          <Button variant="outline" className="action-button-compact"><Edit3 size={14} /> Edit</Button>
-        </Link>
+        <div className="flex shrink-0 items-center gap-2">
+          {batch.status !== 'completed' && (
+            <Button variant="outline" className="action-button-compact" onClick={handleEnd} loading={ending}>
+              <Archive size={14} /> End Batch
+            </Button>
+          )}
+          <Link to={`/batches/${batch.id}/edit`}>
+            <Button variant="outline" className="action-button-compact"><Edit3 size={14} /> Edit</Button>
+          </Link>
+        </div>
       </div>
 
       <Tabs
@@ -173,6 +204,29 @@ function StudentsTab({ batch }: { batch: Batch }) {
 
   const payable = baseFee === null ? null : feeFromDiscount(baseFee, Number(discount) || 0);
 
+  // Left mid-batch: settle what came due, kill the login now, keep the record.
+  const handleTerminate = async (mappingId: string, name: string) => {
+    const ok = await confirm({
+      title: `Terminate ${name}?`,
+      message: 'Their login is deleted immediately and any instalment already due is settled. Records stay.',
+      confirmLabel: 'Terminate',
+      danger: true,
+    });
+    if (!ok) return;
+
+    try {
+      const result = await terminateEnrolment(mappingId);
+      void reloadStudents();
+      showToast(
+        result.settlement > 0
+          ? `${name} terminated — ${formatCurrency(result.settlement)} settled`
+          : `${name} terminated`,
+      );
+    } catch (error) {
+      showToast(errorMessage(error, 'Failed to terminate student'), 'error');
+    }
+  };
+
   const handleAdd = async () => {
     if (!selectedStudents.length || payable === null) return;
     try {
@@ -261,11 +315,31 @@ function StudentsTab({ batch }: { batch: Batch }) {
                 <p className="text-sm font-medium"><StudentLink studentId={s.id} name={s.name} /></p>
                 <p className="text-xs text-[var(--text-muted)]">{s.email ?? s.phone ?? '—'}</p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <StatusPill kind="enrollment" value={s.mapping.status} />
-                <button onClick={() => handleRemove(s.mapping.id, s.id, s.name)} aria-label={`Remove ${s.name} from batch`} className="text-[var(--text-muted)] hover:text-[var(--danger-text)] p-1">
-                  <Trash2 size={14} />
-                </button>
+                {/* Lightest first: detaching is undoable, terminating is not. */}
+                <div className="roster-actions">
+                  <button
+                    type="button"
+                    onClick={() => handleRemove(s.mapping.id, s.id, s.name)}
+                    className="roster-action is-remove"
+                    title="Remove from batch"
+                    aria-label={`Remove ${s.name} from batch`}
+                  >
+                    <Trash2 size={16} aria-hidden="true" />
+                  </button>
+                  {s.mapping.status === 'active' && (
+                    <button
+                      type="button"
+                      onClick={() => handleTerminate(s.mapping.id, s.name)}
+                      className="roster-action is-terminate"
+                      title="Terminate — settles fees and deletes the login"
+                      aria-label={`Terminate ${s.name}`}
+                    >
+                      <UserMinus size={16} aria-hidden="true" />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           ))}
@@ -639,7 +713,7 @@ function FinanceTab({ batchId }: { batchId: string }) {
   const [students, setStudents] = useState<(Student & { mapping: BatchStudentMapping })[]>([]);
   const [loggingFee, setLoggingFee] = useState<StudentFee | null>(null);
   const [paymentLogs, setPaymentLogs] = useState<FeePaymentLog[]>([]);
-  const [logForm, setLogForm] = useState<PaymentLogFormState>({ amount: '', payment_date: new Date().toISOString().slice(0, 10), payment_method: 'other', notes: '' });
+  const [logForm, setLogForm] = useState<PaymentLogFormState>({ amount: '', payment_date: new Date().toISOString().slice(0, 10), payment_method: 'upi', notes: '' });
   const [logging, setLogging] = useState(false);
   const { showToast } = useToast();
 
@@ -653,7 +727,7 @@ function FinanceTab({ batchId }: { batchId: string }) {
 
   const openPaymentLogs = async (fee: StudentFee) => {
     setLoggingFee(fee);
-    setLogForm({ amount: '', payment_date: new Date().toISOString().slice(0, 10), payment_method: 'other', notes: '' });
+    setLogForm({ amount: '', payment_date: new Date().toISOString().slice(0, 10), payment_method: 'upi', notes: '' });
     try {
       setPaymentLogs(await getFeePaymentLogs(fee.id));
     } catch (err) {
@@ -677,7 +751,7 @@ function FinanceTab({ batchId }: { batchId: string }) {
         setLoggingFee(result.fee);
         setPaymentLogs((prev) => [result.log, ...prev]);
         setFees((prev) => prev.map((f) => (f.id === result.fee.id ? result.fee : f)));
-        setLogForm({ amount: '', payment_date: new Date().toISOString().slice(0, 10), payment_method: 'other', notes: '' });
+        setLogForm({ amount: '', payment_date: new Date().toISOString().slice(0, 10), payment_method: 'upi', notes: '' });
         showToast('Payment logged');
       }
     } catch (error) {

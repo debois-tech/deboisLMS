@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { AlertTriangle, Check, Copy, Loader2, Mail, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
+import { Pager, usePager } from '@/components/ui/Pager';
 import { sendCredentialsEmail } from '@/lib/supabase';
 import type { BulkLoginResult, CredentialEmailResult } from '@/lib/supabase';
 import { errorMessage } from '@/lib/utils/errors';
@@ -15,6 +16,8 @@ export function BulkLoginsModal({ result, onClose }: { result: BulkLoginResult |
   const [failures, setFailures] = useState<Map<string, string>>(new Map());
   const [busy, setBusy] = useState<Set<string>>(new Set());
   const [bulkSending, setBulkSending] = useState(false);
+  // Hook order is fixed, so this runs before the early return below.
+  const pager = usePager(result?.created ?? [], 5);
 
   if (!result) return null;
 
@@ -117,7 +120,7 @@ export function BulkLoginsModal({ result, onClose }: { result: BulkLoginResult |
                 </tr>
               </thead>
               <tbody>
-                {result.created.map((row) => {
+                {pager.slice.map((row) => {
                   const isSent = sent.has(row.studentId);
                   const isBusy = busy.has(row.studentId);
                   const failed = failures.get(row.studentId);
@@ -154,6 +157,11 @@ export function BulkLoginsModal({ result, onClose }: { result: BulkLoginResult |
             </table>
           </div>
         )}
+
+        {/* Paging the table only. Every count elsewhere — the footer button, the
+            failure list — still speaks for the whole import, so "Email all 80"
+            never turns into "email this page". */}
+        <Pager {...pager} onChange={pager.setPage} />
 
         {/* Reasons live under the table rather than in the cells, so one long
             failure cannot make its row twice the height of every other. */}

@@ -1,5 +1,5 @@
 import { Badge } from '@/components/ui/Badge';
-import type { AttendanceStatus, BatchStatus, FeeStatus, MappingStatus } from '@/lib/types';
+import type { AttendanceStatus, BatchStatus, FeeStatus, FeedbackStatus, MappingStatus } from '@/lib/types';
 
 type Tone = 'default' | 'success' | 'warning' | 'danger' | 'info';
 
@@ -18,6 +18,7 @@ const fee: Record<FeeStatus, [string, Tone]> = {
 const enrollment: Record<MappingStatus, [string, Tone]> = {
   active: ['Ongoing', 'success'],
   dropped: ['Finished', 'default'],
+  terminated: ['Ended', 'default'],
 };
 
 // A batch a student is on but that has not started yet is not "Ongoing" to them.
@@ -40,9 +41,15 @@ type StatusProps =
   | { kind: 'fee'; value: FeeStatus }
   | { kind: 'enrollment'; value: MappingStatus }
   | { kind: 'batch'; value: BatchStatus }
-  | { kind: 'submission'; value: SubmissionValue };
+  | { kind: 'submission'; value: SubmissionValue }
+  | { kind: 'feedback'; value: FeedbackStatus };
 
-const maps = { attendance, fee, enrollment, batch, submission };
+const feedback: Record<FeedbackStatus, [string, Tone]> = {
+  open: ['Open', 'warning'],
+  resolved: ['Resolved', 'success'],
+};
+
+const maps = { attendance, fee, enrollment, batch, submission, feedback };
 
 /** The one pill used across the portal. Pass the domain value, not a label or colour. */
 export function PortalStatus(props: StatusProps) {

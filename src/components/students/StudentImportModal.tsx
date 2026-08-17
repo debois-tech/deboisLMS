@@ -5,6 +5,7 @@ import { Modal } from '@/components/ui/Modal';
 import { FormField } from '@/components/ui/FormField';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { BatchSelect } from '@/components/ui/BatchSelect';
+import { Pager, usePager } from '@/components/ui/Pager';
 import {
   findDiscountProblems,
   findProgramMismatches,
@@ -34,6 +35,7 @@ interface StudentImportModalProps {
   ) => Promise<void>;
 }
 
+/** Every row is reachable, a page at a time — a sheet is checked in full or not at all. */
 const PREVIEW_ROWS = 5;
 
 /** The one CSV import dialog, shared by the students list and a batch's students tab. */
@@ -45,6 +47,7 @@ export function StudentImportModal({ open, onClose, batches, batch, onImport }: 
   const [error, setError] = useState('');
   const [importing, setImporting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const pager = usePager(rows, PREVIEW_ROWS);
 
   // A finished batch is not something to import a new intake into.
   const options = useMemo(() => (batches ?? []).filter((b) => b.status !== 'completed'), [batches]);
@@ -87,6 +90,7 @@ export function StudentImportModal({ open, onClose, batches, batch, onImport }: 
     setRows([]);
     setHeaders([]);
     setPickedId(null);
+    pager.reset();
     setCreateLogins(true);
     setError('');
     setImporting(false);
@@ -107,6 +111,8 @@ export function StudentImportModal({ open, onClose, batches, batch, onImport }: 
       setHeaders(parsed.headers);
       setRows(parsed.rows);
       setError(parsed.error);
+      // A different sheet starts at its own beginning, not wherever the last one left off.
+      pager.reset();
     };
     reader.readAsText(file);
   };
@@ -183,8 +189,8 @@ export function StudentImportModal({ open, onClose, batches, batch, onImport }: 
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.slice(0, PREVIEW_ROWS).map((row, index) => (
-                    <tr key={index}>
+                  {pager.slice.map((row, index) => (
+                    <tr key={pager.from + index}>
                       {headers.map((header) => <td key={header}>{row[header] || '—'}</td>)}
                       <td className="import-preview-derived">
                         {base === null ? '—' : formatCurrency(feeFromDiscount(base, getImportDiscount(row)))}
@@ -194,11 +200,7 @@ export function StudentImportModal({ open, onClose, batches, batch, onImport }: 
                 </tbody>
               </table>
             </div>
-            {rows.length > PREVIEW_ROWS && (
-              <p className="text-xs text-[var(--text-muted)]">
-                Showing {PREVIEW_ROWS} of {rows.length} rows.
-              </p>
-            )}
+            <Pager {...pager} onChange={pager.setPage} />
             {base !== null && outcome?.noDiscounts && (
               <p className="text-xs text-[var(--text-muted)]">
                 No discounts in this file — every student is charged the full {formatCurrency(base)}.

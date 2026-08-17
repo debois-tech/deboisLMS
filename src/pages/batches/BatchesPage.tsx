@@ -8,19 +8,26 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { SearchFilterBar } from '@/components/ui/SearchFilterBar';
+import { SearchBar } from '@/components/ui/SearchBar';
+import { FilterTabs } from '@/components/ui/FilterTabs';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import { getBatches, getBatchPrograms } from '@/lib/supabase';
 import type { Batch, BatchProgramOption, BatchStatus } from '@/lib/types';
 import { formatDate } from '@/lib/utils/format';
 
-const STATUSES: BatchStatus[] = ['upcoming', 'ongoing', 'completed'];
+const TAB_LABELS: Record<BatchStatus, string> = {
+  ongoing: 'Active',
+  upcoming: 'Upcoming',
+  completed: 'Completed',
+};
+
+const TAB_ORDER: BatchStatus[] = ['ongoing', 'upcoming', 'completed'];
 
 export default function BatchesPage() {
   const [batches, setBatches] = useState<Batch[]>([]);
   const [programs, setPrograms] = useState<BatchProgramOption[]>([]);
   const [search, setSearch] = useState('');
-  const [status, setStatus] = useState<BatchStatus | null>(null);
+  const [status, setStatus] = useState<BatchStatus>('ongoing');
 
   const { loading, error, retry } = useInitialLoad(async () => {
     const [batchRows, programRows] = await Promise.all([getBatches(), getBatchPrograms()]);
@@ -34,18 +41,20 @@ export default function BatchesPage() {
     [programs],
   );
 
-  const filteredBatches = useMemo(() => {
+  const matchesSearch = useMemo(() => {
     const term = search.trim().toLowerCase();
-    return batches.filter((batch) => {
-      if (status && batch.status !== status) return false;
-      if (!term) return true;
-      return `${batch.name} ${programName(batch)} ${batch.program ?? ''}`.toLowerCase().includes(term);
-    });
-  }, [batches, search, status, programName]);
+    return (batch: Batch) =>
+      !term || `${batch.name} ${programName(batch)} ${batch.program ?? ''}`.toLowerCase().includes(term);
+  }, [search, programName]);
 
-  const selectStatus = (next: BatchStatus | null) => {
-    setStatus(next);
-  };
+  // Counts ignore the active tab so every tab shows its own total, not the filtered one.
+  const tabs = TAB_ORDER.map((value) => ({
+    value,
+    label: TAB_LABELS[value],
+    count: batches.filter((batch) => batch.status === value && matchesSearch(batch)).length,
+  }));
+
+  const filteredBatches = batches.filter((batch) => batch.status === status && matchesSearch(batch));
 
   if (loading) return <Spinner centered />;
   if (error) return <ErrorState centered message={error} onRetry={retry} />;
@@ -62,20 +71,15 @@ export default function BatchesPage() {
       ) : (
         <>
           <div className="mb-4 max-w-md">
-            <SearchFilterBar
-              value={search}
-              onChange={setSearch}
-              placeholder="Search by name or track"
-              filterLabel="Filter by status"
-              allLabel="All statuses"
-              filterValue={status}
-              filterOptions={STATUSES.map((option) => ({ value: option, label: option }))}
-              onFilterChange={(next) => selectStatus(next as BatchStatus | null)}
-            />
+            <SearchBar value={search} onChange={setSearch} placeholder="Search by name or track" />
+          </div>
+
+          <div className="mb-4">
+            <FilterTabs tabs={tabs} value={status} onChange={setStatus} label="Batch status" />
           </div>
 
           {filteredBatches.length === 0 ? (
-            <EmptyState icon={<Search size={32} />} title="No matching batches" />
+            <EmptyState icon={<Search size={32} />} title={`No ${TAB_LABELS[status].toLowerCase()} batches`} />
           ) : (
             <Table maxHeight="none">
               <THead>
