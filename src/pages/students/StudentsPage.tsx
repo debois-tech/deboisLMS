@@ -19,19 +19,29 @@ import { useToast } from '@/lib/context/ToastContext';
 
 const NO_BATCH = 'none';
 
-type SortKey = 'newest' | 'az' | 'za';
+type SortKey = 'newest' | 'az' | 'za' | 'idasc' | 'iddesc';
 
-//newest first is what the query already returns 
+//newest first is what the query already returns
 const DEFAULT_SORT: SortKey = 'newest';
 
 const SORT_OPTIONS = [
   { value: 'newest', label: 'Newest first' },
   { value: 'az', label: 'Name (A–Z)' },
   { value: 'za', label: 'Name (Z–A)' },
+  { value: 'idasc', label: 'ID (low–high)' },
+  { value: 'iddesc', label: 'ID (high–low)' },
 ];
 
 // Ref IDs get typed with any or none of their dashes — match on the bare characters
 const refKey = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/**
+ * DBT-INT-2026-001 in issue order. Numeric collation compares each run of digits
+ * as a number, so -057 sorts before -1000 rather than after it, and the year
+ * ahead of the counter keeps a 2027 intake below every 2026 one.
+ */
+const compareRef = (a?: string, b?: string) =>
+  (a ?? '').localeCompare(b ?? '', undefined, { numeric: true, sensitivity: 'base' });
 
 export default function StudentsPage() {
   const [students, setStudents] = useState<Student[]>([]);
@@ -79,9 +89,17 @@ export default function StudentsPage() {
     );
   });
 
-  if (sort !== 'newest') {
+  if (sort === 'az' || sort === 'za') {
     const direction = sort === 'az' ? 1 : -1;
     filteredStudents.sort((a, b) => direction * a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+  } else if (sort === 'idasc' || sort === 'iddesc') {
+    const direction = sort === 'idasc' ? 1 : -1;
+    filteredStudents.sort((a, b) => {
+      // A student with no code yet has no place in an ID order — last either way,
+      // rather than heading the list the moment you reverse the sort.
+      if (!a.student_code !== !b.student_code) return a.student_code ? -1 : 1;
+      return direction * compareRef(a.student_code, b.student_code);
+    });
   }
 
   const selectBatch = (batchId: string | null) => {

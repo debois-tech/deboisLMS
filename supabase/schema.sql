@@ -166,13 +166,43 @@ create table if not exists batch_student_mapping (
   id         uuid primary key default gen_random_uuid(),
   batch_id   uuid references batches(id) on delete cascade not null,
   student_id uuid references students(id) on delete cascade not null,
-  joined_at  date default current_date,
+  -- Filled from the batch's start date by the trigger below when left blank. No
+  -- default: a default cannot read another table, and current_date would make an
+  -- omitted value indistinguishable from one deliberately set to today.
+  joined_at  date,
   status     mapping_status default 'active',
   unique (batch_id, student_id)
 );
 
 create index if not exists idx_bsm_batch   on batch_student_mapping(batch_id);
 create index if not exists idx_bsm_student on batch_student_mapping(student_id);
+
+-- The intake date for everyone on a batch is the batch's own start date, not the
+-- day an admin got round to the paperwork. An explicit joined_at is left alone.
+create or replace function set_join_date_from_batch()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if new.joined_at is not null then
+    return new;
+  end if;
+
+  select b.start_date into new.joined_at from batches b where b.id = new.batch_id;
+  new.joined_at := coalesce(new.joined_at, current_date);
+
+  return new;
+end;
+$$;
+
+drop trigger if exists bsm_join_date_from_batch on batch_student_mapping;
+create trigger bsm_join_date_from_batch
+  before insert on batch_student_mapping
+  for each row execute function set_join_date_from_batch();
+
+-- Re-running this file on a database created before the trigger existed.
+alter table batch_student_mapping alter column joined_at drop default;
 
 create table if not exists tutor_batch_mapping (
   id          uuid primary key default gen_random_uuid(),
@@ -343,12 +373,18 @@ grant execute on function public.record_fee_payment(uuid, numeric, date, payment
 -- Nothing is logged for a student charged nothing — a 100% discount produces a
 -- total_fee of 0, and a registration payment against 0 is not a fact. A fee
 -- under 1000 logs only what was charged, so the log never exceeds the total.
+--
+-- Dated from the batch's start date, not the day the row was inserted: a batch
+-- always exists before its students, and that date is when the intake began. An
+-- import run three weeks late should not read as three weeks of late fees.
 create or replace function log_registration_fee()
 returns trigger
 language plpgsql
 set search_path = public
 as $$
-declare amount numeric;
+declare
+  amount numeric;
+  paid_on date;
 begin
   if new.total_fee is null or new.total_fee <= 0 then
     return new;
@@ -356,10 +392,14 @@ begin
 
   amount := least(1000, new.total_fee);
 
+  -- A batch with no start date falls back to today; the column forbids null.
+  select b.start_date into paid_on from batches b where b.id = new.batch_id;
+  paid_on := coalesce(paid_on, current_date);
+
   insert into fee_payment_logs (
     student_fee_id, student_id, batch_id, amount, payment_date, payment_method, notes
   ) values (
-    new.id, new.student_id, new.batch_id, amount, current_date, 'upi', 'Registration fee'
+    new.id, new.student_id, new.batch_id, amount, paid_on, 'upi', 'Registration fee'
   );
 
   update student_fees
