@@ -140,7 +140,7 @@ function OverviewTab({ batch, programLabel }: { batch: Batch; programLabel?: str
         <p className="text-lg font-bold text-[var(--text-primary)] mt-1 truncate">{programLabel ?? 'Not set'}</p>
       </Card>
       <Card padding="sm">
-        <p className="text-xs text-[var(--text-muted)]">Base Fee</p>
+        <p className="text-xs text-[var(--text-muted)]">Regular Fees</p>
         <p className="text-lg font-bold text-[var(--text-primary)] mt-1">
           {batch.base_fee == null ? 'Not set' : formatCurrency(batch.base_fee)}
         </p>

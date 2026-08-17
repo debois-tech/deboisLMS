@@ -167,7 +167,7 @@ export function StudentImportModal({ open, onClose, batches, batch, onImport }: 
                 <span>{rows.length} students</span>
               ) : (
                 <>
-                  <span><strong>{formatCurrency(base)}</strong> base fee</span>
+                  <span><strong>{formatCurrency(base)}</strong> Regular Fees</span>
                   <span>{rows.length} students</span>
                   {outcome && outcome.discounted > 0 && <span>{outcome.discounted} discounted</span>}
                   {outcome && outcome.free > 0 && <span>{outcome.free} pay nothing</span>}
