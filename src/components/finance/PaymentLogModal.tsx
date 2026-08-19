@@ -1,4 +1,4 @@
-import { History, Plus } from 'lucide-react';
+import { History, Plus, Trash2 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { FormField } from '@/components/ui/FormField';
@@ -8,6 +8,7 @@ import { DatePicker } from '@/components/ui/DatePicker';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import type { StudentFee, FeePaymentLog, PaymentMethod } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils/format';
+import { REGISTRATION_NOTE } from '@/lib/utils/installments';
 
 export interface PaymentLogFormState {
   amount: string;
@@ -25,13 +26,22 @@ interface PaymentLogModalProps {
   onClose: () => void;
   onSubmit: () => void;
   submitting: boolean;
+  onDelete: (log: FeePaymentLog) => void;
+  /** Id of the log currently being removed, so only its own button spins. */
+  deletingId?: string | null;
 }
 
 export function PaymentLogModal({
-  fee, studentName, paymentLogs, form, onFormChange, onClose, onSubmit, submitting,
+  fee, studentName, paymentLogs, form, onFormChange, onClose, onSubmit, submitting, onDelete, deletingId,
 }: PaymentLogModalProps) {
-  const remaining = fee ? Math.max(0, fee.total_fee - fee.paid_amount) : 0;
-  // Nobody pays more than they owe. The RPC refuses it too.
+  // Only a terminated enrolment has this, so it doubles as the flag for one.
+  const left = fee?.expected_on_exit != null;
+  const remaining = fee
+    ? Math.max(0, (left ? Number(fee.expected_on_exit) : fee.total_fee) - fee.paid_amount)
+    : 0;
+  // Instalments themselves are flexible — 6k then 4k settles the same 10k — so the
+  // ceiling is the balance, never one instalment. Nobody pays past what they owe:
+  // for a student who left that is the void, not the fee they never reached.
   const overpaying = Number(form.amount) > remaining;
 
   return (
@@ -46,9 +56,9 @@ export function PaymentLogModal({
               <FormField label="Paid">
                 <div className="display-field text-[var(--success-text)]">{formatCurrency(fee.paid_amount)}</div>
               </FormField>
-              <FormField label="Remaining">
-                <div className={`display-field ${remaining > 0 ? 'text-[var(--danger-text)]' : 'text-[var(--success-text)]'}`}>
-                  {remaining > 0 ? formatCurrency(remaining) : 'Paid in full'}
+              <FormField label={left ? 'Void' : 'Remaining'}>
+                <div className={`display-field ${remaining > 0 ? (left ? 'text-[var(--warning-text)]' : 'text-[var(--danger-text)]') : 'text-[var(--success-text)]'}`}>
+                  {remaining > 0 ? formatCurrency(remaining) : left ? 'Nothing void' : 'Paid in full'}
                 </div>
               </FormField>
             </div>
@@ -115,6 +125,7 @@ export function PaymentLogModal({
                     <TH>Date</TH>
                     <TH>Method</TH>
                     <TH>Notes</TH>
+                    <TH> </TH>
                   </TR>
                 </THead>
                 <TBody>
@@ -124,6 +135,20 @@ export function PaymentLogModal({
                       <TD className="cell-secondary">{log.payment_date}</TD>
                       <TD className="cell-muted capitalize">{(log.payment_method ?? '—').replace('_', ' ')}</TD>
                       <TD className="cell-muted">{log.notes || '—'}</TD>
+                      <TD className="w-px">
+                        {/* The registration fee is written by a trigger, so nothing could put it back. */}
+                        {log.notes !== REGISTRATION_NOTE && (
+                          <Button
+                            variant="ghost"
+                            className="action-button-compact action-button-danger"
+                            onClick={() => onDelete(log)}
+                            loading={deletingId === log.id}
+                            aria-label={`Delete the ${formatCurrency(Number(log.amount))} payment from ${log.payment_date}`}
+                          >
+                            <Trash2 size={14} />
+                          </Button>
+                        )}
+                      </TD>
                     </TR>
                   ))}
                 </TBody>

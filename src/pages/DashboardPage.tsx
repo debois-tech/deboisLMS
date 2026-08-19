@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowUpRight, Layers } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, Layers } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -9,20 +9,29 @@ import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatCard } from '@/components/ui/StatCard';
 import { getDashboardStats, getRecentActivity, type DashboardStats, type RecentActivity } from '@/lib/supabase';
-import { getBatches } from '@/lib/supabase';
-import type { Batch } from '@/lib/types';
+import { getBatches, getEarningBreakdown } from '@/lib/supabase';
+import { EarningBreakdownModal } from '@/components/finance/EarningBreakdownModal';
+import type { Batch, EarningBreakdown } from '@/lib/types';
 import { timeAgo, formatCurrency } from '@/lib/utils/format';
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [activity, setActivity] = useState<RecentActivity[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
+  const [breakdown, setBreakdown] = useState<EarningBreakdown[]>([]);
+  const [breakdownOpen, setBreakdownOpen] = useState(false);
 
   const { loading, error, retry } = useInitialLoad(async () => {
-    const [s, a, b] = await Promise.all([getDashboardStats(), getRecentActivity(), getBatches()]);
+    const [s, a, b, e] = await Promise.all([
+      getDashboardStats(),
+      getRecentActivity(),
+      getBatches(),
+      getEarningBreakdown(),
+    ]);
     setStats(s);
     setActivity(a);
     setBatches(b);
+    setBreakdown(e);
   });
 
   if (loading) return <Spinner centered />;
@@ -38,9 +47,34 @@ export default function DashboardPage() {
         <StatCard label="Total Batches" value={stats?.total_batches ?? 0} />
         <StatCard label="Active Batches" value={stats?.active_batches ?? 0} />
         <StatCard label="Total Students" value={stats?.total_students ?? 0} />
-        <StatCard label="Fees Collected" value={formatCurrency(stats?.total_fees_collected ?? 0)} valueClassName="text-[var(--success-text)]" />
-        <StatCard label="Pending Due" value={formatCurrency(stats?.total_fees_outstanding ?? 0)} valueClassName="text-[var(--danger-text)]" />
+        <StatCard
+          label="Fees Collected"
+          value={formatCurrency(stats?.total_fees_collected ?? 0)}
+          valueClassName="text-[var(--success-text)]"
+          onClick={() => setBreakdownOpen(true)}
+          actionLabel="Fees collected — open the earning breakdown"
+        />
+        <StatCard
+          label="Pending Due"
+          value={formatCurrency(stats?.total_fees_outstanding ?? 0)}
+          valueClassName="text-[var(--danger-text)]"
+          onClick={() => setBreakdownOpen(true)}
+          actionLabel="Pending due — open the earning breakdown"
+        />
+        <StatCard
+          label="Earning breakdown"
+          value={<ArrowRight size={18} />}
+          valueClassName="text-[var(--text-muted)]"
+          onClick={() => setBreakdownOpen(true)}
+          actionLabel="Open the earning breakdown"
+        />
       </div>
+
+      <EarningBreakdownModal
+        open={breakdownOpen}
+        onClose={() => setBreakdownOpen(false)}
+        breakdown={breakdown}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>

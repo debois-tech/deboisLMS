@@ -1,10 +1,12 @@
 import { HTMLAttributes, ReactNode } from 'react';
 import { clsx } from 'clsx';
 
-interface CardProps extends HTMLAttributes<HTMLDivElement> {
+interface CardProps extends HTMLAttributes<HTMLElement> {
   glass?: boolean;
   hover?: boolean;
   padding?: 'sm' | 'md' | 'lg';
+  /** `button` when the whole card is the control, so it keeps real keyboard behaviour. */
+  as?: 'div' | 'button';
   children: ReactNode;
 }
 
@@ -14,9 +16,10 @@ const paddingMap = {
   lg: 'ui-card-padding-lg',
 };
 
-export function Card({ glass, hover, padding = 'md', children, className, ...rest }: CardProps) {
+export function Card({ glass, hover, padding = 'md', as: Tag = 'div', children, className, ...rest }: CardProps) {
   return (
-    <div
+    <Tag
+      type={Tag === 'button' ? 'button' : undefined}
       className={clsx(
         'ui-card rounded-[var(--radius-lg)] border border-[var(--border)]',
         paddingMap[padding],
@@ -30,7 +33,7 @@ export function Card({ glass, hover, padding = 'md', children, className, ...res
       {...rest}
     >
       {children}
-    </div>
+    </Tag>
   );
 }
 

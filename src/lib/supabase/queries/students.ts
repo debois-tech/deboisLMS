@@ -260,11 +260,13 @@ export async function addStudentToBatch(studentId: string, batchId: string, tota
 
 export interface TerminationResult {
   instalments_due: number;
-  settlement: number;
+  expected_on_exit: number;
+  /** Owed on the day they left and unpaid. Recorded, never chased. */
+  void_amount: number;
   login_revoked: boolean;
 }
 
-/** Cuts the fee to what was owed, logs the settlement and deletes the login. One transaction. */
+/** Freezes what they owed, voids the rest and deletes the login. One transaction. */
 export async function terminateEnrolment(mappingId: string, leftOn?: string): Promise<TerminationResult> {
   return row<TerminationResult>(
     await supabase.rpc('terminate_enrolment', {

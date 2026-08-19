@@ -6,7 +6,7 @@ export { getLecturesByBatch, getLectureById, createLecture, updateLecture, delet
 export { getUploadsByLecture, getAttendanceByLecture, getApprovedAttendanceByStudent, insertUploadRows, markAttendance, deleteAttendance, approveAttendance, setAttendanceApproved, bulkApproveAttendance, getUnapprovedCount } from './queries/attendance';
 export { processAttendance, computeStatus, ATTENDANCE_PRESENT_PERCENT, ATTENDANCE_PARTIAL_PERCENT } from '@/lib/attendance/process';
 export type { ProcessingReport, ProcessOptions } from '@/lib/attendance/process';
-export { getFeesByBatch, updateFeePayment, getFeePaymentLogs, addFeePaymentLog, getBatchFeeSummary, getFeesByStudent, getFeePaymentLogsByStudent, getMyFeeDues } from './queries/fees';
+export { getFeesByBatch, updateFeePayment, getFeePaymentLogs, addFeePaymentLog, deleteFeePayment, getBatchFeeSummary, getEarningBreakdown, getFeesByStudent, getFeePaymentLogsByStudent, getMyFeeDues } from './queries/fees';
 export { getAssignmentsByBatch, getAssignmentsForStudent, createAssignment, getAssignmentSubmissions, getStudentRepo, saveStudentRepo, submitAssignmentFromPortal, markSubmission } from './queries/assignments';
 export type { AssignmentSubmissionRow } from './queries/assignments';
 export { getMaterialsByBatch, getMaterialsForEveryone, getMaterialsForStudent, getMaterialsByAssignment, getMaterialById, uploadMaterial, uploadMaterials, deleteMaterial, getMaterialViews, openMaterial, downloadMaterial, MATERIAL_MAX_BYTES } from './queries/materials';

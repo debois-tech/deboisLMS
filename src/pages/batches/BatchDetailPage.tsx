@@ -24,7 +24,7 @@ import { DatePicker } from '@/components/ui/DatePicker';
 import { StudentLink } from '@/components/students/StudentLink';
 import { PaymentLogModal, type PaymentLogFormState } from '@/components/finance/PaymentLogModal';
 import { getBatchById, getBatchPrograms, endBatch } from '@/lib/supabase';
-import { getBatchStudents, addStudentToBatch, removeStudentFromBatch, terminateEnrolment, getStudents, createStudentLoginsBulk, importStudentsIntoBatch, getStudentBatches } from '@/lib/supabase';
+import { getBatchStudents, addStudentToBatch, removeStudentFromBatch, terminateEnrolment, getStudents, createStudentLoginsBulk, importStudentsIntoBatch, getStudentBatches, deleteFeePayment } from '@/lib/supabase';
 import type { BulkLoginResult } from '@/lib/supabase';
 import { BulkLoginsModal } from '@/components/students/BulkLoginsModal';
 import { getBatchTutors, assignTutorToBatch, removeTutorFromBatch, getTutors } from '@/lib/supabase';
@@ -218,8 +218,8 @@ function StudentsTab({ batch }: { batch: Batch }) {
       const result = await terminateEnrolment(mappingId);
       void reloadStudents();
       showToast(
-        result.settlement > 0
-          ? `${name} terminated — ${formatCurrency(result.settlement)} settled`
+        result.void_amount > 0
+          ? `${name} terminated — ${formatCurrency(result.void_amount)} void`
           : `${name} terminated`,
       );
     } catch (error) {
@@ -715,7 +715,9 @@ function FinanceTab({ batchId }: { batchId: string }) {
   const [paymentLogs, setPaymentLogs] = useState<FeePaymentLog[]>([]);
   const [logForm, setLogForm] = useState<PaymentLogFormState>({ amount: '', payment_date: new Date().toISOString().slice(0, 10), payment_method: 'upi', notes: '' });
   const [logging, setLogging] = useState(false);
+  const [deletingLogId, setDeletingLogId] = useState<string | null>(null);
   const { showToast } = useToast();
+  const confirm = useConfirm();
 
   const fetchFees = useCallback(async () => {
     const [f, s] = await Promise.all([getFeesByBatch(batchId), getBatchStudents(batchId)]);
@@ -758,6 +760,30 @@ function FinanceTab({ batchId }: { batchId: string }) {
       showToast(errorMessage(error, 'Failed to log payment'), 'error');
     }
     setLogging(false);
+  };
+
+  // The balance goes back where it came from — pending for an enrolled student,
+  // void for one who left — because both are worked out from what was paid.
+  const handleDeletePaymentLog = async (log: FeePaymentLog) => {
+    const ok = await confirm({
+      title: `Delete this ${formatCurrency(Number(log.amount))} payment?`,
+      message: 'The amount goes back to what is owed. This cannot be undone.',
+      confirmLabel: 'Delete',
+      danger: true,
+    });
+    if (!ok) return;
+
+    setDeletingLogId(log.id);
+    try {
+      const fee = await deleteFeePayment(log.id);
+      setLoggingFee(fee);
+      setPaymentLogs((prev) => prev.filter((entry) => entry.id !== log.id));
+      setFees((prev) => prev.map((f) => (f.id === fee.id ? fee : f)));
+      showToast('Payment deleted');
+    } catch (error) {
+      showToast(errorMessage(error, 'Failed to delete payment'), 'error');
+    }
+    setDeletingLogId(null);
   };
 
   const totalFee = fees.reduce((s, f) => s + f.total_fee, 0);
@@ -832,6 +858,8 @@ function FinanceTab({ batchId }: { batchId: string }) {
         onClose={() => setLoggingFee(null)}
         onSubmit={handleAddPaymentLog}
         submitting={logging}
+        onDelete={handleDeletePaymentLog}
+        deletingId={deletingLogId}
       />
     </div>
   );

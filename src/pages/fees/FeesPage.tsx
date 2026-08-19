@@ -11,10 +11,11 @@ import { BatchSelect } from '@/components/ui/BatchSelect';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import { StudentLink } from '@/components/students/StudentLink';
 import { PaymentLogModal, type PaymentLogFormState } from '@/components/finance/PaymentLogModal';
-import { getBatches, getFeesByBatch, getFeePaymentLogs, addFeePaymentLog, getBatchFeeSummary, getBatchStudents } from '@/lib/supabase';
+import { getBatches, getFeesByBatch, getFeePaymentLogs, addFeePaymentLog, deleteFeePayment, getBatchFeeSummary, getBatchStudents } from '@/lib/supabase';
 import type { Batch, StudentFee, Student, BatchStudentMapping, BatchFeeSummary, FeePaymentLog } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils/format';
 import { useToast } from '@/lib/context/ToastContext';
+import { useConfirm } from '@/lib/context/ConfirmContext';
 import { errorMessage } from '@/lib/utils/errors';
 
 export default function FeesPage() {
@@ -27,7 +28,9 @@ export default function FeesPage() {
   const [paymentLogs, setPaymentLogs] = useState<FeePaymentLog[]>([]);
   const [logForm, setLogForm] = useState<PaymentLogFormState>({ amount: '', payment_date: new Date().toISOString().slice(0, 10), payment_method: 'upi', notes: '' });
   const [logging, setLogging] = useState(false);
+  const [deletingLogId, setDeletingLogId] = useState<string | null>(null);
   const { showToast } = useToast();
+  const confirm = useConfirm();
 
   const { loading, error, retry } = useInitialLoad(async () => {
     const [b, s] = await Promise.all([getBatches(), getBatchFeeSummary()]);
@@ -83,6 +86,31 @@ export default function FeesPage() {
       showToast(errorMessage(error, 'Failed to log payment'), 'error');
     }
     setLogging(false);
+  };
+
+  // The balance goes back where it came from — pending for an enrolled student,
+  // void for one who left — because both are worked out from what was paid.
+  const handleDeletePaymentLog = async (log: FeePaymentLog) => {
+    const ok = await confirm({
+      title: `Delete this ${formatCurrency(Number(log.amount))} payment?`,
+      message: 'The amount goes back to what is owed. This cannot be undone.',
+      confirmLabel: 'Delete',
+      danger: true,
+    });
+    if (!ok) return;
+
+    setDeletingLogId(log.id);
+    try {
+      const fee = await deleteFeePayment(log.id);
+      setLoggingFee(fee);
+      setPaymentLogs((prev) => prev.filter((entry) => entry.id !== log.id));
+      setFees((prev) => prev.map((f) => (f.id === fee.id ? fee : f)));
+      getBatchFeeSummary().then(setSummary);
+      showToast('Payment deleted');
+    } catch (error) {
+      showToast(errorMessage(error, 'Failed to delete payment'), 'error');
+    }
+    setDeletingLogId(null);
   };
 
   if (loading) return <Spinner centered />;
@@ -168,6 +196,8 @@ export default function FeesPage() {
         onClose={() => setLoggingFee(null)}
         onSubmit={handleAddPaymentLog}
         submitting={logging}
+        onDelete={handleDeletePaymentLog}
+        deletingId={deletingLogId}
       />
     </div>
   );

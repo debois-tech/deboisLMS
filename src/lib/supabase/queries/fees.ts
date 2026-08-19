@@ -1,6 +1,6 @@
 import { supabase } from '../client';
 import { maybeRow, ok, row, rows } from './result';
-import type { StudentFee, StudentFeeDue, BatchFeeSummary, FeePaymentLog, PaymentMethod } from '@/lib/types';
+import type { StudentFee, StudentFeeDue, BatchFeeSummary, EarningBreakdown, FeePaymentLog, PaymentMethod } from '@/lib/types';
 
 /** Fees for a batch, backfilling a zeroed row for any active student who has none yet. */
 export async function getFeesByBatch(batchId: string): Promise<StudentFee[]> {
@@ -83,6 +83,21 @@ export async function addFeePaymentLog(input: {
       p_notes: input.notes ?? null,
     }),
     'Could not record the payment',
+  );
+}
+
+/** Removes a payment and hands the balance back. Pending or void, whichever it came from. */
+export async function deleteFeePayment(logId: string): Promise<StudentFee> {
+  return row<StudentFee>(
+    await supabase.rpc('delete_fee_payment', { p_log_id: logId }),
+    'Could not delete this payment',
+  );
+}
+
+export async function getEarningBreakdown(): Promise<EarningBreakdown[]> {
+  return rows<EarningBreakdown>(
+    await supabase.from('earning_breakdown').select('*').order('batch_name'),
+    'Could not load the earning breakdown',
   );
 }
 

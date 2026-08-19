@@ -89,8 +89,8 @@ export default function StudentDetailPage() {
     try {
       const result = await terminateEnrolment(currentMapping.id);
       showToast(
-        result.settlement > 0
-          ? `Terminated — ${formatCurrency(result.settlement)} settled`
+        result.void_amount > 0
+          ? `Terminated — ${formatCurrency(result.void_amount)} void`
           : 'Terminated',
       );
       retry();

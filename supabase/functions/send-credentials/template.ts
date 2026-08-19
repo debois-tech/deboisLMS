@@ -352,7 +352,7 @@ export function credentialsEmail(
     `Welcome aboard, ${firstName}`,
     '',
     course
-      ? `You've been enrolled in ${course} on the deboistech Learning Portal.`
+      ? `You've been successfully enrolled in the Technology Excellence Program 2026 - ${course} on the deboistech Learning Portal.`
       : 'Your deboistech Learning Portal account is ready.',
     '',
     `Portal:   ${portalUrl}`,
