@@ -233,7 +233,12 @@ export async function getBatchStudents(batchId: string): Promise<(Student & { ma
   }));
 }
 
-export async function addStudentToBatch(studentId: string, batchId: string, totalFee: number): Promise<BatchStudentMapping> {
+export async function addStudentToBatch(
+  studentId: string,
+  batchId: string,
+  totalFee: number,
+  discount?: { type: 'percentage' | 'amount'; value: number },
+): Promise<BatchStudentMapping> {
   const mapping = row<BatchStudentMapping>(
     await supabase
       .from('batch_student_mapping')
@@ -249,7 +254,14 @@ export async function addStudentToBatch(studentId: string, batchId: string, tota
     await supabase
       .from('student_fees')
       .upsert(
-        { student_id: studentId, batch_id: batchId, total_fee: totalFee, paid_amount: 0 },
+        {
+          student_id: studentId,
+          batch_id: batchId,
+          total_fee: totalFee,
+          paid_amount: 0,
+          discount_type: discount?.type ?? 'percentage',
+          discount_value: discount?.value ?? 0,
+        },
         { onConflict: 'student_id,batch_id' },
       ),
     'Student was added but the fee could not be set',

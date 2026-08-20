@@ -55,8 +55,8 @@ export interface Student {
   /** Permanent institution-wide ID, e.g. DBT0001. Issued by the database — never sent on insert. */
   student_code?: string;
   name: string;
-  /** WhatsApp number. Also the source of the portal password suffix. */
-  phone?: string;
+  /** Phone/mobile number. Also the source of the portal password suffix. */
+  phone: string;
   email?: string;
   date_of_birth?: string;
   gender?: string;
@@ -96,7 +96,10 @@ export interface Lecture {
   lecture_date: string;
   session_type: SessionType;
   meeting_code?: string;
+  note?: string;
   scheduled_duration_minutes?: number;
+  start_at?: string;
+  end_at?: string;
   created_at: string;
 }
 

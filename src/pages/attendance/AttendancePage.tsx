@@ -11,6 +11,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { BatchSelect } from '@/components/ui/BatchSelect';
 import { LectureSelect } from '@/components/ui/LectureSelect';
 import { FormField } from '@/components/ui/FormField';
+import { SearchSelect } from '@/components/ui/SearchSelect';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { AttendanceRecordsTable } from '@/components/attendance/AttendanceRecordsTable';
 import { ManualAttendance } from '@/components/attendance/ManualAttendance';
@@ -42,7 +43,11 @@ export default function AttendancePage() {
   const [showManual, setShowManual] = useState(false);
   const [showNewLecture, setShowNewLecture] = useState(false);
   const [newLectureDate, setNewLectureDate] = useState('');
+  const [newLectureTime, setNewLectureTime] = useState('09:00');
   const [newLectureMeeting, setNewLectureMeeting] = useState('');
+  const [newLectureNote, setNewLectureNote] = useState('');
+  const [newLectureMode, setNewLectureMode] = useState<'online' | 'offline'>('online');
+  const [newLectureDuration, setNewLectureDuration] = useState(DEFAULT_LECTURE_MINUTES);
   const fileRef = useRef<HTMLInputElement>(null);
   const { showToast } = useToast();
 
@@ -175,16 +180,25 @@ export default function AttendancePage() {
   const handleCreateLecture = async () => {
     if (!selectedBatch || !newLectureDate) return;
     try {
+      const start = new Date(`${newLectureDate}T${newLectureTime}:00`);
+      const end = new Date(start.getTime() + newLectureDuration * 60_000);
       await createLecture({
         batch_id: selectedBatch,
         lecture_date: newLectureDate,
         meeting_code: newLectureMeeting || undefined,
-        session_type: 'online',
-        scheduled_duration_minutes: DEFAULT_LECTURE_MINUTES,
+        note: newLectureNote || undefined,
+        session_type: newLectureMode,
+        scheduled_duration_minutes: newLectureDuration,
+        start_at: start.toISOString(),
+        end_at: end.toISOString(),
       });
       setShowNewLecture(false);
       setNewLectureDate('');
+      setNewLectureTime('09:00');
       setNewLectureMeeting('');
+      setNewLectureNote('');
+      setNewLectureMode('online');
+      setNewLectureDuration(DEFAULT_LECTURE_MINUTES);
       setLectures(await getLecturesByBatch(selectedBatch));
       showToast('Lecture created');
     } catch (error) {
@@ -376,6 +390,14 @@ export default function AttendancePage() {
           <FormField label="Meeting Code">
             <input value={newLectureMeeting} onChange={(e) => setNewLectureMeeting(e.target.value)} />
           </FormField>
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="Mode" required>
+              <SearchSelect options={[{ value: 'online', label: 'Online' }, { value: 'offline', label: 'Offline' }]} value={newLectureMode} onChange={(value) => setNewLectureMode(value as typeof newLectureMode)} placeholder="Select mode" searchPlaceholder="Search modes" emptyText="No modes found" showSearch={false} />
+            </FormField>
+            <FormField label="Start time" required><input type="time" value={newLectureTime} onChange={(e) => setNewLectureTime(e.target.value)} /></FormField>
+          </div>
+          <FormField label="Duration (minutes)" required><input type="number" min="1" value={newLectureDuration} onChange={(e) => setNewLectureDuration(Number(e.target.value))} /></FormField>
+          <FormField label="Note"><input value={newLectureNote} onChange={(e) => setNewLectureNote(e.target.value)} /></FormField>
         </div>
       </Modal>
     </div>

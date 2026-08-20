@@ -463,7 +463,7 @@ function TutorsTab({ batchId }: { batchId: string }) {
 function LecturesTab({ batchId }: { batchId: string }) {
   const [lectures, setLectures] = useState<Lecture[]>([]);
   const [showNew, setShowNew] = useState(false);
-  const [form, setForm] = useState({ lecture_date: '', meeting_code: '', scheduled_duration_minutes: DEFAULT_LECTURE_MINUTES });
+  const [form, setForm] = useState({ lecture_date: '', start_time: '09:00', meeting_code: '', note: '', session_type: 'online' as const, scheduled_duration_minutes: DEFAULT_LECTURE_MINUTES });
 
   const { showToast } = useToast();
   const confirm = useConfirm();
@@ -476,9 +476,11 @@ function LecturesTab({ batchId }: { batchId: string }) {
 
   const handleCreate = async () => {
     try {
-      await createLecture({ ...form, batch_id: batchId, session_type: 'online' });
+      const start = new Date(`${form.lecture_date}T${form.start_time}:00`);
+      const end = new Date(start.getTime() + form.scheduled_duration_minutes * 60_000);
+      await createLecture({ batch_id: batchId, lecture_date: form.lecture_date, meeting_code: form.meeting_code || undefined, note: form.note || undefined, session_type: form.session_type, scheduled_duration_minutes: form.scheduled_duration_minutes, start_at: start.toISOString(), end_at: end.toISOString() });
       setShowNew(false);
-      setForm({ lecture_date: '', meeting_code: '', scheduled_duration_minutes: DEFAULT_LECTURE_MINUTES });
+      setForm({ lecture_date: '', start_time: '09:00', meeting_code: '', note: '', session_type: 'online', scheduled_duration_minutes: DEFAULT_LECTURE_MINUTES });
       void reloadLectures();
       showToast('Lecture created');
     } catch (error) {
@@ -518,7 +520,7 @@ function LecturesTab({ batchId }: { batchId: string }) {
               <div>
                 <p className="text-sm font-medium text-[var(--text-primary)]">{formatDate(l.lecture_date)}</p>
                 <p className="text-xs text-[var(--text-muted)]">
-                  {l.session_type} {l.meeting_code ? `• ${l.meeting_code}` : ''} {l.scheduled_duration_minutes ? `• ${l.scheduled_duration_minutes}min` : ''}
+                  {l.session_type} {l.meeting_code ? `• ${l.meeting_code}` : ''} {l.scheduled_duration_minutes ? `• ${l.scheduled_duration_minutes}min` : ''} {l.note ? `• ${l.note}` : ''}
                 </p>
               </div>
               <button onClick={() => handleDelete(l.id, formatDate(l.lecture_date))} aria-label={`Delete lecture on ${formatDate(l.lecture_date)}`} className="text-[var(--text-muted)] hover:text-[var(--danger-text)] p-1">
@@ -554,9 +556,16 @@ function LecturesTab({ batchId }: { batchId: string }) {
           <FormField label="Meeting Code">
             <input value={form.meeting_code} onChange={(e) => setForm({ ...form, meeting_code: e.target.value })} />
           </FormField>
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="Mode" required>
+              <SearchSelect options={[{ value: 'online', label: 'Online' }, { value: 'offline', label: 'Offline' }]} value={form.session_type} onChange={(session_type) => setForm({ ...form, session_type: session_type as typeof form.session_type })} placeholder="Select mode" searchPlaceholder="Search modes" emptyText="No modes found" showSearch={false} />
+            </FormField>
+            <FormField label="Start time" required><input type="time" value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} /></FormField>
+          </div>
           <FormField label="Duration (minutes)">
             <input type="number" value={form.scheduled_duration_minutes} onChange={(e) => setForm({ ...form, scheduled_duration_minutes: Number(e.target.value) })} />
           </FormField>
+          <FormField label="Note"><input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} /></FormField>
         </div>
       </Modal>
     </Card>
