@@ -157,7 +157,9 @@ export default function FeesPage() {
               <TBody>
                 {fees.map((fee) => {
                   const student = students.find((item) => item.id === fee.student_id);
-                  const remaining = fee.total_fee - fee.paid_amount;
+                  // A leaver owes their void; the rest of the fee never became due.
+                  const owed = fee.expected_on_exit ?? fee.total_fee;
+                  const remaining = Math.max(0, owed - fee.paid_amount);
                   const isPaid = fee.status === 'paid' || remaining <= 0;
                   return (
                     <TR key={fee.id}>

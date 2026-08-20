@@ -107,15 +107,22 @@ export interface ParsedAttendanceCsv {
   meetingCode?: string;
 }
 
-/** Meet codes compare case-insensitively and ignore separator hyphens. */
+// Case-insensitive, hyphens ignored, and a pasted Meet link reduced to its code.
 export function normalizeMeetingCode(code: string | undefined | null): string {
-  return (code ?? '').replace(/-/g, '').trim().toLowerCase();
+  const raw = (code ?? '').trim();
+  if (!raw) return '';
+
+  // Drop any query or fragment, then keep the last path segment of a full URL.
+  const path = raw.split(/[?#]/)[0].replace(/\/+$/, '');
+  const segment = path.slice(path.lastIndexOf('/') + 1);
+  return segment.replace(/-/g, '').trim().toLowerCase();
 }
 
+// Both must be present: an absent code is unknown, not a mismatch.
 export function meetingCodesMatch(expected: string | undefined | null, actual: string | undefined | null): boolean {
   const expectedCode = normalizeMeetingCode(expected);
   const actualCode = normalizeMeetingCode(actual);
-  return expectedCode.length === 10 && actualCode.length === 10 && expectedCode === actualCode;
+  return expectedCode.length > 0 && expectedCode === actualCode;
 }
 
 export function parseCsv(text: string): ParsedAttendanceCsv {

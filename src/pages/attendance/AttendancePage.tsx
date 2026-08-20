@@ -111,8 +111,12 @@ export default function AttendancePage() {
 
   const lecture = lectures.find((l) => l.id === selectedLecture);
 
+  // Only a lecture that already knows its code can disagree with the export.
   const meetingCodeMismatch = Boolean(
-    csvRows.length > 0 && lecture?.session_type === 'online' && !meetingCodesMatch(lecture.meeting_code, csvMeetingCode),
+    csvRows.length > 0 &&
+    lecture?.session_type === 'online' &&
+    lecture.meeting_code &&
+    !meetingCodesMatch(lecture.meeting_code, csvMeetingCode),
   );
 
   // Re-upload guard: the pipeline upserts, so a duplicate would rewrite hand-corrected records. A warning, not a wall.
@@ -138,7 +142,7 @@ export default function AttendancePage() {
 
       // Remember the code the export came with, so the next upload of the same
       // file has something to be recognised against.
-      if (lecture?.session_type !== 'online' && !lecture?.meeting_code && csvMeetingCode) {
+      if (!lecture?.meeting_code && csvMeetingCode) {
         await updateLecture(selectedLecture, { meeting_code: csvMeetingCode });
         setLectures(await getLecturesByBatch(selectedBatch!));
       }

@@ -93,7 +93,7 @@ export function BatchMaterials({
 
     setPurging(true);
     try {
-      const removed = await deleteBatchMaterials(batchId);
+      const removed = await deleteBatchMaterials(batchId, true);
       showToast(`${removed} ${removed === 1 ? 'file' : 'files'} deleted`);
       void reload();
     } catch (err) {

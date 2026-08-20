@@ -45,6 +45,7 @@ export function StudentImportModal({ open, onClose, batches, batch, onImport }: 
   const [pickedId, setPickedId] = useState<string | null>(null);
   const [createLogins, setCreateLogins] = useState(true);
   const [error, setError] = useState('');
+  const [skipped, setSkipped] = useState(0);
   const [importing, setImporting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const pager = usePager(rows, PREVIEW_ROWS);
@@ -111,6 +112,7 @@ export function StudentImportModal({ open, onClose, batches, batch, onImport }: 
       setHeaders(parsed.headers);
       setRows(parsed.rows);
       setError(parsed.error);
+      setSkipped(parsed.skipped);
       // A different sheet starts at its own beginning, not wherever the last one left off.
       pager.reset();
     };
@@ -179,6 +181,7 @@ export function StudentImportModal({ open, onClose, batches, batch, onImport }: 
                   {outcome && outcome.free > 0 && <span>{outcome.free} pay nothing</span>}
                 </>
               )}
+              {skipped > 0 && <span>{skipped} skipped</span>}
             </p>
             <div className="import-preview">
               <table>
@@ -245,7 +248,7 @@ export function StudentImportModal({ open, onClose, batches, batch, onImport }: 
 
         {createLogins && (
           <p className="text-xs text-[var(--text-muted)]">
-            Email required. Passwords appear after import. Rows without email are skipped.
+            Passwords appear after import.
           </p>
         )}
 

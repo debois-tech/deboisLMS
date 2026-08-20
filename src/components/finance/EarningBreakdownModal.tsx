@@ -56,7 +56,7 @@ export function EarningBreakdownModal({ open, onClose, breakdown }: EarningBreak
       rows.reduce((total, row) => total + Number(pick(row) ?? 0), 0);
 
     return {
-      collected: sum((row) => row.collected),
+      collectedActive: sum((row) => row.collected_active),
       pending: sum((row) => row.pending),
       voidAmount: sum((row) => row.void_amount),
       recovered: sum((row) => row.recovered),
@@ -87,7 +87,7 @@ export function EarningBreakdownModal({ open, onClose, breakdown }: EarningBreak
           <Section
             figures={
               <>
-                <Figure label="Collected" value={totals.collected} tone="text-[var(--success-text)]" />
+                <Figure label="Collected" value={totals.collectedActive} tone="text-[var(--success-text)]" />
                 <Figure label="Pending due" value={totals.pending} tone="text-[var(--danger-text)]" />
               </>
             }

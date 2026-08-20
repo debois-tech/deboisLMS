@@ -173,9 +173,11 @@ export async function deleteMaterial(material: Material): Promise<void> {
 }
 
 // Storage has no prefix delete, so the paths come from the table while the rows still exist.
-export async function deleteBatchMaterials(batchId: string): Promise<number> {
+// studyOnly leaves assignment handouts alone, which is what the material list shows.
+export async function deleteBatchMaterials(batchId: string, studyOnly = false): Promise<number> {
+  const select = supabase.from('materials').select('storage_path').eq('batch_id', batchId);
   const paths = rows<{ storage_path: string }>(
-    await supabase.from('materials').select('storage_path').eq('batch_id', batchId),
+    await (studyOnly ? select.is('assignment_id', null) : select),
     'Could not list the files for this batch',
   ).map((row) => row.storage_path);
 
@@ -185,7 +187,8 @@ export async function deleteBatchMaterials(batchId: string): Promise<number> {
   const { error } = await supabase.storage.from(BUCKET).remove(paths);
   if (error) throw new Error(error.message);
 
-  ok(await supabase.from('materials').delete().eq('batch_id', batchId), 'Could not clear the material rows');
+  const remove = supabase.from('materials').delete().eq('batch_id', batchId);
+  ok(await (studyOnly ? remove.is('assignment_id', null) : remove), 'Could not clear the material rows');
   return paths.length;
 }
 

@@ -71,20 +71,29 @@ export function getImportProgram(row: Record<string, string>): BatchProgram | un
 export interface ParsedStudentCsv {
   headers: string[];
   rows: Record<string, string>[];
-  /** Empty when the file is usable. */
+  // Rows dropped for a missing required field.
+  skipped: number;
+  // Empty when the file is usable.
   error: string;
 }
 
-/** Rows without a name are dropped — they cannot produce a student. */
+// Name, email and date of birth are not null in the database, so a row missing
+// any of them cannot become a student. Dropped here rather than failing the
+// whole import on the insert.
 export function parseStudentCsv(text: string): ParsedStudentCsv {
   const table = parseCsvTable(text);
-  const rows = table.rows.filter((row) => getImportValue(row, ['name', 'full name', 'student name']));
+  const rows = table.rows.filter((row) =>
+    getImportValue(row, ['name', 'full name', 'student name']) &&
+    getImportValue(row, ['email', 'email address', 'mail']) &&
+    toIsoDate(getImportValue(row, ['dob', 'date of birth', 'birth date', 'birthdate'])),
+  );
   return {
     headers: table.headers,
     rows,
+    skipped: table.rows.length - rows.length,
     error:
       !table.headers.length || !rows.length
-        ? 'CSV needs a Name column and one student row.'
+        ? 'CSV needs Name, Email and Date of Birth columns, and one usable row.'
         : '',
   };
 }

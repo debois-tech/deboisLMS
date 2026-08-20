@@ -9,13 +9,16 @@ do $$ begin create type batch_status       as enum ('upcoming', 'ongoing', 'comp
 do $$ begin create type session_type       as enum ('online', 'offline');                     exception when duplicate_object then null; end $$;
 do $$ begin create type attendance_status  as enum ('present', 'partial', 'absent');          exception when duplicate_object then null; end $$;
 do $$ begin create type attendance_source  as enum ('manual', 'automated');                   exception when duplicate_object then null; end $$;
-do $$ begin create type mapping_status     as enum ('active', 'dropped');                     exception when duplicate_object then null; end $$;
+do $$ begin create type mapping_status     as enum ('active', 'dropped', 'terminated');       exception when duplicate_object then null; end $$;
 do $$ begin create type fee_status         as enum ('due', 'paid');                           exception when duplicate_object then null; end $$;
 do $$ begin create type payment_method     as enum ('cash', 'upi', 'bank_transfer', 'other'); exception when duplicate_object then null; end $$;
 
 -- Work is handed in as a GitHub repo and nothing else. 'portal' is the student
 -- doing it themselves; 'github' is an admin recording one. WhatsApp is gone.
 do $$ begin create type submission_channel as enum ('github', 'portal');                      exception when duplicate_object then null; end $$;
+do $$ begin create type discount_type      as enum ('percentage', 'amount');                  exception when duplicate_object then null; end $$;
+do $$ begin create type feedback_kind      as enum ('bug', 'request');                        exception when duplicate_object then null; end $$;
+do $$ begin create type feedback_status    as enum ('open', 'resolved');                      exception when duplicate_object then null; end $$;
 
 -- Programmes are NOT an enum — see the batch_programs table below for why.
 
@@ -124,10 +127,10 @@ create table if not exists batches (
   batch_code text,
   -- The batch's full fee before any discount. Student imports carry a Discount %
   -- per row and write base_fee * (1 - discount/100) into student_fees.total_fee;
-  -- the discount itself is never stored, only the amount it produced. Nullable
-  -- for batches created before the column existed — the form requires it now and
-  -- the importer refuses a batch without one rather than importing zeroes.
-  base_fee   numeric check (base_fee is null or base_fee >= 0),
+  -- the discount itself is never stored, only the amount it produced.
+  base_fee   numeric not null check (base_fee >= 0),
+  -- Set by end_batch(). Null while the batch is still running.
+  ended_at   date,
   created_at timestamptz default now()
 );
 
@@ -138,9 +141,9 @@ create table if not exists students (
   student_code    text unique not null default next_student_code(),
   name            text not null,
   -- WhatsApp number. Also the source of the portal password suffix.
-  phone           text,
-  email           text,
-  date_of_birth   date,
+  phone           text not null check (btrim(phone) <> ''),
+  email           text not null,
+  date_of_birth   date not null,
   gender          text,
   college         text,
   course          text,
@@ -170,6 +173,8 @@ create table if not exists batch_student_mapping (
   -- default: a default cannot read another table, and current_date would make an
   -- omitted value indistinguishable from one deliberately set to today.
   joined_at  date,
+  -- Set by terminate_enrolment(). Null until the student leaves.
+  left_on    date,
   status     mapping_status default 'active',
   unique (batch_id, student_id)
 );
@@ -220,10 +225,17 @@ create index if not exists idx_tbm_batch on tutor_batch_mapping(batch_id);
 create table if not exists lectures (
   id                         uuid primary key default gen_random_uuid(),
   batch_id                   uuid references batches(id) on delete cascade not null,
+  -- The day the session ran, entered by hand. Never defaulted from the insert time.
   lecture_date               date not null,
-  session_type               session_type default 'online',
+  session_type               session_type not null default 'online',
   meeting_code               text,
-  scheduled_duration_minutes int default 120,
+  scheduled_duration_minutes int not null default 120,
+  note                       text,
+  -- Session start, entered by hand as a local date and time. Not the insert time.
+  start_at                   timestamptz not null,
+  -- Computed from start_at plus scheduled_duration_minutes.
+  end_at                     timestamptz check (end_at is null or end_at > start_at),
+  -- The only clock-driven column on this table.
   created_at                 timestamptz default now()
 );
 
@@ -284,6 +296,14 @@ create table if not exists student_fees (
   batch_id    uuid references batches(id) on delete cascade not null,
   total_fee   numeric not null,
   paid_amount numeric not null default 0,
+  -- What the fee rule said was owed the day the student left, frozen. Null while
+  -- enrolled. The unpaid remainder is void: recorded, never counted as a due.
+  -- Also the ceiling on any later payment.
+  expected_on_exit numeric,
+  -- What they had paid that day. Anything above it since is recovered void.
+  paid_at_exit     numeric,
+  discount_type    discount_type not null default 'percentage',
+  discount_value   numeric not null default 0 check (discount_value >= 0),
   status      fee_status generated always as (
     case when paid_amount >= total_fee then 'paid'::fee_status else 'due'::fee_status end
   ) stored,
@@ -328,9 +348,10 @@ language plpgsql
 set search_path = public
 as $$
 declare
-  fee_row student_fees%rowtype;
-  log_row fee_payment_logs%rowtype;
+  fee_row     student_fees%rowtype;
+  log_row     fee_payment_logs%rowtype;
   updated_fee student_fees%rowtype;
+  ceiling     numeric;
 begin
   if p_amount is null or p_amount <= 0 then
     raise exception 'Payment amount must be greater than zero';
@@ -341,6 +362,12 @@ begin
 
   if not found then
     raise exception 'Could not find the fee record';
+  end if;
+
+  ceiling := coalesce(fee_row.expected_on_exit, fee_row.total_fee);
+  if fee_row.paid_amount + p_amount > ceiling then
+    raise exception 'That is more than is owed. At most % can be logged.',
+      greatest(ceiling - fee_row.paid_amount, 0);
   end if;
 
   insert into fee_payment_logs (
@@ -361,7 +388,6 @@ begin
   return jsonb_build_object('log', to_jsonb(log_row), 'fee', to_jsonb(updated_fee));
 end;
 $$;
-
 revoke all on function public.record_fee_payment(uuid, numeric, date, payment_method, text) from public;
 grant execute on function public.record_fee_payment(uuid, numeric, date, payment_method, text) to authenticated;
 
@@ -591,12 +617,12 @@ create or replace view batch_fee_summary as
 select
   b.id as batch_id,
   b.name as batch_name,
-  count(distinct bsm.student_id) as total_students,
-  coalesce(sum(sf.total_fee), 0) as total_fees,
+  count(distinct bsm.student_id) filter (where bsm.status <> 'terminated') as total_students,
+  coalesce(sum(sf.total_fee) filter (where bsm.status <> 'terminated'), 0) as total_fees,
   coalesce(sum(sf.paid_amount), 0) as total_collected,
-  coalesce(sum(sf.total_fee - sf.paid_amount), 0) as total_outstanding
+  coalesce(sum(greatest(sf.total_fee - sf.paid_amount, 0)) filter (where bsm.status <> 'terminated'), 0) as total_outstanding
 from batches b
-left join batch_student_mapping bsm on bsm.batch_id = b.id and bsm.status = 'active'
+left join batch_student_mapping bsm on bsm.batch_id = b.id
 left join student_fees sf on sf.batch_id = b.id and sf.student_id = bsm.student_id
 group by b.id, b.name;
 
@@ -613,6 +639,43 @@ from batches b
 left join lectures l on l.batch_id = b.id
 left join attendance a on a.lecture_id = l.id
 group by b.id, b.name;
+
+create or replace view earning_breakdown as
+select
+  b.id   as batch_id,
+  b.name as batch_name,
+  count(bsm.id) filter (where bsm.status <> 'terminated') as active_students,
+  count(bsm.id) filter (where bsm.status =  'terminated') as terminated_students,
+
+  -- Everything banked, whoever paid it.
+  coalesce(sum(sf.paid_amount), 0) as collected,
+  coalesce(sum(sf.paid_amount) filter (where bsm.status <> 'terminated'), 0) as collected_active,
+  coalesce(sum(sf.paid_amount) filter (where bsm.status =  'terminated'), 0) as collected_terminated,
+
+  -- Still expected from students who have not left.
+  coalesce(sum(greatest(sf.total_fee - sf.paid_amount, 0))
+    filter (where bsm.status <> 'terminated'), 0) as pending,
+
+  -- Owed on the day they left and never paid. Recorded, never expected.
+  coalesce(sum(greatest(coalesce(sf.expected_on_exit, 0) - sf.paid_amount, 0))
+    filter (where bsm.status = 'terminated'), 0) as void_amount,
+
+  -- The rest of their course fee, which never became due at all.
+  coalesce(sum(greatest(sf.total_fee - coalesce(sf.expected_on_exit, 0), 0))
+    filter (where bsm.status = 'terminated'), 0) as never_due,
+
+  -- Void that came in after they left. Never more than the void itself.
+  coalesce(sum(greatest(sf.paid_amount - coalesce(sf.paid_at_exit, sf.paid_amount), 0))
+    filter (where bsm.status = 'terminated'), 0) as recovered
+from batches b
+left join batch_student_mapping bsm on bsm.batch_id = b.id
+left join student_fees sf on sf.batch_id = b.id and sf.student_id = bsm.student_id
+group by b.id, b.name;
+
+alter view earning_breakdown set (security_invoker = on);
+comment on view earning_breakdown is
+  'Per-batch earnings. pending is what active students still owe; void_amount is what '
+  'terminated students owed at exit and never paid. The two never mix.';
 
 -- Views run with the owner's rights by default, which would bypass every policy
 -- below. This makes them run as the caller instead.
@@ -631,7 +694,14 @@ select
   sf.batch_id,
   greatest(sf.total_fee - sf.paid_amount, 0) as amount_due,
   sf.status,
-  sf.updated_at
+  sf.updated_at,
+  case
+    when sf.total_fee <= 0 then 2
+    when sf.paid_amount >= sf.total_fee then 2
+    when sf.paid_amount >= least(1000, sf.total_fee)
+                         + round(greatest(sf.total_fee - 1000, 0) / 2.0) then 1
+    else 0
+  end as paid_through
 from student_fees sf
 where sf.student_id = current_student_id();
 
@@ -839,3 +909,301 @@ create policy "admin manages material files" on storage.objects
   for all
   using (bucket_id = 'materials' and is_admin())
   with check (bucket_id = 'materials' and is_admin());
+
+
+-- 11. BATCH LIFECYCLE AND LEAVERS
+create or replace function end_batch(p_batch_id uuid)
+returns batches
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare updated batches;
+begin
+  if not is_admin() then
+    raise exception 'Admin only';
+  end if;
+
+  update batches
+  set status = 'completed', ended_at = coalesce(ended_at, current_date)
+  where id = p_batch_id
+  returning * into updated;
+
+  if not found then
+    raise exception 'Batch not found';
+  end if;
+
+  return updated;
+end $$;
+
+revoke all on function end_batch(uuid) from public;
+grant execute on function end_batch(uuid) to authenticated;
+
+create or replace function terminate_enrolment(p_mapping_id uuid, p_left_on date default current_date)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  m            batch_student_mapping%rowtype;
+  batch_start  date;
+  fee_row      student_fees%rowtype;
+  instalment   numeric;
+  due_count    int := 0;
+  expected     numeric := 0;
+  void_amount  numeric := 0;
+  auth_id      uuid;
+  still_active boolean;
+begin
+  if not is_admin() then
+    raise exception 'Admin only';
+  end if;
+
+  select * into m from batch_student_mapping where id = p_mapping_id;
+  if not found then
+    raise exception 'Enrolment not found';
+  end if;
+
+  select start_date into batch_start from batches where id = m.batch_id;
+  select * into fee_row from student_fees
+  where student_id = m.student_id and batch_id = m.batch_id
+  for update;
+
+  if found and fee_row.total_fee > 0 then
+    instalment := round(greatest(fee_row.total_fee - 1000, 0) / 2.0);
+
+    -- Due on the day itself, so `>=`, not `>`.
+    if batch_start is not null then
+      if p_left_on >= batch_start + 15 then due_count := 1; end if;
+      if p_left_on >= batch_start + 30 then due_count := 2; end if;
+    end if;
+
+    -- Registration is collected at sign-up and always owed; instalments only
+    -- once their date has been reached.
+    expected := least(fee_row.total_fee, least(1000, fee_row.total_fee) + instalment * due_count);
+    void_amount := greatest(expected - fee_row.paid_amount, 0);
+
+    update student_fees
+    set expected_on_exit = expected,
+        paid_at_exit = fee_row.paid_amount,
+        updated_at = now()
+    where id = fee_row.id;
+  end if;
+
+  update batch_student_mapping
+  set status = 'terminated', left_on = p_left_on
+  where id = p_mapping_id;
+
+  -- Checked after the update, so this enrolment is already out of the running.
+  select exists (
+    select 1 from batch_student_mapping m2
+    join batches b2 on b2.id = m2.batch_id
+    where m2.student_id = m.student_id
+      and m2.status = 'active'
+      and b2.ended_at is null
+  ) into still_active;
+
+  select auth_user_id into auth_id from students where id = m.student_id;
+
+  if auth_id is not null and not still_active then
+    delete from auth.users where id = auth_id;
+    update students set password_rotated = false where id = m.student_id;
+  end if;
+
+  return jsonb_build_object(
+    'instalments_due', due_count,
+    'expected_on_exit', expected,
+    'void_amount', void_amount,
+    'login_revoked', auth_id is not null and not still_active
+  );
+end $$;
+
+revoke all on function terminate_enrolment(uuid, date) from public;
+grant execute on function terminate_enrolment(uuid, date) to authenticated;
+
+create or replace function revoke_expired_student_logins()
+returns int
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  expired record;
+  removed int := 0;
+begin
+  -- cron runs this with no JWT, so "no caller" is allowed. A signed-in caller
+  -- must be an admin: without this a student could invoke it themselves.
+  if auth.uid() is not null and not is_admin() then
+    raise exception 'Admin only';
+  end if;
+
+  for expired in
+    select distinct s.id as student_id, s.auth_user_id
+    from batch_student_mapping m
+    join batches b on b.id = m.batch_id
+    join students s on s.id = m.student_id
+    where b.ended_at is not null
+      and b.ended_at + 30 <= current_date
+      and s.auth_user_id is not null
+      -- Still enrolled somewhere that has not ended keeps its login.
+      and not exists (
+        select 1 from batch_student_mapping m2
+        join batches b2 on b2.id = m2.batch_id
+        where m2.student_id = s.id
+          and m2.status = 'active'
+          and (b2.ended_at is null or b2.ended_at + 30 > current_date)
+      )
+  loop
+    delete from auth.users where id = expired.auth_user_id;
+    update students set password_rotated = false where id = expired.student_id;
+    removed := removed + 1;
+  end loop;
+
+  update batch_student_mapping m
+  set status = 'dropped'
+  from batches b
+  where b.id = m.batch_id
+    and b.ended_at is not null
+    and b.ended_at + 30 <= current_date
+    and m.status = 'active';
+
+  return removed;
+end $$;
+
+revoke all on function revoke_expired_student_logins() from public;
+grant execute on function revoke_expired_student_logins() to authenticated;
+
+create or replace function delete_fee_payment(p_log_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  log_row fee_payment_logs%rowtype;
+  fee_row student_fees%rowtype;
+begin
+  if not is_admin() then
+    raise exception 'Admin only';
+  end if;
+
+  select * into log_row from fee_payment_logs where id = p_log_id;
+  if not found then
+    raise exception 'Payment not found';
+  end if;
+
+  if log_row.notes = 'Registration fee' then
+    raise exception 'The registration fee cannot be deleted';
+  end if;
+
+  -- Locked before the delete, so a concurrent payment cannot read a stale total.
+  select * into fee_row from student_fees where id = log_row.student_fee_id for update;
+  if not found then
+    raise exception 'Could not find the fee record';
+  end if;
+
+  delete from fee_payment_logs where id = p_log_id;
+
+  update student_fees
+  set paid_amount = greatest(coalesce(fee_row.paid_amount, 0) - log_row.amount, 0),
+      updated_at = now()
+  where id = fee_row.id
+  returning * into fee_row;
+
+  return to_jsonb(fee_row);
+end $$;
+
+revoke all on function delete_fee_payment(uuid) from public;
+grant execute on function delete_fee_payment(uuid) to authenticated;
+
+create or replace function resync_student_code_seq()
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  prefix  text := student_code_prefix();
+  highest bigint;
+begin
+  -- The SQL editor carries no JWT, so "no caller" is allowed — that is where this
+  -- gets run. A signed-in caller must be an admin.
+  if auth.uid() is not null and not is_admin() then
+    raise exception 'Admin only';
+  end if;
+
+  -- Digits after the prefix. Other years carry a different prefix and a
+  -- different string, so they can never collide with this one.
+  select max(nullif(regexp_replace(substring(student_code from length(prefix) + 1), '\D', '', 'g'), '')::bigint)
+  into highest
+  from students
+  where student_code like prefix || '%';
+
+  if highest is null then
+    -- Nobody left under this prefix: the next call starts at 1.
+    perform setval('student_code_seq', 1, false);
+  else
+    perform setval('student_code_seq', highest);
+  end if;
+
+  -- The code the next student will get. Worked out, not consumed.
+  return prefix || lpad((coalesce(highest, 0) + 1)::text, 3, '0');
+end $$;
+
+revoke all on function resync_student_code_seq() from public;
+grant execute on function resync_student_code_seq() to authenticated;
+
+
+-- 12. FEEDBACK
+create table if not exists feedback (
+  id          uuid primary key default gen_random_uuid(),
+  student_id  uuid references students(id) on delete cascade not null,
+  kind        feedback_kind not null default 'bug',
+  message     text not null check (length(btrim(message)) > 0),
+  -- Captured, not typed: the page and browser are what make a bug report usable.
+  page        text,
+  user_agent  text,
+  status      feedback_status not null default 'open',
+  created_at  timestamptz default now(),
+  resolved_at timestamptz
+);
+
+create index if not exists idx_feedback_student on feedback(student_id);
+create index if not exists idx_feedback_status  on feedback(status);
+
+alter table feedback enable row level security;
+
+drop policy if exists admin_full_access on feedback;
+create policy admin_full_access on feedback
+  for all using (is_admin()) with check (is_admin());
+
+drop policy if exists student_read_own on feedback;
+create policy student_read_own on feedback
+  for select using (student_id = current_student_id());
+
+-- Insert only, and only as themselves. No update policy on purpose: a student
+-- must not be able to mark their own report resolved or edit it after the fact.
+drop policy if exists student_insert_own on feedback;
+create policy student_insert_own on feedback
+  for insert with check (student_id = current_student_id());
+
+-- resolved_at follows status rather than being set by hand in two places.
+create or replace function stamp_feedback_resolved()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if new.status = 'resolved' and coalesce(old.status, 'open') <> 'resolved' then
+    new.resolved_at := now();
+  elsif new.status = 'open' then
+    new.resolved_at := null;
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists feedback_resolved_stamp on feedback;
+create trigger feedback_resolved_stamp
+  before insert or update on feedback
+  for each row execute function stamp_feedback_resolved();

@@ -38,6 +38,11 @@ export default function EditStudentPage() {
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!student) return;
+    // DatePicker is not a native input, so required has to be checked here.
+    if (!form.date_of_birth) {
+      showToast('Pick a date of birth', 'error');
+      return;
+    }
     setSaving(true);
     try {
       await updateStudent(student.id, { ...form, name: form.name.trim(), phone: form.phone.trim(), graduation_year: form.graduation_year || undefined });
@@ -62,7 +67,7 @@ export default function EditStudentPage() {
             <FormField label="Mobile Number" required><input value={form.phone} onChange={set('phone')} required /></FormField>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <FormField label="Date of Birth"><DatePicker value={form.date_of_birth ?? ''} onChange={(date_of_birth) => setForm({ ...form, date_of_birth })} placeholder="Pick a date" ariaLabel="Date of birth" /></FormField>
+            <FormField label="Date of Birth" required><DatePicker value={form.date_of_birth ?? ''} onChange={(date_of_birth) => setForm({ ...form, date_of_birth })} placeholder="Pick a date" ariaLabel="Date of birth" /></FormField>
             <FormField label="College / University"><input value={form.college ?? ''} onChange={set('college')} /></FormField>
           </div>
           <div className="grid grid-cols-2 gap-4">

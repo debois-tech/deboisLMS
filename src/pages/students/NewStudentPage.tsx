@@ -59,6 +59,11 @@ export default function NewStudentPage() {
       showToast('Select a batch for this student', 'error');
       return;
     }
+    // DatePicker is not a native input, so required has to be checked here.
+    if (!form.date_of_birth) {
+      showToast('Pick a date of birth', 'error');
+      return;
+    }
     if (payable === null) {
       showToast(`${batch?.name ?? 'This batch'} has no base fee. Set one on the batch first.`, 'error');
       return;
@@ -159,7 +164,7 @@ export default function NewStudentPage() {
             </InlineAlert>
           )}
           <div className="grid gap-4 md:grid-cols-2">
-            <FormField label="Date of Birth">
+            <FormField label="Date of Birth" required>
               <DatePicker
                 value={form.date_of_birth}
                 onChange={(date_of_birth) => setForm({ ...form, date_of_birth })}
