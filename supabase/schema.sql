@@ -534,7 +534,7 @@ create table if not exists materials (
   -- Folder name when this came from a folder upload; NULL for a single file.
   -- One row per file either way — this only groups them in listings.
   folder        text,
-  storage_path  text not null unique,   -- <batch_id|all>/<uuid>.<ext>
+  storage_path  text not null unique,   -- <batch|all>/materials/<uuid>.<ext> or <batch|all>/assignments/<assignment>/<uuid>.<ext>
   mime_type     text not null default 'application/pdf',
   size_bytes    bigint,
   page_count    int,

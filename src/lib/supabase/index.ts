@@ -1,4 +1,5 @@
-export { getBatches, getBatchById, createBatch, updateBatch, deleteBatch, getBatchPrograms, endBatch, saveBatchProgram, PROGRAM_CODE_PATTERN } from './queries/batches';
+export { getBatches, getBatchById, createBatch, updateBatch, deleteBatch, getBatchDeletionCounts, getBatchPrograms, endBatch, saveBatchProgram, PROGRAM_CODE_PATTERN } from './queries/batches';
+export type { BatchDeletionCounts } from './queries/batches';
 export { getStudents, getStudentById, createStudent, createOrReuseStudent, findExistingStudent, updateStudent, getStudentBatches, getAllBatchStudentMappings, getBatchStudents, addStudentToBatch, terminateEnrolment, getStudentByAuthUserId, createStudentLogin, createStudentLoginsBulk, sendCredentialsEmail, importStudentsIntoBatch } from './queries/students';
 export type { BulkLoginResult, CredentialEmailResult, TerminationResult } from './queries/students';
 export { getTutors, getTutorById, createTutor, getTutorBatches, getBatchTutors, assignTutorToBatch, removeTutorFromBatch } from './queries/tutors';
@@ -9,7 +10,7 @@ export type { ProcessingReport, ProcessOptions } from '@/lib/attendance/process'
 export { getFeesByBatch, updateFeePayment, getFeePaymentLogs, addFeePaymentLog, deleteFeePayment, getBatchFeeSummary, getEarningBreakdown, getFeesByStudent, getFeePaymentLogsByStudent, getMyFeeDues } from './queries/fees';
 export { getAssignmentsByBatch, getAssignmentsForStudent, createAssignment, getAssignmentSubmissions, getStudentRepo, saveStudentRepo, submitAssignmentFromPortal, markSubmission } from './queries/assignments';
 export type { AssignmentSubmissionRow } from './queries/assignments';
-export { getMaterialsByBatch, getMaterialsForEveryone, getMaterialsForStudent, getMaterialsByAssignment, getMaterialById, uploadMaterial, uploadMaterials, deleteMaterial, getMaterialViews, openMaterial, downloadMaterial, MATERIAL_MAX_BYTES } from './queries/materials';
+export { getMaterialsByBatch, getMaterialsForEveryone, getMaterialsForStudent, getMaterialsByAssignment, getMaterialById, uploadMaterial, uploadMaterials, deleteMaterial, deleteBatchMaterials, getMaterialViews, openMaterial, downloadMaterial, MATERIAL_MAX_BYTES } from './queries/materials';
 export type { UploadMaterialInput, BulkUploadResult } from './queries/materials';
 export { getDashboardStats, getRecentActivity } from './queries/dashboard';
 export type { DashboardStats, RecentActivity } from './queries/dashboard';

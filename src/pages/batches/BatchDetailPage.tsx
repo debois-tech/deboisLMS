@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Archive, ArrowLeft, Edit3, UserMinus, Users, GraduationCap, Layers, ClipboardCheck, FileText, Plus, Trash2, ChevronRight, CalendarDays, Upload } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -27,6 +27,7 @@ import { getBatchById, getBatchPrograms, endBatch } from '@/lib/supabase';
 import { getBatchStudents, addStudentToBatch, terminateEnrolment, getStudents, createStudentLoginsBulk, importStudentsIntoBatch, deleteFeePayment } from '@/lib/supabase';
 import type { BulkLoginResult } from '@/lib/supabase';
 import { BulkLoginsModal } from '@/components/students/BulkLoginsModal';
+import { DeleteBatchModal } from '@/components/batches/DeleteBatchModal';
 import { getBatchTutors, assignTutorToBatch, removeTutorFromBatch, getTutors } from '@/lib/supabase';
 import { getLecturesByBatch, createLecture, deleteLecture } from '@/lib/supabase';
 import { getAttendanceByLecture, setAttendanceApproved, bulkApproveAttendance } from '@/lib/supabase';
@@ -48,6 +49,8 @@ export default function BatchDetailPage() {
   const [batch, setBatch] = useState<Batch | null>(null);
   const [programs, setPrograms] = useState<BatchProgramOption[]>([]);
   const [ending, setEnding] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const navigate = useNavigate();
   const { showToast } = useToast();
   const confirm = useConfirm();
 
@@ -109,6 +112,13 @@ export default function BatchDetailPage() {
           <Link to={`/batches/${batch.id}/edit`}>
             <Button variant="outline" className="action-button-compact"><Edit3 size={14} /> Edit</Button>
           </Link>
+          <Button
+            variant="outline"
+            className="action-button-compact action-button-danger"
+            onClick={() => setDeleting(true)}
+          >
+            <Trash2 size={14} /> Delete
+          </Button>
         </div>
       </div>
 
@@ -138,6 +148,16 @@ export default function BatchDetailPage() {
           </>
         )}
       </Tabs>
+
+      <DeleteBatchModal
+        key={deleting ? 'open' : 'closed'}
+        open={deleting}
+        batchId={batch.id}
+        batchName={batch.name}
+        confirmWord={batch.batch_code ?? batch.name}
+        onClose={() => setDeleting(false)}
+        onDeleted={() => navigate('/batches')}
+      />
     </div>
   );
 }

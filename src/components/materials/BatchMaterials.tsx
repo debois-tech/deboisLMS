@@ -13,6 +13,7 @@ import { MaterialViewsModal } from '@/components/materials/MaterialViewsModal';
 import {
   MATERIAL_MAX_BYTES,
   deleteMaterial,
+  deleteBatchMaterials,
   getMaterialsByBatch,
   getMaterialsForEveryone,
   getTutors,
@@ -27,13 +28,13 @@ import { errorMessage } from '@/lib/utils/errors';
 import { useReloadableSection } from '@/lib/hooks/useInitialLoad';
 import { formatDateTime, formatFileSize } from '@/lib/utils/format';
 
-/** One batch's study material: list, upload, preview, open-log. */
+// One batch's study material: list, upload, preview, open-log.
 export function BatchMaterials({
   batchId,
   batchCode,
   title = 'Study material',
 }: {
-  /** null = not tied to a batch, i.e. for every student. */
+  // null = not tied to a batch, i.e. for every student.
   batchId: string | null;
   batchCode?: string;
   title?: string;
@@ -44,6 +45,7 @@ export function BatchMaterials({
   const [showUpload, setShowUpload] = useState(false);
   const [preview, setPreview] = useState<Material | null>(null);
   const [viewsFor, setViewsFor] = useState<Material | null>(null);
+  const [purging, setPurging] = useState(false);
   const { showToast } = useToast();
   const confirm = useConfirm();
 
@@ -78,6 +80,28 @@ export function BatchMaterials({
     }
   };
 
+  // Wipes every file for this batch, rows and objects together.
+  const handlePurge = async () => {
+    if (!batchId) return;
+    const ok = await confirm({
+      title: `Delete all ${materials.length} files?`,
+      message: 'Removed from the database and the file storage. This cannot be undone.',
+      confirmLabel: 'Delete all',
+      danger: true,
+    });
+    if (!ok) return;
+
+    setPurging(true);
+    try {
+      const removed = await deleteBatchMaterials(batchId);
+      showToast(`${removed} ${removed === 1 ? 'file' : 'files'} deleted`);
+      void reload();
+    } catch (err) {
+      showToast(errorMessage(err, 'Could not delete the files'), 'error');
+    }
+    setPurging(false);
+  };
+
   if (error) return <Card><ErrorState message={error} onRetry={reload} /></Card>;
 
   return (
@@ -86,9 +110,22 @@ export function BatchMaterials({
         <CardHeader
           title={title}
           action={
-            <Button size="sm" className="action-button-compact" onClick={() => setShowUpload(true)}>
-              <Upload size={14} /> Upload
-            </Button>
+            <div className="flex flex-wrap justify-end gap-2">
+              {batchId && materials.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="action-button-compact action-button-danger"
+                  onClick={handlePurge}
+                  loading={purging}
+                >
+                  <Trash2 size={14} /> Delete all
+                </Button>
+              )}
+              <Button size="sm" className="action-button-compact" onClick={() => setShowUpload(true)}>
+                <Upload size={14} /> Upload
+              </Button>
+            </div>
           }
         />
 
@@ -166,7 +203,7 @@ function UploadModal({
   onUploaded,
 }: {
   open: boolean;
-  /** null = for every student. */
+  // null = for every student.
   batchId: string | null;
   batchCode?: string;
   tutors: Tutor[];
