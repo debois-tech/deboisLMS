@@ -21,7 +21,7 @@ import { getAttendanceByLecture, insertUploadRows, processAttendance, setAttenda
 import type { ProcessingReport } from '@/lib/supabase';
 import { getBatches } from '@/lib/supabase';
 import type { Batch, Lecture, AttendanceRecord } from '@/lib/types';
-import { parseCsv } from '@/lib/utils/csvParser';
+import { meetingCodesMatch, parseCsv } from '@/lib/utils/csvParser';
 import type { CsvRow } from '@/lib/utils/csvParser';
 import { useToast } from '@/lib/context/ToastContext';
 import { errorMessage } from '@/lib/utils/errors';
@@ -111,19 +111,23 @@ export default function AttendancePage() {
 
   const lecture = lectures.find((l) => l.id === selectedLecture);
 
+  const meetingCodeMismatch = Boolean(
+    csvRows.length > 0 && lecture?.session_type === 'online' && !meetingCodesMatch(lecture.meeting_code, csvMeetingCode),
+  );
+
   // Re-upload guard: the pipeline upserts, so a duplicate would rewrite hand-corrected records. A warning, not a wall.
   const looksAlreadyUploaded = Boolean(
     records.length > 0 &&
     csvRows.length > 0 &&
     csvMeetingCode &&
     lecture?.meeting_code &&
-    csvMeetingCode.trim().toLowerCase() === lecture.meeting_code.trim().toLowerCase(),
+    meetingCodesMatch(lecture.meeting_code, csvMeetingCode),
   );
 
   // Uploads the CSV into the `uploads` table, then immediately processes it into
   // attendance records and clears the uploads — one action end-to-end for the admin.
   const handleUploadAndProcess = async () => {
-    if (!selectedLecture || csvRows.length === 0) return;
+    if (!selectedLecture || csvRows.length === 0 || meetingCodeMismatch) return;
     setProcessing(true);
     setLastReport(null);
 
@@ -134,7 +138,7 @@ export default function AttendancePage() {
 
       // Remember the code the export came with, so the next upload of the same
       // file has something to be recognised against.
-      if (!lecture?.meeting_code && csvMeetingCode) {
+      if (lecture?.session_type !== 'online' && !lecture?.meeting_code && csvMeetingCode) {
         await updateLecture(selectedLecture, { meeting_code: csvMeetingCode });
         setLectures(await getLecturesByBatch(selectedBatch!));
       }
@@ -298,8 +302,17 @@ export default function AttendancePage() {
                 </div>
               )}
 
+              {meetingCodeMismatch && (
+                <div className="repo-notice is-warning">
+                  <AlertTriangle size={14} className="shrink-0" />
+                  <span>
+                    Meet code mismatch. Lecture: <strong>{lecture?.meeting_code || 'missing'}</strong> · CSV: <strong>{csvMeetingCode || 'missing'}</strong>
+                  </span>
+                </div>
+              )}
+
               {showUploadAction && (
-                looksAlreadyUploaded && !forceUpload ? (
+                meetingCodeMismatch ? null : looksAlreadyUploaded && !forceUpload ? (
                   <div className="flex flex-wrap gap-2">
                     <Button variant="secondary" onClick={() => setForceUpload(true)}>
                       Upload anyway
