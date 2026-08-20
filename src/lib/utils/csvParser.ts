@@ -107,8 +107,26 @@ export interface ParsedAttendanceCsv {
   meetingCode?: string;
 }
 
+// Case-insensitive, hyphens ignored, and a pasted Meet link reduced to its code.
+export function normalizeMeetingCode(code: string | undefined | null): string {
+  const raw = (code ?? '').trim();
+  if (!raw) return '';
+
+  // Drop any query or fragment, then keep the last path segment of a full URL.
+  const path = raw.split(/[?#]/)[0].replace(/\/+$/, '');
+  const segment = path.slice(path.lastIndexOf('/') + 1);
+  return segment.replace(/-/g, '').trim().toLowerCase();
+}
+
+// Both must be present: an absent code is unknown, not a mismatch.
+export function meetingCodesMatch(expected: string | undefined | null, actual: string | undefined | null): boolean {
+  const expectedCode = normalizeMeetingCode(expected);
+  const actualCode = normalizeMeetingCode(actual);
+  return expectedCode.length > 0 && expectedCode === actualCode;
+}
+
 export function parseCsv(text: string): ParsedAttendanceCsv {
-  const lines = text.trim().split('\n');
+  const lines = text.replace(/^\uFEFF/, '').trim().split(/\r?\n/);
   if (lines.length < 2) return { rows: [] };
 
   const header = lines[0].toLowerCase();
@@ -128,7 +146,7 @@ export function parseCsv(text: string): ParsedAttendanceCsv {
   let meetingCode: string | undefined;
 
   for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].split(',');
+    const cols = parseCsvLine(lines[i]);
     const name = cols[colMap.name]?.trim().replace(/^"(.*)"$/, '$1') ?? '';
     if (!name) continue;
 

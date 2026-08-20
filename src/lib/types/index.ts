@@ -55,8 +55,8 @@ export interface Student {
   /** Permanent institution-wide ID, e.g. DBT0001. Issued by the database — never sent on insert. */
   student_code?: string;
   name: string;
-  /** WhatsApp number. Also the source of the portal password suffix. */
-  phone?: string;
+  /** Phone/mobile number. Also the source of the portal password suffix. */
+  phone: string;
   email?: string;
   date_of_birth?: string;
   gender?: string;
@@ -96,7 +96,10 @@ export interface Lecture {
   lecture_date: string;
   session_type: SessionType;
   meeting_code?: string;
+  note?: string;
   scheduled_duration_minutes?: number;
+  start_at?: string;
+  end_at?: string;
   created_at: string;
 }
 
@@ -138,6 +141,8 @@ export interface StudentFee {
   batch_id: string;
   total_fee: number;
   paid_amount: number;
+  /** What the fee rule said was owed the day they left. Null while enrolled. */
+  expected_on_exit?: number | null;
   status: FeeStatus;
   updated_at: string;
   student?: Student;
@@ -198,6 +203,8 @@ export interface StudentFeeDue {
   amount_due: number;
   status: FeeStatus;
   updated_at?: string;
+  /** Milestones covered by what they have paid: 0, 1 or 2. Decided by amount in SQL. */
+  paid_through?: number;
 }
 
 /** One GitHub repo per student — every assignment submission points at it. */
@@ -213,6 +220,8 @@ export interface BatchStudentMapping {
   batch_id: string;
   student_id: string;
   joined_at: string;
+  /** Set only once terminated. */
+  left_on?: string | null;
   status: MappingStatus;
 }
 
@@ -262,6 +271,21 @@ export interface BatchFeeSummary {
   total_fees: number;
   total_collected: number;
   total_outstanding: number;
+}
+
+/** Per batch. `pending` is what active students owe; `void_amount` is what leavers never paid. */
+export interface EarningBreakdown {
+  batch_id: string;
+  batch_name: string;
+  active_students: number;
+  terminated_students: number;
+  collected: number;
+  collected_active: number;
+  collected_terminated: number;
+  pending: number;
+  void_amount: number;
+  never_due: number;
+  recovered: number;
 }
 
 export interface BatchAttendanceSummary {

@@ -233,7 +233,12 @@ export async function getBatchStudents(batchId: string): Promise<(Student & { ma
   }));
 }
 
-export async function addStudentToBatch(studentId: string, batchId: string, totalFee: number): Promise<BatchStudentMapping> {
+export async function addStudentToBatch(
+  studentId: string,
+  batchId: string,
+  totalFee: number,
+  discount?: { type: 'percentage' | 'amount'; value: number },
+): Promise<BatchStudentMapping> {
   const mapping = row<BatchStudentMapping>(
     await supabase
       .from('batch_student_mapping')
@@ -243,13 +248,20 @@ export async function addStudentToBatch(studentId: string, batchId: string, tota
     'Could not add the student to the batch',
   );
 
-  // Upsert: removeStudentFromBatch drops only the mapping, so a re-add finds a stale fee row.
+  // Upsert: a mapping can go without its fee row, so a re-add finds a stale one.
   // The registration fee is logged by a trigger on insert — see schema.sql.
   ok(
     await supabase
       .from('student_fees')
       .upsert(
-        { student_id: studentId, batch_id: batchId, total_fee: totalFee, paid_amount: 0 },
+        {
+          student_id: studentId,
+          batch_id: batchId,
+          total_fee: totalFee,
+          paid_amount: 0,
+          discount_type: discount?.type ?? 'percentage',
+          discount_value: discount?.value ?? 0,
+        },
         { onConflict: 'student_id,batch_id' },
       ),
     'Student was added but the fee could not be set',
@@ -260,11 +272,13 @@ export async function addStudentToBatch(studentId: string, batchId: string, tota
 
 export interface TerminationResult {
   instalments_due: number;
-  settlement: number;
+  expected_on_exit: number;
+  /** Owed on the day they left and unpaid. Recorded, never chased. */
+  void_amount: number;
   login_revoked: boolean;
 }
 
-/** Cuts the fee to what was owed, logs the settlement and deletes the login. One transaction. */
+/** Freezes what they owed, voids the rest and deletes the login. One transaction. */
 export async function terminateEnrolment(mappingId: string, leftOn?: string): Promise<TerminationResult> {
   return row<TerminationResult>(
     await supabase.rpc('terminate_enrolment', {
@@ -272,12 +286,5 @@ export async function terminateEnrolment(mappingId: string, leftOn?: string): Pr
       ...(leftOn ? { p_left_on: leftOn } : {}),
     }),
     'Could not terminate this student',
-  );
-}
-
-export async function removeStudentFromBatch(mappingId: string): Promise<void> {
-  ok(
-    await supabase.from('batch_student_mapping').delete().eq('id', mappingId),
-    'Could not remove the student from the batch',
   );
 }

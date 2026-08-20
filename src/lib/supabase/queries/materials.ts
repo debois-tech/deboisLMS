@@ -7,9 +7,15 @@ const BUCKET = 'materials';
 
 export { MATERIAL_MAX_BYTES } from '@/lib/utils/files';
 
-/** `null` batchId = material for every student, stored under `all/`. */
-function storagePathFor(batchId: string | null, extension: string): string {
-  return `${batchId ?? 'all'}/${crypto.randomUUID()}${extension ? `.${extension}` : ''}`;
+// <batch|all>/materials/<uuid>.<ext>, or <batch|all>/assignments/<assignment>/<uuid>.<ext>
+function storagePathFor(
+  batchId: string | null,
+  assignmentId: string | null | undefined,
+  extension: string,
+): string {
+  const root = batchId ?? 'all';
+  const name = `${crypto.randomUUID()}${extension ? `.${extension}` : ''}`;
+  return assignmentId ? `${root}/assignments/${assignmentId}/${name}` : `${root}/materials/${name}`;
 }
 
 const SELECT = '*, batch:batches(*), tutor:tutors(*)';
@@ -26,7 +32,7 @@ export async function getMaterialsByBatch(batchId: string): Promise<Material[]> 
   );
 }
 
-/** Material not tied to any batch — visible to every student. */
+// Material not tied to any batch — visible to every student.
 export async function getMaterialsForEveryone(): Promise<Material[]> {
   return rows<Material>(
     await supabase
@@ -39,7 +45,7 @@ export async function getMaterialsForEveryone(): Promise<Material[]> {
   );
 }
 
-/** Every material the student can open, newest first. RLS does the filtering. */
+// Every material the student can open, newest first. RLS does the filtering.
 export async function getMaterialsForStudent(): Promise<Material[]> {
   return rows<Material>(
     await supabase
@@ -51,7 +57,7 @@ export async function getMaterialsForStudent(): Promise<Material[]> {
   );
 }
 
-/** An assignment's handouts. Same table, same access rule as the batch's material. */
+// An assignment's handouts. Same table, same access rule as the batch's material.
 export async function getMaterialsByAssignment(assignmentId: string): Promise<Material[]> {
   return rows<Material>(
     await supabase
@@ -71,20 +77,20 @@ export async function getMaterialById(id: string): Promise<Material | undefined>
 }
 
 export interface UploadMaterialInput {
-  /** null = for every student. */
+  // null = for every student.
   batchId: string | null;
-  /** Set to attach the file to an assignment instead of the material library. */
+  // Set to attach the file to an assignment instead of the material library.
   assignmentId?: string | null;
   title: string;
   description?: string;
   tutorId?: string | null;
-  /** Folder name when this is part of a folder upload; listings group by it. */
+  // Folder name when this is part of a folder upload; listings group by it.
   folder?: string | null;
   file: File;
   uploadedBy?: string;
 }
 
-/** Uploads the file first and only then writes the row; a failed insert removes the orphaned object. */
+// Uploads the file first and only then writes the row; a failed insert removes the orphaned object.
 export async function uploadMaterial(input: UploadMaterialInput): Promise<Material> {
   // Converted here rather than on the way out: as a PDF or a PNG the file
   // inherits the watermark and the paged reader instead of needing its own path.
@@ -94,7 +100,7 @@ export async function uploadMaterial(input: UploadMaterialInput): Promise<Materi
     : await prepareImageForUpload(input.file);
 
   const mimeType = fileMimeType(file);
-  const storagePath = storagePathFor(input.batchId, extensionOf(file.name));
+  const storagePath = storagePathFor(input.batchId, input.assignmentId, extensionOf(file.name));
 
   const { error: uploadError } = await supabase.storage
     .from(BUCKET)
@@ -132,7 +138,7 @@ export interface BulkUploadResult {
   failed: { name: string; reason: string }[];
 }
 
-/** Uploads a folder's worth of files, one material per file. One file's failure never stops the rest. */
+// Uploads a folder's worth of files, one material per file. One file's failure never stops the rest.
 export async function uploadMaterials(
   files: File[],
   base: Omit<UploadMaterialInput, 'file' | 'title'> & { title: (file: File, index: number) => string },
@@ -158,19 +164,35 @@ export async function uploadMaterials(
   return result;
 }
 
-/** Removes the row first, then the file — a failed object delete leaves only a storage orphan. */
+// File first: an orphaned row is visible and fixable, an orphaned object is not.
 export async function deleteMaterial(material: Material): Promise<void> {
-  ok(await supabase.from('materials').delete().eq('id', material.id), 'Could not delete the material');
-
   const { error: storageError } = await supabase.storage.from(BUCKET).remove([material.storage_path]);
-  if (storageError) {
-    throw new Error(
-      `The material was removed, but its file is still in storage (${storageError.message}).`,
-    );
-  }
+  if (storageError) throw new Error(`Could not delete the file (${storageError.message}).`);
+
+  ok(await supabase.from('materials').delete().eq('id', material.id), 'Could not delete the material');
 }
 
-/** Admin-only: who has opened this material, newest first. */
+// Storage has no prefix delete, so the paths come from the table while the rows still exist.
+// studyOnly leaves assignment handouts alone, which is what the material list shows.
+export async function deleteBatchMaterials(batchId: string, studyOnly = false): Promise<number> {
+  const select = supabase.from('materials').select('storage_path').eq('batch_id', batchId);
+  const paths = rows<{ storage_path: string }>(
+    await (studyOnly ? select.is('assignment_id', null) : select),
+    'Could not list the files for this batch',
+  ).map((row) => row.storage_path);
+
+  if (paths.length === 0) return 0;
+
+  // Files first: an orphaned row is visible and fixable, an orphaned object is not.
+  const { error } = await supabase.storage.from(BUCKET).remove(paths);
+  if (error) throw new Error(error.message);
+
+  const remove = supabase.from('materials').delete().eq('batch_id', batchId);
+  ok(await (studyOnly ? remove.is('assignment_id', null) : remove), 'Could not clear the material rows');
+  return paths.length;
+}
+
+// Admin-only: who has opened this material, newest first.
 export async function getMaterialViews(materialId: string): Promise<MaterialView[]> {
   return rows<MaterialView>(
     await supabase
@@ -183,15 +205,15 @@ export async function getMaterialViews(materialId: string): Promise<MaterialView
 }
 
 export interface OpenedMaterial {
-  /** Blob URL. The caller owns it and must `URL.revokeObjectURL` it. */
+  // Blob URL. The caller owns it and must `URL.revokeObjectURL` it.
   url: string;
-  /** What came back, which is not always what was uploaded: an image arrives as a PDF. */
+  // What came back, which is not always what was uploaded: an image arrives as a PDF.
   type: string;
-  /** Present only for text, already decoded — the reader needs the string, not the blob. */
+  // Present only for text, already decoded — the reader needs the string, not the blob.
   text?: string;
 }
 
-/** PDFs and images come back watermarked, text as itself, everything else as the stored file. */
+// PDFs and images come back watermarked, text as itself, everything else as the stored file.
 export async function openMaterial(materialId: string): Promise<OpenedMaterial> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('You are signed out. Sign in again to open this.');
@@ -223,7 +245,7 @@ export async function openMaterial(materialId: string): Promise<OpenedMaterial> 
   };
 }
 
-/** Saves a material to the visitor's device. Only for files no reader can show. */
+// Saves a material to the visitor's device. Only for files no reader can show.
 export async function downloadMaterial(material: Material): Promise<void> {
   const opened = await openMaterial(material.id);
   try {

@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Archive, ArrowLeft, Edit3, UserMinus, Users, GraduationCap, Layers, ClipboardCheck, FileText, Plus, Trash2, ChevronRight, CalendarDays, Upload } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -24,9 +24,10 @@ import { DatePicker } from '@/components/ui/DatePicker';
 import { StudentLink } from '@/components/students/StudentLink';
 import { PaymentLogModal, type PaymentLogFormState } from '@/components/finance/PaymentLogModal';
 import { getBatchById, getBatchPrograms, endBatch } from '@/lib/supabase';
-import { getBatchStudents, addStudentToBatch, removeStudentFromBatch, terminateEnrolment, getStudents, createStudentLoginsBulk, importStudentsIntoBatch, getStudentBatches } from '@/lib/supabase';
+import { getBatchStudents, addStudentToBatch, terminateEnrolment, getStudents, createStudentLoginsBulk, importStudentsIntoBatch, deleteFeePayment } from '@/lib/supabase';
 import type { BulkLoginResult } from '@/lib/supabase';
 import { BulkLoginsModal } from '@/components/students/BulkLoginsModal';
+import { DeleteBatchModal } from '@/components/batches/DeleteBatchModal';
 import { getBatchTutors, assignTutorToBatch, removeTutorFromBatch, getTutors } from '@/lib/supabase';
 import { getLecturesByBatch, createLecture, deleteLecture } from '@/lib/supabase';
 import { getAttendanceByLecture, setAttendanceApproved, bulkApproveAttendance } from '@/lib/supabase';
@@ -48,6 +49,8 @@ export default function BatchDetailPage() {
   const [batch, setBatch] = useState<Batch | null>(null);
   const [programs, setPrograms] = useState<BatchProgramOption[]>([]);
   const [ending, setEnding] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const navigate = useNavigate();
   const { showToast } = useToast();
   const confirm = useConfirm();
 
@@ -109,6 +112,13 @@ export default function BatchDetailPage() {
           <Link to={`/batches/${batch.id}/edit`}>
             <Button variant="outline" className="action-button-compact"><Edit3 size={14} /> Edit</Button>
           </Link>
+          <Button
+            variant="outline"
+            className="action-button-compact action-button-danger"
+            onClick={() => setDeleting(true)}
+          >
+            <Trash2 size={14} /> Delete
+          </Button>
         </div>
       </div>
 
@@ -138,6 +148,16 @@ export default function BatchDetailPage() {
           </>
         )}
       </Tabs>
+
+      <DeleteBatchModal
+        key={deleting ? 'open' : 'closed'}
+        open={deleting}
+        batchId={batch.id}
+        batchName={batch.name}
+        confirmWord={batch.batch_code ?? batch.name}
+        onClose={() => setDeleting(false)}
+        onDeleted={() => navigate('/batches')}
+      />
     </div>
   );
 }
@@ -218,8 +238,8 @@ function StudentsTab({ batch }: { batch: Batch }) {
       const result = await terminateEnrolment(mappingId);
       void reloadStudents();
       showToast(
-        result.settlement > 0
-          ? `${name} terminated — ${formatCurrency(result.settlement)} settled`
+        result.void_amount > 0
+          ? `${name} terminated — ${formatCurrency(result.void_amount)} void`
           : `${name} terminated`,
       );
     } catch (error) {
@@ -238,30 +258,6 @@ function StudentsTab({ batch }: { batch: Batch }) {
       showToast('Students added');
     } catch (error) {
       showToast(errorMessage(error, 'Failed to add students'), 'error');
-    }
-  };
-
-  const handleRemove = async (mappingId: string, studentId: string, name: string) => {
-    // A student in no batch sees nothing in the portal, so say so before it happens.
-    const others = (await getStudentBatches(studentId).catch(() => []))
-      .filter((m) => m.status === 'active' && m.id !== mappingId);
-
-    const ok = await confirm({
-      title: `Remove ${name} from this batch?`,
-      message: others.length === 0
-        ? 'This is their only batch. They keep their record but will see nothing in the portal until they join another.'
-        : 'The student keeps their record but loses access to this batch.',
-      confirmLabel: 'Remove',
-      danger: true,
-    });
-    if (!ok) return;
-
-    try {
-      await removeStudentFromBatch(mappingId);
-      void reloadStudents();
-      showToast('Student removed from batch');
-    } catch (error) {
-      showToast(errorMessage(error, 'Failed to remove student'), 'error');
     }
   };
 
@@ -317,17 +313,7 @@ function StudentsTab({ batch }: { batch: Batch }) {
               </div>
               <div className="flex items-center gap-3">
                 <StatusPill kind="enrollment" value={s.mapping.status} />
-                {/* Lightest first: detaching is undoable, terminating is not. */}
                 <div className="roster-actions">
-                  <button
-                    type="button"
-                    onClick={() => handleRemove(s.mapping.id, s.id, s.name)}
-                    className="roster-action is-remove"
-                    title="Remove from batch"
-                    aria-label={`Remove ${s.name} from batch`}
-                  >
-                    <Trash2 size={16} aria-hidden="true" />
-                  </button>
                   {s.mapping.status === 'active' && (
                     <button
                       type="button"
@@ -497,7 +483,7 @@ function TutorsTab({ batchId }: { batchId: string }) {
 function LecturesTab({ batchId }: { batchId: string }) {
   const [lectures, setLectures] = useState<Lecture[]>([]);
   const [showNew, setShowNew] = useState(false);
-  const [form, setForm] = useState({ lecture_date: '', meeting_code: '', scheduled_duration_minutes: DEFAULT_LECTURE_MINUTES });
+  const [form, setForm] = useState({ lecture_date: '', start_time: '09:00', meeting_code: '', note: '', session_type: 'online' as const, scheduled_duration_minutes: DEFAULT_LECTURE_MINUTES });
 
   const { showToast } = useToast();
   const confirm = useConfirm();
@@ -510,9 +496,11 @@ function LecturesTab({ batchId }: { batchId: string }) {
 
   const handleCreate = async () => {
     try {
-      await createLecture({ ...form, batch_id: batchId, session_type: 'online' });
+      const start = new Date(`${form.lecture_date}T${form.start_time}:00`);
+      const end = new Date(start.getTime() + form.scheduled_duration_minutes * 60_000);
+      await createLecture({ batch_id: batchId, lecture_date: form.lecture_date, meeting_code: form.meeting_code || undefined, note: form.note || undefined, session_type: form.session_type, scheduled_duration_minutes: form.scheduled_duration_minutes, start_at: start.toISOString(), end_at: end.toISOString() });
       setShowNew(false);
-      setForm({ lecture_date: '', meeting_code: '', scheduled_duration_minutes: DEFAULT_LECTURE_MINUTES });
+      setForm({ lecture_date: '', start_time: '09:00', meeting_code: '', note: '', session_type: 'online', scheduled_duration_minutes: DEFAULT_LECTURE_MINUTES });
       void reloadLectures();
       showToast('Lecture created');
     } catch (error) {
@@ -552,7 +540,7 @@ function LecturesTab({ batchId }: { batchId: string }) {
               <div>
                 <p className="text-sm font-medium text-[var(--text-primary)]">{formatDate(l.lecture_date)}</p>
                 <p className="text-xs text-[var(--text-muted)]">
-                  {l.session_type} {l.meeting_code ? `• ${l.meeting_code}` : ''} {l.scheduled_duration_minutes ? `• ${l.scheduled_duration_minutes}min` : ''}
+                  {l.session_type} {l.meeting_code ? `• ${l.meeting_code}` : ''} {l.scheduled_duration_minutes ? `• ${l.scheduled_duration_minutes}min` : ''} {l.note ? `• ${l.note}` : ''}
                 </p>
               </div>
               <button onClick={() => handleDelete(l.id, formatDate(l.lecture_date))} aria-label={`Delete lecture on ${formatDate(l.lecture_date)}`} className="text-[var(--text-muted)] hover:text-[var(--danger-text)] p-1">
@@ -588,9 +576,16 @@ function LecturesTab({ batchId }: { batchId: string }) {
           <FormField label="Meeting Code">
             <input value={form.meeting_code} onChange={(e) => setForm({ ...form, meeting_code: e.target.value })} />
           </FormField>
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="Mode" required>
+              <SearchSelect options={[{ value: 'online', label: 'Online' }, { value: 'offline', label: 'Offline' }]} value={form.session_type} onChange={(session_type) => setForm({ ...form, session_type: session_type as typeof form.session_type })} placeholder="Select mode" searchPlaceholder="Search modes" emptyText="No modes found" showSearch={false} />
+            </FormField>
+            <FormField label="Start time" required><input type="time" value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} /></FormField>
+          </div>
           <FormField label="Duration (minutes)">
             <input type="number" value={form.scheduled_duration_minutes} onChange={(e) => setForm({ ...form, scheduled_duration_minutes: Number(e.target.value) })} />
           </FormField>
+          <FormField label="Note"><input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} /></FormField>
         </div>
       </Modal>
     </Card>
@@ -715,7 +710,9 @@ function FinanceTab({ batchId }: { batchId: string }) {
   const [paymentLogs, setPaymentLogs] = useState<FeePaymentLog[]>([]);
   const [logForm, setLogForm] = useState<PaymentLogFormState>({ amount: '', payment_date: new Date().toISOString().slice(0, 10), payment_method: 'upi', notes: '' });
   const [logging, setLogging] = useState(false);
+  const [deletingLogId, setDeletingLogId] = useState<string | null>(null);
   const { showToast } = useToast();
+  const confirm = useConfirm();
 
   const fetchFees = useCallback(async () => {
     const [f, s] = await Promise.all([getFeesByBatch(batchId), getBatchStudents(batchId)]);
@@ -758,6 +755,30 @@ function FinanceTab({ batchId }: { batchId: string }) {
       showToast(errorMessage(error, 'Failed to log payment'), 'error');
     }
     setLogging(false);
+  };
+
+  // The balance goes back where it came from — pending for an enrolled student,
+  // void for one who left — because both are worked out from what was paid.
+  const handleDeletePaymentLog = async (log: FeePaymentLog) => {
+    const ok = await confirm({
+      title: `Delete this ${formatCurrency(Number(log.amount))} payment?`,
+      message: 'The amount goes back to what is owed. This cannot be undone.',
+      confirmLabel: 'Delete',
+      danger: true,
+    });
+    if (!ok) return;
+
+    setDeletingLogId(log.id);
+    try {
+      const fee = await deleteFeePayment(log.id);
+      setLoggingFee(fee);
+      setPaymentLogs((prev) => prev.filter((entry) => entry.id !== log.id));
+      setFees((prev) => prev.map((f) => (f.id === fee.id ? fee : f)));
+      showToast('Payment deleted');
+    } catch (error) {
+      showToast(errorMessage(error, 'Failed to delete payment'), 'error');
+    }
+    setDeletingLogId(null);
   };
 
   const totalFee = fees.reduce((s, f) => s + f.total_fee, 0);
@@ -832,6 +853,8 @@ function FinanceTab({ batchId }: { batchId: string }) {
         onClose={() => setLoggingFee(null)}
         onSubmit={handleAddPaymentLog}
         submitting={logging}
+        onDelete={handleDeletePaymentLog}
+        deletingId={deletingLogId}
       />
     </div>
   );

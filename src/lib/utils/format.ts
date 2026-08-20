@@ -28,6 +28,11 @@ export function feeFromDiscount(baseFee: number, discount: number | undefined): 
   return Math.round(baseFee * (1 - percent / 100));
 }
 
+export function feeFromDiscountValue(baseFee: number, discount: number | undefined, type: 'percentage' | 'amount'): number {
+  const value = Math.max(discount ?? 0, 0);
+  return Math.round(Math.max(0, type === 'amount' ? baseFee - value : baseFee * (1 - Math.min(value, 100) / 100)));
+}
+
 export function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;

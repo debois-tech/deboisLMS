@@ -23,6 +23,7 @@ interface SearchSelectProps {
   selectedValues?: string[];
   onToggle?: (value: string) => void;
   triggerLabel?: ReactNode;
+  showSearch?: boolean;
 }
 
 /** Shared searchable dropdown used by admin and portal selectors. */
@@ -38,6 +39,7 @@ export function SearchSelect({
   selectedValues,
   onToggle,
   triggerLabel,
+  showSearch = true,
 }: SearchSelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -130,9 +132,11 @@ export function SearchSelect({
             marginTop: 0,
           }}
         >
-          <div className="select-panel-head">
-            <SearchBar size="sm" autoFocus value={search} onChange={setSearch} placeholder={searchPlaceholder} />
-          </div>
+          {showSearch && (
+            <div className="select-panel-head">
+              <SearchBar size="sm" autoFocus value={search} onChange={setSearch} placeholder={searchPlaceholder} />
+            </div>
+          )}
           <div className="select-panel-scroll" role="listbox">
             {filtered.length === 0 ? (
               <p className="select-panel-empty">{emptyText}</p>

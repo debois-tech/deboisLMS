@@ -19,7 +19,7 @@ import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { useToast } from '@/lib/context/ToastContext';
 import type { Batch, StudentCredentials } from '@/lib/types';
 import { errorMessage } from '@/lib/utils/errors';
-import { feeFromDiscount, formatCurrency } from '@/lib/utils/format';
+import { feeFromDiscountValue, formatCurrency } from '@/lib/utils/format';
 
 export default function NewStudentPage() {
   const navigate = useNavigate();
@@ -31,6 +31,7 @@ export default function NewStudentPage() {
   // A discount, not an amount — same as the CSV, so a student costs the same
   // however they were added. The fee itself is derived from the batch.
   const [discount, setDiscount] = useState('');
+  const [discountType, setDiscountType] = useState<'percentage' | 'amount'>('percentage');
   // Mirrors STUDENT_IMPORT_FIELDS, so a student typed in here carries the same
   // profile as one that arrived on a CSV.
   const [form, setForm] = useState({
@@ -49,13 +50,18 @@ export default function NewStudentPage() {
 
   const batch = batches.find((option) => option.id === batchId);
   const baseFee = batch?.base_fee ?? null;
-  const payable = baseFee === null ? null : feeFromDiscount(baseFee, Number(discount) || 0);
+  const payable = baseFee === null ? null : feeFromDiscountValue(baseFee, Number(discount) || 0, discountType);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     // A student with no batch sees nothing in the portal and belongs to no roster.
     if (!batchId) {
       showToast('Select a batch for this student', 'error');
+      return;
+    }
+    // DatePicker is not a native input, so required has to be checked here.
+    if (!form.date_of_birth) {
+      showToast('Pick a date of birth', 'error');
       return;
     }
     if (payable === null) {
@@ -74,7 +80,7 @@ export default function NewStudentPage() {
       setCreatedStudentId(student.id);
       // An existing student already on this batch is the goal, not an error — the
       // unique mapping throws, and the login below should still run.
-      await addStudentToBatch(student.id, batchId, payable).catch(() => undefined);
+      await addStudentToBatch(student.id, batchId, payable, { type: discountType, value: Number(discount) || 0 }).catch(() => undefined);
       showToast('Student added');
 
       // Reusing an existing student would rotate a password they already have — skip those.
@@ -122,18 +128,27 @@ export default function NewStudentPage() {
           <FormField label="Full Name" required>
             <input value={form.name} onChange={set('name')} required />
           </FormField>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-[1fr_7rem_9rem]">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_8rem_9rem]">
             <FormField label="Batch" required>
               <BatchSelect batches={batches} value={batchId} onChange={setBatchId} />
             </FormField>
-            <FormField label="Discount %">
-              <input
-                type="number"
-                min="0"
-                max="100"
-                value={discount}
-                onChange={(e) => setDiscount(e.target.value)}
-              />
+            <FormField label="Discount">
+              <div className="relative">
+                <input
+                  className="pr-20"
+                  type="number"
+                  min="0"
+                  max={discountType === 'percentage' ? 100 : undefined}
+                  value={discount}
+                  onChange={(e) => setDiscount(e.target.value)}
+                  aria-label={discountType === 'percentage' ? 'Discount percentage' : 'Discount amount'}
+                />
+                <span aria-hidden className="absolute right-[4.5rem] top-1 bottom-1 w-[2px] bg-[var(--border)]" />
+                <div className="absolute right-1 top-1 bottom-1 flex rounded-[var(--radius-sm)] bg-[var(--bg-elevated)] p-0.5">
+                  <button type="button" onClick={() => setDiscountType('percentage')} aria-pressed={discountType === 'percentage'} className={`min-w-8 rounded-[var(--radius-sm)] px-2 text-xs font-semibold transition-colors ${discountType === 'percentage' ? 'bg-[var(--primary)] text-white' : 'text-[var(--text-muted)]'}`}>%</button>
+                  <button type="button" onClick={() => setDiscountType('amount')} aria-pressed={discountType === 'amount'} className={`min-w-8 rounded-[var(--radius-sm)] px-2 text-xs font-semibold transition-colors ${discountType === 'amount' ? 'bg-[var(--primary)] text-white' : 'text-[var(--text-muted)]'}`}>₹</button>
+                </div>
+              </div>
             </FormField>
             {/* Read-only: the fee is worked out, never typed. Shown as a field
                 rather than a line of prose so it reads as this form's output. */}
@@ -148,8 +163,8 @@ export default function NewStudentPage() {
               Set one on the batch, then add the student.
             </InlineAlert>
           )}
-          <div className="grid grid-cols-2 gap-4">
-            <FormField label="Date of Birth">
+          <div className="grid gap-4 md:grid-cols-2">
+            <FormField label="Date of Birth" required>
               <DatePicker
                 value={form.date_of_birth}
                 onChange={(date_of_birth) => setForm({ ...form, date_of_birth })}
@@ -168,9 +183,9 @@ export default function NewStudentPage() {
               />
             </FormField>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <FormField label="WhatsApp Number">
-              <input value={form.phone} onChange={set('phone')} />
+          <div className="grid gap-4 md:grid-cols-2">
+            <FormField label="Mobile Number" required>
+              <input value={form.phone} onChange={set('phone')} required />
             </FormField>
             <FormField label="Email" required>
               <input type="email" value={form.email} onChange={set('email')} required />
@@ -179,7 +194,7 @@ export default function NewStudentPage() {
           <FormField label="College / University">
             <input value={form.college} onChange={set('college')} />
           </FormField>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid gap-4 md:grid-cols-2">
             <FormField label="Course / Degree">
               <input value={form.course} onChange={set('course')} />
             </FormField>
@@ -195,12 +210,8 @@ export default function NewStudentPage() {
               <input type="number" min="1900" max="2200" value={form.graduation_year} onChange={set('graduation_year')} />
             </FormField>
           </div>
-          <FormField label="GitHub URL">
-            <input value={form.github_url} onChange={set('github_url')} />
-          </FormField>
-          <FormField label="LinkedIn URL">
-            <input value={form.linkedin_url} onChange={set('linkedin_url')} />
-          </FormField>
+          <FormField label="GitHub URL"><input value={form.github_url} onChange={set('github_url')} /></FormField>
+          <FormField label="LinkedIn URL"><input value={form.linkedin_url} onChange={set('linkedin_url')} /></FormField>
           <div className="flex gap-3 pt-2">
             <Button
               className="action-button"

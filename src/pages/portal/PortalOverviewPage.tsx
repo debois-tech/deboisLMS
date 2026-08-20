@@ -17,7 +17,6 @@ import {
   ATTENDANCE_PARTIAL_PERCENT,
   getApprovedAttendanceByStudent,
   getAssignmentsForStudent,
-  getFeePaymentLogsByStudent,
   getMyFeeDues,
   getLecturesByBatch,
   getStudentById,
@@ -29,7 +28,6 @@ import type {
   AttendanceRecord,
   Batch,
   BatchStudentMapping,
-  FeePaymentLog,
   Lecture,
   Student,
   StudentFeeDue,
@@ -40,7 +38,7 @@ import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { useNow } from '@/lib/hooks/useNow';
 import { assignmentState } from '@/lib/utils/deadline';
 import { deriveBatchStatus, formatCurrency, formatDate, formatDayLabel } from '@/lib/utils/format';
-import { countInstallmentPayments, dueInstallment, installmentLabel } from '@/lib/utils/installments';
+import { behindOnFees, dueInstallment, installmentDetail, installmentLabel } from '@/lib/utils/installments';
 import type { InstallmentDue } from '@/lib/utils/installments';
 
 type Enrollment = BatchStudentMapping & { batch?: Batch };
@@ -55,19 +53,17 @@ export default function PortalOverviewPage() {
   const [nextLecture, setNextLecture] = useState<Lecture | null>(null);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [assignments, setAssignments] = useState<StudentAssignment[]>([]);
-  const [payments, setPayments] = useState<FeePaymentLog[]>([]);
   const now = useNow();
   const { loading, error, retry } = useInitialLoad(async () => {
     if (!studentId) return;
 
     // Fees across every batch, matching the Fees tab — one batch's balance meant a different number.
-    const [record, mappings, records, work, feeRows, paymentRows] = await Promise.all([
+    const [record, mappings, records, work, feeRows] = await Promise.all([
       getStudentById(studentId),
       getStudentBatches(studentId),
       getApprovedAttendanceByStudent(studentId),
       getAssignmentsForStudent(studentId),
       getMyFeeDues(),
-      getFeePaymentLogsByStudent(studentId),
     ]);
 
     // Multiple active batches are possible; the most recently joined one is "current".
@@ -92,7 +88,6 @@ export default function PortalOverviewPage() {
     setNextLecture(upcoming);
     setAttendance(records);
     setAssignments(work);
-    setPayments(paymentRows);
   });
 
   const currentBatch = enrollments
@@ -111,14 +106,17 @@ export default function PortalOverviewPage() {
   // and it cannot be worked out without this.
   const outstanding = fees.reduce((sum, fee) => sum + Math.max(0, Number(fee.amount_due)), 0);
 
+  // Decided by amount in the view, not by how many payments were logged.
+  const paidThrough = currentBatch
+    ? fees.find((fee) => fee.batch_id === currentBatch.id)?.paid_through ?? 0
+    : 0;
+
   const installment = currentBatch
-    ? dueInstallment(
-        currentBatch.start_date,
-        countInstallmentPayments(payments, currentBatch.id),
-        outstanding,
-        now,
-      )
+    ? dueInstallment(currentBatch.start_date, paidThrough, outstanding, now)
     : null;
+  const behind = currentBatch
+    ? behindOnFees(currentBatch.start_date, paidThrough, outstanding, now)
+    : false;
 
   const name = student?.name ?? user?.full_name ?? 'there';
   const firstName = name.split(' ')[0];
@@ -141,6 +139,7 @@ export default function PortalOverviewPage() {
             pending={pending}
             outstanding={outstanding}
             installment={installment}
+            behind={behind}
             enrolled={Boolean(currentBatch)}
           />
 
@@ -209,6 +208,7 @@ function NextUp({
   pending,
   outstanding,
   installment,
+  behind,
   enrolled,
 }: {
   batchName?: string;
@@ -216,6 +216,7 @@ function NextUp({
   pending: number;
   outstanding: number;
   installment: InstallmentDue | null;
+  behind: boolean;
   enrolled: boolean;
 }) {
   if (!enrolled) {
@@ -228,9 +229,9 @@ function NextUp({
     return (
       <PortalFocus
         icon={Wallet}
-        tone={installment.missed ? 'attention' : 'default'}
+        tone={installment.missed || installment.unofficial ? 'attention' : 'default'}
         title={installmentLabel(installment)}
-        detail={`Installment ${installment.index} · due ${formatDate(installment.dueDate)}`}
+        detail={installmentDetail(installment, outstanding, formatDate(installment.dueDate))}
         action={<Link to="/portal/profile" className="portal-focus-link">Details</Link>}
       />
     );
@@ -264,9 +265,11 @@ function NextUp({
 
   if (outstanding > 0) {
     return (
+      // Untoned this card rendered green even when the money was overdue.
       <PortalFocus
         icon={Wallet}
-        title={`${formatCurrency(outstanding)} due`}
+        tone={behind ? 'attention' : 'default'}
+        title={`${formatCurrency(outstanding)} left to pay`}
         action={<Link to="/portal/profile" className="portal-focus-link">Details</Link>}
       />
     );
