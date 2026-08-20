@@ -24,7 +24,7 @@ import { DatePicker } from '@/components/ui/DatePicker';
 import { StudentLink } from '@/components/students/StudentLink';
 import { PaymentLogModal, type PaymentLogFormState } from '@/components/finance/PaymentLogModal';
 import { getBatchById, getBatchPrograms, endBatch } from '@/lib/supabase';
-import { getBatchStudents, addStudentToBatch, removeStudentFromBatch, terminateEnrolment, getStudents, createStudentLoginsBulk, importStudentsIntoBatch, getStudentBatches, deleteFeePayment } from '@/lib/supabase';
+import { getBatchStudents, addStudentToBatch, terminateEnrolment, getStudents, createStudentLoginsBulk, importStudentsIntoBatch, deleteFeePayment } from '@/lib/supabase';
 import type { BulkLoginResult } from '@/lib/supabase';
 import { BulkLoginsModal } from '@/components/students/BulkLoginsModal';
 import { getBatchTutors, assignTutorToBatch, removeTutorFromBatch, getTutors } from '@/lib/supabase';
@@ -241,30 +241,6 @@ function StudentsTab({ batch }: { batch: Batch }) {
     }
   };
 
-  const handleRemove = async (mappingId: string, studentId: string, name: string) => {
-    // A student in no batch sees nothing in the portal, so say so before it happens.
-    const others = (await getStudentBatches(studentId).catch(() => []))
-      .filter((m) => m.status === 'active' && m.id !== mappingId);
-
-    const ok = await confirm({
-      title: `Remove ${name} from this batch?`,
-      message: others.length === 0
-        ? 'This is their only batch. They keep their record but will see nothing in the portal until they join another.'
-        : 'The student keeps their record but loses access to this batch.',
-      confirmLabel: 'Remove',
-      danger: true,
-    });
-    if (!ok) return;
-
-    try {
-      await removeStudentFromBatch(mappingId);
-      void reloadStudents();
-      showToast('Student removed from batch');
-    } catch (error) {
-      showToast(errorMessage(error, 'Failed to remove student'), 'error');
-    }
-  };
-
   const available = allStudents.filter((s) => !students.some((e) => e.id === s.id));
 
   // Same routine as the students page, so a sheet imported from either place
@@ -317,17 +293,7 @@ function StudentsTab({ batch }: { batch: Batch }) {
               </div>
               <div className="flex items-center gap-3">
                 <StatusPill kind="enrollment" value={s.mapping.status} />
-                {/* Lightest first: detaching is undoable, terminating is not. */}
                 <div className="roster-actions">
-                  <button
-                    type="button"
-                    onClick={() => handleRemove(s.mapping.id, s.id, s.name)}
-                    className="roster-action is-remove"
-                    title="Remove from batch"
-                    aria-label={`Remove ${s.name} from batch`}
-                  >
-                    <Trash2 size={16} aria-hidden="true" />
-                  </button>
                   {s.mapping.status === 'active' && (
                     <button
                       type="button"

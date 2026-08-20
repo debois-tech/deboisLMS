@@ -243,7 +243,7 @@ export async function addStudentToBatch(studentId: string, batchId: string, tota
     'Could not add the student to the batch',
   );
 
-  // Upsert: removeStudentFromBatch drops only the mapping, so a re-add finds a stale fee row.
+  // Upsert: a mapping can go without its fee row, so a re-add finds a stale one.
   // The registration fee is logged by a trigger on insert — see schema.sql.
   ok(
     await supabase
@@ -274,12 +274,5 @@ export async function terminateEnrolment(mappingId: string, leftOn?: string): Pr
       ...(leftOn ? { p_left_on: leftOn } : {}),
     }),
     'Could not terminate this student',
-  );
-}
-
-export async function removeStudentFromBatch(mappingId: string): Promise<void> {
-  ok(
-    await supabase.from('batch_student_mapping').delete().eq('id', mappingId),
-    'Could not remove the student from the batch',
   );
 }

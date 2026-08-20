@@ -1946,13 +1946,6 @@ html.light .glass {
   transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
 }
 
-/* Amber: the mapping detaches, the fee row survives and they can be re-added. */
-.roster-action.is-remove:hover {
-  color: var(--warning-text);
-  border-color: color-mix(in srgb, var(--warning-text) 45%, var(--border));
-  background: color-mix(in srgb, var(--warning-text) 10%, var(--bg-surface));
-}
-
 /* Red: the login is deleted and the fees settled. Nothing here comes back. */
 .roster-action.is-terminate:hover {
   color: var(--danger-text);
