@@ -3,7 +3,7 @@ import { maybeRow, ok, row, rows } from './result';
 import type { Batch, Student, BatchStudentMapping, StudentCredentials } from '@/lib/types';
 import { errorMessage } from '@/lib/utils/errors';
 import { getImportDiscount, toStudentInput } from '@/lib/utils/studentImport';
-import { feeFromDiscount } from '@/lib/utils/format';
+import { feeFromDiscountValue } from '@/lib/utils/format';
 
 export async function getStudents(): Promise<Student[]> {
   return rows<Student>(
@@ -76,8 +76,8 @@ export async function createOrReuseStudent(input: Omit<Student, 'id' | 'created_
 
 /**
  * The one CSV import path, so both import screens write the same fields.
- * The sheet carries a Discount % and never an amount — `baseFee` is the batch's
- * own fee, and each student is charged that less their discount.
+ * The sheet's Discount column is rupees off and never a percentage — `baseFee`
+ * is the batch's own fee, and each student is charged that less their discount.
  */
 export async function importStudentsIntoBatch(
   rows: Record<string, string>[],
@@ -87,8 +87,13 @@ export async function importStudentsIntoBatch(
   return Promise.all(
     rows.map(async (row) => {
       const student = await createOrReuseStudent(toStudentInput(row));
-      const fee = feeFromDiscount(baseFee, getImportDiscount(row));
-      await addStudentToBatch(student.id, batchId, fee).catch(() => undefined);
+      const discount = getImportDiscount(row);
+      const fee = feeFromDiscountValue(baseFee, discount, 'amount');
+      // The discount is stored alongside the fee it produced, not just baked into it.
+      await addStudentToBatch(student.id, batchId, fee, {
+        type: 'amount',
+        value: discount ?? 0,
+      }).catch(() => undefined);
       return student;
     }),
   );

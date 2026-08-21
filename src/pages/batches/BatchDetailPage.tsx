@@ -207,7 +207,7 @@ function StudentsTab({ batch }: { batch: Batch }) {
   const [allStudents, setAllStudents] = useState<Student[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
-  // A discount, not an amount — same as the CSV. The fee comes off the batch.
+  // A percentage, unlike the CSV's rupee amount. The fee comes off the batch.
   const [discount, setDiscount] = useState('');
   const [showImport, setShowImport] = useState(false);
   const [bulkLogins, setBulkLogins] = useState<BulkLoginResult | null>(null);

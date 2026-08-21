@@ -125,9 +125,9 @@ create table if not exists batches (
   -- Filename prefix for this batch's study material, e.g. DBT-TEPC-2026-D.
   -- Material titles are this plus an admin-entered suffix: DBT-TEPC-2026-D01.
   batch_code text,
-  -- The batch's full fee before any discount. Student imports carry a Discount %
-  -- per row and write base_fee * (1 - discount/100) into student_fees.total_fee;
-  -- the discount itself is never stored, only the amount it produced.
+  -- The batch's full fee before any discount. Student imports carry a Discount
+  -- amount in rupees per row and write base_fee - discount into
+  -- student_fees.total_fee, with the discount kept on the fee row as an 'amount'.
   base_fee   numeric not null check (base_fee >= 0),
   -- Set by end_batch(). Null while the batch is still running.
   ended_at   date,

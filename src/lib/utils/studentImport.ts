@@ -18,8 +18,8 @@ export const STUDENT_IMPORT_FIELDS = [
 ] as const;
 
 const DISCOUNT_ALIASES = [
-  'discount', 'discount %', 'discount percent', 'discount percentage',
-  'disc', 'disc %', 'concession', 'waiver', 'scholarship',
+  'discount', 'discount amount', 'discount amt', 'disc',
+  'concession', 'waiver', 'scholarship',
 ];
 const BATCH_ALIASES = ['batch', 'batch code', 'program', 'programme', 'course batch'];
 
@@ -38,24 +38,31 @@ export function getImportValue(row: Record<string, string>, aliases: readonly st
   return entry?.[1]?.trim() || undefined;
 }
 
-/** The row's discount as a percentage. Undefined when the cell is blank or unreadable. */
+/** The row's discount in rupees off the batch fee. Undefined when blank or unreadable. */
 export function getImportDiscount(row: Record<string, string>): number | undefined {
   const raw = getImportValue(row, DISCOUNT_ALIASES);
   if (!raw) return undefined;
-  // Sheets export "50%", "50", and "12.5" alike.
-  const percent = Number(raw.replace(/[^0-9.]/g, ''));
-  return Number.isFinite(percent) ? percent : undefined;
+  // Sheets export "4000", "4,000", "₹4,000" and "4000/-" alike.
+  const cleaned = raw.replace(/[^0-9.]/g, '');
+  const amount = Number(cleaned);
+  return cleaned && Number.isFinite(amount) ? amount : undefined;
 }
 
-/** Rows whose Discount cell is filled but isn't a percentage — returned, not thrown. */
+/** Rows whose Discount cell is filled but isn't an amount the fee can absorb — returned, not thrown. */
 export function findDiscountProblems(
   rows: Record<string, string>[],
+  baseFee: number | null,
 ): { name: string; found: string }[] {
   return rows.flatMap((row) => {
     const raw = getImportValue(row, DISCOUNT_ALIASES);
     if (!raw) return [];
-    const percent = getImportDiscount(row);
-    if (percent !== undefined && percent >= 0 && percent <= 100) return [];
+    const amount = getImportDiscount(row);
+    // A '%' or a minus means the cell holds something other than rupees off the fee.
+    const usable =
+      amount !== undefined &&
+      !/[%-]/.test(raw) &&
+      (baseFee === null || amount <= baseFee);
+    if (usable) return [];
     return [{
       name: getImportValue(row, ['name', 'full name', 'student name']) ?? 'Unnamed row',
       found: raw,
