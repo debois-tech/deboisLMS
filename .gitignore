@@ -45,3 +45,6 @@ AGENTS.md
 # Finished working notes — kept locally, not versioned.
 /completed md/
 run_build.md
+
+# Sample import/attendance CSVs — real names and addresses, kept locally.
+/test_csv/
