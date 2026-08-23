@@ -13,7 +13,7 @@ import {
   parseStudentCsv,
 } from '@/lib/utils/studentImport';
 import { errorMessage } from '@/lib/utils/errors';
-import { feeFromDiscount, formatCurrency, formatDate } from '@/lib/utils/format';
+import { feeFromDiscountValue, formatCurrency, formatDate } from '@/lib/utils/format';
 import type { Batch } from '@/lib/types';
 
 interface StudentImportModalProps {
@@ -65,12 +65,12 @@ export function StudentImportModal({ open, onClose, batches, batch, onImport }: 
     () => (target?.program ? findProgramMismatches(rows, target.program) : []),
     [rows, target],
   );
-  const discountProblems = useMemo(() => findDiscountProblems(rows), [rows]);
+  const discountProblems = useMemo(() => findDiscountProblems(rows, base), [rows, base]);
 
   // What the sheet actually does to the money, before anyone commits to it.
   const outcome = useMemo(() => {
     if (base === null) return null;
-    const fees = rows.map((row) => feeFromDiscount(base, getImportDiscount(row)));
+    const fees = rows.map((row) => feeFromDiscountValue(base, getImportDiscount(row), 'amount'));
     return {
       discounted: fees.filter((fee) => fee < base).length,
       free: fees.filter((fee) => fee === 0).length,
@@ -196,7 +196,7 @@ export function StudentImportModal({ open, onClose, batches, batch, onImport }: 
                     <tr key={pager.from + index}>
                       {headers.map((header) => <td key={header}>{row[header] || '—'}</td>)}
                       <td className="import-preview-derived">
-                        {base === null ? '—' : formatCurrency(feeFromDiscount(base, getImportDiscount(row)))}
+                        {base === null ? '—' : formatCurrency(feeFromDiscountValue(base, getImportDiscount(row), 'amount'))}
                       </td>
                     </tr>
                   ))}
@@ -219,7 +219,7 @@ export function StudentImportModal({ open, onClose, batches, batch, onImport }: 
         {discountProblems.length > 0 && (
           <InlineAlert>
             {discountProblems.length} {discountProblems.length === 1 ? 'row has' : 'rows have'} a
-            discount that is not a percentage between 0 and 100 —{' '}
+            discount that is not an amount between 0 and the batch fee —{' '}
             {discountProblems.slice(0, 3).map((r) => `${r.name} (${r.found})`).join(', ')}
             {discountProblems.length > 3 ? `, and ${discountProblems.length - 3} more` : ''}. Fix
             those cells and choose the file again. A blank cell is full price.
