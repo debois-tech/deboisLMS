@@ -612,7 +612,36 @@ on conflict (id) do update
       allowed_mime_types = excluded.allowed_mime_types;
 
 
--- 8. VIEWS
+-- 8. AUTH HELPERS
+-- Policies trust app_metadata.role, which only the service role can write.
+-- EDIT the email before running on a new project.
+update auth.users
+set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || jsonb_build_object('role', 'admin')
+where email = 'adminuser@deboistech.in';
+
+create or replace function is_admin()
+returns boolean
+language sql
+stable
+set search_path = public
+as $$
+  select coalesce((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin', false);
+$$;
+
+create or replace function current_student_id()
+returns uuid
+language sql
+stable
+set search_path = public
+as $$
+  select id from students where auth_user_id = auth.uid();
+$$;
+
+
+-- 9. VIEWS
+-- current_student_id() is defined above (§8): the student_fee_dues view below
+-- resolves it at CREATE VIEW time, unlike a plpgsql function body, which only
+-- resolves calls at execution. Views must come after the functions they use.
 create or replace view batch_fee_summary as
 select
   b.id as batch_id,
@@ -712,32 +741,6 @@ comment on view student_fee_dues is
   'never leave the database for a student. Admin reads student_fees directly.';
 
 
--- 9. AUTH HELPERS
--- Policies trust app_metadata.role, which only the service role can write.
--- EDIT the email before running on a new project.
-update auth.users
-set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || jsonb_build_object('role', 'admin')
-where email = 'adminuser@deboistech.in';
-
-create or replace function is_admin()
-returns boolean
-language sql
-stable
-set search_path = public
-as $$
-  select coalesce((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin', false);
-$$;
-
-create or replace function current_student_id()
-returns uuid
-language sql
-stable
-set search_path = public
-as $$
-  select id from students where auth_user_id = auth.uid();
-$$;
-
-
 -- 10. ROW LEVEL SECURITY
 alter table tutors                 enable row level security;
 alter table batches                enable row level security;
@@ -805,7 +808,7 @@ create policy student_read_own on attendance
   for select using (student_id = current_student_id() and approved = true);
 
 -- No student policy on student_fees: the portal reads student_fee_dues instead,
--- which exposes the balance without total_fee or paid_amount. See section 8.
+-- which exposes the balance without total_fee or paid_amount. See section 9.
 
 drop policy if exists student_read_own on fee_payment_logs;
 create policy student_read_own on fee_payment_logs
