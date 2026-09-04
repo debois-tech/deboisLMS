@@ -73,14 +73,12 @@ export default function AssignmentsPage() {
 
       {selectedBatch && selectedAsgn && (
         <Card>
-          <CardHeader title="Files" />
           <AssignmentFiles key={selectedAsgn} assignmentId={selectedAsgn} batchId={selectedBatch} />
         </Card>
       )}
 
       {selectedBatch && selectedAsgn && (
         <Card>
-          <CardHeader title="Submission Status" />
           <AssignmentSubmissionTable
             key={selectedAsgn}
             assignmentId={selectedAsgn}

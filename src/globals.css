@@ -2250,6 +2250,58 @@ html.light .glass {
 .searchbar-lg input { font-size: 0.9375rem; }
 .searchbar-lg .searchbar-action { width: 2.25rem; height: 2.25rem; }
 
+/* ── Expandable search ───────────────────────────────────────── */
+/* Collapsed to an icon so it can sit right in a card header without competing
+   with the title. Clicking it swaps the icon for the real search+filter bar —
+   the grow keyframe below is what sells that as the button becoming the bar,
+   not a second element appearing next to it. */
+.expandable-search-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  transition: color 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
+}
+
+.expandable-search-trigger:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.expandable-search-open {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transform-origin: left center;
+  animation: expandable-search-grow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes expandable-search-grow {
+  from { opacity: 0; transform: scaleX(0.9); }
+  to { opacity: 1; transform: scaleX(1); }
+}
+
+.expandable-search-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: color 0.18s ease;
+}
+
+.expandable-search-close:hover {
+  color: var(--text-primary);
+}
+
 /* ── Dropdown trigger ────────────────────────────────────────── */
 /* Holds its open state visibly: while the panel is down, the control is lit and
    the chevron is turned. Without that, an open dropdown looked identical to a
@@ -3015,25 +3067,6 @@ html.light .glass {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-}
-
-.assignment-files-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.assignment-files-title {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  font-size: 0.6875rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
 }
 
 .assignment-files-add {

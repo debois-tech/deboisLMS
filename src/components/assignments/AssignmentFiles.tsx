@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
-import { Loader2, Paperclip, Trash2, Upload } from 'lucide-react';
+import { Loader2, Trash2, Upload } from 'lucide-react';
+import { CardHeader } from '@/components/ui/Card';
 import { MaterialViewer } from '@/components/portal/MaterialViewer';
 import {
   MATERIAL_MAX_BYTES,
@@ -106,12 +107,9 @@ export function AssignmentFiles({ assignmentId, batchId, readOnly }: AssignmentF
 
   return (
     <div className="assignment-files">
-      <div className="assignment-files-head">
-        <p className="assignment-files-title">
-          <Paperclip size={14} aria-hidden="true" />
-          {readOnly ? 'Files for this assignment' : 'Attached files'}
-        </p>
-        {!readOnly && (
+      <CardHeader
+        title={readOnly ? 'Files for this assignment' : 'Files'}
+        action={!readOnly && (
           <label className={`assignment-files-add ${busy ? 'is-busy' : ''}`}>
             {busy ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
             {busy && progress.total > 1 ? `Uploading ${progress.done}/${progress.total}` : 'Attach files'}
@@ -126,7 +124,7 @@ export function AssignmentFiles({ assignmentId, batchId, readOnly }: AssignmentF
             />
           </label>
         )}
-      </div>
+      />
 
       {error ? (
         <p className="assignment-files-empty">{error}</p>
