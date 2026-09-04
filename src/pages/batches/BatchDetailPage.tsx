@@ -948,7 +948,7 @@ function AssignmentsTab({ batchId }: { batchId: string }) {
       ) : (
         assignments.length > 0 && (
           <Card>
-            <EmptyState icon={<FileText size={32} />} title="Select an assignment" description="Pick one from the list to see its files and submissions." />
+            <EmptyState icon={<FileText size={32} />} title="Select an assignment" />
           </Card>
         )
       )}
