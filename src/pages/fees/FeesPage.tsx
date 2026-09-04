@@ -122,7 +122,7 @@ export default function FeesPage() {
     <div className="page-section">
       <PageHeader title="Finance" />
 
-      <Card className="step-card">
+      <Card className="step-card sticky top-[calc(var(--navbar-h)_+_1rem)] z-20">
         <CardHeader title="Select Batch" />
         <BatchSelect batches={batches} value={selectedBatch} onChange={loadBatchFees} />
       </Card>
@@ -143,7 +143,7 @@ export default function FeesPage() {
             <p className="text-sm text-[var(--text-muted)]" style={{ padding: '1rem 1.25rem' }}>No fee records.</p>
           ) : (
             <div style={{ marginTop: '0.75rem' }}>
-              <Table maxHeight="28rem">
+              <Table maxHeight="none">
               <THead>
                 <TR>
                   <TH>Student</TH>

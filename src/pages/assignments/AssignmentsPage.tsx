@@ -1,14 +1,15 @@
 import { useState } from 'react';
-import { ClipboardCheck, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import { ErrorState } from '@/components/ui/ErrorState';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { BatchSelect } from '@/components/ui/BatchSelect';
 import { AssignmentSelect } from '@/components/ui/AssignmentSelect';
+import { FormField } from '@/components/ui/FormField';
+import { FieldNotice } from '@/components/ui/FieldNotice';
 import { AssignmentSubmissionTable } from '@/components/assignments/AssignmentSubmissionTable';
 import { AssignmentFiles } from '@/components/assignments/AssignmentFiles';
 import { NewAssignmentModal } from '@/components/assignments/NewAssignmentModal';
@@ -47,24 +48,28 @@ export default function AssignmentsPage() {
     <div className="page-section">
       <PageHeader title="Assignments" />
 
-      <Card className="step-card">
-        <CardHeader title="Select Batch" />
-        <BatchSelect batches={batches} value={selectedBatch} onChange={fetchBatchData} />
-      </Card>
-
-      {selectedBatch && (
-        <Card>
-          <CardHeader
-            title="Select Assignment"
-            action={<Button size="sm" className="action-button-compact" onClick={() => setShowNew(true)}><Plus size={14} /> New Assignment</Button>}
-          />
-          {assignments.length === 0 ? (
-            <EmptyState icon={<ClipboardCheck size={32} />} title="No assignments" />
-          ) : (
-            <AssignmentSelect assignments={assignments} value={selectedAsgn} onChange={setSelectedAsgn} />
+      <Card className="step-card sticky top-[calc(var(--navbar-h)_+_1rem)] z-20">
+        <CardHeader
+          title="Select batch & assignment"
+          action={selectedBatch && (
+            <Button size="sm" className="action-button-compact" onClick={() => setShowNew(true)}><Plus size={14} /> New Assignment</Button>
           )}
-        </Card>
-      )}
+        />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <FormField label="Batch">
+            <BatchSelect batches={batches} value={selectedBatch} onChange={fetchBatchData} />
+          </FormField>
+          <FormField label="Assignment">
+            {!selectedBatch ? (
+              <FieldNotice>Select a batch first</FieldNotice>
+            ) : assignments.length === 0 ? (
+              <FieldNotice>No assignments yet — create one</FieldNotice>
+            ) : (
+              <AssignmentSelect assignments={assignments} value={selectedAsgn} onChange={setSelectedAsgn} />
+            )}
+          </FormField>
+        </div>
+      </Card>
 
       {selectedBatch && selectedAsgn && (
         <Card>

@@ -92,7 +92,7 @@ export function AssignmentSubmissionTable({
       ) : rows.length === 0 ? (
         <EmptyState icon={<Users size={32} />} title="No active students in this batch" />
       ) : (
-        <Table maxHeight="24rem">
+        <Table maxHeight="none">
           <THead>
             <TR>
               <TH>Student</TH>
