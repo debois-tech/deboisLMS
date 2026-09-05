@@ -122,7 +122,7 @@ export default function FeesPage() {
     <div className="page-section">
       <PageHeader title="Finance" />
 
-      <Card className="step-card">
+      <Card className="step-card sticky top-[calc(var(--navbar-h)_+_1rem)] z-20">
         <CardHeader title="Select Batch" />
         <BatchSelect batches={batches} value={selectedBatch} onChange={loadBatchFees} />
       </Card>
@@ -143,9 +143,10 @@ export default function FeesPage() {
             <p className="text-sm text-[var(--text-muted)]" style={{ padding: '1rem 1.25rem' }}>No fee records.</p>
           ) : (
             <div style={{ marginTop: '0.75rem' }}>
-              <Table maxHeight="28rem">
+              <Table maxHeight="none">
               <THead>
                 <TR>
+                  <TH align="center" className="w-12">#</TH>
                   <TH>Student</TH>
                   <TH>Total Fee</TH>
                   <TH>Paid</TH>
@@ -155,7 +156,7 @@ export default function FeesPage() {
                 </TR>
               </THead>
               <TBody>
-                {fees.map((fee) => {
+                {fees.map((fee, index) => {
                   const student = students.find((item) => item.id === fee.student_id);
                   // A leaver owes their void; the rest of the fee never became due.
                   const owed = fee.expected_on_exit ?? fee.total_fee;
@@ -163,6 +164,7 @@ export default function FeesPage() {
                   const isPaid = fee.status === 'paid' || remaining <= 0;
                   return (
                     <TR key={fee.id}>
+                      <TD align="center" className="cell-muted">{index + 1}</TD>
                       <TD className="font-medium">
                         <StudentLink studentId={fee.student_id} name={student?.name ?? 'Unknown'} />
                       </TD>

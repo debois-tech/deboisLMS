@@ -30,7 +30,7 @@ export default function MaterialsPage() {
     <div className="page-section">
       <PageHeader title="Study Material" />
 
-      <Card className="step-card">
+      <Card className="step-card sticky top-[calc(var(--navbar-h)_+_1rem)] z-20">
         <CardHeader title="Select Batch" />
         <BatchSelect
           batches={batches}

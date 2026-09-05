@@ -1,9 +1,11 @@
-import { useState } from 'react';
-import { CheckCircle, Download, ExternalLink, Users, XCircle } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { CheckCircle, Download, ExternalLink, Search, Users, XCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { CardHeader } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { ExpandableSearch } from '@/components/ui/ExpandableSearch';
 import { Spinner } from '@/components/ui/Spinner';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import { getAssignmentSubmissions, markSubmission } from '@/lib/supabase';
@@ -23,6 +25,8 @@ interface AssignmentSubmissionTableProps {
 
 const CSV_HEADERS = ['Student Name', 'Submitted', 'GitHub Repo', 'Submitted At'];
 
+type SubmissionFilter = 'submitted' | 'pending';
+
 /** Per-assignment submission roster — shared by the Assignments page and the batch detail tab. */
 export function AssignmentSubmissionTable({
   assignmentId,
@@ -31,6 +35,8 @@ export function AssignmentSubmissionTable({
 }: AssignmentSubmissionTableProps) {
   const [rows, setRows] = useState<AssignmentSubmissionRow[]>([]);
   const [busyStudentId, setBusyStudentId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<SubmissionFilter | null>(null);
   const { showToast } = useToast();
 
   const { loading, error, retry } = useInitialLoad(async () => {
@@ -68,22 +74,50 @@ export function AssignmentSubmissionTable({
 
   const submittedCount = rows.filter((row) => row.submitted).length;
 
+  const filteredRows = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return rows.filter((row) => {
+      if (statusFilter === 'submitted' && !row.submitted) return false;
+      if (statusFilter === 'pending' && row.submitted) return false;
+      if (!term) return true;
+      return row.student_name.toLowerCase().includes(term);
+    });
+  }, [rows, search, statusFilter]);
+
   return (
     <div className="table-block">
-      <div className="table-toolbar">
-        <Badge variant={submittedCount === rows.length && rows.length > 0 ? 'success' : 'default'}>
-          {submittedCount} of {rows.length} submitted
-        </Badge>
-        <Button
-          size="sm"
-          variant="secondary"
-          className="action-button-compact"
-          onClick={handleExport}
-          disabled={loading || rows.length === 0}
-        >
-          <Download size={14} /> Export CSV
-        </Button>
-      </div>
+      <CardHeader
+        title="Submission Status"
+        titleAdornment={
+          <>
+            <Badge variant={submittedCount === rows.length && rows.length > 0 ? 'success' : 'default'}>
+              {submittedCount} of {rows.length} submitted
+            </Badge>
+            <ExpandableSearch
+              value={search}
+              onChange={setSearch}
+              placeholder="Search by student name"
+              filterLabel="Status"
+              allLabel="All"
+              filterValue={statusFilter}
+              filterOptions={[{ value: 'submitted', label: 'Submitted' }, { value: 'pending', label: 'Pending' }]}
+              onFilterChange={(value) => setStatusFilter(value as SubmissionFilter | null)}
+              onClose={() => { setSearch(''); setStatusFilter(null); }}
+            />
+          </>
+        }
+        action={
+          <Button
+            size="sm"
+            variant="secondary"
+            className="action-button-compact"
+            onClick={handleExport}
+            disabled={loading || rows.length === 0}
+          >
+            <Download size={14} /> Export CSV
+          </Button>
+        }
+      />
 
       {loading ? (
         <Spinner centered />
@@ -91,10 +125,13 @@ export function AssignmentSubmissionTable({
         <ErrorState message={error} onRetry={retry} />
       ) : rows.length === 0 ? (
         <EmptyState icon={<Users size={32} />} title="No active students in this batch" />
+      ) : filteredRows.length === 0 ? (
+        <EmptyState icon={<Search size={32} />} title="No matching submissions" />
       ) : (
-        <Table maxHeight="24rem">
+        <Table maxHeight="none">
           <THead>
             <TR>
+              <TH align="center" className="w-12">#</TH>
               <TH>Student</TH>
               <TH align="center">Submitted</TH>
               <TH>GitHub Repo</TH>
@@ -102,8 +139,9 @@ export function AssignmentSubmissionTable({
             </TR>
           </THead>
           <TBody>
-            {rows.map((row) => (
+            {filteredRows.map((row, index) => (
               <TR key={row.student_id}>
+                <TD align="center" className="cell-muted">{index + 1}</TD>
                 <TD className="font-medium text-[var(--text-primary)]">{row.student_name}</TD>
                 <TD align="center">
                   <button

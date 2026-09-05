@@ -11,6 +11,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { BatchSelect } from '@/components/ui/BatchSelect';
 import { LectureSelect } from '@/components/ui/LectureSelect';
 import { FormField } from '@/components/ui/FormField';
+import { FieldNotice } from '@/components/ui/FieldNotice';
 import { SearchSelect } from '@/components/ui/SearchSelect';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { AttendanceRecordsTable } from '@/components/attendance/AttendanceRecordsTable';
@@ -223,30 +224,30 @@ export default function AttendancePage() {
     <div className="page-section">
       <PageHeader title="Attendance" />
 
-      <Card className="step-card">
-        <CardHeader title="Select Batch" />
-        <BatchSelect batches={batches} value={selectedBatch} onChange={selectBatch} />
-      </Card>
-
-      {selectedBatch && (
-        <Card>
-          <CardHeader
-            title="Select lecture"
-            action={
-              <Button size="sm" className="action-button-compact" onClick={() => setShowNewLecture(true)}>
-                <Plus size={14} /> New Lecture
-              </Button>
-            }
-          />
-          {lectures.length === 0 ? (
-            <p className="rounded-[var(--radius-md)] bg-[var(--bg-elevated)] text-sm text-[var(--text-muted)]" style={{ padding: '1rem 1.25rem' }}>
-              No lectures available. Create a new lecture to continue.
-            </p>
-          ) : (
-            <LectureSelect lectures={lectures} value={selectedLecture} onChange={loadRecords} />
+      <Card className="step-card sticky top-[calc(var(--navbar-h)_+_1rem)] z-20">
+        <CardHeader
+          title="Select batch & lecture"
+          action={selectedBatch && (
+            <Button size="sm" className="action-button-compact" onClick={() => setShowNewLecture(true)}>
+              <Plus size={14} /> New Lecture
+            </Button>
           )}
-        </Card>
-      )}
+        />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <FormField label="Batch">
+            <BatchSelect batches={batches} value={selectedBatch} onChange={selectBatch} />
+          </FormField>
+          <FormField label="Lecture">
+            {!selectedBatch ? (
+              <FieldNotice>Select a batch first</FieldNotice>
+            ) : lectures.length === 0 ? (
+              <FieldNotice>No lectures yet — create one</FieldNotice>
+            ) : (
+              <LectureSelect lectures={lectures} value={selectedLecture} onChange={loadRecords} />
+            )}
+          </FormField>
+        </div>
+      </Card>
 
       {selectedLecture && (
         <>
@@ -357,7 +358,7 @@ export default function AttendancePage() {
                 records={records}
                 onToggleApproved={handleToggleApproved}
                 onApproveAll={handleBulkApprove}
-                maxHeight="28rem"
+                maxHeight="none"
               />
             )}
           </Card>

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Archive, ArrowLeft, Edit3, UserMinus, Users, GraduationCap, Layers, ClipboardCheck, FileText, Plus, Trash2, ChevronRight, CalendarDays, Upload } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
@@ -12,6 +12,7 @@ import { NotFound } from '@/components/ui/NotFound';
 import { Modal } from '@/components/ui/Modal';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import { StudentMultiSelect } from '@/components/ui/StudentMultiSelect';
+import { SearchFilterBar } from '@/components/ui/SearchFilterBar';
 import { SearchSelect } from '@/components/ui/SearchSelect';
 import { FormField } from '@/components/ui/FormField';
 import { AttendanceRecordsTable } from '@/components/attendance/AttendanceRecordsTable';
@@ -36,7 +37,6 @@ import { getAssignmentsByBatch } from '@/lib/supabase';
 import type { Batch, BatchProgramOption, Student, Tutor, Lecture, AttendanceRecord, StudentFee, FeePaymentLog, Assignment, BatchStudentMapping, TutorBatchMapping } from '@/lib/types';
 import { formatDate, formatCurrency, feeFromDiscount } from '@/lib/utils/format';
 import { InlineAlert } from '@/components/ui/InlineAlert';
-import { formatDeadline } from '@/lib/utils/deadline';
 import { StudentImportModal } from '@/components/students/StudentImportModal';
 import { useToast } from '@/lib/context/ToastContext';
 import { useConfirm } from '@/lib/context/ConfirmContext';
@@ -711,6 +711,8 @@ function FinanceTab({ batchId }: { batchId: string }) {
   const [logForm, setLogForm] = useState<PaymentLogFormState>({ amount: '', payment_date: new Date().toISOString().slice(0, 10), payment_method: 'upi', notes: '' });
   const [logging, setLogging] = useState(false);
   const [deletingLogId, setDeletingLogId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'due' | 'paid' | null>(null);
   const { showToast } = useToast();
   const confirm = useConfirm();
 
@@ -784,6 +786,24 @@ function FinanceTab({ batchId }: { batchId: string }) {
   const totalFee = fees.reduce((s, f) => s + f.total_fee, 0);
   const totalPaid = fees.reduce((s, f) => s + f.paid_amount, 0);
 
+  const feeRows = useMemo(
+    () => fees.map((fee) => {
+      const student = students.find((s) => s.id === fee.student_id);
+      const remaining = fee.total_fee - fee.paid_amount;
+      return { fee, student, remaining, isPaid: remaining <= 0 };
+    }),
+    [fees, students],
+  );
+
+  const filteredFeeRows = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return feeRows.filter((row) => {
+      if (statusFilter && (statusFilter === 'paid') !== row.isPaid) return false;
+      if (!term) return true;
+      return (row.student?.name ?? 'unknown').toLowerCase().includes(term);
+    });
+  }, [feeRows, search, statusFilter]);
+
   if (loadError) return <Card><ErrorState message={loadError} onRetry={reloadFees} /></Card>;
 
   return (
@@ -799,36 +819,50 @@ function FinanceTab({ batchId }: { batchId: string }) {
         {fees.length === 0 ? (
           <EmptyState icon={<ClipboardCheck size={32} />} title="No fee records" />
         ) : (
-          <div style={{ marginTop: '0.75rem' }}>
-            <Table maxHeight="28rem">
-            <THead>
-              <TR>
-                <TH>Student</TH>
-                <TH>Total Fee</TH>
-                <TH>Paid</TH>
-                <TH>Remaining</TH>
-                <TH>Status</TH>
-                <TH>Action</TH>
-              </TR>
-            </THead>
-            <TBody>
-              {fees.map((fee) => {
-                const student = students.find((s) => s.id === fee.student_id);
-                const remaining = fee.total_fee - fee.paid_amount;
-                return (
+          <div className="table-block" style={{ marginTop: '0.75rem' }}>
+            <SearchFilterBar
+              className="max-w-sm"
+              value={search}
+              onChange={setSearch}
+              placeholder="Search by student name"
+              filterLabel="Status"
+              allLabel="All statuses"
+              filterValue={statusFilter}
+              filterOptions={[{ value: 'due', label: 'Due' }, { value: 'paid', label: 'Paid' }]}
+              onFilterChange={(value) => setStatusFilter(value as 'due' | 'paid' | null)}
+            />
+
+            {filteredFeeRows.length === 0 ? (
+              <EmptyState icon={<ClipboardCheck size={32} />} title="No matching records" />
+            ) : (
+              <Table maxHeight="none">
+              <THead>
+                <TR>
+                  <TH align="center" className="w-12">#</TH>
+                  <TH>Student</TH>
+                  <TH>Total Fee</TH>
+                  <TH>Paid</TH>
+                  <TH>Remaining</TH>
+                  <TH>Status</TH>
+                  <TH>Action</TH>
+                </TR>
+              </THead>
+              <TBody>
+                {filteredFeeRows.map(({ fee, student, remaining, isPaid }, index) => (
                   <TR key={fee.id}>
+                    <TD align="center" className="cell-muted">{index + 1}</TD>
                     <TD className="font-medium">
                       <StudentLink studentId={fee.student_id} name={student?.name ?? 'Unknown'} />
                     </TD>
                     <TD>{formatCurrency(fee.total_fee)}</TD>
                     <TD>{formatCurrency(fee.paid_amount)}</TD>
                     <TD>
-                      <span className={remaining > 0 ? 'text-[var(--danger-text)]' : 'text-[var(--success-text)]'}>
-                        {remaining > 0 ? formatCurrency(remaining) : '—'}
+                      <span className={!isPaid ? 'text-[var(--danger-text)]' : 'text-[var(--success-text)]'}>
+                        {!isPaid ? formatCurrency(remaining) : '—'}
                       </span>
                     </TD>
                     <TD>
-                      <StatusPill kind="fee" value={remaining > 0 ? 'due' : 'paid'} />
+                      <StatusPill kind="fee" value={isPaid ? 'paid' : 'due'} />
                     </TD>
                     <TD>
                       <Button size="sm" className="action-button-compact" onClick={() => openPaymentLogs(fee)}>
@@ -836,10 +870,10 @@ function FinanceTab({ batchId }: { batchId: string }) {
                       </Button>
                     </TD>
                   </TR>
-                );
-              })}
-            </TBody>
-            </Table>
+                ))}
+              </TBody>
+              </Table>
+            )}
           </div>
         )}
       </Card>
@@ -874,13 +908,13 @@ function AssignmentsTab({ batchId }: { batchId: string }) {
   if (loadError) return <Card><ErrorState message={loadError} onRetry={reloadAssignments} /></Card>;
 
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader title="Assignments" action={<Button size="sm" className="action-button-compact" onClick={() => setShowNew(true)}><Plus size={14} /> New Assignment</Button>} />
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[20rem_1fr] lg:items-start">
+      <Card className="lg:sticky lg:top-[calc(var(--navbar-h)_+_1rem)]">
+        <CardHeader title="Assignments" action={<Button size="sm" className="action-button-compact" onClick={() => setShowNew(true)}><Plus size={14} />Create</Button>} />
         {assignments.length === 0 ? (
           <EmptyState icon={<FileText size={32} />} title="No assignments" />
         ) : (
-          <div className="batch-list">
+          <div className="batch-list max-h-[32rem] overflow-y-auto pr-1">
             {assignments.map((a) => (
               <div
                 key={a.id}
@@ -890,33 +924,33 @@ function AssignmentsTab({ batchId }: { batchId: string }) {
                 }`}
               >
                 <p className="text-sm font-medium text-[var(--text-primary)]">{a.title}</p>
-                <p className="text-xs text-[var(--text-muted)]">
-                  {a.description ?? 'No description'} •{' '}
-                  {a.due_at ? `Due ${formatDeadline(a.due_at)}` : 'No deadline'}
-                </p>
               </div>
             ))}
           </div>
         )}
       </Card>
 
-      {selectedAsgn && (
-        <Card>
-          <CardHeader title="Files" />
-          <AssignmentFiles key={selectedAsgn} assignmentId={selectedAsgn} batchId={batchId} />
-        </Card>
-      )}
+      {selectedAsgn ? (
+        <div className="space-y-4">
+          <Card>
+            <AssignmentFiles key={selectedAsgn} assignmentId={selectedAsgn} batchId={batchId} />
+          </Card>
 
-      {selectedAsgn && (
-        <Card>
-          <CardHeader title="Submission Status" />
-          <AssignmentSubmissionTable
-            key={selectedAsgn}
-            assignmentId={selectedAsgn}
-            batchId={batchId}
-            assignmentTitle={assignments.find((a) => a.id === selectedAsgn)?.title ?? 'assignment'}
-          />
-        </Card>
+          <Card>
+            <AssignmentSubmissionTable
+              key={selectedAsgn}
+              assignmentId={selectedAsgn}
+              batchId={batchId}
+              assignmentTitle={assignments.find((a) => a.id === selectedAsgn)?.title ?? 'assignment'}
+            />
+          </Card>
+        </div>
+      ) : (
+        assignments.length > 0 && (
+          <Card>
+            <EmptyState icon={<FileText size={32} />} title="Select an assignment" />
+          </Card>
+        )
       )}
 
       <NewAssignmentModal
