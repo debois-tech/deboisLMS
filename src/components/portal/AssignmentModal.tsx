@@ -8,7 +8,7 @@ import { PortalStatus } from '@/components/portal/PortalStatus';
 import { AssignmentFiles } from '@/components/assignments/AssignmentFiles';
 import type { Assignment, AssignmentCompletion } from '@/lib/types';
 import { formatDate, formatDateTime } from '@/lib/utils/format';
-import { assignmentState, formatDeadline, formatDueLabel } from '@/lib/utils/deadline';
+import { assignmentState, formatDeadline, formatDueLabel, isOverdue } from '@/lib/utils/deadline';
 import { errorMessage } from '@/lib/utils/errors';
 
 export type StudentAssignment = Assignment & { completion?: AssignmentCompletion };
@@ -60,9 +60,9 @@ function AssignmentModalBody({ assignment, repoUrl, now, onClose, onSubmit }: As
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  const state = assignment ? assignmentState(assignment, now) : 'todo';
-  const submitted = state === 'done';
-  const missed = state === 'missed';
+  const state = assignment ? assignmentState(assignment) : 'todo';
+  const submitted = state === 'done' || state === 'late';
+  const overdue = Boolean(assignment) && !submitted && isOverdue(assignment!, now);
   const trimmed = draftRepo.trim();
   const isReplacingRepo = Boolean(repoUrl) && trimmed !== repoUrl && trimmed.length > 0;
 
@@ -70,10 +70,6 @@ function AssignmentModalBody({ assignment, repoUrl, now, onClose, onSubmit }: As
     const { url, error: problem } = validateRepoUrl(draftRepo);
     if (problem || !url) {
       setError(problem ?? 'Enter your GitHub repository link.');
-      return;
-    }
-    if (missed) {
-      setError('The deadline has passed. Talk to your tutor.');
       return;
     }
     setSubmitting(true);
@@ -96,7 +92,7 @@ function AssignmentModalBody({ assignment, repoUrl, now, onClose, onSubmit }: As
         view === 'info' ? (
           <>
             <Button variant="ghost" onClick={onClose}>Close</Button>
-            {!submitted && !missed && (
+            {!submitted && (
               <Button className="action-button-compact" onClick={() => setView('submit')}>
                 Submit
               </Button>
@@ -109,7 +105,7 @@ function AssignmentModalBody({ assignment, repoUrl, now, onClose, onSubmit }: As
               className="action-button-compact"
               onClick={handleSubmit}
               loading={submitting}
-              disabled={!confirmed || trimmed.length === 0 || missed}
+              disabled={!confirmed || trimmed.length === 0}
             >
               Submit
             </Button>
@@ -120,7 +116,7 @@ function AssignmentModalBody({ assignment, repoUrl, now, onClose, onSubmit }: As
       {view === 'info' ? (
         <div className="assignment-detail">
           <div className="assignment-detail-meta">
-            <PortalStatus kind="submission" value={submitted ? 'submitted' : missed ? 'missed' : 'pending'} />
+            <PortalStatus kind="submission" value={state === 'done' ? 'submitted' : state === 'late' ? 'late' : 'pending'} />
             {assignment?.assigned_date && <span>Given {formatDate(assignment.assigned_date)}</span>}
             {!submitted && <span>{formatDueLabel(assignment?.due_at, now)}</span>}
           </div>
@@ -133,11 +129,11 @@ function AssignmentModalBody({ assignment, repoUrl, now, onClose, onSubmit }: As
             <AssignmentFiles assignmentId={assignment.id} batchId={assignment.batch_id} readOnly />
           )}
 
-          {missed && (
-            <p className="repo-notice is-danger">
-              <Lock size={14} className="shrink-0" />
+          {overdue && (
+            <p className="repo-notice is-warning">
+              <AlertTriangle size={14} className="shrink-0" />
               <span>
-                Submissions closed{assignment?.due_at ? ` on ${formatDeadline(assignment.due_at)}` : ''}.
+                Deadline passed{assignment?.due_at ? ` on ${formatDeadline(assignment.due_at)}` : ''} — you can still submit, it'll be marked late.
               </span>
             </p>
           )}
@@ -169,11 +165,11 @@ function AssignmentModalBody({ assignment, repoUrl, now, onClose, onSubmit }: As
           {error && <InlineAlert>{error}</InlineAlert>}
 
           {assignment?.due_at && (
-            <p className={`repo-notice ${missed ? 'is-danger' : ''}`}>
-              <Lock size={14} className="shrink-0" />
+            <p className={`repo-notice ${overdue ? 'is-warning' : ''}`}>
+              {overdue ? <AlertTriangle size={14} className="shrink-0" /> : <Lock size={14} className="shrink-0" />}
               <span>
                 {formatDueLabel(assignment.due_at, now)}.{' '}
-                {missed ? 'Nothing more can be handed in.' : 'Nothing can be handed in after that.'}
+                {overdue ? "This will be marked as a late submission." : 'Submitting after this marks it late.'}
               </span>
             </p>
           )}

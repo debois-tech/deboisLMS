@@ -2,7 +2,7 @@
 -- The whole database in one file: run it on a fresh project and nothing else.
 -- Assumes an admin user already exists in Supabase Auth — edit the email in §8.
 -- Re-runnable: every statement is guarded and nothing rewrites issued data.
-
+  
 
 -- 1. TYPES
 do $$ begin create type batch_status       as enum ('upcoming', 'ongoing', 'completed');      exception when duplicate_object then null; end $$;
@@ -455,7 +455,8 @@ create table if not exists assignments (
 );
 
 comment on column assignments.due_at is
-  'Deadline as an absolute instant. Null = no deadline. Students cannot submit after it.';
+  'Deadline as an absolute instant. Null = no deadline. A submission after it is still '
+  'accepted — the client flags it late by comparing it against submitted_at.';
 
 create index if not exists idx_assignments_batch on assignments(batch_id);
 
@@ -872,10 +873,8 @@ create policy student_update_own on student_repos
   for update using (student_id = current_student_id())
   with check (student_id = current_student_id());
 
--- Both policies carry the same conditions, so the deadline cannot be sidestepped
--- by updating a completion row instead of inserting one. The client check is UX;
--- this is the one that holds against a changed clock or a direct API call.
--- admin_full_access is untouched, so an admin can still tick work off late.
+-- Enrolment gate only — a late submission is still accepted, just flagged
+-- client-side by comparing submitted_at against the assignment's due_at.
 drop policy if exists student_insert_own on assignment_completions;
 create policy student_insert_own on assignment_completions
   for insert with check (
@@ -886,7 +885,6 @@ create policy student_insert_own on assignment_completions
       join batch_student_mapping m on m.batch_id = a.batch_id
       where m.student_id = current_student_id()
         and m.status = 'active'
-        and (a.due_at is null or now() <= a.due_at)
     )
   );
 
@@ -904,7 +902,6 @@ create policy student_update_own on assignment_completions
       join batch_student_mapping m on m.batch_id = a.batch_id
       where m.student_id = current_student_id()
         and m.status = 'active'
-        and (a.due_at is null or now() <= a.due_at)
     )
   )
   with check (
@@ -915,7 +912,6 @@ create policy student_update_own on assignment_completions
       join batch_student_mapping m on m.batch_id = a.batch_id
       where m.student_id = current_student_id()
         and m.status = 'active'
-        and (a.due_at is null or now() <= a.due_at)
     )
   );
 

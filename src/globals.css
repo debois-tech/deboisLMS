@@ -254,7 +254,10 @@ select option {
 .action-button { min-width: 10rem; }
 .action-button-wide { min-width: 12rem; }
 .action-button-import { min-width: 8.5rem; }
-.action-button-compact { min-width: 7.5rem; padding-left: 1.25rem; padding-right: 1.25rem; }
+.action-button-compact { min-width: 6rem; padding-left: 0.875rem; padding-right: 0.875rem; }
+
+/* Icon only, no label — square, no forced min-width. */
+.action-button-icon { min-width: 0; width: 2.75rem; padding-left: 0; padding-right: 0; }
 
 /* Popup forms with multiple stacked fields — generous rhythm between
    labels, inputs, and the trailing action button. */
@@ -1029,11 +1032,17 @@ html.light .glass {
 }
 
 .portal-row-dot.is-done { background: var(--primary); }
-.portal-row-dot.is-missed { background: var(--danger-text); }
+.portal-row-dot.is-late { background: var(--warning-text); }
 
 /* The last day before a deadline — the wording alone is easy to skim past. */
 .portal-due-soon {
   color: var(--warning-text);
+  font-weight: 600;
+}
+
+/* Past due and still not handed in — late is allowed, but this says to hurry. */
+.portal-overdue {
+  color: var(--danger-text);
   font-weight: 600;
 }
 
@@ -1751,6 +1760,7 @@ html.light .glass {
 }
 
 .submission-toggle.is-submitted { color: var(--primary-light); }
+.submission-toggle.is-late { color: var(--warning-text); }
 .submission-toggle:disabled { opacity: 0.5; cursor: progress; }
 
 .submission-toggle:focus-visible {

@@ -898,6 +898,9 @@ function AssignmentsTab({ batchId }: { batchId: string }) {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [selectedAsgn, setSelectedAsgn] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
+
+  const selectedAssignment = assignments.find((a) => a.id === selectedAsgn);
 
   const fetchAssignments = useCallback(async () => {
     setAssignments(await getAssignmentsByBatch(batchId));
@@ -910,7 +913,19 @@ function AssignmentsTab({ batchId }: { batchId: string }) {
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[20rem_1fr] lg:items-start">
       <Card className="lg:sticky lg:top-[calc(var(--navbar-h)_+_1rem)]">
-        <CardHeader title="Assignments" action={<Button size="sm" className="action-button-compact" onClick={() => setShowNew(true)}><Plus size={14} />Create</Button>} />
+        <CardHeader
+          title="Assignments"
+          action={
+            <div className="flex gap-2">
+              {selectedAssignment && (
+                <Button size="sm" variant="secondary" className="action-button-icon" onClick={() => setShowEdit(true)} aria-label="Edit assignment">
+                  <Edit3 size={14} />
+                </Button>
+              )}
+              <Button size="sm" className="action-button-compact" onClick={() => setShowNew(true)}><Plus size={14} />Create</Button>
+            </div>
+          }
+        />
         {assignments.length === 0 ? (
           <EmptyState icon={<FileText size={32} />} title="No assignments" />
         ) : (
@@ -941,7 +956,8 @@ function AssignmentsTab({ batchId }: { batchId: string }) {
               key={selectedAsgn}
               assignmentId={selectedAsgn}
               batchId={batchId}
-              assignmentTitle={assignments.find((a) => a.id === selectedAsgn)?.title ?? 'assignment'}
+              assignmentTitle={selectedAssignment?.title ?? 'assignment'}
+              dueAt={selectedAssignment?.due_at}
             />
           </Card>
         </div>
@@ -954,10 +970,12 @@ function AssignmentsTab({ batchId }: { batchId: string }) {
       )}
 
       <NewAssignmentModal
-        open={showNew}
-        onClose={() => setShowNew(false)}
+        key={showEdit ? (selectedAsgn ?? 'edit') : 'new'}
+        open={showNew || showEdit}
+        onClose={() => { setShowNew(false); setShowEdit(false); }}
         batchId={batchId}
-        onCreated={reloadAssignments}
+        assignment={showEdit ? selectedAssignment : undefined}
+        onSaved={reloadAssignments}
       />
     </div>
   );

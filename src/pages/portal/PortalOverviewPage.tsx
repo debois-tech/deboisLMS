@@ -97,10 +97,10 @@ export default function PortalOverviewPage() {
   const attended = attendance.filter((record) => record.status !== 'absent').length;
   const attendanceRate = attendance.length > 0 ? Math.round((attended / attendance.length) * 100) : null;
   // By state, not submitted/not: closed work is not "to hand in".
-  const states = assignments.map((item) => assignmentState(item, now));
-  const handedIn = states.filter((state) => state === 'done').length;
+  const states = assignments.map((item) => assignmentState(item));
+  const handedIn = states.filter((state) => state === 'done' || state === 'late').length;
   const pending = states.filter((state) => state === 'todo').length;
-  const missed = states.filter((state) => state === 'missed').length;
+  const late = states.filter((state) => state === 'late').length;
   // The balance across every batch. Home no longer states it — the profile owns
   // that number now — but an instalment falling due is still the day's one thing,
   // and it cannot be worked out without this.
@@ -160,15 +160,15 @@ export default function PortalOverviewPage() {
               label="Assignments"
               icon={FileText}
               value={assignments.length === 0 ? 'None yet' : `${handedIn} of ${assignments.length}`}
-              tone={assignments.length === 0 ? 'default' : pending > 0 || missed > 0 ? 'attention' : 'positive'}
+              tone={assignments.length === 0 ? 'default' : pending > 0 || late > 0 ? 'attention' : 'positive'}
               progress={assignments.length > 0 ? (handedIn / assignments.length) * 100 : undefined}
               note={
                 assignments.length === 0
                   ? 'Nothing set yet'
                   : pending > 0
                     ? `${pending} to hand in`
-                    : missed > 0
-                      ? `${missed} missed`
+                    : late > 0
+                      ? `${late} late`
                       : 'All handed in'
               }
             />

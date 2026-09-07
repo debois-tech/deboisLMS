@@ -1,7 +1,7 @@
 import type { Assignment, AssignmentCompletion } from '@/lib/types';
 import { formatTimeLabel } from '@/lib/utils/date';
 
-export type AssignmentState = 'todo' | 'done' | 'missed';
+export type AssignmentState = 'todo' | 'done' | 'late';
 
 type WithCompletion = Pick<Assignment, 'due_at'> & { completion?: AssignmentCompletion };
 
@@ -11,13 +11,23 @@ export function isPastDue(dueAt: string | null | undefined, now: number): boolea
   return !Number.isNaN(due) && now > due;
 }
 
-export function assignmentState(assignment: WithCompletion, now: number): AssignmentState {
-  if (assignment.completion?.submitted) return 'done';
-  return isPastDue(assignment.due_at, now) ? 'missed' : 'todo';
+// Late is decided once, from submitted_at vs due_at — not from the clock right now.
+export function isLateSubmission(dueAt: string | null | undefined, submittedAt: string | null | undefined): boolean {
+  if (!dueAt || !submittedAt) return false;
+  const due = new Date(dueAt).getTime();
+  const submitted = new Date(submittedAt).getTime();
+  return !Number.isNaN(due) && !Number.isNaN(submitted) && submitted > due;
 }
 
-export function canSubmit(assignment: WithCompletion, now: number): boolean {
-  return assignmentState(assignment, now) === 'todo';
+export function assignmentState(assignment: WithCompletion): AssignmentState {
+  if (!assignment.completion?.submitted) return 'todo';
+  return isLateSubmission(assignment.due_at, assignment.completion.submitted_at) ? 'late' : 'done';
+}
+
+// True once the deadline has passed and nothing has been handed in yet — still
+// submittable, just worth flagging in the to-do list.
+export function isOverdue(assignment: WithCompletion, now: number): boolean {
+  return !assignment.completion?.submitted && isPastDue(assignment.due_at, now);
 }
 
 const MINUTE = 60_000;
@@ -45,10 +55,10 @@ export function formatDueLabel(dueAt: string | null | undefined, now: number): s
 
   if (left <= 0) {
     const late = now - due;
-    if (late < HOUR) return `Closed ${Math.max(1, Math.floor(late / MINUTE))} min ago`;
-    if (late < DAY) return `Closed ${Math.floor(late / HOUR)}h ago`;
-    if (late < 7 * DAY) return `Closed ${Math.floor(late / DAY)}d ago`;
-    return `Closed ${stated}`;
+    if (late < HOUR) return `Overdue by ${Math.max(1, Math.floor(late / MINUTE))} min`;
+    if (late < DAY) return `Overdue by ${Math.floor(late / HOUR)}h`;
+    if (late < 7 * DAY) return `Overdue by ${Math.floor(late / DAY)}d`;
+    return `Overdue since ${stated}`;
   }
 
   if (left < HOUR) return `Due in ${Math.max(1, Math.floor(left / MINUTE))} min`;
