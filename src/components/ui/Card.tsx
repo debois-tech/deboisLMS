@@ -41,7 +41,7 @@ interface CardHeaderProps {
   title: string;
   subtitle?: string;
   action?: ReactNode;
-  /** Sits right next to the title itself — a count badge, a search toggle — as opposed to `action`, which is pinned to the far right. */
+  // Sits next to the title itself — a count badge, a search toggle. `action` stays pinned far right.
   titleAdornment?: ReactNode;
   className?: string;
 }

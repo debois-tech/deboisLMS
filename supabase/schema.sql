@@ -1,6 +1,6 @@
 -- DeboisTech ERP — schema
 -- The whole database in one file: run it on a fresh project and nothing else.
--- Assumes an admin user already exists in Supabase Auth — edit the email in §9.
+-- Assumes an admin user already exists in Supabase Auth — edit the email in §8.
 -- Re-runnable: every statement is guarded and nothing rewrites issued data.
 
 
@@ -543,9 +543,10 @@ create trigger student_repos_touch_updated_at
 
 
 -- 7. STUDY MATERIAL
--- The file itself lives in the private `materials` bucket; only the edge
--- function (service role) can reach it, and it stamps every page before
--- returning it.
+-- The file itself lives in the private `materials` bucket, already permanently
+-- watermarked at upload (client-side, before the bytes ever leave the browser).
+-- A read is a plain storage fetch, gated by the storage policy in §10 — nothing
+-- stamps it again, or even touches it, on the way out.
 create table if not exists materials (
   id            uuid primary key default gen_random_uuid(),
   -- NULL means the material is for every student, not one batch.
@@ -565,8 +566,15 @@ create table if not exists materials (
   size_bytes    bigint,
   page_count    int,
   uploaded_by   uuid,
+  -- Null on a pageable file (PDF or image) means it predates client-side
+  -- upload-time stamping and still needs a backfill. Every upload sets this
+  -- from here on; never null for a kind that was never watermarked to begin with.
+  watermarked_at timestamptz,
   created_at    timestamptz default now()
 );
+
+-- Re-running this file on a database created before watermarked_at existed.
+alter table materials add column if not exists watermarked_at timestamptz;
 
 comment on column materials.mime_type is
   'Decides how the file is delivered: PDFs and images are watermarked and paged, '
@@ -591,7 +599,7 @@ create index if not exists idx_material_views_student  on material_views(student
 
 -- .docx is absent on purpose: it is converted to a PDF in the browser before
 -- upload, so it never reaches storage as Word. 50 MB per file is what the
--- watermark function can hold in memory alongside its output.
+-- browser can hold in memory while stamping the watermark on the way in.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
   'materials', 'materials', false, 52428800,
@@ -832,7 +840,17 @@ drop policy if exists student_read_own on material_views;
 create policy student_read_own on material_views
   for select using (student_id = current_student_id());
 
--- Metadata only — the bytes still require the edge function.
+-- The client logs its own open now that there is no service-role function in the
+-- loop. student_id is never sent by the client — it comes from the column
+-- default below, so an admin's open (current_student_id() is null there) fails
+-- the not-null constraint and is simply never logged, same as before.
+alter table material_views alter column student_id set default current_student_id();
+
+drop policy if exists student_insert_own on material_views;
+create policy student_insert_own on material_views
+  for insert with check (student_id = current_student_id());
+
+-- Metadata only; the storage policy in this section gates the bytes directly.
 -- The `batch_id is null` branch is deliberately absent: a material for everyone
 -- is still only for enrolled students, and every student now has a batch.
 drop policy if exists student_read_own on materials;
@@ -904,9 +922,25 @@ create policy student_update_own on assignment_completions
 -- No student policy on tutors / tutor_batch_mapping / uploads: RLS default-denies.
 
 -- ── Storage ─────────────────────────────────────────────────────────────────
--- Students get NO storage policy on purpose: with RLS on and no match, every
--- direct request for the raw object is denied. The watermark edge function is
--- the only route to the bytes.
+-- Every stored file is already the final, watermarked copy, so a student reads
+-- it straight from the bucket — gated by the same enrolment rule as the
+-- `materials` row itself, just re-expressed against storage.objects.name since
+-- a storage policy cannot reference the students' own RLS-filtered view.
+drop policy if exists "student reads own material files" on storage.objects;
+create policy "student reads own material files" on storage.objects
+  for select
+  using (
+    bucket_id = 'materials'
+    and exists (
+      select 1 from materials m
+      where m.storage_path = storage.objects.name
+        and m.batch_id in (
+          select batch_id from batch_student_mapping
+          where student_id = current_student_id() and status = 'active'
+        )
+    )
+  );
+
 drop policy if exists "admin manages material files" on storage.objects;
 create policy "admin manages material files" on storage.objects
   for all

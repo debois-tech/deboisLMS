@@ -2870,10 +2870,16 @@ html.light .glass {
   white-space: nowrap;
 }
 
-.material-viewer-close {
+.material-viewer-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  justify-self: end;
+}
+
+.material-viewer-action {
   display: grid;
   place-items: center;
-  justify-self: end;
   flex: 0 0 auto;
   width: 2.25rem;
   height: 2.25rem;
@@ -2882,12 +2888,17 @@ html.light .glass {
   transition: background-color 0.18s ease, color 0.18s ease;
 }
 
-.material-viewer-close:hover {
+.material-viewer-action:hover {
   color: var(--text-primary);
   background: var(--bg-elevated);
 }
 
-.material-viewer-close:focus-visible {
+.material-viewer-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.material-viewer-action:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
@@ -2897,11 +2908,6 @@ html.light .glass {
   padding: 1.5rem 1rem 3rem;
   overflow-y: auto;
   overscroll-behavior-y: contain;
-  /* Selection and long-press callouts off: there is no text layer to select
-     anyway, and the callout offers "save image" on a phone. */
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
 }
 
 /* Block, not flex. As flex items the page canvases inherit `flex-shrink: 1` and
@@ -2942,7 +2948,6 @@ html.light .glass {
   border-radius: var(--radius-md);
   background: #ffffff;
   box-shadow: var(--shadow-md);
-  pointer-events: none;
 }
 
 .material-viewer-status {
@@ -2973,14 +2978,10 @@ html.light .glass {
   color: var(--text-primary);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  /* The body turns selection off for the canvas pages; text is there to be read
-     and copied, so it turns it back on. */
-  user-select: text;
-  -webkit-user-select: text;
 }
 
-/* The handover, for a file no reader can show. Deliberately plain: it is a fact
-   about the file and one action, not a preview pretending to be one. */
+/* The handover, for a file no reader can show. Deliberately plain: it states a
+   fact about the file, not a preview pretending to be one. */
 .material-handover {
   display: flex;
   flex-direction: column;
@@ -3011,26 +3012,10 @@ html.light .glass {
   overflow-wrap: anywhere;
 }
 
-.material-handover-action {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
+.material-handover-hint {
   margin-top: 0.75rem;
-  padding: 0.75rem 1.5rem;
-  border-radius: var(--radius-md);
-  background: var(--primary);
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--text-inverse);
-  transition: background-color 0.15s, opacity 0.15s;
-}
-
-.material-handover-action:hover { background: var(--primary-dark); }
-.material-handover-action:disabled { opacity: 0.6; }
-
-.material-handover-action:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 3px;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
 }
 
 /* ── Manual attendance ───────────────────────────────────────── */
@@ -3204,30 +3189,9 @@ html.light .glass {
   text-align: center;
 }
 
-/* Covers the pages whenever the tab loses focus — the shape a screen share or a
-   switch to a capture tool takes from inside the page. */
-.material-viewer-shield {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  z-index: 1;
-  font-size: 0.875rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  background: var(--bg-base);
-}
-
 @media (max-width: 480px) {
   .material-viewer-logo { height: 1.375rem; }
   .material-viewer-title { font-size: 0.875rem; }
-}
-
-/* Printing a reader whose whole point is that the file does not leave. */
-@media print {
-  .material-viewer { display: none !important; }
 }
 
 /* ── Portal search ───────────────────────────────────────────── */

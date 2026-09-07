@@ -16,7 +16,7 @@ interface MaterialViewerProps {
   onClose: () => void;
 }
 
-/** Read-only reader. The friction here only deters; the watermark is what names a leaker. */
+// Read-only reader — viewing and downloading are both open; the watermark is the only safeguard.
 export function MaterialViewer(props: MaterialViewerProps) {
   return <MaterialViewerBody key={props.material?.id ?? 'closed'} {...props} />;
 }
@@ -30,9 +30,6 @@ function MaterialViewerBody({ material, onClose }: MaterialViewerProps) {
   const [error, setError] = useState('');
   const [text, setText] = useState('');
   const [saving, setSaving] = useState(false);
-  // Blanked while the tab is in the background, which is what a naive screen
-  // share or a switch to a recording app looks like from in here.
-  const [hidden, setHidden] = useState(false);
 
   useEffect(() => {
     // A file no reader can page is not fetched on open — it is fetched when the
@@ -144,36 +141,30 @@ function MaterialViewerBody({ material, onClose }: MaterialViewerProps) {
 
   const handleKey = useCallback((event: KeyboardEvent) => {
     if (event.key === 'Escape') onClose();
-    // Ctrl/Cmd+P and PrintScreen: block what we can, blank for the rest.
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'p') {
-      event.preventDefault();
-    }
-    if (event.key === 'PrintScreen') {
-      setHidden(true);
-      setTimeout(() => setHidden(false), 1200);
-    }
   }, [onClose]);
 
   useEffect(() => {
     if (!material) return;
-    const onVisibility = () => setHidden(document.hidden);
-    const onBlur = () => setHidden(true);
-    const onFocus = () => setHidden(false);
-
     document.addEventListener('keydown', handleKey);
-    document.addEventListener('visibilitychange', onVisibility);
-    window.addEventListener('blur', onBlur);
-    window.addEventListener('focus', onFocus);
     document.body.style.overflow = 'hidden';
 
     return () => {
       document.removeEventListener('keydown', handleKey);
-      document.removeEventListener('visibilitychange', onVisibility);
-      window.removeEventListener('blur', onBlur);
-      window.removeEventListener('focus', onFocus);
       document.body.style.overflow = '';
     };
   }, [material, handleKey]);
+
+  const handleDownload = async () => {
+    if (!material) return;
+    setSaving(true);
+    try {
+      await downloadMaterial(material);
+    } catch (err) {
+      setError(errorMessage(err, 'Could not download this file.'));
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (!material) return null;
 
@@ -187,16 +178,24 @@ function MaterialViewerBody({ material, onClose }: MaterialViewerProps) {
           className="material-viewer-logo"
         />
         <p className="material-viewer-title">{material.title}</p>
-        <button type="button" onClick={onClose} className="material-viewer-close" aria-label="Close">
-          <X size={18} />
-        </button>
+        <div className="material-viewer-actions">
+          <button
+            type="button"
+            onClick={handleDownload}
+            disabled={saving}
+            className="material-viewer-action"
+            aria-label="Download"
+            title="Download"
+          >
+            {saving ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
+          </button>
+          <button type="button" onClick={onClose} className="material-viewer-action" aria-label="Close">
+            <X size={18} />
+          </button>
+        </div>
       </header>
 
-      <div
-        className="material-viewer-body"
-        onContextMenu={(event) => event.preventDefault()}
-        onDragStart={(event) => event.preventDefault()}
-      >
+      <div className="material-viewer-body">
         {loading && (
           <p className="material-viewer-status">
             <Loader2 size={16} className="animate-spin" />
@@ -216,24 +215,7 @@ function MaterialViewerBody({ material, onClose }: MaterialViewerProps) {
           <div className="material-handover">
             <p className="material-handover-kind">{fileTypeLabel(material.mime_type, material.storage_path)}</p>
             <p className="material-handover-title">{material.title}</p>
-            <button
-              type="button"
-              className="material-handover-action"
-              onClick={async () => {
-                setSaving(true);
-                try {
-                  await downloadMaterial(material);
-                } catch (err) {
-                  setError(errorMessage(err, 'Could not download this file.'));
-                } finally {
-                  setSaving(false);
-                }
-              }}
-              disabled={saving}
-            >
-              {saving ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-              {saving ? 'Preparing' : 'Download'}
-            </button>
+            <p className="material-handover-hint">Use the download button above to save this file.</p>
           </div>
         ) : kind === 'text' ? (
           <pre className="material-text">{text}</pre>
@@ -241,16 +223,10 @@ function MaterialViewerBody({ material, onClose }: MaterialViewerProps) {
           <div ref={pagesRef} className="material-pages" />
         )}
 
-        {!loading && !error && (
-          <p className="material-viewer-note">
-            {kind === 'paged'
-              ? 'This copy is watermarked and your opening of it is logged.'
-              : 'Your opening of this file is logged.'}
-          </p>
+        {!loading && !error && kind === 'paged' && (
+          <p className="material-viewer-note">This copy is watermarked.</p>
         )}
       </div>
-
-      {hidden && <div className="material-viewer-shield">Paused</div>}
     </div>,
     document.body,
   );

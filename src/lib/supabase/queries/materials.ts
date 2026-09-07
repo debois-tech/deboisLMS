@@ -1,6 +1,7 @@
 import { supabase } from '../client';
 import { maybeRow, ok, rows } from './result';
 import { DOCX_TYPE, docxToPdf, extensionOf, fileMimeType, prepareImageForUpload } from '@/lib/utils/files';
+import { stampMaterialFile } from '@/lib/utils/watermark';
 import type { Material, MaterialView } from '@/lib/types';
 
 const BUCKET = 'materials';
@@ -92,13 +93,14 @@ export interface UploadMaterialInput {
 
 // Uploads the file first and only then writes the row; a failed insert removes the orphaned object.
 export async function uploadMaterial(input: UploadMaterialInput): Promise<Material> {
-  // Converted here rather than on the way out: as a PDF or a PNG the file
-  // inherits the watermark and the paged reader instead of needing its own path.
+  // Converted first, so a PDF or image inherits the paged reader without its own path.
   const incoming = fileMimeType(input.file);
-  const file =
+  const converted =
     incoming === DOCX_TYPE ? await docxToPdf(input.file)
     : await prepareImageForUpload(input.file);
 
+  // Stamped once here — the stored bytes are the permanent watermarked copy.
+  const file = await stampMaterialFile(converted);
   const mimeType = fileMimeType(file);
   const storagePath = storagePathFor(input.batchId, input.assignmentId, extensionOf(file.name));
 
@@ -121,6 +123,8 @@ export async function uploadMaterial(input: UploadMaterialInput): Promise<Materi
       mime_type: mimeType,
       size_bytes: file.size,
       uploaded_by: input.uploadedBy ?? null,
+      // Set only when stampMaterialFile actually ran (PDF in, PDF out).
+      watermarked_at: mimeType === 'application/pdf' ? new Date().toISOString() : null,
     })
     .select()
     .single();
@@ -213,35 +217,25 @@ export interface OpenedMaterial {
   text?: string;
 }
 
-// PDFs and images come back watermarked, text as itself, everything else as the stored file.
+// Plain storage read — RLS on the bucket gates it, nothing stamps it on the way out.
 export async function openMaterial(materialId: string): Promise<OpenedMaterial> {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) throw new Error('You are signed out. Sign in again to open this.');
+  const material = await getMaterialById(materialId);
+  if (!material) throw new Error('Could not open this material.');
 
-  const response = await fetch(
-    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/watermark-material`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ material_id: materialId }),
-    },
+  const { data, error } = await supabase.storage.from(BUCKET).download(material.storage_path);
+  if (error || !data) throw new Error('The file is missing from storage.');
+
+  // student_id comes from a column default; best-effort, never blocks the open.
+  void supabase.from('material_views').insert({ material_id: materialId }).then(
+    () => {},
+    () => {},
   );
 
-  if (!response.ok) {
-    // The function answers with JSON on failure and the file on success.
-    const message = await response.json().catch(() => null);
-    throw new Error(message?.error ?? 'Could not open this material.');
-  }
-
-  const blob = await response.blob();
-  const type = response.headers.get('Content-Type') ?? blob.type;
+  const type = material.mime_type ?? data.type;
   return {
-    url: URL.createObjectURL(blob),
+    url: URL.createObjectURL(data),
     type,
-    text: type.startsWith('text/') ? await blob.text() : undefined,
+    text: type.startsWith('text/') ? await data.text() : undefined,
   };
 }
 
