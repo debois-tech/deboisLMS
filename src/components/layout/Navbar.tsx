@@ -1,8 +1,11 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { Sun, Moon, LogOut, ChevronDown, Menu } from 'lucide-react';
+import { Sun, Moon, LogOut, ChevronDown, Menu, Construction } from 'lucide-react';
 import { useTheme } from '@/lib/context/ThemeContext';
 import { useAuth } from '@/lib/context/AuthContext';
+import { useToast } from '@/lib/context/ToastContext';
 import { supabase } from '@/lib/supabase/client';
+import { getMaintenanceMode, setMaintenanceMode } from '@/lib/supabase';
+import { errorMessage } from '@/lib/utils/errors';
 import { useState, useEffect, useRef } from 'react';
 
 interface NavbarProps {
@@ -13,9 +16,29 @@ export function Navbar({ onMenuClick }: NavbarProps) {
   const navigate = useNavigate();
   const { theme, toggle } = useTheme();
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [maintenance, setMaintenance] = useState(false);
+  const [togglingMaintenance, setTogglingMaintenance] = useState(false);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    getMaintenanceMode().then(setMaintenance).catch(() => {});
+  }, []);
+
+  const handleToggleMaintenance = async () => {
+    setTogglingMaintenance(true);
+    try {
+      const next = await setMaintenanceMode(!maintenance);
+      setMaintenance(next);
+      showToast(next ? 'Maintenance mode is on — students see the maintenance page' : 'Maintenance mode is off');
+    } catch (err) {
+      showToast(errorMessage(err, 'Could not update maintenance mode'), 'error');
+    } finally {
+      setTogglingMaintenance(false);
+    }
+  };
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -85,6 +108,24 @@ export function Navbar({ onMenuClick }: NavbarProps) {
               >
                 <div
                   className={`absolute top-[3px] left-[3px] w-[18px] h-[18px] rounded-full bg-white transition-transform duration-200 ${theme === 'dark' ? 'translate-x-5' : 'translate-x-0'}`}
+                />
+              </div>
+            </button>
+
+            <button
+              onClick={handleToggleMaintenance}
+              disabled={togglingMaintenance}
+              className="nav-user-dropdown-item flex items-center justify-between w-full text-sm text-[var(--text-primary)] hover:bg-[var(--bg-overlay)] transition-colors disabled:opacity-50"
+            >
+              <span className="flex items-center gap-3">
+                <Construction size={17} />
+                <span>Maintenance Mode</span>
+              </span>
+              <div
+                className={`relative w-[44px] h-[24px] rounded-full transition-colors duration-200 ${maintenance ? 'bg-[var(--danger)]' : 'bg-[var(--text-muted)]'}`}
+              >
+                <div
+                  className={`absolute top-[3px] left-[3px] w-[18px] h-[18px] rounded-full bg-white transition-transform duration-200 ${maintenance ? 'translate-x-5' : 'translate-x-0'}`}
                 />
               </div>
             </button>

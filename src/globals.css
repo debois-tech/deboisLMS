@@ -3756,6 +3756,45 @@ html.light .glass {
   margin: 1.25rem 0;
 }
 
+/* ── Maintenance page ────────────────────────────────────────── */
+.maintenance-page {
+  display: flex;
+  min-height: 100svh;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 2rem;
+  text-align: center;
+  background: var(--bg-base);
+}
+
+.maintenance-emoji {
+  font-size: 4rem;
+  line-height: 1;
+  animation: maintenance-wiggle 2.4s ease-in-out infinite;
+}
+
+@keyframes maintenance-wiggle {
+  0%, 100% { transform: rotate(-8deg) translateY(0); }
+  25%      { transform: rotate(8deg) translateY(-4px); }
+  50%      { transform: rotate(-4deg) translateY(0); }
+  75%      { transform: rotate(6deg) translateY(-2px); }
+}
+
+.maintenance-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.maintenance-body {
+  max-width: 26rem;
+  color: var(--text-secondary);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+
 /* ── Animations ──────────────────────────────────────────────── */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(10px); }

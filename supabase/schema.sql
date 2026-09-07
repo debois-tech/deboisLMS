@@ -1240,3 +1240,25 @@ drop trigger if exists feedback_resolved_stamp on feedback;
 create trigger feedback_resolved_stamp
   before insert or update on feedback
   for each row execute function stamp_feedback_resolved();
+
+
+-- 13. APP SETTINGS
+-- One row, admin-toggled. Every signed-in user reads it; only an admin writes it.
+create table if not exists app_settings (
+  id               uuid primary key default gen_random_uuid(),
+  maintenance_mode boolean not null default false,
+  updated_at       timestamptz default now()
+);
+
+insert into app_settings (maintenance_mode)
+select false
+where not exists (select 1 from app_settings);
+
+alter table app_settings enable row level security;
+
+drop policy if exists read_settings on app_settings;
+create policy read_settings on app_settings for select to authenticated using (true);
+
+drop policy if exists admin_full_access on app_settings;
+create policy admin_full_access on app_settings
+  for all using (is_admin()) with check (is_admin());
