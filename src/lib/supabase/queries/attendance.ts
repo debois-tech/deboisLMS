@@ -21,6 +21,14 @@ export async function getAttendanceByLecture(lectureId: string): Promise<Attenda
   );
 }
 
+// Every attendance row for a batch, across every lecture — the CSV export's source.
+export async function getAttendanceByBatch(batchId: string): Promise<AttendanceRecord[]> {
+  return unwrapRows<AttendanceRecord>(
+    await supabase.from('attendance').select('*').eq('batch_id', batchId),
+    'Could not load attendance for this batch',
+  );
+}
+
 /** Approved-only attendance for one student, newest first (RLS enforces the same rule server-side). */
 export async function getApprovedAttendanceByStudent(studentId: string): Promise<AttendanceRecord[]> {
   const records = unwrapRows<AttendanceRecord>(

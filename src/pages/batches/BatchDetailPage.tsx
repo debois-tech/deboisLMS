@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Archive, ArrowLeft, Edit3, UserMinus, Users, GraduationCap, Layers, ClipboardCheck, FileText, Plus, Trash2, ChevronRight, CalendarDays, Upload } from 'lucide-react';
+import { Archive, ArrowLeft, Edit3, UserMinus, Users, GraduationCap, Layers, ClipboardCheck, FileText, Plus, Trash2, ChevronRight, CalendarDays, Upload, Download } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { StatusPill } from '@/components/ui/StatusPill';
@@ -17,6 +17,7 @@ import { SearchSelect } from '@/components/ui/SearchSelect';
 import { FormField } from '@/components/ui/FormField';
 import { AttendanceRecordsTable } from '@/components/attendance/AttendanceRecordsTable';
 import { DEFAULT_LECTURE_MINUTES } from '@/lib/attendance/types';
+import { exportBatchAttendanceCsv } from '@/lib/attendance/exportCsv';
 import { AssignmentSubmissionTable } from '@/components/assignments/AssignmentSubmissionTable';
 import { NewAssignmentModal } from '@/components/assignments/NewAssignmentModal';
 import { AssignmentFiles } from '@/components/assignments/AssignmentFiles';
@@ -141,7 +142,7 @@ export default function BatchDetailPage() {
             {active === 'students' && <StudentsTab batch={batch} />}
             {active === 'tutors' && <TutorsTab batchId={batch.id} />}
             {active === 'lectures' && <LecturesTab batchId={batch.id} />}
-            {active === 'attendance' && <AttendanceTab batchId={batch.id} />}
+            {active === 'attendance' && <AttendanceTab batchId={batch.id} batchName={batch.name} />}
             {active === 'finance' && <FinanceTab batchId={batch.id} />}
             {active === 'assignments' && <AssignmentsTab batchId={batch.id} />}
             {active === 'material' && <BatchMaterials batchId={batch.id} batchCode={batch.batch_code} />}
@@ -592,11 +593,12 @@ function LecturesTab({ batchId }: { batchId: string }) {
   );
 }
 
-function AttendanceTab({ batchId }: { batchId: string }) {
+function AttendanceTab({ batchId, batchName }: { batchId: string; batchName: string }) {
   const [lectures, setLectures] = useState<Lecture[]>([]);
   const [selectedLecture, setSelectedLecture] = useState<string | null>(null);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const { showToast } = useToast();
 
   const fetchLectures = useCallback(async () => {
@@ -643,12 +645,29 @@ function AttendanceTab({ batchId }: { batchId: string }) {
 
   const selectedLectureData = lectures.find((lecture) => lecture.id === selectedLecture);
 
+  const handleExportCsv = async () => {
+    setExporting(true);
+    try {
+      await exportBatchAttendanceCsv(batchId, batchName);
+    } catch (err) {
+      showToast(errorMessage(err, 'Could not export attendance'), 'error');
+    }
+    setExporting(false);
+  };
+
   if (loadError) return <Card><ErrorState message={loadError} onRetry={reloadLectures} /></Card>;
 
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader title="Select Lecture" />
+        <CardHeader
+          title="Select Lecture"
+          action={lectures.length > 0 && (
+            <Button size="sm" variant="secondary" className="action-button-compact" onClick={handleExportCsv} loading={exporting}>
+              <Download size={14} /> Export CSV
+            </Button>
+          )}
+        />
         {lectures.length === 0 ? (
           <EmptyState icon={<Layers size={32} />} title="No lectures yet" />
         ) : (

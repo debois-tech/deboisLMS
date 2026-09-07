@@ -4,7 +4,7 @@ export { getStudents, getStudentById, createStudent, createOrReuseStudent, findE
 export type { BulkLoginResult, CredentialEmailResult, TerminationResult } from './queries/students';
 export { getTutors, getTutorById, createTutor, getTutorBatches, getBatchTutors, assignTutorToBatch, removeTutorFromBatch } from './queries/tutors';
 export { getLecturesByBatch, getLectureById, createLecture, updateLecture, deleteLecture } from './queries/lectures';
-export { getUploadsByLecture, getAttendanceByLecture, getApprovedAttendanceByStudent, insertUploadRows, markAttendance, deleteAttendance, approveAttendance, setAttendanceApproved, bulkApproveAttendance, getUnapprovedCount } from './queries/attendance';
+export { getUploadsByLecture, getAttendanceByLecture, getAttendanceByBatch, getApprovedAttendanceByStudent, insertUploadRows, markAttendance, deleteAttendance, approveAttendance, setAttendanceApproved, bulkApproveAttendance, getUnapprovedCount } from './queries/attendance';
 export { processAttendance, computeStatus, ATTENDANCE_PRESENT_PERCENT, ATTENDANCE_PARTIAL_PERCENT } from '@/lib/attendance/process';
 export type { ProcessingReport, ProcessOptions } from '@/lib/attendance/process';
 export { getFeesByBatch, updateFeePayment, getFeePaymentLogs, addFeePaymentLog, deleteFeePayment, getBatchFeeSummary, getEarningBreakdown, getFeesByStudent, getFeePaymentLogsByStudent, getMyFeeDues } from './queries/fees';

@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { ClipboardCheck, Upload, Loader2, Plus, AlertTriangle, PenLine } from 'lucide-react';
+import { ClipboardCheck, Upload, Loader2, Plus, AlertTriangle, PenLine, Download } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
@@ -17,6 +17,7 @@ import { DatePicker } from '@/components/ui/DatePicker';
 import { AttendanceRecordsTable } from '@/components/attendance/AttendanceRecordsTable';
 import { ManualAttendance } from '@/components/attendance/ManualAttendance';
 import { DEFAULT_LECTURE_MINUTES } from '@/lib/attendance/types';
+import { exportBatchAttendanceCsv } from '@/lib/attendance/exportCsv';
 import { getLecturesByBatch, createLecture } from '@/lib/supabase';
 import { getAttendanceByLecture, insertUploadRows, processAttendance, setAttendanceApproved, bulkApproveAttendance, updateLecture } from '@/lib/supabase';
 import type { ProcessingReport } from '@/lib/supabase';
@@ -49,6 +50,7 @@ export default function AttendancePage() {
   const [newLectureNote, setNewLectureNote] = useState('');
   const [newLectureMode, setNewLectureMode] = useState<'online' | 'offline'>('online');
   const [newLectureDuration, setNewLectureDuration] = useState(DEFAULT_LECTURE_MINUTES);
+  const [exporting, setExporting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const { showToast } = useToast();
 
@@ -215,6 +217,18 @@ export default function AttendancePage() {
     }
   };
 
+  const handleExportCsv = async () => {
+    if (!selectedBatch) return;
+    const batchName = batches.find((b) => b.id === selectedBatch)?.name ?? 'batch';
+    setExporting(true);
+    try {
+      await exportBatchAttendanceCsv(selectedBatch, batchName);
+    } catch (err) {
+      showToast(errorMessage(err, 'Could not export attendance'), 'error');
+    }
+    setExporting(false);
+  };
+
   const showUploadAction = csvRows.length > 0 && selectedLecture && !processing;
 
   if (loading) return <Spinner centered />;
@@ -228,9 +242,20 @@ export default function AttendancePage() {
         <CardHeader
           title="Select batch & lecture"
           action={selectedBatch && (
-            <Button size="sm" className="action-button-compact" onClick={() => setShowNewLecture(true)}>
-              <Plus size={14} /> New Lecture
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                className="action-button-compact"
+                onClick={handleExportCsv}
+                loading={exporting}
+              >
+                <Download size={14} /> Export CSV
+              </Button>
+              <Button size="sm" className="action-button-compact" onClick={() => setShowNewLecture(true)}>
+                <Plus size={14} /> New Lecture
+              </Button>
+            </div>
           )}
         />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
