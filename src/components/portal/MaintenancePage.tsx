@@ -24,9 +24,9 @@ export function MaintenancePage({ onRetry }: MaintenancePageProps) {
       <span className="maintenance-emoji" aria-hidden="true">🛠️</span>
       <h1 className="maintenance-title">brb, fixing stuff</h1>
       <p className="maintenance-body">
-        The LMS stepped out to fix a few gremlins in the wiring. Try again in a bit — probably not on fire. 🔥
+        The LMS stepped out to fix a few gremlins in the wiring. Try again in a bit probably not on fire. 🔥
       </p>
-      <Button variant="secondary" onClick={handleRetry} disabled={checking}>
+      <Button className="action-button-compact" variant="secondary" onClick={handleRetry} disabled={checking}>
         {checking ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
         Try again
       </Button>
