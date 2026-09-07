@@ -12,6 +12,7 @@ import { getAssignmentSubmissions, markSubmission } from '@/lib/supabase';
 import type { AssignmentSubmissionRow } from '@/lib/supabase';
 import { formatDateTime } from '@/lib/utils/format';
 import { downloadCsv, toCsv, toFileStem } from '@/lib/utils/csvExport';
+import { isLateSubmission } from '@/lib/utils/deadline';
 import { useToast } from '@/lib/context/ToastContext';
 import { errorMessage } from '@/lib/utils/errors';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
@@ -21,6 +22,8 @@ interface AssignmentSubmissionTableProps {
   batchId: string;
   /** Names the CSV file, so the admin can tell exports apart after downloading. */
   assignmentTitle: string;
+  // Colors the toggle orange for a submission that came in after this.
+  dueAt?: string | null;
 }
 
 const CSV_HEADERS = ['Student Name', 'Submitted', 'GitHub Repo', 'Submitted At'];
@@ -32,6 +35,7 @@ export function AssignmentSubmissionTable({
   assignmentId,
   batchId,
   assignmentTitle,
+  dueAt,
 }: AssignmentSubmissionTableProps) {
   const [rows, setRows] = useState<AssignmentSubmissionRow[]>([]);
   const [busyStudentId, setBusyStudentId] = useState<string | null>(null);
@@ -150,7 +154,10 @@ export function AssignmentSubmissionTable({
                     disabled={busyStudentId === row.student_id}
                     aria-pressed={row.submitted}
                     aria-label={`${row.submitted ? 'Unmark' : 'Mark'} ${row.student_name} as submitted`}
-                    className={`submission-toggle ${row.submitted ? 'is-submitted' : ''}`}
+                    title={row.submitted && isLateSubmission(dueAt, row.submitted_at) ? 'Submitted late' : undefined}
+                    className={`submission-toggle ${
+                      row.submitted ? (isLateSubmission(dueAt, row.submitted_at) ? 'is-late' : 'is-submitted') : ''
+                    }`}
                   >
                     {row.submitted ? <CheckCircle size={20} /> : <XCircle size={20} />}
                   </button>

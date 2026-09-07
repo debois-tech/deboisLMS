@@ -14,7 +14,7 @@ import {
   usePortalStudentId,
 } from '@/components/portal';
 import { getAssignmentsForStudent, getStudentRepo, submitAssignmentFromPortal } from '@/lib/supabase';
-import { assignmentState, formatDueLabel, isDueSoon, type AssignmentState } from '@/lib/utils/deadline';
+import { assignmentState, formatDueLabel, isDueSoon, isOverdue, type AssignmentState } from '@/lib/utils/deadline';
 import { formatDate } from '@/lib/utils/format';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { useNow } from '@/lib/hooks/useNow';
@@ -25,7 +25,7 @@ type Filter = 'all' | AssignmentState;
 const SECTIONS: { state: AssignmentState; label: string; empty: string }[] = [
   { state: 'todo', label: 'To do', empty: 'Nothing to hand in.' },
   { state: 'done', label: 'Done', empty: 'Nothing handed in yet.' },
-  { state: 'missed', label: 'Missed', empty: "You haven't missed anything." },
+  { state: 'late', label: 'Late', empty: 'Nothing submitted late.' },
 ];
 
 export default function PortalAssignmentsPage() {
@@ -78,9 +78,9 @@ export default function PortalAssignmentsPage() {
       ? assignments.filter((a) => `${a.title} ${a.description ?? ''}`.toLowerCase().includes(term))
       : assignments;
 
-    const empty: Record<AssignmentState, StudentAssignment[]> = { todo: [], done: [], missed: [] };
+    const empty: Record<AssignmentState, StudentAssignment[]> = { todo: [], done: [], late: [] };
     for (const assignment of matched) {
-      empty[assignmentState(assignment, now)].push(assignment);
+      empty[assignmentState(assignment)].push(assignment);
     }
 
     // To do is a queue: soonest deadline first, undated work last.
@@ -91,12 +91,13 @@ export default function PortalAssignmentsPage() {
     });
 
     return { buckets: empty, matches: matched.length };
-  }, [assignments, query, now]);
+  }, [assignments, query]);
 
   const renderRow = (assignment: StudentAssignment, state: AssignmentState) => {
     const submittedAt = assignment.completion?.submitted_at;
+    const overdue = state === 'todo' && isOverdue(assignment, now);
     const secondary =
-      state === 'done'
+      state !== 'todo'
         ? submittedAt
           ? `Handed in ${formatDate(submittedAt)}`
           : 'Handed in'
@@ -107,15 +108,15 @@ export default function PortalAssignmentsPage() {
         key={assignment.id}
         primary={assignment.title}
         secondary={
-          <span className={state === 'todo' && isDueSoon(assignment.due_at, now) ? 'portal-due-soon' : undefined}>
+          <span className={overdue ? 'portal-overdue' : isDueSoon(assignment.due_at, now) ? 'portal-due-soon' : undefined}>
             {secondary}
           </span>
         }
-        trailing={state === 'missed' ? <PortalStatus kind="submission" value="missed" /> : undefined}
+        trailing={state === 'late' ? <PortalStatus kind="submission" value="late" /> : undefined}
         state={state}
         muted={state !== 'todo'}
         onClick={() => setOpen(assignment)}
-        label={`${assignment.title} — ${state === 'done' ? 'submitted' : state === 'missed' ? 'missed' : 'to hand in'}`}
+        label={`${assignment.title} — ${state === 'todo' ? 'to hand in' : state === 'late' ? 'submitted late' : 'submitted'}`}
       />
     );
   };

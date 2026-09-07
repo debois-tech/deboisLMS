@@ -3,11 +3,11 @@ import { Search, X } from 'lucide-react';
 import { SearchFilterBar } from '@/components/ui/SearchFilterBar';
 
 interface ExpandableSearchProps extends ComponentProps<typeof SearchFilterBar> {
-  /** Fires when the bar collapses back to the icon — clear the search/filter state here. */
+  // Fires when the bar collapses back to the icon — clear the search/filter state here.
   onClose?: () => void;
 }
 
-/** Collapsed: a small icon button. Clicked: the button itself grows into the real search+filter bar. */
+// Collapsed: a small icon button. Clicked: it grows into the real search+filter bar.
 export function ExpandableSearch({ onClose, ...barProps }: ExpandableSearchProps) {
   const [open, setOpen] = useState(false);
 

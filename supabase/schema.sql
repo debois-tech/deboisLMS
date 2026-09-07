@@ -1,8 +1,8 @@
 -- DeboisTech ERP — schema
 -- The whole database in one file: run it on a fresh project and nothing else.
--- Assumes an admin user already exists in Supabase Auth — edit the email in §9.
+-- Assumes an admin user already exists in Supabase Auth — edit the email in §8.
 -- Re-runnable: every statement is guarded and nothing rewrites issued data.
-
+  
 
 -- 1. TYPES
 do $$ begin create type batch_status       as enum ('upcoming', 'ongoing', 'completed');      exception when duplicate_object then null; end $$;
@@ -455,7 +455,8 @@ create table if not exists assignments (
 );
 
 comment on column assignments.due_at is
-  'Deadline as an absolute instant. Null = no deadline. Students cannot submit after it.';
+  'Deadline as an absolute instant. Null = no deadline. A submission after it is still '
+  'accepted — the client flags it late by comparing it against submitted_at.';
 
 create index if not exists idx_assignments_batch on assignments(batch_id);
 
@@ -543,9 +544,10 @@ create trigger student_repos_touch_updated_at
 
 
 -- 7. STUDY MATERIAL
--- The file itself lives in the private `materials` bucket; only the edge
--- function (service role) can reach it, and it stamps every page before
--- returning it.
+-- The file itself lives in the private `materials` bucket, already permanently
+-- watermarked at upload (client-side, before the bytes ever leave the browser).
+-- A read is a plain storage fetch, gated by the storage policy in §10 — nothing
+-- stamps it again, or even touches it, on the way out.
 create table if not exists materials (
   id            uuid primary key default gen_random_uuid(),
   -- NULL means the material is for every student, not one batch.
@@ -565,8 +567,15 @@ create table if not exists materials (
   size_bytes    bigint,
   page_count    int,
   uploaded_by   uuid,
+  -- Null on a pageable file (PDF or image) means it predates client-side
+  -- upload-time stamping and still needs a backfill. Every upload sets this
+  -- from here on; never null for a kind that was never watermarked to begin with.
+  watermarked_at timestamptz,
   created_at    timestamptz default now()
 );
+
+-- Re-running this file on a database created before watermarked_at existed.
+alter table materials add column if not exists watermarked_at timestamptz;
 
 comment on column materials.mime_type is
   'Decides how the file is delivered: PDFs and images are watermarked and paged, '
@@ -591,7 +600,7 @@ create index if not exists idx_material_views_student  on material_views(student
 
 -- .docx is absent on purpose: it is converted to a PDF in the browser before
 -- upload, so it never reaches storage as Word. 50 MB per file is what the
--- watermark function can hold in memory alongside its output.
+-- browser can hold in memory while stamping the watermark on the way in.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
   'materials', 'materials', false, 52428800,
@@ -832,7 +841,17 @@ drop policy if exists student_read_own on material_views;
 create policy student_read_own on material_views
   for select using (student_id = current_student_id());
 
--- Metadata only — the bytes still require the edge function.
+-- The client logs its own open now that there is no service-role function in the
+-- loop. student_id is never sent by the client — it comes from the column
+-- default below, so an admin's open (current_student_id() is null there) fails
+-- the not-null constraint and is simply never logged, same as before.
+alter table material_views alter column student_id set default current_student_id();
+
+drop policy if exists student_insert_own on material_views;
+create policy student_insert_own on material_views
+  for insert with check (student_id = current_student_id());
+
+-- Metadata only; the storage policy in this section gates the bytes directly.
 -- The `batch_id is null` branch is deliberately absent: a material for everyone
 -- is still only for enrolled students, and every student now has a batch.
 drop policy if exists student_read_own on materials;
@@ -854,10 +873,8 @@ create policy student_update_own on student_repos
   for update using (student_id = current_student_id())
   with check (student_id = current_student_id());
 
--- Both policies carry the same conditions, so the deadline cannot be sidestepped
--- by updating a completion row instead of inserting one. The client check is UX;
--- this is the one that holds against a changed clock or a direct API call.
--- admin_full_access is untouched, so an admin can still tick work off late.
+-- Enrolment gate only — a late submission is still accepted, just flagged
+-- client-side by comparing submitted_at against the assignment's due_at.
 drop policy if exists student_insert_own on assignment_completions;
 create policy student_insert_own on assignment_completions
   for insert with check (
@@ -868,7 +885,6 @@ create policy student_insert_own on assignment_completions
       join batch_student_mapping m on m.batch_id = a.batch_id
       where m.student_id = current_student_id()
         and m.status = 'active'
-        and (a.due_at is null or now() <= a.due_at)
     )
   );
 
@@ -886,7 +902,6 @@ create policy student_update_own on assignment_completions
       join batch_student_mapping m on m.batch_id = a.batch_id
       where m.student_id = current_student_id()
         and m.status = 'active'
-        and (a.due_at is null or now() <= a.due_at)
     )
   )
   with check (
@@ -897,16 +912,31 @@ create policy student_update_own on assignment_completions
       join batch_student_mapping m on m.batch_id = a.batch_id
       where m.student_id = current_student_id()
         and m.status = 'active'
-        and (a.due_at is null or now() <= a.due_at)
     )
   );
 
 -- No student policy on tutors / tutor_batch_mapping / uploads: RLS default-denies.
 
 -- ── Storage ─────────────────────────────────────────────────────────────────
--- Students get NO storage policy on purpose: with RLS on and no match, every
--- direct request for the raw object is denied. The watermark edge function is
--- the only route to the bytes.
+-- Every stored file is already the final, watermarked copy, so a student reads
+-- it straight from the bucket — gated by the same enrolment rule as the
+-- `materials` row itself, just re-expressed against storage.objects.name since
+-- a storage policy cannot reference the students' own RLS-filtered view.
+drop policy if exists "student reads own material files" on storage.objects;
+create policy "student reads own material files" on storage.objects
+  for select
+  using (
+    bucket_id = 'materials'
+    and exists (
+      select 1 from materials m
+      where m.storage_path = storage.objects.name
+        and m.batch_id in (
+          select batch_id from batch_student_mapping
+          where student_id = current_student_id() and status = 'active'
+        )
+    )
+  );
+
 drop policy if exists "admin manages material files" on storage.objects;
 create policy "admin manages material files" on storage.objects
   for all
@@ -1210,3 +1240,25 @@ drop trigger if exists feedback_resolved_stamp on feedback;
 create trigger feedback_resolved_stamp
   before insert or update on feedback
   for each row execute function stamp_feedback_resolved();
+
+
+-- 13. APP SETTINGS
+-- One row, admin-toggled. Every signed-in user reads it; only an admin writes it.
+create table if not exists app_settings (
+  id               uuid primary key default gen_random_uuid(),
+  maintenance_mode boolean not null default false,
+  updated_at       timestamptz default now()
+);
+
+insert into app_settings (maintenance_mode)
+select false
+where not exists (select 1 from app_settings);
+
+alter table app_settings enable row level security;
+
+drop policy if exists read_settings on app_settings;
+create policy read_settings on app_settings for select to authenticated using (true);
+
+drop policy if exists admin_full_access on app_settings;
+create policy admin_full_access on app_settings
+  for all using (is_admin()) with check (is_admin());

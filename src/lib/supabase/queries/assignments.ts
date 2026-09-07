@@ -55,7 +55,17 @@ export async function createAssignment(input: Omit<Assignment, 'id' | 'created_a
   return data as Assignment;
 }
 
-/** Every active student and their submission. The CSV export ships these same rows. */
+// Lets an admin push out a due date on an existing assignment, past ones included.
+export async function updateAssignment(
+  id: string,
+  patch: Pick<Assignment, 'title' | 'description' | 'due_at'>,
+): Promise<Assignment> {
+  const { data, error } = await supabase.from('assignments').update(patch).eq('id', id).select().single();
+  if (error) throw error;
+  return data as Assignment;
+}
+
+// Every active student and their submission. The CSV export ships these same rows. 
 export async function getAssignmentSubmissions(
   assignmentId: string,
   batchId: string,

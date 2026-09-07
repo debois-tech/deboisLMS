@@ -4,16 +4,18 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { FormField } from '@/components/ui/FormField';
 import { DateTimePicker } from '@/components/ui/DatePicker';
-import { MATERIAL_MAX_BYTES, createAssignment, uploadMaterials } from '@/lib/supabase';
+import { MATERIAL_MAX_BYTES, createAssignment, updateAssignment, uploadMaterials } from '@/lib/supabase';
 import { useAuth } from '@/lib/context/AuthContext';
 import { useNow } from '@/lib/hooks/useNow';
 import { isPastDue } from '@/lib/utils/deadline';
 import { toDateValue } from '@/lib/utils/date';
+import type { Assignment } from '@/lib/types';
 import {
   ACCEPTED_FILE_ACCEPT,
   ACCEPTED_TYPES,
   extensionOf,
   fileMimeType,
+  filesFromDataTransfer,
   fileTypeLabel,
 } from '@/lib/utils/files';
 import { formatFileSize } from '@/lib/utils/format';
@@ -24,15 +26,22 @@ interface NewAssignmentModalProps {
   open: boolean;
   onClose: () => void;
   batchId: string;
-  /** Refetch the list. Called after the row is in. */
-  onCreated: () => void | Promise<void>;
+  // Present to edit an existing assignment; absent to create a new one.
+  assignment?: Assignment | null;
+  // Refetch the list. Called after the row is saved.
+  onSaved: () => void | Promise<void>;
 }
 
-const emptyForm = { title: '', description: '', due_at: null as string | null, noDeadline: false };
+const formFrom = (assignment?: Assignment | null) => ({
+  title: assignment?.title ?? '',
+  description: assignment?.description ?? '',
+  due_at: assignment?.due_at ?? null,
+  noDeadline: Boolean(assignment) && !assignment?.due_at,
+});
 
-/** Shared by the Assignments page and a batch's Assignments tab. */
-export function NewAssignmentModal({ open, onClose, batchId, onCreated }: NewAssignmentModalProps) {
-  const [form, setForm] = useState(emptyForm);
+// Shared by the Assignments page and a batch's Assignments tab, for both create and edit.
+export function NewAssignmentModal({ open, onClose, batchId, assignment, onSaved }: NewAssignmentModalProps) {
+  const [form, setForm] = useState(() => formFrom(assignment));
   const [files, setFiles] = useState<File[]>([]);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState({ done: 0, total: 0 });
@@ -44,7 +53,7 @@ export function NewAssignmentModal({ open, onClose, batchId, onCreated }: NewAss
   const deadlineDecided = form.noDeadline || Boolean(form.due_at);
 
   const close = () => {
-    setForm(emptyForm);
+    setForm(formFrom(assignment));
     setFiles([]);
     setUploading({ done: 0, total: 0 });
     if (fileRef.current) fileRef.current.value = '';
@@ -53,10 +62,7 @@ export function NewAssignmentModal({ open, onClose, batchId, onCreated }: NewAss
 
   // Held in state, not uploaded yet: a file needs an assignment to hang off, and
   // that row does not exist until Create is pressed.
-  const pick = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const chosen = [...(event.target.files ?? [])];
-    if (fileRef.current) fileRef.current.value = '';
-
+  const addFiles = (chosen: File[]) => {
     const accepted = chosen.filter((file) => ACCEPTED_TYPES.has(extensionOf(file.name)));
     const tooBig = accepted.find((file) => file.size > MATERIAL_MAX_BYTES);
     if (tooBig) {
@@ -74,16 +80,40 @@ export function NewAssignmentModal({ open, onClose, batchId, onCreated }: NewAss
     ]);
   };
 
-  const handleCreate = async () => {
+  const pick = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const chosen = [...(event.target.files ?? [])];
+    if (fileRef.current) fileRef.current.value = '';
+    addFiles(chosen);
+  };
+
+  const [dragOver, setDragOver] = useState(false);
+
+  const handleDrop = async (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setDragOver(false);
+    if (saving) return;
+    const dropped = await filesFromDataTransfer(event.dataTransfer);
+    addFiles(dropped.map((d) => d.file));
+  };
+
+  const handleSave = async () => {
     setSaving(true);
     try {
-      const assignment = await createAssignment({
-        batch_id: batchId,
+      const payload = {
         title: form.title.trim(),
         description: form.description.trim() || undefined,
-        assigned_date: toDateValue(new Date()),
         due_at: form.noDeadline ? null : form.due_at,
-      });
+      };
+
+      if (assignment) {
+        await updateAssignment(assignment.id, payload);
+        await onSaved();
+        close();
+        showToast('Assignment updated');
+        return;
+      }
+
+      const created = await createAssignment({ batch_id: batchId, ...payload, assigned_date: toDateValue(new Date()) });
 
       // The assignment is saved by now; a failed upload is reported, not rolled back.
       if (files.length > 0) {
@@ -92,7 +122,7 @@ export function NewAssignmentModal({ open, onClose, batchId, onCreated }: NewAss
           files,
           {
             batchId,
-            assignmentId: assignment.id,
+            assignmentId: created.id,
             uploadedBy: user?.id,
             title: (file) => file.name.replace(/\.[a-z0-9]+$/i, ''),
           },
@@ -100,7 +130,7 @@ export function NewAssignmentModal({ open, onClose, batchId, onCreated }: NewAss
         );
 
         if (result.failed.length > 0) {
-          await onCreated();
+          await onSaved();
           close();
           showToast(
             `Assignment created, but ${result.failed.length} file(s) failed: ${result.failed[0].reason}`,
@@ -110,11 +140,11 @@ export function NewAssignmentModal({ open, onClose, batchId, onCreated }: NewAss
         }
       }
 
-      await onCreated();
+      await onSaved();
       close();
       showToast(files.length > 0 ? 'Assignment created with files' : 'Assignment created');
     } catch (error) {
-      showToast(errorMessage(error, 'Failed to create assignment'), 'error');
+      showToast(errorMessage(error, assignment ? 'Failed to update assignment' : 'Failed to create assignment'), 'error');
     } finally {
       setSaving(false);
     }
@@ -124,19 +154,19 @@ export function NewAssignmentModal({ open, onClose, batchId, onCreated }: NewAss
     <Modal
       open={open}
       onClose={saving ? () => {} : close}
-      title="New Assignment"
+      title={assignment ? 'Edit Assignment' : 'New Assignment'}
       footer={
         <>
-          <Button variant="ghost" onClick={close} disabled={saving}>Cancel</Button>
+          <Button className='cancel-button-compact' variant="ghost" onClick={close} disabled={saving}>Cancel</Button>
           <Button
             className="action-button-compact"
-            onClick={handleCreate}
+            onClick={handleSave}
             loading={saving}
             disabled={!form.title.trim() || !deadlineDecided}
           >
             {saving && uploading.total > 0
               ? `Uploading ${uploading.done}/${uploading.total}`
-              : 'Create Assignment'}
+              : assignment ? 'Save Changes' : 'Create Assignment'}
           </Button>
         </>
       }
@@ -158,44 +188,56 @@ export function NewAssignmentModal({ open, onClose, batchId, onCreated }: NewAss
           />
         </FormField>
 
-        <FormField label="Files">
-          <label className="import-dropzone">
-            <Upload size={16} />
-            {files.length === 0 ? 'Attach files' : `Add more (${files.length} attached)`}
-            <input
-              ref={fileRef}
-              type="file"
-              accept={ACCEPTED_FILE_ACCEPT}
-              multiple
-              onChange={pick}
-              className="hidden"
-              disabled={saving}
-            />
-          </label>
+        {!assignment && (
+          <FormField label="Files">
+            <label className="import-dropzone">
+              <Upload size={16} />
+              {files.length === 0 ? 'Attach files' : `Add more (${files.length} attached)`}
+              <input
+                ref={fileRef}
+                type="file"
+                accept={ACCEPTED_FILE_ACCEPT}
+                multiple
+                onChange={pick}
+                className="hidden"
+                disabled={saving}
+              />
+            </label>
 
-          {files.length > 0 && (
-            <ul className="assignment-files-list">
-              {files.map((file) => (
-                <li key={`${file.name}-${file.size}`} className="assignment-files-row">
-                  <span className="assignment-files-open is-static">
-                    <span className="assignment-files-kind">{fileTypeLabel(fileMimeType(file), file.name)}</span>
-                    <span className="assignment-files-name">{file.name}</span>
-                    <span className="assignment-files-size">{formatFileSize(file.size)}</span>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setFiles((current) => current.filter((held) => held !== file))}
-                    className="assignment-files-remove"
-                    aria-label={`Remove ${file.name}`}
-                    disabled={saving}
-                  >
-                    <Trash2 size={15} />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </FormField>
+            <div
+              className={`drop-zone ${dragOver ? 'is-active' : ''}`}
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={handleDrop}
+            >
+              <Upload size={18} />
+              <p>Drag and drop files here</p>
+            </div>
+
+            {files.length > 0 && (
+              <ul className="assignment-files-list">
+                {files.map((file) => (
+                  <li key={`${file.name}-${file.size}`} className="assignment-files-row">
+                    <span className="assignment-files-open is-static">
+                      <span className="assignment-files-kind">{fileTypeLabel(fileMimeType(file), file.name)}</span>
+                      <span className="assignment-files-name">{file.name}</span>
+                      <span className="assignment-files-size">{formatFileSize(file.size)}</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setFiles((current) => current.filter((held) => held !== file))}
+                      className="assignment-files-remove"
+                      aria-label={`Remove ${file.name}`}
+                      disabled={saving}
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </FormField>
+        )}
 
         <FormField label="Deadline" required>
           <DateTimePicker
@@ -212,7 +254,7 @@ export function NewAssignmentModal({ open, onClose, batchId, onCreated }: NewAss
         {isPastDue(form.due_at, now) && (
           <p className="repo-notice is-warning">
             <AlertTriangle size={14} className="shrink-0" />
-            <span>That time has already passed. Students won't be able to submit at all.</span>
+            <span>Due date/time already passed — submissions will be marked late.</span>
           </p>
         )}
 

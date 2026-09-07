@@ -22,7 +22,7 @@ interface PortalRowProps {
   primary: ReactNode;
   secondary?: ReactNode;
   trailing?: ReactNode;
-  state?: 'todo' | 'done' | 'missed';
+  state?: 'todo' | 'done' | 'late';
   muted?: boolean;
   onClick?: () => void;
   label?: string;
@@ -41,7 +41,7 @@ export function PortalRow({ primary, secondary, trailing, state, muted, onClick,
       <span className="portal-list-lead">
         {state && (
           <span
-            className={clsx('portal-row-dot', state === 'done' && 'is-done', state === 'missed' && 'is-missed')}
+            className={clsx('portal-row-dot', state === 'done' && 'is-done', state === 'late' && 'is-late')}
             aria-hidden="true"
           />
         )}

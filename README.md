@@ -30,7 +30,7 @@ npm run dev
 and row-level security. Paste it into the Supabase SQL editor and run it. It is idempotent, so
 running it again on a live project is safe and changes nothing.
 
-Before running it on a new project, edit the admin email in section 9 — that `update auth.users`
+Before running it on a new project, edit the admin email in section 8 — that `update auth.users`
 block is what tags your account as an admin, and the account must already exist in Supabase Auth.
 
 ### Edge functions
@@ -41,7 +41,6 @@ Anything needing a secret runs server-side. Deploy each with
 | Function | Purpose | Secret |
 |---|---|---|
 | `create-student-login` | Creates/resets a student's portal login | `SECRET_SERVICE_ROLE_KEY` |
-| `watermark-material` | Serves a material: watermarks PDFs and images, passes other files through | `SECRET_SERVICE_ROLE_KEY` |
 | `match-name` | Gemini fuzzy name matching for attendance | `GEMINI_API_KEY` |
 | `send-credentials` | Emails a student their portal login, one or a whole import | `RESEND_API_KEY` |
 
@@ -94,16 +93,18 @@ towards a dashboard or a student's portal until an admin approves it — the AI 
 treated as trustworthy on its own.
 
 **Study material** accepts any file, and what happens to it depends on what it is. PDFs and images
-are watermarked and paged in the in-app reader, never downloadable — an image is wrapped into a
-one-page PDF first, so it takes the same path. Word files are converted to PDF in the browser before
-upload, which keeps the text but not the layout. Markdown and plain text are shown as written.
-Everything else — sheets, decks, archives — is downloaded, because no browser renders them.
+are watermarked and paged in the in-app reader — an image is wrapped into a one-page PDF first, so
+it takes the same path. Word files are converted to PDF in the browser before upload, which keeps
+the text but not the layout. Markdown and plain text are shown as written. Everything else — sheets,
+decks, archives — is handed over directly, because no browser renders them. Every kind can be
+downloaded.
 
-Every file lives in a private bucket that students have no storage policy for; the only path to the
-bytes is the `watermark-material` function. Screenshots cannot be prevented in a browser — the
-watermark says where a leaked copy came from and the view log, written for every kind including
-downloads, says who opened it. Assignment handouts are the same table with an `assignment_id`, so
-they inherit the reader, the log and the enrolment rule.
+The watermark is stamped once, client-side, at upload — the stored file is the final copy, not
+something rebuilt on every open. A read is a plain storage fetch: the bucket is private, but a
+storage policy lets an enrolled student read a material's bytes directly, gated by the same
+enrolment rule as the `materials` table row itself. The view log, written for every kind including
+downloads, still says who opened what and when. Assignment handouts are the same table with an
+`assignment_id`, so they inherit the reader, the log and the enrolment rule.
 
 **Portal logins** use a password derived from the student's phone (`Debois@<last4>`). Supabase Auth
 stores only a hash and this app stores no plaintext copy; the dashboard shows the current password

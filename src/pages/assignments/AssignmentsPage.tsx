@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Edit3, Plus } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
@@ -24,7 +24,10 @@ export default function AssignmentsPage() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [selectedAsgn, setSelectedAsgn] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
   const { showToast } = useToast();
+
+  const selectedAssignment = assignments.find((a) => a.id === selectedAsgn);
 
   const { loading, error, retry } = useInitialLoad(async () => {
     setBatches(await getBatches());
@@ -52,7 +55,14 @@ export default function AssignmentsPage() {
         <CardHeader
           title="Select batch & assignment"
           action={selectedBatch && (
-            <Button size="sm" className="action-button-compact" onClick={() => setShowNew(true)}><Plus size={14} /> New Assignment</Button>
+            <div className="flex gap-2">
+              {selectedAssignment && (
+                <Button size="sm" variant="secondary" className="action-button-icon" onClick={() => setShowEdit(true)} aria-label="Edit assignment">
+                  <Edit3 size={14} />
+                </Button>
+              )}
+              <Button size="sm" className="action-button-compact" onClick={() => setShowNew(true)}><Plus size={14} /> New Assignment</Button>
+            </div>
           )}
         />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -83,17 +93,20 @@ export default function AssignmentsPage() {
             key={selectedAsgn}
             assignmentId={selectedAsgn}
             batchId={selectedBatch}
-            assignmentTitle={assignments.find((a) => a.id === selectedAsgn)?.title ?? 'assignment'}
+            assignmentTitle={selectedAssignment?.title ?? 'assignment'}
+            dueAt={selectedAssignment?.due_at}
           />
         </Card>
       )}
 
       {selectedBatch && (
         <NewAssignmentModal
-          open={showNew}
-          onClose={() => setShowNew(false)}
+          key={showEdit ? (selectedAsgn ?? 'edit') : 'new'}
+          open={showNew || showEdit}
+          onClose={() => { setShowNew(false); setShowEdit(false); }}
           batchId={selectedBatch}
-          onCreated={() => fetchBatchData(selectedBatch)}
+          assignment={showEdit ? selectedAssignment : undefined}
+          onSaved={() => fetchBatchData(selectedBatch)}
         />
       )}
     </div>

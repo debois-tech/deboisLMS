@@ -244,6 +244,8 @@ export interface Material {
   size_bytes?: number;
   page_count?: number;
   uploaded_by?: string;
+  /** Null on a PDF/image means it predates upload-time stamping and still needs a backfill. */
+  watermarked_at?: string | null;
   created_at: string;
   batch?: Batch;
   tutor?: Tutor;

@@ -2,9 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { ChevronDown, LogOut, Menu, Moon, Sun } from 'lucide-react';
 import { PortalNav } from '@/components/layout/PortalNav';
+import { MaintenancePage } from '@/components/portal';
 import { useAuth } from '@/lib/context/AuthContext';
 import { useTheme } from '@/lib/context/ThemeContext';
 import { supabase } from '@/lib/supabase/client';
+import { getMaintenanceMode } from '@/lib/supabase';
+import { Spinner } from '@/components/ui/Spinner';
 
 export default function PortalLayout() {
   const { user } = useAuth();
@@ -12,7 +15,12 @@ export default function PortalLayout() {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
+  const [maintenance, setMaintenance] = useState<boolean | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    getMaintenanceMode().then(setMaintenance).catch(() => setMaintenance(false));
+  }, []);
 
   useEffect(() => {
     const handler = (event: MouseEvent) => {
@@ -28,6 +36,11 @@ export default function PortalLayout() {
     .slice(0, 2)
     .join('')
     .toUpperCase() ?? '?';
+
+  if (maintenance === null) return <Spinner centered />;
+  if (maintenance) {
+    return <MaintenancePage onRetry={async () => setMaintenance(await getMaintenanceMode())} />;
+  }
 
   return (
     <div className="min-h-screen bg-[var(--bg-base)]">
