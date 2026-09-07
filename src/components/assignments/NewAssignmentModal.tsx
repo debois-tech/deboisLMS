@@ -15,6 +15,7 @@ import {
   ACCEPTED_TYPES,
   extensionOf,
   fileMimeType,
+  filesFromDataTransfer,
   fileTypeLabel,
 } from '@/lib/utils/files';
 import { formatFileSize } from '@/lib/utils/format';
@@ -61,10 +62,7 @@ export function NewAssignmentModal({ open, onClose, batchId, assignment, onSaved
 
   // Held in state, not uploaded yet: a file needs an assignment to hang off, and
   // that row does not exist until Create is pressed.
-  const pick = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const chosen = [...(event.target.files ?? [])];
-    if (fileRef.current) fileRef.current.value = '';
-
+  const addFiles = (chosen: File[]) => {
     const accepted = chosen.filter((file) => ACCEPTED_TYPES.has(extensionOf(file.name)));
     const tooBig = accepted.find((file) => file.size > MATERIAL_MAX_BYTES);
     if (tooBig) {
@@ -80,6 +78,22 @@ export function NewAssignmentModal({ open, onClose, batchId, assignment, onSaved
       ...current,
       ...accepted.filter((file) => !current.some((held) => held.name === file.name && held.size === file.size)),
     ]);
+  };
+
+  const pick = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const chosen = [...(event.target.files ?? [])];
+    if (fileRef.current) fileRef.current.value = '';
+    addFiles(chosen);
+  };
+
+  const [dragOver, setDragOver] = useState(false);
+
+  const handleDrop = async (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setDragOver(false);
+    if (saving) return;
+    const dropped = await filesFromDataTransfer(event.dataTransfer);
+    addFiles(dropped.map((d) => d.file));
   };
 
   const handleSave = async () => {
@@ -189,6 +203,16 @@ export function NewAssignmentModal({ open, onClose, batchId, assignment, onSaved
                 disabled={saving}
               />
             </label>
+
+            <div
+              className={`drop-zone ${dragOver ? 'is-active' : ''}`}
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={handleDrop}
+            >
+              <Upload size={18} />
+              <p>Drag and drop files here</p>
+            </div>
 
             {files.length > 0 && (
               <ul className="assignment-files-list">

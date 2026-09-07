@@ -63,6 +63,50 @@ export function fileTypeLabel(mimeType?: string | null, name?: string): string {
   return ext ? ext.toUpperCase() : 'File';
 }
 
+export interface DroppedFile {
+  file: File;
+  // Path within the drop, e.g. "MyFolder/sub/file.pdf" — just the filename when it wasn't inside a folder.
+  relativePath: string;
+}
+
+function readFileEntry(entry: FileSystemFileEntry, path: string): Promise<DroppedFile> {
+  return new Promise((resolve) => entry.file((file) => resolve({ file, relativePath: `${path}${entry.name}` })));
+}
+
+function readDirectoryBatch(reader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> {
+  return new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+}
+
+// Chrome caps each readEntries() call at 100 entries, so it has to be called on repeat until empty.
+async function readDirectoryEntry(entry: FileSystemDirectoryEntry, path: string): Promise<DroppedFile[]> {
+  const reader = entry.createReader();
+  const children: FileSystemEntry[] = [];
+  for (let batch = await readDirectoryBatch(reader); batch.length > 0; batch = await readDirectoryBatch(reader)) {
+    children.push(...batch);
+  }
+  const nested = await Promise.all(children.map((child) => readEntry(child, `${path}${entry.name}/`)));
+  return nested.flat();
+}
+
+function readEntry(entry: FileSystemEntry, path: string): Promise<DroppedFile[]> {
+  if (entry.isFile) return readFileEntry(entry as FileSystemFileEntry, path).then((f) => [f]);
+  if (entry.isDirectory) return readDirectoryEntry(entry as FileSystemDirectoryEntry, path);
+  return Promise.resolve([]);
+}
+
+export async function filesFromDataTransfer(dataTransfer: DataTransfer): Promise<DroppedFile[]> {
+  const entries = [...dataTransfer.items]
+    .map((item) => item.webkitGetAsEntry?.())
+    .filter((entry): entry is FileSystemEntry => Boolean(entry));
+
+  if (entries.length === 0) {
+    return [...dataTransfer.files].map((file) => ({ file, relativePath: file.name }));
+  }
+
+  const nested = await Promise.all(entries.map((entry) => readEntry(entry, '')));
+  return nested.flat();
+}
+
 /** Longest edge kept on upload. pdf-lib decodes PNG to raw RGBA, so a 12MP shot OOMs the watermarker. */
 export const MAX_IMAGE_EDGE = 2400;
 

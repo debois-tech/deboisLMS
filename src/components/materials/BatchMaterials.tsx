@@ -19,7 +19,7 @@ import {
   getTutors,
   uploadMaterials,
 } from '@/lib/supabase';
-import { ACCEPTED_FILE_ACCEPT, ACCEPTED_TYPES, extensionOf, fileTypeLabel } from '@/lib/utils/files';
+import { ACCEPTED_FILE_ACCEPT, ACCEPTED_TYPES, extensionOf, filesFromDataTransfer, fileTypeLabel } from '@/lib/utils/files';
 import type { Material, Tutor } from '@/lib/types';
 import { useAuth } from '@/lib/context/AuthContext';
 import { useToast } from '@/lib/context/ToastContext';
@@ -252,16 +252,10 @@ function UploadModal({
     return `${batchCode}${trimmed}-${String(index + 1).padStart(2, '0')}`;
   };
 
-  const pick = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const addFiles = (chosen: File[], relativePath?: string) => {
     setError('');
-    const chosen = [...(event.target.files ?? [])];
+    setFolder(relativePath ? relativePath.split('/')[0] : null);
 
-    // A folder pick reports "Folder/Sub/file.pdf"; the first segment is the chosen folder.
-    const relative = (chosen[0] as File & { webkitRelativePath?: string })?.webkitRelativePath;
-    setFolder(relative ? relative.split('/')[0] : null);
-
-    // A folder pick brings everything in it, so unsupported types are filtered
-    // rather than turned into an error the admin has to clear one file at a time.
     const accepted = chosen.filter((file) => ACCEPTED_TYPES.has(extensionOf(file.name)));
     const skipped = chosen.length - accepted.length;
     const tooBig = accepted.filter((file) => file.size > MATERIAL_MAX_BYTES);
@@ -287,6 +281,24 @@ function UploadModal({
     if (!batchCode && accepted.length === 1 && !suffix.trim()) {
       setSuffix(dropExtension(accepted[0].name));
     }
+  };
+
+  const pick = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const chosen = [...(event.target.files ?? [])];
+    const relative = (chosen[0] as File & { webkitRelativePath?: string })?.webkitRelativePath;
+    addFiles(chosen, relative);
+  };
+
+  const [dragOver, setDragOver] = useState(false);
+
+  const handleDrop = async (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setDragOver(false);
+    if (busy) return;
+    const dropped = await filesFromDataTransfer(event.dataTransfer);
+    // A path with a "/" in it came from a folder — group under its first segment, same as the folder picker.
+    const folderHint = dropped.find((d) => d.relativePath.includes('/'))?.relativePath;
+    addFiles(dropped.map((d) => d.file), folderHint);
   };
 
   const submit = async () => {
@@ -381,18 +393,20 @@ function UploadModal({
           </label>
         </div>
 
-        {/* What happens to a file is decided by its type, and an admin choosing
-            between a .docx and a PDF should know that before uploading. */}
-        <p className="field-hint">
-          PDFs and images are watermarked and open in the reader. Word files are converted
-          to PDF — the text survives, the layout does not. Markdown and text are shown as
-          written. Spreadsheets, slides and archives are downloaded as they are.
-        </p>
+        <div
+          className={`drop-zone ${dragOver ? 'is-active' : ''}`}
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={handleDrop}
+        >
+          <Upload size={18} />
+          <p>Drag and drop files here</p>
+        </div>
 
         {folder ? (
           <FormField label="Name">
             <p className="material-folder-note">
-              These {files.length} files keep their own names, grouped under :
+              {files.length} files parsed, grouped under :
               <strong> {folder}</strong>.
             </p>
           </FormField>
