@@ -119,7 +119,7 @@ export function Navbar({ onMenuClick }: NavbarProps) {
             >
               <span className="flex items-center gap-3">
                 <Construction size={17} />
-                <span>Maintenance Mode</span>
+                <span>Maintenance</span>
               </span>
               <div
                 className={`relative w-[44px] h-[24px] rounded-full transition-colors duration-200 ${maintenance ? 'bg-[var(--danger)]' : 'bg-[var(--text-muted)]'}`}
