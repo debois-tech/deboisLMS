@@ -22,7 +22,7 @@ export function MaintenancePage({ onRetry }: MaintenancePageProps) {
   return (
     <div className="maintenance-page">
       <span className="maintenance-emoji" aria-hidden="true">🛠️</span>
-      <h1 className="maintenance-title">brb, GOAT software engineer fixing stuff</h1>
+      <h1 className="maintenance-title">brb, GOAT software engineer fixing stuff✨</h1>
       <p className="maintenance-body">
         The LMS stepped out to fix a few gremlins in the wiring. Try again in a bit probably not on fire. 🔥
       </p>
