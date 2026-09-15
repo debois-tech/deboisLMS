@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { QrCode } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -23,7 +23,7 @@ export function PaymentClaimModal({ open, studentId, batchId, dueAmount, onClose
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [qrFailed, setQrFailed] = useState(false);
-  const qrUrl = useMemo(() => `${getPaymentQrUrl()}?v=${Date.now()}`, [open]);
+  const qrUrl = getPaymentQrUrl();
 
   const reset = () => {
     setTransactionId('');
@@ -37,11 +37,17 @@ export function PaymentClaimModal({ open, studentId, batchId, dueAmount, onClose
     onClose();
   };
 
+  const handleAmountChange = (value: string) => {
+    setAmount(dueAmount && Number(value) > dueAmount ? String(dueAmount) : value);
+    setError('');
+  };
+
   const handleSubmit = async () => {
     const trimmedId = transactionId.trim();
     const parsedAmount = Number(amount);
     if (!trimmedId) return setError('Enter the transaction ID.');
     if (!(parsedAmount > 0)) return setError('Enter a valid amount.');
+    if (dueAmount && parsedAmount > dueAmount) return setError('Amount can’t exceed what you owe.');
 
     setSubmitting(true);
     setError('');
@@ -104,9 +110,10 @@ export function PaymentClaimModal({ open, studentId, batchId, dueAmount, onClose
               type="number"
               inputMode="decimal"
               min="0"
+              max={dueAmount || undefined}
               step="0.01"
               value={amount}
-              onChange={(e) => { setAmount(e.target.value); setError(''); }}
+              onChange={(e) => handleAmountChange(e.target.value)}
               placeholder="0"
               disabled={submitting}
             />

@@ -8,9 +8,12 @@ import { toCsv, downloadCsv } from '@/lib/utils/csvExport';
 
 const QR_PATH = 'qr_img.jpeg';
 
+const qrCacheBust = Date.now();
+
 /** Public URL, no fetch — the 'assets' bucket serves it straight off a CDN. */
 export function getPaymentQrUrl(): string {
-  return supabase.storage.from('assets').getPublicUrl(QR_PATH).data.publicUrl;
+  const url = supabase.storage.from('assets').getPublicUrl(QR_PATH).data.publicUrl;
+  return `${url}?v=${qrCacheBust}`;
 }
 
 export async function submitPaymentClaim(
