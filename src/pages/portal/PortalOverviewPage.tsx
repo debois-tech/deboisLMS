@@ -98,7 +98,7 @@ export default function PortalOverviewPage() {
   const attendanceRate = attendance.length > 0 ? Math.round((attended / attendance.length) * 100) : null;
   // By state, not submitted/not: closed work is not "to hand in".
   const states = assignments.map((item) => assignmentState(item));
-  const handedIn = states.filter((state) => state === 'done' || state === 'late').length;
+  const handedIn = states.filter((state) => state !== 'todo').length;
   const pending = states.filter((state) => state === 'todo').length;
   const late = states.filter((state) => state === 'late').length;
   // The balance across every batch. Home no longer states it — the profile owns

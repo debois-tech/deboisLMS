@@ -1031,7 +1031,8 @@ html.light .glass {
   background: var(--warning-text);
 }
 
-.portal-row-dot.is-done { background: var(--primary); }
+.portal-row-dot.is-complete { background: var(--primary); }
+.portal-row-dot.is-reviewing { background: var(--info-text); }
 .portal-row-dot.is-late { background: var(--warning-text); }
 
 /* The last day before a deadline — the wording alone is easy to skim past. */

@@ -13,9 +13,9 @@ do $$ begin create type mapping_status     as enum ('active', 'dropped', 'termin
 do $$ begin create type fee_status         as enum ('due', 'paid');                           exception when duplicate_object then null; end $$;
 do $$ begin create type payment_method     as enum ('cash', 'upi', 'bank_transfer', 'other'); exception when duplicate_object then null; end $$;
 
--- Work is handed in as a GitHub repo and nothing else. 'portal' is the student
--- doing it themselves; 'github' is an admin recording one. WhatsApp is gone.
-do $$ begin create type submission_channel as enum ('github', 'portal');                      exception when duplicate_object then null; end $$;
+-- Work is handed in as a GitHub repo and nothing else, always by the student
+-- themselves — 'portal' is the only channel.
+do $$ begin create type submission_channel as enum ('portal');                                exception when duplicate_object then null; end $$;
 do $$ begin create type discount_type      as enum ('percentage', 'amount');                  exception when duplicate_object then null; end $$;
 do $$ begin create type feedback_kind      as enum ('bug', 'request');                        exception when duplicate_object then null; end $$;
 do $$ begin create type feedback_status    as enum ('open', 'resolved');                      exception when duplicate_object then null; end $$;
@@ -467,7 +467,7 @@ create table if not exists assignment_completions (
   submitted     boolean default false,
   submitted_via submission_channel default 'portal',
   submitted_at  timestamptz,
-  marked_by     uuid references tutors(id) on delete set null,
+  mark          boolean default false not null,
   unique (assignment_id, student_id)
 );
 
@@ -478,27 +478,38 @@ create index if not exists idx_ac_student    on assignment_completions(student_i
 -- assignment's dialog re-points every past and future submission. Intentional.
 -- The row belongs to the student, but the columns do not. RLS decides which row
 -- a student may write; this decides what the values may be, so a hand-written
--- API call carrying submitted_at, submitted_via or marked_by achieves nothing.
+-- API call carrying submitted_at or submitted_via achieves nothing.
 create or replace function guard_assignment_completion()
 returns trigger
 language plpgsql
 set search_path = public
 as $$
 begin
-  if is_admin() then return new; end if;
+  if is_admin() then
+    -- Admin can only set the manual mark — submission status is student-driven.
+    if tg_op = 'UPDATE' then
+      new.submitted     := old.submitted;
+      new.submitted_via := old.submitted_via;
+      new.submitted_at  := old.submitted_at;
+    else
+      new.submitted     := false;
+      new.submitted_via := null;
+      new.submitted_at  := null;
+    end if;
+    return new;
+  end if;
 
-  -- Students hand work in. Taking it back is an admin action.
+  -- Students hand work in, and can't take it back or redo it.
   if new.submitted is not true then
-    raise exception 'Only a coordinator can un-submit work';
+    raise exception 'Submission status is set by the student';
   end if;
   if tg_op = 'UPDATE' and old.submitted then
     raise exception 'This assignment has already been handed in';
   end if;
 
-  -- Server owns all three, whatever the client sent.
+  -- Server owns both, whatever the client sent.
   new.submitted_via := 'portal';
   new.submitted_at  := now();
-  new.marked_by     := null;
   return new;
 end;
 $$;

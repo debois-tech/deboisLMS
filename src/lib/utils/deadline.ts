@@ -1,7 +1,7 @@
 import type { Assignment, AssignmentCompletion } from '@/lib/types';
 import { formatTimeLabel } from '@/lib/utils/date';
 
-export type AssignmentState = 'todo' | 'done' | 'late';
+export type AssignmentState = 'todo' | 'reviewing' | 'complete' | 'late';
 
 type WithCompletion = Pick<Assignment, 'due_at'> & { completion?: AssignmentCompletion };
 
@@ -20,8 +20,10 @@ export function isLateSubmission(dueAt: string | null | undefined, submittedAt: 
 }
 
 export function assignmentState(assignment: WithCompletion): AssignmentState {
-  if (!assignment.completion?.submitted) return 'todo';
-  return isLateSubmission(assignment.due_at, assignment.completion.submitted_at) ? 'late' : 'done';
+  const completion = assignment.completion;
+  if (!completion?.submitted) return 'todo';
+  if (isLateSubmission(assignment.due_at, completion.submitted_at)) return 'late';
+  return completion.mark ? 'complete' : 'reviewing';
 }
 
 // True once the deadline has passed and nothing has been handed in yet — still

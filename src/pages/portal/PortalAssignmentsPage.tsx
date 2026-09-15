@@ -24,7 +24,8 @@ type Filter = 'all' | AssignmentState;
 
 const SECTIONS: { state: AssignmentState; label: string; empty: string }[] = [
   { state: 'todo', label: 'To do', empty: 'Nothing to hand in.' },
-  { state: 'done', label: 'Done', empty: 'Nothing handed in yet.' },
+  { state: 'reviewing', label: 'Reviewing', empty: 'Nothing awaiting review.' },
+  { state: 'complete', label: 'Complete', empty: 'Nothing marked complete yet.' },
   { state: 'late', label: 'Late', empty: 'Nothing submitted late.' },
 ];
 
@@ -78,7 +79,7 @@ export default function PortalAssignmentsPage() {
       ? assignments.filter((a) => `${a.title} ${a.description ?? ''}`.toLowerCase().includes(term))
       : assignments;
 
-    const empty: Record<AssignmentState, StudentAssignment[]> = { todo: [], done: [], late: [] };
+    const empty: Record<AssignmentState, StudentAssignment[]> = { todo: [], reviewing: [], complete: [], late: [] };
     for (const assignment of matched) {
       empty[assignmentState(assignment)].push(assignment);
     }
@@ -116,7 +117,9 @@ export default function PortalAssignmentsPage() {
         state={state}
         muted={state !== 'todo'}
         onClick={() => setOpen(assignment)}
-        label={`${assignment.title} — ${state === 'todo' ? 'to hand in' : state === 'late' ? 'submitted late' : 'submitted'}`}
+        label={`${assignment.title} — ${
+          state === 'todo' ? 'to hand in' : state === 'late' ? 'submitted late' : state === 'reviewing' ? 'submitted, reviewing' : 'complete'
+        }`}
       />
     );
   };

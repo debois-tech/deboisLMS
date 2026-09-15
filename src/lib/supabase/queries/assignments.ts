@@ -6,6 +6,7 @@ export interface AssignmentSubmissionRow {
   student_id: string;
   student_name: string;
   submitted: boolean;
+  mark: boolean;
   repo_url?: string;
   submitted_at?: string;
 }
@@ -102,6 +103,7 @@ export async function getAssignmentSubmissions(
         student_id: student.id,
         student_name: student.name,
         submitted: completion?.submitted ?? false,
+        mark: completion?.mark ?? false,
         repo_url: repoByStudent.get(student.id),
         submitted_at: completion?.submitted_at,
       };
@@ -128,21 +130,48 @@ export async function saveStudentRepo(studentId: string, repoUrl: string): Promi
   return data as StudentRepo;
 }
 
-/** submitted_at, submitted_via and marked_by are not sent — the guard trigger sets them. */
+/** submitted_at and submitted_via are not sent — the guard trigger sets them. */
 export async function submitAssignmentFromPortal(
   assignmentId: string,
   studentId: string,
   repoUrl: string,
 ): Promise<AssignmentCompletion> {
   await saveStudentRepo(studentId, repoUrl);
-  return markSubmission(assignmentId, studentId, true, 'portal');
+
+  const existing = await supabase
+    .from('assignment_completions')
+    .select('*')
+    .eq('assignment_id', assignmentId)
+    .eq('student_id', studentId)
+    .maybeSingle();
+
+  const patch = { submitted: true, submitted_via: 'portal' as SubmissionChannel, submitted_at: new Date().toISOString() };
+
+  if (existing.data) {
+    const { data, error } = await supabase
+      .from('assignment_completions')
+      .update(patch)
+      .eq('id', existing.data.id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data as AssignmentCompletion;
+  }
+
+  const { data, error } = await supabase
+    .from('assignment_completions')
+    .insert({ assignment_id: assignmentId, student_id: studentId, ...patch })
+    .select()
+    .single();
+  if (error) throw error;
+  return data as AssignmentCompletion;
 }
 
-export async function markSubmission(
+/** Admin's manual mark, independent of the student-driven submitted flag. */
+export async function setAssignmentMark(
   assignmentId: string,
   studentId: string,
-  submitted: boolean,
-  submittedVia: SubmissionChannel = 'github',
+  mark: boolean,
 ): Promise<AssignmentCompletion> {
   const existing = await supabase
     .from('assignment_completions')
@@ -154,11 +183,7 @@ export async function markSubmission(
   if (existing.data) {
     const { data, error } = await supabase
       .from('assignment_completions')
-      .update({
-        submitted,
-        submitted_via: submittedVia,
-        submitted_at: submitted ? new Date().toISOString() : null,
-      })
+      .update({ mark })
       .eq('id', existing.data.id)
       .select()
       .single();
@@ -168,13 +193,7 @@ export async function markSubmission(
 
   const { data, error } = await supabase
     .from('assignment_completions')
-    .insert({
-      assignment_id: assignmentId,
-      student_id: studentId,
-      submitted,
-      submitted_via: submittedVia,
-      submitted_at: submitted ? new Date().toISOString() : null,
-    })
+    .insert({ assignment_id: assignmentId, student_id: studentId, mark })
     .select()
     .single();
   if (error) throw error;
