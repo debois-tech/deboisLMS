@@ -16,3 +16,4 @@ export { getDashboardStats, getRecentActivity } from './queries/dashboard';
 export type { DashboardStats, RecentActivity } from './queries/dashboard';
 export { getMyFeedback, submitFeedback, getAllFeedback, setFeedbackStatus } from './queries/feedback';
 export { getMaintenanceMode, setMaintenanceMode } from './queries/settings';
+export { submitPaymentClaim, exportPaymentClaimsCsv, getPaymentQrUrl } from './queries/paymentClaims';

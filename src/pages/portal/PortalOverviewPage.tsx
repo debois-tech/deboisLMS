@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CalendarCheck, CalendarClock, FileText, PartyPopper, UserPlus, Wallet } from 'lucide-react';
 import {
+  PaymentClaimModal,
   PortalEmpty,
   PortalFocus,
   PortalList,
@@ -34,6 +35,7 @@ import type {
 } from '@/lib/types';
 import { StudentIdChip } from '@/components/students/StudentLink';
 import { useAuth } from '@/lib/context/AuthContext';
+import { useToast } from '@/lib/context/ToastContext';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { useNow } from '@/lib/hooks/useNow';
 import { assignmentState } from '@/lib/utils/deadline';
@@ -47,6 +49,8 @@ type StudentAssignment = Assignment & { completion?: AssignmentCompletion };
 export default function PortalOverviewPage() {
   const studentId = usePortalStudentId();
   const { user } = useAuth();
+  const { showToast } = useToast();
+  const [payOpen, setPayOpen] = useState(false);
   const [student, setStudent] = useState<Student | null>(null);
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [fees, setFees] = useState<StudentFeeDue[]>([]);
@@ -117,6 +121,9 @@ export default function PortalOverviewPage() {
   const behind = currentBatch
     ? behindOnFees(currentBatch.start_date, paidThrough, outstanding, now)
     : false;
+  const currentBatchDue = currentBatch
+    ? fees.find((fee) => fee.batch_id === currentBatch.id)?.amount_due ?? 0
+    : 0;
 
   const name = student?.name ?? user?.full_name ?? 'there';
   const firstName = name.split(' ')[0];
@@ -141,6 +148,7 @@ export default function PortalOverviewPage() {
             installment={installment}
             behind={behind}
             enrolled={Boolean(currentBatch)}
+            onPay={() => setPayOpen(true)}
           />
 
           <PortalStatGrid>
@@ -195,6 +203,20 @@ export default function PortalOverviewPage() {
               </PortalList>
             )}
           </PortalSection>
+
+          {studentId && (
+            <PaymentClaimModal
+              open={payOpen}
+              studentId={studentId}
+              batchId={currentBatch?.id}
+              dueAmount={currentBatchDue}
+              onClose={() => setPayOpen(false)}
+              onSubmitted={() => {
+                setPayOpen(false);
+                showToast('Payment details submitted');
+              }}
+            />
+          )}
         </>
       )}
     </PortalPage>
@@ -210,6 +232,7 @@ function NextUp({
   installment,
   behind,
   enrolled,
+  onPay,
 }: {
   batchName?: string;
   lecture: Lecture | null;
@@ -218,6 +241,7 @@ function NextUp({
   installment: InstallmentDue | null;
   behind: boolean;
   enrolled: boolean;
+  onPay: () => void;
 }) {
   if (!enrolled) {
     return (
@@ -232,7 +256,12 @@ function NextUp({
         tone={installment.missed || installment.unofficial ? 'attention' : 'default'}
         title={installmentLabel(installment)}
         detail={installmentDetail(installment, outstanding, formatDate(installment.dueDate))}
-        action={<Link to="/portal/profile" className="portal-focus-link">Details</Link>}
+        action={
+          <span className="portal-focus-actions">
+            <Link to="/portal/profile" className="portal-focus-link">Details</Link>
+            <button type="button" className="portal-pay-button" onClick={onPay}>Pay</button>
+          </span>
+        }
       />
     );
   }
@@ -270,7 +299,12 @@ function NextUp({
         icon={Wallet}
         tone={behind ? 'attention' : 'default'}
         title={`${formatCurrency(outstanding)} left to pay`}
-        action={<Link to="/portal/profile" className="portal-focus-link">Details</Link>}
+        action={
+          <span className="portal-focus-actions">
+            <Link to="/portal/profile" className="portal-focus-link">Details</Link>
+            <button type="button" className="portal-pay-button" onClick={onPay}>Pay</button>
+          </span>
+        }
       />
     );
   }

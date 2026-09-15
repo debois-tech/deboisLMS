@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { PartyPopper, UserPlus, Wallet } from 'lucide-react';
 import {
+  PaymentClaimModal,
   PortalAmount,
   PortalEmpty,
   PortalFacts,
@@ -21,6 +22,7 @@ import {
 } from '@/lib/supabase';
 import type { Batch, BatchStudentMapping, FeePaymentLog, Student, StudentFeeDue } from '@/lib/types';
 import { useAuth } from '@/lib/context/AuthContext';
+import { useToast } from '@/lib/context/ToastContext';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { formatCurrency, formatDate } from '@/lib/utils/format';
 
@@ -41,6 +43,8 @@ const METHOD_LABELS: Record<string, string> = {
 export default function PortalProfilePage() {
   const studentId = usePortalStudentId();
   const { user } = useAuth();
+  const { showToast } = useToast();
+  const [payFee, setPayFee] = useState<StudentFeeDue | null>(null);
   const [student, setStudent] = useState<Student | null>(null);
   const [fees, setFees] = useState<StudentFeeDue[]>([]);
   const [payments, setPayments] = useState<FeePaymentLog[]>([]);
@@ -148,7 +152,16 @@ export default function PortalProfilePage() {
                       primary={batchNames.get(fee.batch_id) ?? 'Batch'}
                       secondary={due > 0 ? `${formatCurrency(due)} pending` : undefined}
                       muted={due <= 0}
-                      trailing={<PortalStatus kind="fee" value={due > 0 ? 'due' : 'paid'} />}
+                      trailing={
+                        <>
+                          {due > 0 && (
+                            <button type="button" className="portal-pay-button" onClick={() => setPayFee(fee)}>
+                              Pay
+                            </button>
+                          )}
+                          <PortalStatus kind="fee" value={due > 0 ? 'due' : 'paid'} />
+                        </>
+                      }
                     />
                   );
                 })}
@@ -179,6 +192,20 @@ export default function PortalProfilePage() {
               </PortalList>
             )}
           </PortalSection>
+
+          {studentId && (
+            <PaymentClaimModal
+              open={payFee !== null}
+              studentId={studentId}
+              batchId={payFee?.batch_id}
+              dueAmount={payFee ? Number(payFee.amount_due) : undefined}
+              onClose={() => setPayFee(null)}
+              onSubmitted={() => {
+                setPayFee(null);
+                showToast('Payment details submitted');
+              }}
+            />
+          )}
         </>
       )}
     </PortalPage>

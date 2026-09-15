@@ -207,6 +207,16 @@ export interface StudentFeeDue {
   paid_through?: number;
 }
 
+/** Self-reported "I paid" — a student's claim, not a confirmed payment. Admin still logs the real thing by hand. */
+export interface PaymentClaim {
+  id: string;
+  student_id: string;
+  batch_id?: string;
+  transaction_id: string;
+  amount: number;
+  created_at: string;
+}
+
 /** One GitHub repo per student — every assignment submission points at it. */
 export interface StudentRepo {
   student_id: string;

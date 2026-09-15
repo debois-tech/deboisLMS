@@ -631,6 +631,16 @@ on conflict (id) do update
       file_size_limit    = excluded.file_size_limit,
       allowed_mime_types = excluded.allowed_mime_types;
 
+-- Public bucket for static app images (the payment QR, etc.) so they never
+-- have to live in the git repo. Public = served straight off a CDN URL, no
+-- signed URL needed — fine for an image with nothing sensitive in it.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('assets', 'assets', true, 5242880, array['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'])
+on conflict (id) do update
+  set public             = excluded.public,
+      file_size_limit    = excluded.file_size_limit,
+      allowed_mime_types = excluded.allowed_mime_types;
+
 
 -- 8. AUTH HELPERS
 -- Policies trust app_metadata.role, which only the service role can write.
@@ -954,6 +964,13 @@ create policy "admin manages material files" on storage.objects
   using (bucket_id = 'materials' and is_admin())
   with check (bucket_id = 'materials' and is_admin());
 
+-- Public bucket means anyone can already read; this only gates who can write.
+drop policy if exists "admin manages asset files" on storage.objects;
+create policy "admin manages asset files" on storage.objects
+  for all
+  using (bucket_id = 'assets' and is_admin())
+  with check (bucket_id = 'assets' and is_admin());
+
 
 -- 11. BATCH LIFECYCLE AND LEAVERS
 create or replace function end_batch(p_batch_id uuid)
@@ -1273,3 +1290,32 @@ create policy read_settings on app_settings for select to authenticated using (t
 drop policy if exists admin_full_access on app_settings;
 create policy admin_full_access on app_settings
   for all using (is_admin()) with check (is_admin());
+
+
+-- 14. PAYMENT CLAIMS
+-- A student saying "I paid, here's the transaction id and amount" — pure
+-- self-reported intimation so they stop having to call/message for the QR.
+-- It does not touch student_fees or fee_payment_logs; the admin still logs
+-- the real payment by hand after checking the bank statement, same as always.
+create table if not exists payment_claims (
+  id             uuid primary key default gen_random_uuid(),
+  student_id     uuid references students(id) on delete cascade not null,
+  batch_id       uuid references batches(id) on delete cascade,
+  transaction_id text not null check (length(btrim(transaction_id)) > 0),
+  amount         numeric not null check (amount > 0),
+  created_at     timestamptz default now()
+);
+
+create index if not exists idx_payment_claims_student on payment_claims(student_id);
+
+alter table payment_claims enable row level security;
+
+drop policy if exists admin_full_access on payment_claims;
+create policy admin_full_access on payment_claims
+  for all using (is_admin()) with check (is_admin());
+
+-- Insert only, and only as themselves. No update/delete on purpose: once
+-- sent, a claim is fixed — same as a feedback report.
+drop policy if exists student_insert_own on payment_claims;
+create policy student_insert_own on payment_claims
+  for insert with check (student_id = current_student_id());
