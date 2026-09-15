@@ -6,7 +6,7 @@ import type { PaymentClaim } from '@/lib/types';
 import { formatDateTime } from '@/lib/utils/format';
 import { toCsv, downloadCsv } from '@/lib/utils/csvExport';
 
-const QR_PATH = 'qr.jpeg';
+const QR_PATH = 'qr_img.jpeg';
 
 /** Public URL, no fetch — the 'assets' bucket serves it straight off a CDN. */
 export function getPaymentQrUrl(): string {

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { QrCode } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -23,6 +23,7 @@ export function PaymentClaimModal({ open, studentId, batchId, dueAmount, onClose
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [qrFailed, setQrFailed] = useState(false);
+  const qrUrl = useMemo(() => `${getPaymentQrUrl()}?v=${Date.now()}`, [open]);
 
   const reset = () => {
     setTransactionId('');
@@ -78,7 +79,7 @@ export function PaymentClaimModal({ open, studentId, batchId, dueAmount, onClose
           </div>
         ) : (
           <img
-            src={getPaymentQrUrl()}
+            src={qrUrl}
             alt="Payment QR code"
             className="payment-qr-image"
             onError={() => setQrFailed(true)}
