@@ -28,11 +28,12 @@ const batch: Record<BatchStatus, [string, Tone]> = {
   completed: ['Finished', 'default'],
 };
 
-type SubmissionValue = 'submitted' | 'pending' | 'late';
+type SubmissionValue = 'pending' | 'reviewing' | 'complete' | 'late';
 
 const submission: Record<SubmissionValue, [string, Tone]> = {
-  submitted: ['Submitted', 'success'],
   pending: ['To do', 'warning'],
+  reviewing: ['Reviewing', 'info'],
+  complete: ['Complete', 'success'],
   late: ['Submitted late', 'warning'],
 };
 

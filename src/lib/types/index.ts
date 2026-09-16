@@ -6,8 +6,8 @@ export type AttendanceStatus = 'present' | 'partial' | 'absent';
 export type AttendanceSource = 'manual' | 'automated';
 /** 'dropped' = batch finished and grace window passed. 'terminated' = left mid-batch. */
 export type MappingStatus = 'active' | 'dropped' | 'terminated';
-/** 'portal' = the student handed it in; 'github' = an admin recorded it. */
-export type SubmissionChannel = 'github' | 'portal';
+/** Students only hand work in through the portal now. */
+export type SubmissionChannel = 'portal';
 /** Open, not a union: admins mint new codes and the valid set lives in `batch_programs`. */
 export type BatchProgram = string;
 export type FeeStatus = 'due' | 'paid';
@@ -190,7 +190,7 @@ export interface AssignmentCompletion {
   submitted: boolean;
   submitted_via: SubmissionChannel;
   submitted_at?: string;
-  marked_by?: string;
+  mark: boolean;
   student?: Student;
   assignment?: Assignment;
 }
@@ -205,6 +205,16 @@ export interface StudentFeeDue {
   updated_at?: string;
   /** Milestones covered by what they have paid: 0, 1 or 2. Decided by amount in SQL. */
   paid_through?: number;
+}
+
+/** Self-reported "I paid" — a student's claim, not a confirmed payment. Admin still logs the real thing by hand. */
+export interface PaymentClaim {
+  id: string;
+  student_id: string;
+  batch_id?: string;
+  transaction_id: string;
+  amount: number;
+  created_at: string;
 }
 
 /** One GitHub repo per student — every assignment submission points at it. */

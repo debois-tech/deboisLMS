@@ -61,7 +61,7 @@ function AssignmentModalBody({ assignment, repoUrl, now, onClose, onSubmit }: As
   const [error, setError] = useState('');
 
   const state = assignment ? assignmentState(assignment) : 'todo';
-  const submitted = state === 'done' || state === 'late';
+  const submitted = state !== 'todo';
   const overdue = Boolean(assignment) && !submitted && isOverdue(assignment!, now);
   const trimmed = draftRepo.trim();
   const isReplacingRepo = Boolean(repoUrl) && trimmed !== repoUrl && trimmed.length > 0;
@@ -116,7 +116,10 @@ function AssignmentModalBody({ assignment, repoUrl, now, onClose, onSubmit }: As
       {view === 'info' ? (
         <div className="assignment-detail">
           <div className="assignment-detail-meta">
-            <PortalStatus kind="submission" value={state === 'done' ? 'submitted' : state === 'late' ? 'late' : 'pending'} />
+            <PortalStatus
+              kind="submission"
+              value={state === 'todo' ? 'pending' : state === 'late' ? 'late' : state === 'reviewing' ? 'reviewing' : 'complete'}
+            />
             {assignment?.assigned_date && <span>Given {formatDate(assignment.assigned_date)}</span>}
             {!submitted && <span>{formatDueLabel(assignment?.due_at, now)}</span>}
           </div>

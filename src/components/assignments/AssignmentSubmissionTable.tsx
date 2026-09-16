@@ -8,7 +8,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { ExpandableSearch } from '@/components/ui/ExpandableSearch';
 import { Spinner } from '@/components/ui/Spinner';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
-import { getAssignmentSubmissions, markSubmission } from '@/lib/supabase';
+import { getAssignmentSubmissions, setAssignmentMark } from '@/lib/supabase';
 import type { AssignmentSubmissionRow } from '@/lib/supabase';
 import { formatDateTime } from '@/lib/utils/format';
 import { downloadCsv, toCsv, toFileStem } from '@/lib/utils/csvExport';
@@ -26,7 +26,13 @@ interface AssignmentSubmissionTableProps {
   dueAt?: string | null;
 }
 
-const CSV_HEADERS = ['Student Name', 'Submitted', 'GitHub Repo', 'Submitted At'];
+const CSV_HEADERS = ['Student Name', 'Status', 'GitHub Repo', 'Submitted At'];
+
+// Completed only once both the student has submitted and the admin has marked it.
+function exportStatus(row: AssignmentSubmissionRow): string {
+  if (!row.submitted) return 'Pending';
+  return row.mark ? 'Completed' : 'Reviewing';
+}
 
 type SubmissionFilter = 'submitted' | 'pending';
 
@@ -47,27 +53,25 @@ export function AssignmentSubmissionTable({
     setRows(await getAssignmentSubmissions(assignmentId, batchId));
   });
 
-  const handleToggle = async (row: AssignmentSubmissionRow) => {
+  const handleMarkToggle = async (row: AssignmentSubmissionRow) => {
     setBusyStudentId(row.student_id);
     try {
-      await markSubmission(assignmentId, row.student_id, !row.submitted);
+      await setAssignmentMark(assignmentId, row.student_id, !row.mark);
       const data = await getAssignmentSubmissions(assignmentId, batchId);
       setRows(data);
     } catch (err) {
-      showToast(errorMessage(err, 'Failed to update submission'), 'error');
+      showToast(errorMessage(err, 'Failed to update mark'), 'error');
     } finally {
       setBusyStudentId(null);
     }
   };
 
-  // Same four columns as the table, and the same rendered values — the exported
-  // file always matches what the admin was looking at.
   const handleExport = () => {
     const csv = toCsv(
       CSV_HEADERS,
       rows.map((row) => [
         row.student_name,
-        row.submitted ? 'Yes' : 'No',
+        exportStatus(row),
         row.repo_url ?? '',
         row.submitted_at ? formatDateTime(row.submitted_at) : '',
       ]),
@@ -138,6 +142,7 @@ export function AssignmentSubmissionTable({
               <TH align="center" className="w-12">#</TH>
               <TH>Student</TH>
               <TH align="center">Submitted</TH>
+              <TH align="center">Mark</TH>
               <TH>GitHub Repo</TH>
               <TH>Submitted At</TH>
             </TR>
@@ -148,18 +153,26 @@ export function AssignmentSubmissionTable({
                 <TD align="center" className="cell-muted">{index + 1}</TD>
                 <TD className="font-medium text-[var(--text-primary)]">{row.student_name}</TD>
                 <TD align="center">
-                  <button
-                    type="button"
-                    onClick={() => handleToggle(row)}
-                    disabled={busyStudentId === row.student_id}
-                    aria-pressed={row.submitted}
-                    aria-label={`${row.submitted ? 'Unmark' : 'Mark'} ${row.student_name} as submitted`}
+                  <span
+                    aria-label={`${row.student_name} has ${row.submitted ? '' : 'not '}submitted`}
                     title={row.submitted && isLateSubmission(dueAt, row.submitted_at) ? 'Submitted late' : undefined}
                     className={`submission-toggle ${
                       row.submitted ? (isLateSubmission(dueAt, row.submitted_at) ? 'is-late' : 'is-submitted') : ''
                     }`}
                   >
                     {row.submitted ? <CheckCircle size={20} /> : <XCircle size={20} />}
+                  </span>
+                </TD>
+                <TD align="center">
+                  <button
+                    type="button"
+                    onClick={() => handleMarkToggle(row)}
+                    disabled={busyStudentId === row.student_id}
+                    aria-pressed={row.mark}
+                    aria-label={`${row.mark ? 'Unmark' : 'Mark'} ${row.student_name}`}
+                    className={`submission-toggle ${row.mark ? 'is-submitted' : ''}`}
+                  >
+                    {row.mark ? <CheckCircle size={20} /> : <XCircle size={20} />}
                   </button>
                 </TD>
                 <TD>

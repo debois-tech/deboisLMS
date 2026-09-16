@@ -13,9 +13,9 @@ do $$ begin create type mapping_status     as enum ('active', 'dropped', 'termin
 do $$ begin create type fee_status         as enum ('due', 'paid');                           exception when duplicate_object then null; end $$;
 do $$ begin create type payment_method     as enum ('cash', 'upi', 'bank_transfer', 'other'); exception when duplicate_object then null; end $$;
 
--- Work is handed in as a GitHub repo and nothing else. 'portal' is the student
--- doing it themselves; 'github' is an admin recording one. WhatsApp is gone.
-do $$ begin create type submission_channel as enum ('github', 'portal');                      exception when duplicate_object then null; end $$;
+-- Work is handed in as a GitHub repo and nothing else, always by the student
+-- themselves — 'portal' is the only channel.
+do $$ begin create type submission_channel as enum ('portal');                                exception when duplicate_object then null; end $$;
 do $$ begin create type discount_type      as enum ('percentage', 'amount');                  exception when duplicate_object then null; end $$;
 do $$ begin create type feedback_kind      as enum ('bug', 'request');                        exception when duplicate_object then null; end $$;
 do $$ begin create type feedback_status    as enum ('open', 'resolved');                      exception when duplicate_object then null; end $$;
@@ -467,7 +467,7 @@ create table if not exists assignment_completions (
   submitted     boolean default false,
   submitted_via submission_channel default 'portal',
   submitted_at  timestamptz,
-  marked_by     uuid references tutors(id) on delete set null,
+  mark          boolean default false not null,
   unique (assignment_id, student_id)
 );
 
@@ -478,27 +478,38 @@ create index if not exists idx_ac_student    on assignment_completions(student_i
 -- assignment's dialog re-points every past and future submission. Intentional.
 -- The row belongs to the student, but the columns do not. RLS decides which row
 -- a student may write; this decides what the values may be, so a hand-written
--- API call carrying submitted_at, submitted_via or marked_by achieves nothing.
+-- API call carrying submitted_at or submitted_via achieves nothing.
 create or replace function guard_assignment_completion()
 returns trigger
 language plpgsql
 set search_path = public
 as $$
 begin
-  if is_admin() then return new; end if;
+  if is_admin() then
+    -- Admin can only set the manual mark — submission status is student-driven.
+    if tg_op = 'UPDATE' then
+      new.submitted     := old.submitted;
+      new.submitted_via := old.submitted_via;
+      new.submitted_at  := old.submitted_at;
+    else
+      new.submitted     := false;
+      new.submitted_via := null;
+      new.submitted_at  := null;
+    end if;
+    return new;
+  end if;
 
-  -- Students hand work in. Taking it back is an admin action.
+  -- Students hand work in, and can't take it back or redo it.
   if new.submitted is not true then
-    raise exception 'Only a coordinator can un-submit work';
+    raise exception 'Submission status is set by the student';
   end if;
   if tg_op = 'UPDATE' and old.submitted then
     raise exception 'This assignment has already been handed in';
   end if;
 
-  -- Server owns all three, whatever the client sent.
+  -- Server owns both, whatever the client sent.
   new.submitted_via := 'portal';
   new.submitted_at  := now();
-  new.marked_by     := null;
   return new;
 end;
 $$;
@@ -615,6 +626,16 @@ values (
     'application/octet-stream'
   ]
 )
+on conflict (id) do update
+  set public             = excluded.public,
+      file_size_limit    = excluded.file_size_limit,
+      allowed_mime_types = excluded.allowed_mime_types;
+
+-- Public bucket for static app images (the payment QR, etc.) so they never
+-- have to live in the git repo. Public = served straight off a CDN URL, no
+-- signed URL needed — fine for an image with nothing sensitive in it.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('assets', 'assets', true, 5242880, array['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'])
 on conflict (id) do update
   set public             = excluded.public,
       file_size_limit    = excluded.file_size_limit,
@@ -943,6 +964,13 @@ create policy "admin manages material files" on storage.objects
   using (bucket_id = 'materials' and is_admin())
   with check (bucket_id = 'materials' and is_admin());
 
+-- Public bucket means anyone can already read; this only gates who can write.
+drop policy if exists "admin manages asset files" on storage.objects;
+create policy "admin manages asset files" on storage.objects
+  for all
+  using (bucket_id = 'assets' and is_admin())
+  with check (bucket_id = 'assets' and is_admin());
+
 
 -- 11. BATCH LIFECYCLE AND LEAVERS
 create or replace function end_batch(p_batch_id uuid)
@@ -1262,3 +1290,32 @@ create policy read_settings on app_settings for select to authenticated using (t
 drop policy if exists admin_full_access on app_settings;
 create policy admin_full_access on app_settings
   for all using (is_admin()) with check (is_admin());
+
+
+-- 14. PAYMENT CLAIMS
+-- A student saying "I paid, here's the transaction id and amount" — pure
+-- self-reported intimation so they stop having to call/message for the QR.
+-- It does not touch student_fees or fee_payment_logs; the admin still logs
+-- the real payment by hand after checking the bank statement, same as always.
+create table if not exists payment_claims (
+  id             uuid primary key default gen_random_uuid(),
+  student_id     uuid references students(id) on delete cascade not null,
+  batch_id       uuid references batches(id) on delete cascade,
+  transaction_id text not null check (length(btrim(transaction_id)) > 0),
+  amount         numeric not null check (amount > 0),
+  created_at     timestamptz default now()
+);
+
+create index if not exists idx_payment_claims_student on payment_claims(student_id);
+
+alter table payment_claims enable row level security;
+
+drop policy if exists admin_full_access on payment_claims;
+create policy admin_full_access on payment_claims
+  for all using (is_admin()) with check (is_admin());
+
+-- Insert only, and only as themselves. No update/delete on purpose: once
+-- sent, a claim is fixed — same as a feedback report.
+drop policy if exists student_insert_own on payment_claims;
+create policy student_insert_own on payment_claims
+  for insert with check (student_id = current_student_id());

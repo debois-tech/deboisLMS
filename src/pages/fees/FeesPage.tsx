@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Download, Plus } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { StatusPill } from '@/components/ui/StatusPill';
 import { Spinner } from '@/components/ui/Spinner';
@@ -11,7 +11,7 @@ import { BatchSelect } from '@/components/ui/BatchSelect';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import { StudentLink } from '@/components/students/StudentLink';
 import { PaymentLogModal, type PaymentLogFormState } from '@/components/finance/PaymentLogModal';
-import { getBatches, getFeesByBatch, getFeePaymentLogs, addFeePaymentLog, deleteFeePayment, getBatchFeeSummary, getBatchStudents } from '@/lib/supabase';
+import { getBatches, getFeesByBatch, getFeePaymentLogs, addFeePaymentLog, deleteFeePayment, getBatchFeeSummary, getBatchStudents, exportPaymentClaimsCsv } from '@/lib/supabase';
 import type { Batch, StudentFee, Student, BatchStudentMapping, BatchFeeSummary, FeePaymentLog } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils/format';
 import { useToast } from '@/lib/context/ToastContext';
@@ -29,6 +29,7 @@ export default function FeesPage() {
   const [logForm, setLogForm] = useState<PaymentLogFormState>({ amount: '', payment_date: new Date().toISOString().slice(0, 10), payment_method: 'upi', notes: '' });
   const [logging, setLogging] = useState(false);
   const [deletingLogId, setDeletingLogId] = useState<string | null>(null);
+  const [exportingClaims, setExportingClaims] = useState(false);
   const { showToast } = useToast();
   const confirm = useConfirm();
 
@@ -113,6 +114,18 @@ export default function FeesPage() {
     setDeletingLogId(null);
   };
 
+  // Self-reported claims only — the office still logs the real payment by hand,
+  // so this is metadata to reconcile against the bank statement, nothing more.
+  const handleExportClaims = async () => {
+    setExportingClaims(true);
+    try {
+      await exportPaymentClaimsCsv();
+    } catch (err) {
+      showToast(errorMessage(err, 'Failed to export payment claims'), 'error');
+    }
+    setExportingClaims(false);
+  };
+
   if (loading) return <Spinner centered />;
   if (error) return <ErrorState centered message={error} onRetry={retry} />;
 
@@ -120,7 +133,14 @@ export default function FeesPage() {
 
   return (
     <div className="page-section">
-      <PageHeader title="Finance" />
+      <PageHeader
+        title="Finance"
+        action={
+          <Button size="sm" variant="secondary" className="action-button-compact" onClick={handleExportClaims} loading={exportingClaims}>
+            <Download size={14} /> Export Payment Claims
+          </Button>
+        }
+      />
 
       <Card className="step-card sticky top-[calc(var(--navbar-h)_+_1rem)] z-20">
         <CardHeader title="Select Batch" />

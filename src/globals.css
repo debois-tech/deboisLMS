@@ -881,6 +881,12 @@ html.light .glass {
   flex: 0 0 auto;
 }
 
+.portal-focus-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .portal-focus-link {
   display: inline-flex;
   align-items: center;
@@ -1031,7 +1037,8 @@ html.light .glass {
   background: var(--warning-text);
 }
 
-.portal-row-dot.is-done { background: var(--primary); }
+.portal-row-dot.is-complete { background: var(--primary); }
+.portal-row-dot.is-reviewing { background: var(--info-text); }
 .portal-row-dot.is-late { background: var(--warning-text); }
 
 /* The last day before a deadline — the wording alone is easy to skim past. */
@@ -1071,9 +1078,6 @@ html.light .glass {
   color: var(--text-secondary);
 }
 
-/* Wraps rather than truncates — a payment's note is the line that tells a student
-   which payment this was, so losing its end to an ellipsis loses the point. Two
-   lines is the ceiling before the row stops being a row. */
 .portal-list-secondary {
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -1093,8 +1097,6 @@ html.light .glass {
   gap: 0.875rem;
 }
 
-/* Quiet trailing fact — a payment method, a count — where a status pill would
-   overstate it. */
 .portal-row-meta {
   font-size: 0.75rem;
   color: var(--text-secondary);
@@ -1175,8 +1177,7 @@ html.light .glass {
 }
 
 /* ── Loading ─────────────────────────────────────────────────── */
-/* Placeholders in the shape of the content that is coming, rather than a spinner
-   that tells a student nothing about what to expect. */
+
 .portal-skeleton {
   display: flex;
   flex-direction: column;
@@ -3320,15 +3321,13 @@ html.light .glass {
   white-space: pre-line;
 }
 
-/* Placeholder for an assignment with no description, so the dialog never opens
-   on an empty box with two buttons under it. */
+
 .assignment-detail-body.is-empty {
   color: var(--text-muted);
   font-style: italic;
 }
 
-/* Label above value rather than beside it: a repo URL is long, and the old
-   fixed-width label column forced it onto one truncated line. */
+
 .assignment-detail-facts {
   display: flex;
   flex-direction: column;
@@ -3367,11 +3366,7 @@ html.light .glass {
 }
 
 /* ── Repo submit dialog ──────────────────────────────────────── */
-/* The link field and its confirmation tick sit side by side; the tick wraps
-   underneath once the field can no longer hold its 14rem basis. */
-/* Stacked, not side by side. The field and its confirmation used to sit on one
-   row that wrapped the moment the dialog narrowed, leaving a full-width input
-   above a stranded checkbox pill. */
+
 .repo-submit-row {
   display: flex;
   flex-direction: column;
@@ -3466,6 +3461,80 @@ html.light .glass {
 
 .repo-notice svg { flex: 0 0 auto; margin-top: 0.1rem; }
 
+.payment-claim-layout {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.payment-claim-layout > .repo-submit-row {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.payment-qr-placeholder,
+.payment-qr-image {
+  flex: 0 0 auto;
+  width: 20rem;
+}
+
+/* Shown only if the 'assets' bucket has no qr.jpeg yet (image onError). */
+.payment-qr-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  aspect-ratio: 1;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.payment-qr-image {
+  display: block;
+  aspect-ratio: 1;
+  border-radius: var(--radius-md);
+  object-fit: contain;
+  background: white;
+}
+
+@media (max-width: 480px) {
+  .payment-claim-layout {
+    flex-direction: column;
+  }
+
+  .payment-qr-placeholder,
+  .payment-qr-image {
+    width: 100%;
+    max-width: 18rem;
+    margin: 0 auto;
+  }
+}
+
+.portal-pay-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.25rem;
+  height: 2.25rem;
+  padding: 0 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: white;
+  background: var(--primary);
+  border-radius: var(--radius-sm);
+  transition: background-color 0.18s ease;
+}
+
+.portal-pay-button:hover { background: var(--primary-dark); }
+
+.portal-pay-button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
 @media (max-width: 640px) {
   :root {
     --space-page: 1rem;
@@ -3479,8 +3548,6 @@ html.light .glass {
   }
 }
 
-/* ── Date picker ─────────────────────────────────────────────── */
-/* Replaces `<input type="date">`, whose panel the OS draws in its own greys. */
 .datepicker {
   position: relative;
   display: flex;
@@ -3526,7 +3593,6 @@ html.light .glass {
 
 .datepicker-trigger.is-open .datepicker-trigger-icon { color: var(--primary); }
 
-/* An unset date reads as a prompt, not as a value. */
 .datepicker-trigger.is-empty .datepicker-trigger-value { color: var(--text-muted); }
 
 .datepicker-trigger-value {
@@ -3536,10 +3602,8 @@ html.light .glass {
   white-space: nowrap;
 }
 
-/* A long value would otherwise run underneath the clear button. */
 .datepicker:has(.datepicker-clear) .datepicker-trigger { padding-right: 2.5rem; }
 
-/* Inside the field rather than beside it, so clearing a date never widens the row. */
 .datepicker-clear {
   position: absolute;
   right: 0.5rem;
@@ -3562,7 +3626,6 @@ html.light .glass {
   outline-offset: -2px;
 }
 
-/* Fixed: most of these fields live inside a modal whose body scrolls. */
 .datepicker-panel {
   position: fixed;
   z-index: 60;
@@ -3733,7 +3796,6 @@ html.light .glass {
   gap: 0.25rem;
 }
 
-/* Beats the global `select` rule, which sizes for a full-width form field. */
 .datepicker-time-fields select {
   width: auto;
   padding: 0.3125rem 1.75rem 0.3125rem 0.5rem;
@@ -3822,9 +3884,7 @@ html.light .glass {
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-/* Same gesture as `select-panel-in`, anchored to whichever corner the menu hangs
-   from. Kept as its own keyframe only because the account menu sets a different
-   transform-origin. */
+
 @keyframes dropdown {
   from { opacity: 0; transform: translateY(-0.375rem) scale(0.98); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
@@ -3844,8 +3904,7 @@ html.light .glass {
   0%, 100% { box-shadow: 0 0 8px var(--primary-glow-soft); }
   50%       { box-shadow: 0 0 22px var(--primary-glow); }
 }
-/* Exponential ease-out, no overshoot: the toast arrives and settles rather than
-   springing past its mark. */
+
 @keyframes toastIn {
   from { opacity: 0; transform: translateY(14px) scale(0.97); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
