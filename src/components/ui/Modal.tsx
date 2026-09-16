@@ -1,7 +1,12 @@
 import { ReactNode, useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { clsx } from 'clsx';
 import { X } from 'lucide-react';
 import { Button } from './Button';
+import { useExitAnimation } from '@/lib/hooks/useExitAnimation';
+
+/** Keep in step with .animate-modal-out in globals.css — the longer of the two exit animations. */
+const EXIT_MS = 160;
 
 /** Everything that can hold focus inside the panel, in document order. */
 const FOCUSABLE =
@@ -90,14 +95,15 @@ export function Modal({ open, onClose, title, description, children, footer, siz
     return () => { document.body.style.overflow = ''; };
   }, [open]);
 
-  if (!open) return null;
+  const { mounted, closing } = useExitAnimation(open, EXIT_MS);
+  if (!mounted) return null;
 
   return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div className={clsx('absolute inset-0 bg-black/60 backdrop-blur-sm', closing ? 'animate-overlay-out' : 'animate-overlay-in')} />
 
       <div
         ref={panelRef}
@@ -106,7 +112,11 @@ export function Modal({ open, onClose, title, description, children, footer, siz
         aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
-        className={`modal-panel relative w-full ${sizes[size]} bg-[var(--bg-surface)] border border-[var(--border)] rounded-[var(--radius-xl)] shadow-[var(--shadow-lg)] animate-fade-in focus:outline-none`}
+        className={clsx(
+          'modal-panel relative w-full bg-[var(--bg-surface)] border border-[var(--border)] rounded-[var(--radius-xl)] shadow-[var(--shadow-lg)] focus:outline-none',
+          sizes[size],
+          closing ? 'animate-modal-out' : 'animate-modal-in',
+        )}
       >
         <div className="modal-header flex items-start justify-between gap-4 border-b border-[var(--border)]">
           <div className="min-w-0">

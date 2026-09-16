@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { Navbar } from '@/components/layout/Navbar';
 import { Sidebar } from '@/components/layout/Sidebar';
 
 export default function DashboardLayout() {
+  const { pathname } = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
@@ -36,7 +37,7 @@ export default function DashboardLayout() {
           onClose={() => setSidebarOpen(false)}
           onToggle={handleSidebarToggle}
         />
-        <main className="app-content animate-fade-in">
+        <main key={pathname} className="app-content animate-fade-in">
           <Outlet />
         </main>
       </div>

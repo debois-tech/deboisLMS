@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronDown, LogOut, Menu, Moon, Sun } from 'lucide-react';
 import { PortalNav } from '@/components/layout/PortalNav';
 import { MaintenancePage } from '@/components/portal';
@@ -13,6 +13,7 @@ export default function PortalLayout() {
   const { user } = useAuth();
   const { theme, toggle } = useTheme();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [maintenance, setMaintenance] = useState<boolean | null>(null);
@@ -120,7 +121,7 @@ export default function PortalLayout() {
 
       <PortalNav open={navOpen} onClose={() => setNavOpen(false)} />
 
-      <main className="portal-main animate-fade-in">
+      <main key={pathname} className="portal-main animate-fade-in">
         <Outlet />
       </main>
     </div>

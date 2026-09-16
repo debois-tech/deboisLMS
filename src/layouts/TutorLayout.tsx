@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Users, ClipboardCheck, FileText, BookOpen } from 'lucide-react';
 import { Navbar } from '@/components/layout/Navbar';
 import { Sidebar } from '@/components/layout/Sidebar';
@@ -13,6 +13,7 @@ const TUTOR_NAV_ITEMS = [
 ];
 
 export default function TutorLayout() {
+  const { pathname } = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
@@ -49,7 +50,7 @@ export default function TutorLayout() {
           items={TUTOR_NAV_ITEMS}
           newAction={null}
         />
-        <main className="app-content animate-fade-in">
+        <main key={pathname} className="app-content animate-fade-in">
           <Outlet />
         </main>
       </div>

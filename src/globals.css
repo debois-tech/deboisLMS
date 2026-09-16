@@ -3914,6 +3914,9 @@ html.light .glass {
   from { opacity: 1; transform: translateY(0) scale(1); }
   to   { opacity: 0; transform: translateY(6px) scale(0.98); }
 }
+
+@keyframes overlayIn  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes overlayOut { from { opacity: 1; } to { opacity: 0; } }
 @keyframes shimmer {
   from { background-position: -200% 0; }
   to   { background-position: 200% 0; }
@@ -3925,6 +3928,12 @@ html.light .glass {
 .animate-slide-in     { animation: slideIn 0.3s ease-out forwards; }
 .animate-spin         { animation: spin 1s linear infinite; }
 .animate-pulse-glow   { animation: pulse-glow 2s ease-in-out infinite; }
+
+.animate-overlay-in  { animation: overlayIn 0.22s ease-out forwards; }
+.animate-overlay-out { animation: overlayOut 0.16s ease-in forwards; }
+/* Same travel as a toast — reused rather than a near-duplicate pair of keyframes. */
+.animate-modal-in    { animation: toastIn 0.26s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.animate-modal-out   { animation: toastOut 0.16s ease-in forwards; }
 
 /* Stagger helpers */
 .stagger-1 { animation-delay: 0.05s; }
