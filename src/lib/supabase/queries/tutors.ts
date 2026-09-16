@@ -1,6 +1,6 @@
 import { supabase } from '../client';
-import { maybeRow, ok, row, rows } from './result';
-import type { Batch, Tutor, TutorBatchMapping } from '@/lib/types';
+import { invokeLoginFunction, maybeRow, ok, row, rows } from './result';
+import type { Batch, StudentCredentials, Tutor, TutorBatchMapping } from '@/lib/types';
 
 export async function getTutors(): Promise<Tutor[]> {
   return rows<Tutor>(
@@ -61,4 +61,16 @@ export async function removeTutorFromBatch(mappingId: string): Promise<void> {
     await supabase.from('tutor_batch_mapping').delete().eq('id', mappingId),
     'Could not remove the tutor',
   );
+}
+
+export async function getTutorByAuthUserId(authUserId: string): Promise<Tutor | undefined> {
+  return maybeRow<Tutor>(
+    await supabase.from('tutors').select('*').eq('auth_user_id', authUserId).maybeSingle(),
+    'Could not load your tutor record',
+  );
+}
+
+/** Create uses the derived password; `rotate` issues a random one. Shown once, never stored. */
+export async function createTutorLogin(tutorId: string, rotate = false): Promise<StudentCredentials> {
+  return invokeLoginFunction('create-tutor-login', { tutor_id: tutorId, rotate });
 }

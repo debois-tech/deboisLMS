@@ -87,8 +87,15 @@ create table if not exists tutors (
   name       text not null,
   email      text,
   phone      text,
+  -- Set once a portal login exists for this tutor. Same shape as students.auth_user_id.
+  auth_user_id     uuid references auth.users(id) unique,
+  password_rotated boolean not null default false,
   created_at timestamptz default now()
 );
+
+-- Re-running this file on a database created before tutor logins existed.
+alter table tutors add column if not exists auth_user_id uuid references auth.users(id) unique;
+alter table tutors add column if not exists password_rotated boolean not null default false;
 
 -- Abbreviation to display name. A table rather than a hardcoded list in the app,
 -- so the import validator and the batch form read the same rows.
@@ -485,8 +492,8 @@ language plpgsql
 set search_path = public
 as $$
 begin
-  if is_admin() then
-    -- Admin can only set the manual mark — submission status is student-driven.
+  if is_admin() or is_tutor() then
+    -- Admin/tutor can only set the manual mark — submission status is student-driven.
     if tg_op = 'UPDATE' then
       new.submitted     := old.submitted;
       new.submitted_via := old.submitted_via;
@@ -665,6 +672,59 @@ stable
 set search_path = public
 as $$
   select id from students where auth_user_id = auth.uid();
+$$;
+
+create or replace function is_tutor()
+returns boolean
+language sql
+stable
+set search_path = public
+as $$
+  select coalesce((auth.jwt() -> 'app_metadata' ->> 'role') = 'tutor', false);
+$$;
+
+create or replace function current_tutor_id()
+returns uuid
+language sql
+stable
+set search_path = public
+as $$
+  select id from tutors where auth_user_id = auth.uid();
+$$;
+
+-- security definer on purpose: a tutor's own RLS on `students`/`student_repos`
+-- needs this, and batch_student_mapping already carries a student policy that
+-- calls current_student_id() — which queries students. Evaluated as invoker,
+-- that closes a cycle (students -> batch_student_mapping -> students) and
+-- Postgres aborts with "stack depth limit exceeded". Running as the owner
+-- here means this lookup never re-enters RLS, so it can never join that cycle.
+create or replace function tutor_can_see_student(target_student_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from batch_student_mapping bsm
+    join tutor_batch_mapping tbm on tbm.batch_id = bsm.batch_id
+    join tutors t on t.id = tbm.tutor_id
+    where t.auth_user_id = auth.uid()
+      and bsm.student_id = target_student_id
+  );
+$$;
+
+-- text::uuid raises rather than returning null, and the materials storage path's
+-- first segment is "all" for everyone-facing files — casting that would error
+-- out the whole policy check instead of just failing to match.
+create or replace function safe_uuid(value text)
+returns uuid
+language sql
+immutable
+as $$
+  select case when value ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    then value::uuid else null end;
 $$;
 
 
@@ -938,6 +998,85 @@ create policy student_update_own on assignment_completions
 
 -- No student policy on tutors / tutor_batch_mapping / uploads: RLS default-denies.
 
+-- ── Tutor — read-only, scoped to their assigned batches ─────────────────────
+-- No policy on student_fees / fee_payment_logs / payment_claims / feedback for
+-- a tutor: finance and feedback are admin/student only, RLS default-denies.
+drop policy if exists tutor_read_own on tutors;
+create policy tutor_read_own on tutors
+  for select using (auth_user_id = auth.uid());
+
+drop policy if exists tutor_read_own on tutor_batch_mapping;
+create policy tutor_read_own on tutor_batch_mapping
+  for select using (tutor_id = (select current_tutor_id()));
+
+drop policy if exists tutor_read_own on batches;
+create policy tutor_read_own on batches
+  for select using (id in (select batch_id from tutor_batch_mapping where tutor_id = (select current_tutor_id())));
+
+drop policy if exists tutor_read_own on batch_student_mapping;
+create policy tutor_read_own on batch_student_mapping
+  for select using (batch_id in (select batch_id from tutor_batch_mapping where tutor_id = (select current_tutor_id())));
+
+-- Profile fields only — the students table carries no fee data, so a plain
+-- select never leaks anything financial.
+drop policy if exists tutor_read_own on students;
+create policy tutor_read_own on students
+  for select using (tutor_can_see_student(id));
+
+drop policy if exists tutor_read_own on student_repos;
+create policy tutor_read_own on student_repos
+  for select using (tutor_can_see_student(student_id));
+
+-- ── Tutor — manage their own batches' lectures, attendance and materials ────
+do $$
+declare t text;
+begin
+  foreach t in array array['lectures', 'attendance', 'assignments', 'materials'] loop
+    execute format('drop policy if exists tutor_manage_own on %I', t);
+    execute format(
+      'create policy tutor_manage_own on %I for all using (batch_id in (select batch_id from tutor_batch_mapping where tutor_id = (select current_tutor_id()))) with check (batch_id in (select batch_id from tutor_batch_mapping where tutor_id = (select current_tutor_id())))', t
+    );
+  end loop;
+end $$;
+
+drop policy if exists tutor_manage_own on uploads;
+create policy tutor_manage_own on uploads
+  for all using (
+    lecture_id in (select id from lectures where batch_id in (select batch_id from tutor_batch_mapping where tutor_id = (select current_tutor_id())))
+  )
+  with check (
+    lecture_id in (select id from lectures where batch_id in (select batch_id from tutor_batch_mapping where tutor_id = (select current_tutor_id())))
+  );
+
+-- Grading only: the guard trigger already limits a tutor's write to the `mark`
+-- column, same as admin. No delete — a tutor cannot take back a submission.
+drop policy if exists tutor_read_own on assignment_completions;
+create policy tutor_read_own on assignment_completions
+  for select using (
+    assignment_id in (select id from assignments where batch_id in (select batch_id from tutor_batch_mapping where tutor_id = (select current_tutor_id())))
+  );
+
+drop policy if exists tutor_insert_own on assignment_completions;
+create policy tutor_insert_own on assignment_completions
+  for insert with check (
+    assignment_id in (select id from assignments where batch_id in (select batch_id from tutor_batch_mapping where tutor_id = (select current_tutor_id())))
+  );
+
+drop policy if exists tutor_update_own on assignment_completions;
+create policy tutor_update_own on assignment_completions
+  for update using (
+    assignment_id in (select id from assignments where batch_id in (select batch_id from tutor_batch_mapping where tutor_id = (select current_tutor_id())))
+  )
+  with check (
+    assignment_id in (select id from assignments where batch_id in (select batch_id from tutor_batch_mapping where tutor_id = (select current_tutor_id())))
+  );
+
+drop policy if exists tutor_read_own on material_views;
+create policy tutor_read_own on material_views
+  for select using (
+    material_id in (select id from materials where batch_id in (select batch_id from tutor_batch_mapping where tutor_id = (select current_tutor_id())))
+  );
+
 -- ── Storage ─────────────────────────────────────────────────────────────────
 -- Every stored file is already the final, watermarked copy, so a student reads
 -- it straight from the bucket — gated by the same enrolment rule as the
@@ -963,6 +1102,21 @@ create policy "admin manages material files" on storage.objects
   for all
   using (bucket_id = 'materials' and is_admin())
   with check (bucket_id = 'materials' and is_admin());
+
+-- Keyed off the path itself (<batchId>/materials/... or <batchId>/assignments/...),
+-- not the materials row: uploadMaterial() writes the file before the row exists,
+-- so a join through materials would reject the upload that creates it.
+drop policy if exists "tutor manages own batch material files" on storage.objects;
+create policy "tutor manages own batch material files" on storage.objects
+  for all
+  using (
+    bucket_id = 'materials'
+    and safe_uuid(split_part(storage.objects.name, '/', 1)) in (select batch_id from tutor_batch_mapping where tutor_id = (select current_tutor_id()))
+  )
+  with check (
+    bucket_id = 'materials'
+    and safe_uuid(split_part(storage.objects.name, '/', 1)) in (select batch_id from tutor_batch_mapping where tutor_id = (select current_tutor_id()))
+  );
 
 -- Public bucket means anyone can already read; this only gates who can write.
 drop policy if exists "admin manages asset files" on storage.objects;

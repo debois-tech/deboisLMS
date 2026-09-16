@@ -2,6 +2,7 @@ import { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import DashboardLayout from '@/layouts/DashboardLayout';
 import PortalLayout from '@/layouts/PortalLayout';
+import TutorLayout from '@/layouts/TutorLayout';
 import ProtectedRoute from '@/components/layout/ProtectedRoute';
 import ErrorBoundary from '@/components/layout/ErrorBoundary';
 import { Loader2 } from 'lucide-react';
@@ -26,6 +27,7 @@ const FeedbackPage = lazy(() => import('@/pages/feedback/FeedbackPage'));
 const LoginPage = lazy(() => import('@/pages/auth/LoginPage'));
 const LoginChoicePage = lazy(() => import('@/pages/auth/LoginChoicePage'));
 const UserLoginPage = lazy(() => import('@/pages/auth/UserLoginPage'));
+const TutorLoginPage = lazy(() => import('@/pages/auth/TutorLoginPage'));
 
 const PortalOverviewPage = lazy(() => import('@/pages/portal/PortalOverviewPage'));
 const PortalAttendancePage = lazy(() => import('@/pages/portal/PortalAttendancePage'));
@@ -33,6 +35,11 @@ const PortalAssignmentsPage = lazy(() => import('@/pages/portal/PortalAssignment
 const PortalMaterialsPage = lazy(() => import('@/pages/portal/PortalMaterialsPage'));
 const PortalFeedbackPage = lazy(() => import('@/pages/portal/PortalFeedbackPage'));
 const PortalProfilePage = lazy(() => import('@/pages/portal/PortalProfilePage'));
+
+const TutorDashboardPage = lazy(() => import('@/pages/tutor/TutorDashboardPage'));
+const TutorStudentsPage = lazy(() => import('@/pages/tutor/TutorStudentsPage'));
+const TutorStudentDetailPage = lazy(() => import('@/pages/tutor/TutorStudentDetailPage'));
+const TutorBatchDetailPage = lazy(() => import('@/pages/tutor/TutorBatchDetailPage'));
 
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
 
@@ -52,6 +59,7 @@ export default function App() {
           <Route path="/auth/login" element={<LoginChoicePage />} />
           <Route path="/auth/login/admin" element={<LoginPage />} />
           <Route path="/auth/login/user" element={<UserLoginPage />} />
+          <Route path="/auth/login/tutor" element={<TutorLoginPage />} />
 
           <Route path="/" element={<ProtectedRoute role="admin" />}>
             <Route element={<DashboardLayout />}>
@@ -72,6 +80,19 @@ export default function App() {
               <Route path="assignments" element={<AssignmentsPage />} />
               <Route path="materials" element={<MaterialsPage />} />
               <Route path="feedback" element={<FeedbackPage />} />
+              <Route path="*" element={<NotFoundPage />} />
+            </Route>
+          </Route>
+
+          <Route path="/tutor" element={<ProtectedRoute role="tutor" />}>
+            <Route element={<TutorLayout />}>
+              <Route index element={<TutorDashboardPage />} />
+              <Route path="students" element={<TutorStudentsPage />} />
+              <Route path="students/:studentId" element={<TutorStudentDetailPage />} />
+              <Route path="batches/:batchId" element={<TutorBatchDetailPage />} />
+              <Route path="attendance" element={<AttendancePage autoApprove />} />
+              <Route path="assignments" element={<AssignmentsPage />} />
+              <Route path="materials" element={<MaterialsPage allowEveryone={false} />} />
               <Route path="*" element={<NotFoundPage />} />
             </Route>
           </Route>

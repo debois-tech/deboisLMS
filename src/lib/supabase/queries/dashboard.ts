@@ -44,6 +44,27 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   };
 }
 
+export interface TutorDashboardStats {
+  batch_count: number;
+  student_count: number;
+  pending_grading: number;
+}
+
+/** RLS already scopes every one of these to the signed-in tutor's own batches. */
+export async function getTutorDashboardStats(): Promise<TutorDashboardStats> {
+  const [batchRes, rosterRes, gradingRes] = await Promise.all([
+    supabase.from('batches').select('*', { count: 'exact', head: true }),
+    supabase.from('batch_student_mapping').select('student_id').eq('status', 'active'),
+    supabase.from('assignment_completions').select('*', { count: 'exact', head: true }).eq('submitted', true).eq('mark', false),
+  ]);
+
+  return {
+    batch_count: count(batchRes, 'Could not count batches'),
+    student_count: new Set(rows<{ student_id: string }>(rosterRes, 'Could not count students').map((r) => r.student_id)).size,
+    pending_grading: count(gradingRes, 'Could not count pending grading'),
+  };
+}
+
 export async function getRecentActivity(): Promise<RecentActivity[]> {
   const results: RecentActivity[] = [];
 

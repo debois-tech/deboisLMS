@@ -29,7 +29,12 @@ import { useToast } from '@/lib/context/ToastContext';
 import { errorMessage } from '@/lib/utils/errors';
 import { formatDate } from '@/lib/utils/format';
 
-export default function AttendancePage() {
+interface AttendancePageProps {
+  /** Skips the pending-review step: CSV rows are approved the moment they're processed. */
+  autoApprove?: boolean;
+}
+
+export default function AttendancePage({ autoApprove = false }: AttendancePageProps) {
   const [batches, setBatches] = useState<Batch[]>([]);
   const [selectedBatch, setSelectedBatch] = useState<string | null>(null);
   const [lectures, setLectures] = useState<Lecture[]>([]);
@@ -142,6 +147,7 @@ export default function AttendancePage() {
       const code = lecture?.meeting_code || csvMeetingCode;
       await insertUploadRows(selectedLecture, code, lecture?.lecture_date, csvRows);
       const report = await processAttendance(selectedLecture);
+      if (autoApprove) await bulkApproveAttendance(selectedLecture);
 
       // Remember the code the export came with, so the next upload of the same
       // file has something to be recognised against.

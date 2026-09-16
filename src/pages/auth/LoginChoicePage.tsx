@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, ShieldCheck, UserRound } from 'lucide-react';
+import { ArrowRight, GraduationCap, ShieldCheck, UserRound } from 'lucide-react';
 import { useTheme } from '@/lib/context/ThemeContext';
 import { AuthSurface } from './LoginPage';
 
@@ -19,6 +19,11 @@ export default function LoginChoicePage() {
           <button type="button" className="auth-choice" onClick={() => navigate('/auth/login/admin')}>
             <span className="auth-choice-icon"><ShieldCheck size={21} /></span>
             <span className="auth-choice-copy"><strong>Admin</strong><small>Dashboard</small></span>
+            <ArrowRight className="auth-choice-arrow" size={18} />
+          </button>
+          <button type="button" className="auth-choice" onClick={() => navigate('/auth/login/tutor')}>
+            <span className="auth-choice-icon"><GraduationCap size={21} /></span>
+            <span className="auth-choice-copy"><strong>Tutor</strong><small>Your batches</small></span>
             <ArrowRight className="auth-choice-arrow" size={18} />
           </button>
           <button type="button" className="auth-choice" onClick={() => navigate('/auth/login/user')}>

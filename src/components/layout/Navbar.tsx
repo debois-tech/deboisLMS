@@ -10,9 +10,13 @@ import { useState, useEffect, useRef } from 'react';
 
 interface NavbarProps {
   onMenuClick?: () => void;
+  /** Where the logo links to. Defaults to the admin dashboard. */
+  homePath?: string;
+  /** The maintenance-mode switch is admin-only; a tutor shell hides it. */
+  showMaintenanceToggle?: boolean;
 }
 
-export function Navbar({ onMenuClick }: NavbarProps) {
+export function Navbar({ onMenuClick, homePath = '/', showMaintenanceToggle = true }: NavbarProps) {
   const navigate = useNavigate();
   const { theme, toggle } = useTheme();
   const { user } = useAuth();
@@ -24,8 +28,9 @@ export function Navbar({ onMenuClick }: NavbarProps) {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!showMaintenanceToggle) return;
     getMaintenanceMode().then(setMaintenance).catch(() => {});
-  }, []);
+  }, [showMaintenanceToggle]);
 
   const handleToggleMaintenance = async () => {
     setTogglingMaintenance(true);
@@ -70,7 +75,7 @@ export function Navbar({ onMenuClick }: NavbarProps) {
         <Menu size={18} />
       </button>
 
-      <Link to="/" className="flex items-center select-none hover:opacity-80 transition-opacity">
+      <Link to={homePath} className="flex items-center select-none hover:opacity-80 transition-opacity">
         <img src={theme === 'dark' ? '/logo-dark.png' : '/logo.png'} alt="deboistech" className="h-9 w-auto" />
       </Link>
 
@@ -112,23 +117,25 @@ export function Navbar({ onMenuClick }: NavbarProps) {
               </div>
             </button>
 
-            <button
-              onClick={handleToggleMaintenance}
-              disabled={togglingMaintenance}
-              className="nav-user-dropdown-item flex items-center justify-between w-full text-sm text-[var(--text-primary)] hover:bg-[var(--bg-overlay)] transition-colors disabled:opacity-50"
-            >
-              <span className="flex items-center gap-3">
-                <Construction size={17} />
-                <span>Maintenance</span>
-              </span>
-              <div
-                className={`relative w-[44px] h-[24px] rounded-full transition-colors duration-200 ${maintenance ? 'bg-[var(--danger)]' : 'bg-[var(--text-muted)]'}`}
+            {showMaintenanceToggle && (
+              <button
+                onClick={handleToggleMaintenance}
+                disabled={togglingMaintenance}
+                className="nav-user-dropdown-item flex items-center justify-between w-full text-sm text-[var(--text-primary)] hover:bg-[var(--bg-overlay)] transition-colors disabled:opacity-50"
               >
+                <span className="flex items-center gap-3">
+                  <Construction size={17} />
+                  <span>Maintenance</span>
+                </span>
                 <div
-                  className={`absolute top-[3px] left-[3px] w-[18px] h-[18px] rounded-full bg-white transition-transform duration-200 ${maintenance ? 'translate-x-5' : 'translate-x-0'}`}
-                />
-              </div>
-            </button>
+                  className={`relative w-[44px] h-[24px] rounded-full transition-colors duration-200 ${maintenance ? 'bg-[var(--danger)]' : 'bg-[var(--text-muted)]'}`}
+                >
+                  <div
+                    className={`absolute top-[3px] left-[3px] w-[18px] h-[18px] rounded-full bg-white transition-transform duration-200 ${maintenance ? 'translate-x-5' : 'translate-x-0'}`}
+                  />
+                </div>
+              </button>
+            )}
 
             <div className="nav-user-dropdown-divider border-t border-[var(--border)]">
               <button

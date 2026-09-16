@@ -12,7 +12,12 @@ import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 /** Sentinel for the "not tied to a batch" option in the batch picker. */
 const ALL_STUDENTS = '__all__';
 
-export default function MaterialsPage() {
+interface MaterialsPageProps {
+  /** A tutor only manages their own batches' material, never the everyone-wide library. */
+  allowEveryone?: boolean;
+}
+
+export default function MaterialsPage({ allowEveryone = true }: MaterialsPageProps) {
   const [batches, setBatches] = useState<Batch[]>([]);
   const [audience, setAudience] = useState<string | null>(null);
 
@@ -37,7 +42,7 @@ export default function MaterialsPage() {
           value={audience}
           onChange={setAudience}
           placeholder="Select a Batch"
-          extraOptions={[{ id: ALL_STUDENTS, name: 'All students' }]}
+          extraOptions={allowEveryone ? [{ id: ALL_STUDENTS, name: 'All students' }] : []}
         />
       </Card>
 

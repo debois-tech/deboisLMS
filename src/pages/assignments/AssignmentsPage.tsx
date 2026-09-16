@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Edit3, Plus } from 'lucide-react';
+import { Edit3, Plus, Trash2 } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
@@ -13,9 +13,10 @@ import { FieldNotice } from '@/components/ui/FieldNotice';
 import { AssignmentSubmissionTable } from '@/components/assignments/AssignmentSubmissionTable';
 import { AssignmentFiles } from '@/components/assignments/AssignmentFiles';
 import { NewAssignmentModal } from '@/components/assignments/NewAssignmentModal';
-import { getBatches, getAssignmentsByBatch } from '@/lib/supabase';
+import { getBatches, getAssignmentsByBatch, deleteAssignment } from '@/lib/supabase';
 import type { Batch, Assignment } from '@/lib/types';
 import { useToast } from '@/lib/context/ToastContext';
+import { useConfirm } from '@/lib/context/ConfirmContext';
 import { errorMessage } from '@/lib/utils/errors';
 
 export default function AssignmentsPage() {
@@ -25,7 +26,9 @@ export default function AssignmentsPage() {
   const [selectedAsgn, setSelectedAsgn] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const { showToast } = useToast();
+  const confirm = useConfirm();
 
   const selectedAssignment = assignments.find((a) => a.id === selectedAsgn);
 
@@ -44,6 +47,28 @@ export default function AssignmentsPage() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!selectedBatch || !selectedAssignment) return;
+    const ok = await confirm({
+      title: `Delete “${selectedAssignment.title}”?`,
+      message: 'Students lose access to any files and their submissions are removed. This cannot be undone.',
+      confirmLabel: 'Delete assignment',
+      danger: true,
+    });
+    if (!ok) return;
+
+    setDeleting(true);
+    try {
+      await deleteAssignment(selectedAssignment.id);
+      showToast('Assignment deleted');
+      await fetchBatchData(selectedBatch);
+    } catch (err) {
+      showToast(errorMessage(err, 'Failed to delete assignment'), 'error');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   if (loading) return <Spinner centered />;
   if (error) return <ErrorState centered message={error} onRetry={retry} />;
 
@@ -57,9 +82,14 @@ export default function AssignmentsPage() {
           action={selectedBatch && (
             <div className="flex gap-2">
               {selectedAssignment && (
-                <Button size="sm" variant="secondary" className="action-button-icon" onClick={() => setShowEdit(true)} aria-label="Edit assignment">
-                  <Edit3 size={14} />
-                </Button>
+                <>
+                  <Button size="sm" variant="secondary" className="action-button-icon" onClick={() => setShowEdit(true)} aria-label="Edit assignment">
+                    <Edit3 size={14} />
+                  </Button>
+                  <Button size="sm" variant="secondary" className="action-button-icon action-button-danger" onClick={handleDelete} loading={deleting} aria-label="Delete assignment">
+                    <Trash2 size={14} />
+                  </Button>
+                </>
               )}
               <Button size="sm" className="action-button-compact" onClick={() => setShowNew(true)}><Plus size={14} /> New Assignment</Button>
             </div>

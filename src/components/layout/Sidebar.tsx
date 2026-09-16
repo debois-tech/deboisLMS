@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { clsx } from 'clsx';
+import type { LucideIcon } from 'lucide-react';
 import {
   LayoutDashboard,
   Layers,
@@ -15,8 +16,16 @@ import {
   PanelLeft,
 } from 'lucide-react';
 
-const navItems = [
-  { label: 'Dashboard', to: '/', icon: LayoutDashboard },
+export interface SidebarNavItem {
+  label: string;
+  to: string;
+  icon: LucideIcon;
+  /** Match only exactly `to`, never a sub-route — for the dashboard/index item. */
+  end?: boolean;
+}
+
+const navItems: SidebarNavItem[] = [
+  { label: 'Dashboard', to: '/', icon: LayoutDashboard, end: true },
   { label: 'Batches', to: '/batches', icon: Layers },
   { label: 'Students', to: '/students', icon: Users },
   { label: 'Tutors', to: '/tutors', icon: GraduationCap },
@@ -32,13 +41,17 @@ interface SidebarProps {
   collapsed: boolean;
   onClose: () => void;
   onToggle?: () => void;
+  /** Defaults to the admin nav — a tutor shell passes its own scoped list. */
+  items?: SidebarNavItem[];
+  /** Bottom "+ New X" shortcut. Pass `null` to hide it entirely. */
+  newAction?: { label: string; to: string } | null;
 }
 
-export function Sidebar({ open, collapsed, onClose, onToggle }: SidebarProps) {
+export function Sidebar({ open, collapsed, onClose, onToggle, items = navItems, newAction = { label: 'New Batch', to: '/batches/new' } }: SidebarProps) {
   const location = useLocation();
 
-  const isActive = (to: string) =>
-    location.pathname === to || (to !== '/' && location.pathname.startsWith(to));
+  const isActive = (item: SidebarNavItem) =>
+    item.end ? location.pathname === item.to : location.pathname === item.to || location.pathname.startsWith(`${item.to}/`);
 
   return (
     <>
@@ -83,8 +96,8 @@ export function Sidebar({ open, collapsed, onClose, onToggle }: SidebarProps) {
         </div>
 
         <nav className="flex flex-1 flex-col overflow-y-auto py-3 px-2 space-y-1">
-          {navItems.map((item) => {
-            const active = isActive(item.to);
+          {items.map((item) => {
+            const active = isActive(item);
             const Icon = item.icon;
             return (
               <Link
@@ -109,22 +122,24 @@ export function Sidebar({ open, collapsed, onClose, onToggle }: SidebarProps) {
           })}
         </nav>
 
-        <div className={clsx('p-2', collapsed && 'flex justify-center')}>
-          <Link
-            to="/batches/new"
-            onClick={onClose}
-            title={collapsed ? 'New Batch' : undefined}
-            className={clsx(
-              'flex items-center rounded-[var(--radius-md)] bg-[var(--primary)] hover:bg-[var(--primary-light)] text-white text-sm font-semibold transition-all duration-200 shadow-[var(--primary-glow)] h-10 w-full',
-              collapsed ? 'justify-center' : 'gap-2.5 pl-2'
-            )}
-          >
-            <span className="flex items-center justify-center w-10 h-10 shrink-0">
-              <Plus size={16} />
-            </span>
-            {!collapsed && <span>New Batch</span>}
-          </Link>
-        </div>
+        {newAction && (
+          <div className={clsx('p-2', collapsed && 'flex justify-center')}>
+            <Link
+              to={newAction.to}
+              onClick={onClose}
+              title={collapsed ? newAction.label : undefined}
+              className={clsx(
+                'flex items-center rounded-[var(--radius-md)] bg-[var(--primary)] hover:bg-[var(--primary-light)] text-white text-sm font-semibold transition-all duration-200 shadow-[var(--primary-glow)] h-10 w-full',
+                collapsed ? 'justify-center' : 'gap-2.5 pl-2'
+              )}
+            >
+              <span className="flex items-center justify-center w-10 h-10 shrink-0">
+                <Plus size={16} />
+              </span>
+              {!collapsed && <span>{newAction.label}</span>}
+            </Link>
+          </div>
+        )}
       </aside>
     </>
   );

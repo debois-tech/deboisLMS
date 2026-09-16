@@ -1,5 +1,5 @@
 import { supabase } from '../client';
-import { maybeRow, ok, row, rows } from './result';
+import { invokeLoginFunction, maybeRow, ok, row, rows } from './result';
 import type { Batch, Student, BatchStudentMapping, StudentCredentials } from '@/lib/types';
 import { errorMessage } from '@/lib/utils/errors';
 import { getImportDiscount, toStudentInput } from '@/lib/utils/studentImport';
@@ -115,25 +115,7 @@ export async function getStudentByAuthUserId(authUserId: string): Promise<Studen
 
 /** Create uses the derived password; `rotate` issues a random one. Shown once, never stored. */
 export async function createStudentLogin(studentId: string, rotate = false): Promise<StudentCredentials> {
-  const { data, error } = await supabase.functions.invoke('create-student-login', {
-    body: { student_id: studentId, rotate },
-  });
-
-  if (error) {
-    // Non-2xx surfaces as a generic message; the useful reason is on error.context.
-    let detail: string | undefined;
-    const response = (error as { context?: Response }).context;
-    if (response && typeof response.json === 'function') {
-      detail = await response
-        .json()
-        .then((body: { error?: string } | null) => body?.error)
-        .catch(() => undefined);
-    }
-    throw new Error(detail ?? error.message ?? 'Failed to create login');
-  }
-  if (data?.error) throw new Error(data.error);
-
-  return data as StudentCredentials;
+  return invokeLoginFunction('create-student-login', { student_id: studentId, rotate });
 }
 
 export interface CredentialEmailResult {

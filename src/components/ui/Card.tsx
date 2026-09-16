@@ -21,7 +21,7 @@ export function Card({ glass, hover, padding = 'md', as: Tag = 'div', children, 
     <Tag
       type={Tag === 'button' ? 'button' : undefined}
       className={clsx(
-        'ui-card rounded-[var(--radius-lg)] border border-[var(--border)]',
+        'ui-card rounded-[var(--radius-lg)] border border-[var(--border)] animate-fade-in-fast',
         paddingMap[padding],
         glass
           ? 'glass'

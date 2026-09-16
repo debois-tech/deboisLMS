@@ -1,9 +1,18 @@
 import { useState, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
+import { LayoutDashboard, Users, ClipboardCheck, FileText, BookOpen } from 'lucide-react';
 import { Navbar } from '@/components/layout/Navbar';
 import { Sidebar } from '@/components/layout/Sidebar';
 
-export default function DashboardLayout() {
+const TUTOR_NAV_ITEMS = [
+  { label: 'Dashboard', to: '/tutor', icon: LayoutDashboard, end: true },
+  { label: 'Students', to: '/tutor/students', icon: Users },
+  { label: 'Attendance', to: '/tutor/attendance', icon: ClipboardCheck },
+  { label: 'Assignments', to: '/tutor/assignments', icon: FileText },
+  { label: 'Study Material', to: '/tutor/materials', icon: BookOpen },
+];
+
+export default function TutorLayout() {
   const { pathname } = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -25,6 +34,8 @@ export default function DashboardLayout() {
   return (
     <div className="min-h-screen bg-[var(--bg-base)]">
       <Navbar
+        homePath="/tutor"
+        showMaintenanceToggle={false}
         onMenuClick={() => {
           setSidebarCollapsed(false);
           setSidebarOpen(true);
@@ -36,6 +47,8 @@ export default function DashboardLayout() {
           collapsed={sidebarCollapsed}
           onClose={() => setSidebarOpen(false)}
           onToggle={handleSidebarToggle}
+          items={TUTOR_NAV_ITEMS}
+          newAction={null}
         />
         <main key={pathname} className="app-content animate-fade-in">
           <Outlet />
