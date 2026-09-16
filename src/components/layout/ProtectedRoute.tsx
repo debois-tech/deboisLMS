@@ -7,6 +7,7 @@ import type { Role } from '@/lib/types';
 const homeForRole: Record<Role, string> = {
   admin: '/',
   student: '/portal',
+  tutor: '/tutor',
 };
 
 export default function ProtectedRoute({ role = 'admin' }: { role?: Role }) {

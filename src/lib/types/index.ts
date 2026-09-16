@@ -1,4 +1,4 @@
-export type Role = 'admin' | 'student';
+export type Role = 'admin' | 'student' | 'tutor';
 
 export type BatchStatus = 'upcoming' | 'ongoing' | 'completed';
 export type SessionType = 'online' | 'offline';
@@ -24,6 +24,8 @@ export interface Profile {
   created_at: string;
   /** Only set for role === 'student' — the students.id row this login belongs to. */
   student_id?: string;
+  /** Only set for role === 'tutor' — the tutors.id row this login belongs to. */
+  tutor_id?: string;
 }
 
 /** Abbreviation to display name, from the `batch_programs` table. */
@@ -87,6 +89,10 @@ export interface Tutor {
   name: string;
   email?: string;
   phone?: string;
+  /** auth.users id once a tutor login has been created. */
+  auth_user_id?: string;
+  /** True once the password was reset to a random one — the derived rule no longer applies. */
+  password_rotated?: boolean;
   created_at: string;
 }
 

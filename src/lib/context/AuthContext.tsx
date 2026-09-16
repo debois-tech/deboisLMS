@@ -2,13 +2,14 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import type { User } from '@supabase/supabase-js';
 import type { Profile, Role } from '@/lib/types';
 import { supabase } from '@/lib/supabase/client';
-import { getStudentByAuthUserId } from '@/lib/supabase';
+import { getStudentByAuthUserId, getTutorByAuthUserId } from '@/lib/supabase';
 
 interface AuthContextValue {
   user: Profile | null;
   setUser: (u: Profile | null) => void;
   isAdmin: boolean;
   isStudent: boolean;
+  isTutor: boolean;
   loading: boolean;
 }
 
@@ -17,23 +18,37 @@ const AuthContext = createContext<AuthContextValue>({
   setUser: () => {},
   isAdmin: false,
   isStudent: false,
+  isTutor: false,
   loading: true,
 });
 
+const ROLE_LABEL: Record<Role, string> = { admin: 'Admin', student: 'Student', tutor: 'Tutor' };
+
 /** Role comes from app_metadata (set server-side) — never user_metadata, which a user can edit on themselves. */
 export function roleFromUser(user: User): Role {
-  return user.app_metadata?.role === 'admin' ? 'admin' : 'student';
+  const role = user.app_metadata?.role;
+  return role === 'admin' || role === 'tutor' ? role : 'student';
 }
 
 export async function profileFromUser(user: User): Promise<Profile> {
   const role = roleFromUser(user);
   const base: Profile = {
     id: user.id,
-    full_name: user.user_metadata?.full_name ?? (role === 'admin' ? 'Admin' : 'Student'),
+    full_name: user.user_metadata?.full_name ?? ROLE_LABEL[role],
     email: user.email ?? '',
     role,
     created_at: user.created_at,
   };
+
+  if (role === 'tutor') {
+    const metaTutorId = user.app_metadata?.tutor_id as string | undefined;
+    const tutor = await getTutorByAuthUserId(user.id);
+    return {
+      ...base,
+      full_name: tutor?.name ?? base.full_name,
+      tutor_id: tutor?.id ?? metaTutorId,
+    };
+  }
 
   if (role !== 'student') return base;
 
@@ -85,6 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser,
         isAdmin: user?.role === 'admin',
         isStudent: user?.role === 'student',
+        isTutor: user?.role === 'tutor',
         loading,
       }}
     >

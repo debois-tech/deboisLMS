@@ -43,8 +43,8 @@ AGENTS.md
 /supabase/.temp/
 
 # Finished working notes — kept locally, not versioned.
-/completed md/
 run_build.md
+ARCHITECTURE.md
 
 # Sample import/attendance CSVs — real names and addresses, kept locally.
 /test_csv/

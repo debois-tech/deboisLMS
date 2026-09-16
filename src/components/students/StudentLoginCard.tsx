@@ -5,7 +5,7 @@ import { Modal } from '@/components/ui/Modal';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { createStudentLogin, sendCredentialsEmail } from '@/lib/supabase';
 import type { StudentCredentials } from '@/lib/types';
-import { derivePortalPassword } from '@/lib/utils/portalPassword';
+import { useLoginCredentials } from '@/lib/hooks/useLoginCredentials';
 import { errorMessage } from '@/lib/utils/errors';
 
 interface EmailCredentialsButtonProps {
@@ -72,28 +72,12 @@ interface StudentLoginCardProps {
 export function StudentLoginCard({
   studentId, email, phone, hasLogin, passwordRotated, onCreated,
 }: StudentLoginCardProps) {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [fresh, setFresh] = useState<StudentCredentials | null>(null);
-
-  const derived = derivePortalPassword(phone);
-  // Derived password only holds until a reset; after that there is nothing to recompute.
-  const rotated = fresh?.rotated ?? passwordRotated ?? false;
-  const password = fresh?.password ?? (rotated ? null : derived);
-
-  const run = async (rotate = false) => {
-    setLoading(true);
-    setError('');
-    try {
-      const result = await createStudentLogin(studentId, rotate);
-      setFresh(result);
-      onCreated?.();
-    } catch (err) {
-      setError(errorMessage(err, rotate ? 'Failed to reset the password' : 'Failed to create login'));
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { loading, error, fresh, password, rotated, run } = useLoginCredentials({
+    phone,
+    passwordRotated,
+    createLogin: (rotate) => createStudentLogin(studentId, rotate),
+    onCreated,
+  });
 
   if (!email) {
     return (
@@ -141,7 +125,7 @@ export function StudentLoginCard({
         </div>
       )}
 
-      {fresh?.rotated && (
+      {rotated && fresh && (
         <p className="text-xs text-[var(--text-muted)]">
           New password — copy it now. It is not stored and cannot be shown again.
         </p>

@@ -22,9 +22,12 @@ interface LoginPanelProps {
   hint?: string;
 }
 
+const HOME_FOR_ROLE: Record<Role, string> = { admin: '/', student: '/portal', tutor: '/tutor' };
+
 const WRONG_DOOR: Record<Role, string> = {
-  admin: 'Not an admin account. Use the student login.',
-  student: 'Not a student account. Use the admin login.',
+  admin: 'Not an admin account. Use the student or tutor login.',
+  student: 'Not a student account. Use the admin or tutor login.',
+  tutor: 'Not a tutor account. Use the admin or student login.',
 };
 
 /** Shared by the admin and student login routes, but each one only admits its own role. */
@@ -65,7 +68,7 @@ export function LoginPanel({ title, emailPlaceholder, expectedRole, hint }: Logi
       }
 
       setUser(profile);
-      navigate(expectedRole === 'admin' ? '/' : '/portal');
+      navigate(HOME_FOR_ROLE[expectedRole]);
     }
     setLoading(false);
   };

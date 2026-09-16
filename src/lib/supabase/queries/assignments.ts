@@ -1,4 +1,5 @@
 import { supabase } from '../client';
+import { deleteMaterial, getMaterialsByAssignment } from './materials';
 import type { Assignment, AssignmentCompletion, StudentRepo, SubmissionChannel } from '@/lib/types';
 
 /** One row per active student in the batch — exactly the admin submission table (and its CSV). */
@@ -66,7 +67,16 @@ export async function updateAssignment(
   return data as Assignment;
 }
 
-// Every active student and their submission. The CSV export ships these same rows. 
+// Files first: an assignment's handouts would otherwise cascade-delete as orphaned storage objects.
+export async function deleteAssignment(id: string): Promise<void> {
+  const materials = await getMaterialsByAssignment(id);
+  await Promise.all(materials.map((material) => deleteMaterial(material)));
+
+  const { error } = await supabase.from('assignments').delete().eq('id', id);
+  if (error) throw new Error(`Could not delete the assignment: ${error.message}`);
+}
+
+// Every active student and their submission. The CSV export ships these same rows.
 export async function getAssignmentSubmissions(
   assignmentId: string,
   batchId: string,

@@ -163,7 +163,7 @@ export default function BatchDetailPage() {
   );
 }
 
-function OverviewTab({ batch, programLabel }: { batch: Batch; programLabel?: string }) {
+export function OverviewTab({ batch, programLabel, showFees = true }: { batch: Batch; programLabel?: string; showFees?: boolean }) {
   const [students, setStudents] = useState<(Student & { mapping: BatchStudentMapping })[]>([]);
   const [lectures, setLectures] = useState<Lecture[]>([]);
 
@@ -178,7 +178,7 @@ function OverviewTab({ batch, programLabel }: { batch: Batch; programLabel?: str
   if (error) return <ErrorState message={error} onRetry={reload} />;
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${showFees ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
       <Card padding="sm">
         <p className="text-xs text-[var(--text-muted)]">Total Students</p>
         <p className="text-lg font-bold text-[var(--text-primary)] mt-1">{students.filter((s) => s.mapping.status === 'active').length}</p>
@@ -191,12 +191,14 @@ function OverviewTab({ batch, programLabel }: { batch: Batch; programLabel?: str
         <p className="text-xs text-[var(--text-muted)]">Programme</p>
         <p className="text-lg font-bold text-[var(--text-primary)] mt-1 truncate">{programLabel ?? 'Not set'}</p>
       </Card>
-      <Card padding="sm">
-        <p className="text-xs text-[var(--text-muted)]">Regular Fees</p>
-        <p className="text-lg font-bold text-[var(--text-primary)] mt-1">
-          {batch.base_fee == null ? 'Not set' : formatCurrency(batch.base_fee)}
-        </p>
-      </Card>
+      {showFees && (
+        <Card padding="sm">
+          <p className="text-xs text-[var(--text-muted)]">Regular Fees</p>
+          <p className="text-lg font-bold text-[var(--text-primary)] mt-1">
+            {batch.base_fee == null ? 'Not set' : formatCurrency(batch.base_fee)}
+          </p>
+        </Card>
+      )}
     </div>
   );
 }
@@ -481,7 +483,7 @@ function TutorsTab({ batchId }: { batchId: string }) {
   );
 }
 
-function LecturesTab({ batchId }: { batchId: string }) {
+export function LecturesTab({ batchId }: { batchId: string }) {
   const [lectures, setLectures] = useState<Lecture[]>([]);
   const [showNew, setShowNew] = useState(false);
   const [form, setForm] = useState({ lecture_date: '', start_time: '09:00', meeting_code: '', note: '', session_type: 'online' as const, scheduled_duration_minutes: DEFAULT_LECTURE_MINUTES });
@@ -593,7 +595,7 @@ function LecturesTab({ batchId }: { batchId: string }) {
   );
 }
 
-function AttendanceTab({ batchId, batchName }: { batchId: string; batchName: string }) {
+export function AttendanceTab({ batchId, batchName }: { batchId: string; batchName: string }) {
   const [lectures, setLectures] = useState<Lecture[]>([]);
   const [selectedLecture, setSelectedLecture] = useState<string | null>(null);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
@@ -913,7 +915,7 @@ function FinanceTab({ batchId }: { batchId: string }) {
   );
 }
 
-function AssignmentsTab({ batchId }: { batchId: string }) {
+export function AssignmentsTab({ batchId }: { batchId: string }) {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [selectedAsgn, setSelectedAsgn] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);

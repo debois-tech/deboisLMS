@@ -4,14 +4,18 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { FormField } from '@/components/ui/FormField';
-import { createTutor } from '@/lib/supabase';
+import { TutorCredentialsModal } from '@/components/tutors/TutorLoginCard';
+import { createTutor, createTutorLogin } from '@/lib/supabase';
 import { useToast } from '@/lib/context/ToastContext';
 import { errorMessage } from '@/lib/utils/errors';
+import type { StudentCredentials } from '@/lib/types';
 
 export default function NewTutorPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', phone: '' });
+  const [credentials, setCredentials] = useState<StudentCredentials | null>(null);
+  const [createdTutorId, setCreatedTutorId] = useState<string | null>(null);
   const { showToast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -19,8 +23,16 @@ export default function NewTutorPage() {
     setLoading(true);
     try {
       const tutor = await createTutor(form);
+      setCreatedTutorId(tutor.id);
       showToast('Tutor added');
-      navigate(`/tutors/${tutor.id}`);
+
+      try {
+        setCredentials(await createTutorLogin(tutor.id));
+      } catch (loginError) {
+        // The record is saved; a failed login just needs a retry from the detail page.
+        showToast(errorMessage(loginError, 'Tutor saved. Login not created.'), 'warning');
+        navigate(`/tutors/${tutor.id}`);
+      }
     } catch (error) {
       showToast(errorMessage(error, 'Failed to add tutor'), 'error');
     } finally {
@@ -50,6 +62,14 @@ export default function NewTutorPage() {
           </div>
         </form>
       </Card>
+
+      <TutorCredentialsModal
+        credentials={credentials}
+        onClose={() => {
+          setCredentials(null);
+          if (createdTutorId) navigate(`/tutors/${createdTutorId}`);
+        }}
+      />
     </div>
   );
 }

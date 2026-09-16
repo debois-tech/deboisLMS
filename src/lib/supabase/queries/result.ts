@@ -1,4 +1,6 @@
 import type { PostgrestError } from '@supabase/supabase-js';
+import { supabase } from '../client';
+import type { StudentCredentials } from '@/lib/types';
 
 /** A failure throws, so an empty array only ever means "no rows" — never an RLS denial. */
 interface Result<T> {
@@ -40,4 +42,25 @@ export function row<T>(result: Result<T>, what: string): T {
 /** A delete or other write with nothing to return. */
 export function ok(result: { error: PostgrestError | null }, what: string): void {
   if (result.error) fail(result.error, what);
+}
+
+/** Shared by create-student-login and create-tutor-login: same request/response shape either side. */
+export async function invokeLoginFunction(name: string, body: Record<string, unknown>): Promise<StudentCredentials> {
+  const { data, error } = await supabase.functions.invoke(name, { body });
+
+  if (error) {
+    // Non-2xx surfaces as a generic message; the useful reason is on error.context.
+    let detail: string | undefined;
+    const response = (error as { context?: Response }).context;
+    if (response && typeof response.json === 'function') {
+      detail = await response
+        .json()
+        .then((responseBody: { error?: string } | null) => responseBody?.error)
+        .catch(() => undefined);
+    }
+    throw new Error(detail ?? error.message ?? 'Failed to create login');
+  }
+  if (data?.error) throw new Error(data.error);
+
+  return data as StudentCredentials;
 }

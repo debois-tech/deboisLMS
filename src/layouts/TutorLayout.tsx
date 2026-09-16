@@ -1,0 +1,58 @@
+import { useState, useEffect } from 'react';
+import { Outlet } from 'react-router-dom';
+import { LayoutDashboard, Users, ClipboardCheck, FileText, BookOpen } from 'lucide-react';
+import { Navbar } from '@/components/layout/Navbar';
+import { Sidebar } from '@/components/layout/Sidebar';
+
+const TUTOR_NAV_ITEMS = [
+  { label: 'Dashboard', to: '/tutor', icon: LayoutDashboard, end: true },
+  { label: 'Students', to: '/tutor/students', icon: Users },
+  { label: 'Attendance', to: '/tutor/attendance', icon: ClipboardCheck },
+  { label: 'Assignments', to: '/tutor/assignments', icon: FileText },
+  { label: 'Study Material', to: '/tutor/materials', icon: BookOpen },
+];
+
+export default function TutorLayout() {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  useEffect(() => {
+    document.body.style.overflow = sidebarOpen ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [sidebarOpen]);
+
+  const handleSidebarToggle = () => {
+    if (window.innerWidth < 1024) {
+      setSidebarCollapsed(false);
+      setSidebarOpen((open) => !open);
+      return;
+    }
+    setSidebarCollapsed((collapsed) => !collapsed);
+  };
+
+  return (
+    <div className="min-h-screen bg-[var(--bg-base)]">
+      <Navbar
+        homePath="/tutor"
+        showMaintenanceToggle={false}
+        onMenuClick={() => {
+          setSidebarCollapsed(false);
+          setSidebarOpen(true);
+        }}
+      />
+      <div className="app-shell">
+        <Sidebar
+          open={sidebarOpen}
+          collapsed={sidebarCollapsed}
+          onClose={() => setSidebarOpen(false)}
+          onToggle={handleSidebarToggle}
+          items={TUTOR_NAV_ITEMS}
+          newAction={null}
+        />
+        <main className="app-content animate-fade-in">
+          <Outlet />
+        </main>
+      </div>
+    </div>
+  );
+}

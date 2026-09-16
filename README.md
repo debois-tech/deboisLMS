@@ -1,7 +1,7 @@
 # DeboisTech ERP
 
 Admin dashboard for running training batches — students, tutors, attendance, fees, assignments and
-study material — plus a read-only student portal.
+study material — plus a read-only student portal and a batch-scoped tutor dashboard.
 
 Built with Vite 6 + React 19 + TypeScript, Tailwind CSS 4, and Supabase (Postgres, Auth, Storage,
 Edge Functions).
@@ -11,7 +11,10 @@ Edge Functions).
 - **Admins** run everything from the dashboard at `/`.
 - **Students** get a read-only portal at `/portal`. Their logins are **created by an admin**, not by
   self-signup — there is no public registration and no class-join code.
-- **Tutors have no login.** They are records the admin manages.
+- **Tutors** get a dashboard at `/tutor`, scoped to whichever batch(es) an admin assigns them via
+  `tutor_batch_mapping`: their students' profiles (never fees), lectures and attendance, assignments
+  and grading, and study material. Like students, their login is created by an admin, not by
+  self-signup. They cannot see finance anywhere, create logins, or edit batch/student rosters.
 
 Roles come from `app_metadata.role` on the auth user, and access is enforced by row-level security
 in Postgres rather than by the client.
@@ -41,6 +44,7 @@ Anything needing a secret runs server-side. Deploy each with
 | Function | Purpose | Secret |
 |---|---|---|
 | `create-student-login` | Creates/resets a student's portal login | `SECRET_SERVICE_ROLE_KEY` |
+| `create-tutor-login` | Creates/resets a tutor's dashboard login | `SECRET_SERVICE_ROLE_KEY` |
 | `match-name` | Gemini fuzzy name matching for attendance | `GEMINI_API_KEY` |
 | `send-credentials` | Emails a student their portal login, one or a whole import | `RESEND_API_KEY` |
 
