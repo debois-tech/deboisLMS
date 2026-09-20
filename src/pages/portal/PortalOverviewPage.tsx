@@ -92,7 +92,7 @@ export default function PortalOverviewPage() {
     setNextLecture(upcoming);
     setAttendance(records);
     setAssignments(work);
-  });
+  }, true);
 
   const currentBatch = enrollments
     .filter((enrollment) => enrollment.status === 'active')

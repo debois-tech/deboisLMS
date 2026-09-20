@@ -1,5 +1,5 @@
 import { supabase } from '../client';
-import { row, rows } from './result';
+import { ok, rows } from './result';
 import { getStudents } from './students';
 import { getBatches } from './batches';
 import type { PaymentClaim } from '@/lib/types';
@@ -21,13 +21,12 @@ export async function submitPaymentClaim(
   batchId: string | undefined,
   transactionId: string,
   amount: number,
-): Promise<PaymentClaim> {
-  return row<PaymentClaim>(
+): Promise<void> {
+  // No .select(): students may insert but not read payment_claims, and RETURNING needs a SELECT policy.
+  ok(
     await supabase
       .from('payment_claims')
-      .insert({ student_id: studentId, batch_id: batchId ?? null, transaction_id: transactionId, amount })
-      .select()
-      .single(),
+      .insert({ student_id: studentId, batch_id: batchId ?? null, transaction_id: transactionId, amount }),
     'Could not submit your payment details',
   );
 }

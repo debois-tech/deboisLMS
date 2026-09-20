@@ -52,7 +52,7 @@ export default function PortalAssignmentsPage() {
     setRepoUrl(repo?.repo_url);
   }, [studentId]);
 
-  const { loading, error, retry } = useInitialLoad(load);
+  const { loading, error, retry } = useInitialLoad(load, true);
 
   const handleSubmit = async (url: string) => {
     if (!studentId || !open) return;

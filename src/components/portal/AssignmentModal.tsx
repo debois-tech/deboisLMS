@@ -9,7 +9,6 @@ import { AssignmentFiles } from '@/components/assignments/AssignmentFiles';
 import type { Assignment, AssignmentCompletion } from '@/lib/types';
 import { formatDate, formatDateTime } from '@/lib/utils/format';
 import { assignmentState, formatDeadline, formatDueLabel, isOverdue } from '@/lib/utils/deadline';
-import { errorMessage } from '@/lib/utils/errors';
 
 export type StudentAssignment = Assignment & { completion?: AssignmentCompletion };
 
@@ -77,7 +76,8 @@ function AssignmentModalBody({ assignment, repoUrl, now, onClose, onSubmit }: As
     try {
       await onSubmit(url);
     } catch (err) {
-      setError(errorMessage(err, 'Could not submit. Try again.'));
+      console.error(err);
+      setError('Could not submit. Try again.');
       setSubmitting(false);
     }
   };

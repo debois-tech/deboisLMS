@@ -74,7 +74,7 @@ export default function PortalProfilePage() {
     setFees(feeRows);
     setPayments(paymentRows);
     setBatchNames(names);
-  });
+  }, true);
 
   const outstanding = fees.reduce((sum, fee) => sum + Math.max(0, Number(fee.amount_due)), 0);
   const owing = fees.filter((fee) => Number(fee.amount_due) > 0).length;

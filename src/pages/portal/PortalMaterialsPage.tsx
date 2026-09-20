@@ -25,7 +25,7 @@ export default function PortalMaterialsPage() {
   const { loading, error, retry } = useInitialLoad(async () => {
     if (!studentId) return;
     setMaterials(await getMaterialsForStudent());
-  });
+  }, true);
 
   // Material with no batch is for everyone; it gets its own group and its own
   // filter entry rather than being lumped in with a batch it does not belong to.
