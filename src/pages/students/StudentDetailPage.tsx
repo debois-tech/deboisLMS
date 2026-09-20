@@ -12,8 +12,10 @@ import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import { StudentLoginCard } from '@/components/students/StudentLoginCard';
 import { StudentIdChip } from '@/components/students/StudentLink';
-import { getStudentById, getStudentBatches, getFeesByStudent, getLecturesByBatch, getFeePaymentLogsByStudent, terminateEnrolment } from '@/lib/supabase';
-import type { Student, BatchStudentMapping, Batch, StudentFee, Lecture, FeePaymentLog } from '@/lib/types';
+import { Badge } from '@/components/ui/Badge';
+import { ClaimActions } from '@/components/finance/ClaimActions';
+import { getStudentById, getStudentBatches, getFeesByStudent, getLecturesByBatch, getFeePaymentLogsByStudent, getPendingClaims, terminateEnrolment } from '@/lib/supabase';
+import type { Student, BatchStudentMapping, Batch, StudentFee, Lecture, FeePaymentLog, PaymentClaim } from '@/lib/types';
 import { formatDate, formatCurrency } from '@/lib/utils/format';
 import { useToast } from '@/lib/context/ToastContext';
 import { useConfirm } from '@/lib/context/ConfirmContext';
@@ -26,6 +28,7 @@ export default function StudentDetailPage() {
   const [currentFee, setCurrentFee] = useState<StudentFee | null>(null);
   const [nextLecture, setNextLecture] = useState<Lecture | null>(null);
   const [paymentLogs, setPaymentLogs] = useState<FeePaymentLog[]>([]);
+  const [claims, setClaims] = useState<PaymentClaim[]>([]);
   const [terminating, setTerminating] = useState(false);
   const { showToast } = useToast();
   const confirm = useConfirm();
@@ -33,13 +36,15 @@ export default function StudentDetailPage() {
   const { loading, error, retry } = useInitialLoad(async () => {
     if (!studentId) return;
 
-    const [s, mappings, logs] = await Promise.all([
+    const [s, mappings, logs, pending] = await Promise.all([
       getStudentById(studentId),
       getStudentBatches(studentId),
       getFeePaymentLogsByStudent(studentId),
+      getPendingClaims(studentId),
     ]);
     setStudent(s ?? null);
     setPaymentLogs(logs);
+    setClaims(pending);
     setBatchMappings(mappings);
 
     // Multiple active batches are possible; the most recently joined one is "current".
@@ -266,7 +271,7 @@ export default function StudentDetailPage() {
 
       <Card>
         <CardHeader title="Payment Logs" />
-        {paymentLogs.length === 0 ? (
+        {paymentLogs.length === 0 && claims.length === 0 ? (
           <EmptyState icon={<History size={32} />} title="No payment logs yet" />
         ) : (
           <Table maxHeight="24rem">
@@ -277,9 +282,24 @@ export default function StudentDetailPage() {
                 <TH>Batch</TH>
                 <TH>Method</TH>
                 <TH>Notes</TH>
+                <TH>Status</TH>
+                <TH> </TH>
               </TR>
             </THead>
             <TBody>
+              {claims.map((claim) => (
+                <TR key={claim.id}>
+                  <TD className="font-semibold text-[var(--warning-text)]">{formatCurrency(Number(claim.amount))}</TD>
+                  <TD className="cell-secondary">{claim.created_at.slice(0, 10)}</TD>
+                  <TD className="cell-secondary">{(claim.batch_id && batchNameById.get(claim.batch_id)) || '—'}</TD>
+                  <TD className="cell-muted">UPI</TD>
+                  <TD className="cell-muted">Student claim · Txn {claim.transaction_id}</TD>
+                  <TD><Badge variant="warning" dot>Unverified</Badge></TD>
+                  <TD className="w-px">
+                    <ClaimActions claim={claim} name={student.name} onDone={retry} />
+                  </TD>
+                </TR>
+              ))}
               {paymentLogs.map((log) => (
                 <TR key={log.id}>
                   <TD className="font-semibold text-[var(--success-text)]">{formatCurrency(Number(log.amount))}</TD>
@@ -287,6 +307,8 @@ export default function StudentDetailPage() {
                   <TD className="cell-secondary">{batchNameById.get(log.batch_id) ?? log.batch_id}</TD>
                   <TD className="cell-muted capitalize">{(log.payment_method ?? '—').replace('_', ' ')}</TD>
                   <TD className="cell-muted">{log.notes || '—'}</TD>
+                  <TD><Badge variant="success" dot>Verified</Badge></TD>
+                  <TD />
                 </TR>
               ))}
             </TBody>

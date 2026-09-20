@@ -910,6 +910,11 @@ function FinanceTab({ batchId }: { batchId: string }) {
         submitting={logging}
         onDelete={handleDeletePaymentLog}
         deletingId={deletingLogId}
+        onClaimApproved={({ log, fee }) => {
+          setLoggingFee(fee);
+          setPaymentLogs((prev) => [log, ...prev]);
+          setFees((prev) => prev.map((f) => (f.id === fee.id ? fee : f)));
+        }}
       />
     </div>
   );
