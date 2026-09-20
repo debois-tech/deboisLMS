@@ -1,12 +1,16 @@
+import { useEffect, useState } from 'react';
 import { History, Plus, Trash2 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
+import { Badge } from '@/components/ui/Badge';
+import { ClaimActions } from '@/components/finance/ClaimActions';
+import { getPendingClaims } from '@/lib/supabase';
 import { Button } from '@/components/ui/Button';
 import { FormField } from '@/components/ui/FormField';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { SearchSelect } from '@/components/ui/SearchSelect';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
-import type { StudentFee, FeePaymentLog, PaymentMethod } from '@/lib/types';
+import type { StudentFee, FeePaymentLog, PaymentClaim, PaymentMethod } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils/format';
 import { REGISTRATION_NOTE } from '@/lib/utils/installments';
 
@@ -29,11 +33,26 @@ interface PaymentLogModalProps {
   onDelete: (log: FeePaymentLog) => void;
   /** Id of the log currently being removed, so only its own button spins. */
   deletingId?: string | null;
+  /** A pending claim was verified: the new log and updated fee, for the parent to fold in. */
+  onClaimApproved: (result: { log: FeePaymentLog; fee: StudentFee }) => void;
 }
 
 export function PaymentLogModal({
-  fee, studentName, paymentLogs, form, onFormChange, onClose, onSubmit, submitting, onDelete, deletingId,
+  fee, studentName, paymentLogs, form, onFormChange, onClose, onSubmit, submitting, onDelete, deletingId, onClaimApproved,
 }: PaymentLogModalProps) {
+  const [claims, setClaims] = useState<PaymentClaim[]>([]);
+
+  const studentId = fee?.student_id;
+
+  useEffect(() => {
+    if (!studentId) return;
+    let live = true;
+    getPendingClaims(studentId).then((c) => { if (live) setClaims(c); }).catch(console.error);
+    return () => { live = false; };
+  }, [studentId]);
+
+  // Filtered on render so a previous student's claims never flash on open.
+  const shownClaims = fee ? claims.filter((c) => c.student_id === fee.student_id && c.batch_id === fee.batch_id) : [];
   // Only a terminated enrolment has this, so it doubles as the flag for one.
   const left = fee?.expected_on_exit != null;
   const remaining = fee
@@ -115,7 +134,7 @@ export function PaymentLogModal({
             <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
               <History size={15} /> Previous Payments
             </div>
-            {paymentLogs.length === 0 ? (
+            {paymentLogs.length === 0 && shownClaims.length === 0 ? (
               <p className="text-sm text-[var(--text-muted)]">No payment logs yet.</p>
             ) : (
               <Table maxHeight="16rem">
@@ -125,16 +144,37 @@ export function PaymentLogModal({
                     <TH>Date</TH>
                     <TH>Method</TH>
                     <TH>Notes</TH>
+                    <TH>Status</TH>
                     <TH> </TH>
                   </TR>
                 </THead>
                 <TBody>
+                  {shownClaims.map((claim) => (
+                    <TR key={claim.id}>
+                      <TD className="font-semibold text-[var(--warning-text)]">{formatCurrency(Number(claim.amount))}</TD>
+                      <TD className="cell-secondary">{claim.created_at.slice(0, 10)}</TD>
+                      <TD className="cell-muted">UPI</TD>
+                      <TD className="cell-muted">Student claim · Txn {claim.transaction_id}</TD>
+                      <TD><Badge variant="warning" dot>Unverified</Badge></TD>
+                      <TD className="w-px">
+                        <ClaimActions
+                          claim={claim}
+                          name={studentName}
+                          onDone={(done, result) => {
+                            setClaims((prev) => prev.filter((c) => c.id !== done.id));
+                            if (result) onClaimApproved(result);
+                          }}
+                        />
+                      </TD>
+                    </TR>
+                  ))}
                   {paymentLogs.map((log) => (
                     <TR key={log.id}>
                       <TD className="font-semibold text-[var(--success-text)]">{formatCurrency(Number(log.amount))}</TD>
                       <TD className="cell-secondary">{log.payment_date}</TD>
                       <TD className="cell-muted capitalize">{(log.payment_method ?? '—').replace('_', ' ')}</TD>
                       <TD className="cell-muted">{log.notes || '—'}</TD>
+                      <TD><Badge variant="success" dot>Verified</Badge></TD>
                       <TD className="w-px">
                         {/* The registration fee is written by a trigger, so nothing could put it back. */}
                         {log.notes !== REGISTRATION_NOTE && (

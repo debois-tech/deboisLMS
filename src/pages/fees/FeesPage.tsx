@@ -114,6 +114,13 @@ export default function FeesPage() {
     setDeletingLogId(null);
   };
 
+  const handleClaimApproved = ({ log, fee }: { log: FeePaymentLog; fee: StudentFee }) => {
+    setLoggingFee(fee);
+    setPaymentLogs((prev) => [log, ...prev]);
+    setFees((prev) => prev.map((f) => (f.id === fee.id ? fee : f)));
+    getBatchFeeSummary().then(setSummary);
+  };
+
   // Self-reported claims only — the office still logs the real payment by hand,
   // so this is metadata to reconcile against the bank statement, nothing more.
   const handleExportClaims = async () => {
@@ -222,6 +229,7 @@ export default function FeesPage() {
         submitting={logging}
         onDelete={handleDeletePaymentLog}
         deletingId={deletingLogId}
+        onClaimApproved={handleClaimApproved}
       />
     </div>
   );

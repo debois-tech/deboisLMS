@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { clsx } from 'clsx';
 import { AlertTriangle, CheckCircle2, Info, X, XCircle } from 'lucide-react';
 import { useToast } from '@/lib/context/ToastContext';
@@ -10,10 +11,9 @@ const icons: Record<ToastVariant, typeof Info> = {
   info: Info,
 };
 
-export function ToastContainer() {
+/** `children` sit last in the stack, so a pinned notice stays put while toasts rise above it. */
+export function ToastContainer({ children }: { children?: ReactNode }) {
   const { toasts, removeToast } = useToast();
-
-  if (!toasts.length) return null;
 
   return (
     <div className="toast-stack" role="region" aria-live="polite" aria-label="Notifications">
@@ -42,6 +42,7 @@ export function ToastContainer() {
           </div>
         );
       })}
+      {children}
     </div>
   );
 }

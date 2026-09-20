@@ -12,6 +12,7 @@ do $$ begin create type attendance_source  as enum ('manual', 'automated');     
 do $$ begin create type mapping_status     as enum ('active', 'dropped', 'terminated');       exception when duplicate_object then null; end $$;
 do $$ begin create type fee_status         as enum ('due', 'paid');                           exception when duplicate_object then null; end $$;
 do $$ begin create type payment_method     as enum ('cash', 'upi', 'bank_transfer', 'other'); exception when duplicate_object then null; end $$;
+do $$ begin create type claim_status       as enum ('pending', 'approved', 'dismissed');      exception when duplicate_object then null; end $$;
 
 -- Work is handed in as a GitHub repo and nothing else, always by the student
 -- themselves — 'portal' is the only channel.
@@ -1460,6 +1461,12 @@ create table if not exists payment_claims (
   created_at     timestamptz default now()
 );
 
+-- pending until an admin approves (logs the payment) or dismisses it. Claims from
+-- before approval existed were logged by hand, so they backfill as dismissed; the
+-- default flips straight after so new ones start pending.
+alter table payment_claims add column if not exists status claim_status not null default 'dismissed';
+alter table payment_claims alter column status set default 'pending';
+
 create index if not exists idx_payment_claims_student on payment_claims(student_id);
 
 alter table payment_claims enable row level security;
@@ -1472,4 +1479,39 @@ create policy admin_full_access on payment_claims
 -- sent, a claim is fixed — same as a feedback report.
 drop policy if exists student_insert_own on payment_claims;
 create policy student_insert_own on payment_claims
-  for insert with check (student_id = current_student_id());
+  for insert with check (student_id = current_student_id() and status = 'pending');
+
+-- Logs the claimed amount as a UPI payment on the student's fee for that batch and
+-- marks the claim approved, in one transaction. INVOKER, like record_fee_payment:
+-- RLS still applies, and the is_admin() check makes the intent explicit.
+create or replace function approve_payment_claim(p_claim_id uuid)
+returns jsonb
+language plpgsql
+set search_path = public
+as $$
+declare
+  c      payment_claims%rowtype;
+  fee_id uuid;
+  result jsonb;
+begin
+  if not is_admin() then
+    raise exception 'Admin only';
+  end if;
+
+  select * into c from payment_claims where id = p_claim_id and status = 'pending' for update;
+  if not found then
+    raise exception 'This claim was not found or has already been handled';
+  end if;
+
+  select id into fee_id from student_fees where student_id = c.student_id and batch_id = c.batch_id;
+  if fee_id is null then
+    raise exception 'No fee record for this claim';
+  end if;
+
+  result := record_fee_payment(fee_id, c.amount, current_date, 'upi', 'Claim ' || c.transaction_id);
+  update payment_claims set status = 'approved' where id = c.id;
+  return result;
+end $$;
+
+revoke all on function approve_payment_claim(uuid) from public;
+grant execute on function approve_payment_claim(uuid) to authenticated;

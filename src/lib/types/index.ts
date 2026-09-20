@@ -14,6 +14,7 @@ export type FeeStatus = 'due' | 'paid';
 export type PaymentMethod = 'cash' | 'upi' | 'bank_transfer' | 'other';
 export type FeedbackKind = 'bug' | 'request';
 export type FeedbackStatus = 'open' | 'resolved';
+export type ClaimStatus = 'pending' | 'approved' | 'dismissed';
 
 export interface Profile {
   id: string;
@@ -220,6 +221,7 @@ export interface PaymentClaim {
   batch_id?: string;
   transaction_id: string;
   amount: number;
+  status: ClaimStatus;
   created_at: string;
 }
 

@@ -2627,6 +2627,72 @@ html.light .glass {
   .toast { min-width: 0; max-width: none; }
 }
 
+/* ── Pending claims notice ───────────────────────────────────── */
+/* A toast that does not time out: same card, last in the stack, so real toasts
+   rise above it. Hidden under an open dialog so it never covers Add Log. */
+.claims-notice-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-top: 0.1875rem;
+}
+
+.claims-notice-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+.claims-notice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  margin: 0.375rem -0.5rem 0;
+}
+
+.claims-notice-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  transition: color 0.18s ease, background-color 0.18s ease;
+}
+
+.claims-notice-row:hover {
+  color: var(--text-primary);
+  background: var(--bg-overlay);
+}
+
+.claims-notice-row:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.claims-notice-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.claims-notice-amount {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.claims-notice-more {
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+body:has([role="dialog"]) .claims-notice { display: none; }
+
 /* ── Bulk login results ──────────────────────────────────────── */
 .bulk-login-failures {
   padding: 0.875rem 1rem;
