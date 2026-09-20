@@ -6,7 +6,6 @@ import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { downloadMaterial, openMaterial } from '@/lib/supabase';
 import { useTheme } from '@/lib/context/ThemeContext';
 import type { Material } from '@/lib/types';
-import { errorMessage } from '@/lib/utils/errors';
 import { fileTypeLabel, materialKind } from '@/lib/utils/files';
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
@@ -122,7 +121,8 @@ function MaterialViewerBody({ material, onClose }: MaterialViewerProps) {
         setLoading(false);
       } catch (err) {
         if (cancelled) return;
-        setError(errorMessage(err, 'Could not open this material.'));
+        console.error(err);
+        setError('Could not open this material.');
         setLoading(false);
       } finally {
         // Revoked once drawn: after this the document exists only as pixels.
@@ -160,7 +160,8 @@ function MaterialViewerBody({ material, onClose }: MaterialViewerProps) {
     try {
       await downloadMaterial(material);
     } catch (err) {
-      setError(errorMessage(err, 'Could not download this file.'));
+      console.error(err);
+      setError('Could not download this file.');
     } finally {
       setSaving(false);
     }

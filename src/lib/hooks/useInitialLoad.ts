@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { errorMessage } from '@/lib/utils/errors';
 
 /** First load including the failure case: queries throw, so a bare .then() renders an empty table. */
-export function useInitialLoad(load: () => Promise<void>) {
+export function useInitialLoad(load: () => Promise<void>, generic = false) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -26,7 +26,9 @@ export function useInitialLoad(load: () => Promise<void>) {
         }
       } catch (err) {
         if (active) {
-          setError(errorMessage(err, "We couldn't load this page."));
+          // generic: student-facing, so never surface table or policy names.
+          if (generic) console.error(err);
+          setError(generic ? "We couldn't load this page." : errorMessage(err, "We couldn't load this page."));
           setLoading(false);
         }
       }
@@ -35,7 +37,7 @@ export function useInitialLoad(load: () => Promise<void>) {
     return () => {
       active = false;
     };
-  }, [attempt]);
+  }, [attempt, generic]);
 
   // Loading is set here so the effect body stays free of synchronous setState.
   const retry = useCallback(() => {

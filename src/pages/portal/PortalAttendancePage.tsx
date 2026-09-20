@@ -23,7 +23,7 @@ export default function PortalAttendancePage() {
   const { loading, error, retry } = useInitialLoad(async () => {
     if (!studentId) return;
     setRecords(await getApprovedAttendanceByStudent(studentId));
-  });
+  }, true);
 
   const attended = records.filter((record) => record.status !== 'absent').length;
   const missed = records.length - attended;

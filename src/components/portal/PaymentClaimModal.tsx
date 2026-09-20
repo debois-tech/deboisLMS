@@ -5,7 +5,6 @@ import { Modal } from '@/components/ui/Modal';
 import { FormField } from '@/components/ui/FormField';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { getPaymentQrUrl, submitPaymentClaim } from '@/lib/supabase';
-import { errorMessage } from '@/lib/utils/errors';
 
 interface PaymentClaimModalProps {
   open: boolean;
@@ -56,7 +55,8 @@ export function PaymentClaimModal({ open, studentId, batchId, dueAmount, onClose
       reset();
       onSubmitted();
     } catch (err) {
-      setError(errorMessage(err, 'Could not submit. Try again.'));
+      console.error(err);
+      setError('Could not submit. Try again.');
     } finally {
       setSubmitting(false);
     }

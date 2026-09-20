@@ -15,7 +15,6 @@ import { InlineAlert } from '@/components/ui/InlineAlert';
 import { getMyFeedback, submitFeedback } from '@/lib/supabase';
 import type { Feedback, FeedbackKind } from '@/lib/types';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
-import { errorMessage } from '@/lib/utils/errors';
 import { formatDate } from '@/lib/utils/format';
 
 const KINDS: { value: FeedbackKind; label: string }[] = [
@@ -35,7 +34,7 @@ export default function PortalFeedbackPage() {
   const { loading, error, retry } = useInitialLoad(async () => {
     if (!studentId) return;
     setReports(await getMyFeedback());
-  });
+  }, true);
 
   const send = async () => {
     if (!studentId || !message.trim()) return;
@@ -47,7 +46,8 @@ export default function PortalFeedbackPage() {
       setMessage('');
       setKind('bug');
     } catch (err) {
-      setSendError(errorMessage(err, 'Could not send your report'));
+      console.error(err);
+      setSendError('Could not send your report');
     } finally {
       setSending(false);
     }
