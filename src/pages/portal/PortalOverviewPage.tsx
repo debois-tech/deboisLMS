@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { CalendarCheck, CalendarClock, FileText, PartyPopper, UserPlus, Wallet } from 'lucide-react';
 import {
   PaymentClaimModal,
+  PortalBadgeCard,
   PortalEmpty,
   PortalFocus,
   PortalList,
@@ -20,9 +21,11 @@ import {
   getAssignmentsForStudent,
   getMyFeeDues,
   getLecturesByBatch,
+  getMyBadges,
   getStudentById,
   getStudentBatches,
 } from '@/lib/supabase';
+import type { MyBadges } from '@/lib/supabase';
 import type {
   Assignment,
   AssignmentCompletion,
@@ -57,17 +60,23 @@ export default function PortalOverviewPage() {
   const [nextLecture, setNextLecture] = useState<Lecture | null>(null);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [assignments, setAssignments] = useState<StudentAssignment[]>([]);
+  const [myBadges, setMyBadges] = useState<MyBadges | null>(null);
   const now = useNow();
   const { loading, error, retry } = useInitialLoad(async () => {
     if (!studentId) return;
 
     // Fees across every batch, matching the Fees tab — one batch's balance meant a different number.
-    const [record, mappings, records, work, feeRows] = await Promise.all([
+    const [record, mappings, records, work, feeRows, badgeSet] = await Promise.all([
       getStudentById(studentId),
       getStudentBatches(studentId),
       getApprovedAttendanceByStudent(studentId),
       getAssignmentsForStudent(studentId),
       getMyFeeDues(),
+      // A badge hiccup must not take Home down with it.
+      getMyBadges().catch((err) => {
+        console.error(err);
+        return null;
+      }),
     ]);
 
     // Multiple active batches are possible; the most recently joined one is "current".
@@ -92,6 +101,7 @@ export default function PortalOverviewPage() {
     setNextLecture(upcoming);
     setAttendance(records);
     setAssignments(work);
+    setMyBadges(badgeSet);
   }, true);
 
   const currentBatch = enrollments
@@ -140,6 +150,8 @@ export default function PortalOverviewPage() {
         <PortalEmpty icon={UserPlus}>Student record not linked.</PortalEmpty>
       ) : (
         <>
+          {myBadges && <PortalBadgeCard studentId={studentId} {...myBadges} />}
+
           <NextUp
             batchName={currentBatch?.name}
             lecture={nextLecture}

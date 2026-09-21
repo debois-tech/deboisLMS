@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { PartyPopper, UserPlus, Wallet } from 'lucide-react';
+import { Award, PartyPopper, UserPlus, Wallet } from 'lucide-react';
 import {
   PaymentClaimModal,
   PortalAmount,
+  PortalBadgeGrid,
   PortalEmpty,
   PortalFacts,
   PortalIdentity,
@@ -16,10 +17,12 @@ import {
 import {
   getBatchById,
   getFeePaymentLogsByStudent,
+  getMyBadges,
   getMyFeeDues,
   getStudentBatches,
   getStudentById,
 } from '@/lib/supabase';
+import type { MyBadges } from '@/lib/supabase';
 import type { Batch, BatchStudentMapping, FeePaymentLog, Student, StudentFeeDue } from '@/lib/types';
 import { useAuth } from '@/lib/context/AuthContext';
 import { useToast } from '@/lib/context/ToastContext';
@@ -50,15 +53,21 @@ export default function PortalProfilePage() {
   const [payments, setPayments] = useState<FeePaymentLog[]>([]);
   const [enrollments, setEnrollments] = useState<(BatchStudentMapping & { batch?: Batch })[]>([]);
   const [batchNames, setBatchNames] = useState<Map<string, string>>(new Map());
+  const [myBadges, setMyBadges] = useState<MyBadges | null>(null);
 
   const { loading, error, retry } = useInitialLoad(async () => {
     if (!studentId) return;
 
-    const [record, mappings, feeRows, paymentRows] = await Promise.all([
+    const [record, mappings, feeRows, paymentRows, badgeSet] = await Promise.all([
       getStudentById(studentId),
       getStudentBatches(studentId),
       getMyFeeDues(),
       getFeePaymentLogsByStudent(studentId),
+      // A badge hiccup must not take the profile down with it.
+      getMyBadges().catch((err) => {
+        console.error(err);
+        return null;
+      }),
     ]);
 
     // Enrolments already carry their batch, so only a batch named by a fee or a
@@ -74,6 +83,7 @@ export default function PortalProfilePage() {
     setFees(feeRows);
     setPayments(paymentRows);
     setBatchNames(names);
+    setMyBadges(badgeSet);
   }, true);
 
   const outstanding = fees.reduce((sum, fee) => sum + Math.max(0, Number(fee.amount_due)), 0);
@@ -125,6 +135,16 @@ export default function PortalProfilePage() {
               <PortalFacts facts={facts} />
             )}
           </PortalSection>
+
+          {myBadges && (
+            <PortalSection title="Badges">
+              {myBadges.badges.length === 0 ? (
+                <PortalEmpty icon={Award}>No badges yet.</PortalEmpty>
+              ) : (
+                <PortalBadgeGrid {...myBadges} />
+              )}
+            </PortalSection>
+          )}
 
           {/* Only the balance is ever spelled out. What the student was charged,
               and what has been paid against it, stay in the database. Home no

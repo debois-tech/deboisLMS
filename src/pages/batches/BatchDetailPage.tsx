@@ -22,6 +22,7 @@ import { AssignmentSubmissionTable } from '@/components/assignments/AssignmentSu
 import { NewAssignmentModal } from '@/components/assignments/NewAssignmentModal';
 import { AssignmentFiles } from '@/components/assignments/AssignmentFiles';
 import { BatchMaterials } from '@/components/materials/BatchMaterials';
+import { BatchBadges } from '@/components/badges/BatchBadges';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { StudentLink } from '@/components/students/StudentLink';
 import { PaymentLogModal, type PaymentLogFormState } from '@/components/finance/PaymentLogModal';
@@ -135,6 +136,7 @@ export default function BatchDetailPage() {
           { label: 'Finance', value: 'finance' },
           { label: 'Assignments', value: 'assignments' },
           { label: 'Curriculum', value: 'curriculum' },
+          { label: 'Badges', value: 'badges' },
           { label: 'Material', value: 'material' },
         ]}
         defaultValue="overview"
@@ -153,6 +155,7 @@ export default function BatchDetailPage() {
                 <CurriculumCanvas batchId={batch.id} batchName={batch.name} role="admin" height="calc(100vh - 17rem)" />
               </Suspense>
             )}
+            {active === 'badges' && <BatchBadges batchId={batch.id} />}
             {active === 'material' && <BatchMaterials batchId={batch.id} batchCode={batch.batch_code} />}
           </>
         )}

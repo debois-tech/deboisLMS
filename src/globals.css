@@ -4313,3 +4313,88 @@ html.light .cv-canvas {
 .cv-calendar-date { margin-bottom: 0.25rem; font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); }
 .cv-calendar-item { font-size: 0.8125rem; color: var(--text-primary); }
 .cv-calendar-path, .cv-calendar-empty { font-size: 0.75rem; color: var(--text-muted); }
+
+/* ── Portal badges ─────────────────────────────────────────────
+   Home: a dismissible card for the newest badge. Profile: a grid of the batch's
+   badges, earned in colour and locked ones greyed. */
+.portal-badge-card {
+  position: relative;
+  border: 1px solid var(--primary-glow);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+}
+.portal-badge-open {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+  padding: 1rem 3.75rem 1rem 1rem;
+  text-align: left;
+  border-radius: inherit;
+  cursor: pointer;
+  transition: background-color 0.18s ease;
+}
+.portal-badge-open:hover { background: var(--bg-elevated); }
+.portal-badge-open:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.portal-badge-open img {
+  flex: 0 0 auto;
+  width: 4.5rem;
+  height: 4.5rem;
+  padding: 0.375rem;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+}
+.portal-badge-copy { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; }
+.portal-badge-title { font-size: 1.0625rem; font-weight: 650; letter-spacing: -0.02em; color: var(--text-primary); }
+.portal-badge-detail-line { font-size: 0.8125rem; color: var(--text-secondary); }
+.portal-badge-more { font-size: 0.75rem; color: var(--text-muted); }
+.portal-badge-close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  cursor: pointer;
+  transition: color 0.18s ease, border-color 0.18s ease;
+}
+.portal-badge-close:hover { color: var(--text-primary); border-color: var(--border-strong); }
+.portal-badge-close:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+.portal-badge-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+  gap: 0.75rem;
+  list-style: none;
+}
+.portal-badge-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 1rem 0.75rem;
+  text-align: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  cursor: pointer;
+  transition: border-color 0.18s ease;
+}
+.portal-badge-tile:hover { border-color: var(--border-strong); }
+.portal-badge-tile:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.portal-badge-tile img { width: 100%; max-width: 5.5rem; aspect-ratio: 1; object-fit: contain; }
+.portal-badge-tile.is-locked img, .portal-badge-detail img.is-locked { filter: grayscale(1); opacity: 0.5; }
+.portal-badge-name { font-size: 0.8125rem; font-weight: 600; line-height: 1.3; color: var(--text-primary); }
+.portal-badge-meta { display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.75rem; color: var(--text-muted); }
+
+.portal-badge-detail { display: flex; flex-direction: column; align-items: center; gap: 0.75rem; text-align: center; }
+.portal-badge-detail img { max-width: 12rem; max-height: 12rem; object-fit: contain; }
+.portal-badge-detail p { font-size: 0.875rem; color: var(--text-secondary); }
+.portal-badge-detail .portal-badge-when { font-size: 0.8125rem; color: var(--text-muted); }

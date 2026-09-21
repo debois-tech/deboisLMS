@@ -19,3 +19,5 @@ export { getMaintenanceMode, setMaintenanceMode } from './queries/settings';
 export { submitPaymentClaim, getPendingClaims, approvePaymentClaim, dismissPaymentClaim, exportPaymentClaimsCsv, getPaymentQrUrl } from './queries/paymentClaims';
 export { getCurriculumNodes, getLatestCurriculumRequest, saveCurriculum, proposeCurriculum, reviewCurriculum, setCurriculumStatus, getCurriculumOverview } from './queries/curriculum';
 export type { CurriculumOverview } from './queries/curriculum';
+export { getBatchBadges, createBatchBadge, deleteBatchBadge, getBadgeHolders, giveBadge, takeBadge, getMyBadges, badgeImageUrl, BADGE_EXTENSIONS, BADGE_MAX_BYTES, BADGE_ACCEPT } from './queries/badges';
+export type { BadgeWithHolders, BadgeHolder, MyBadges, NewBadgeInput } from './queries/badges';
