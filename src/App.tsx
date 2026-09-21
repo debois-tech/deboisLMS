@@ -41,6 +41,9 @@ const TutorStudentsPage = lazy(() => import('@/pages/tutor/TutorStudentsPage'));
 const TutorStudentDetailPage = lazy(() => import('@/pages/tutor/TutorStudentDetailPage'));
 const TutorBatchDetailPage = lazy(() => import('@/pages/tutor/TutorBatchDetailPage'));
 
+const CurriculumPage = lazy(() => import('@/pages/curriculum/CurriculumPage'));
+const PortalCurriculumPage = lazy(() => import('@/pages/portal/PortalCurriculumPage'));
+
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
 
 function PageFallback() {
@@ -79,6 +82,8 @@ export default function App() {
               <Route path="fees" element={<FeesPage />} />
               <Route path="assignments" element={<AssignmentsPage />} />
               <Route path="materials" element={<MaterialsPage />} />
+              <Route path="curriculum" element={<CurriculumPage />} />
+              <Route path="curriculum/:batchId" element={<CurriculumPage />} />
               <Route path="feedback" element={<FeedbackPage />} />
               <Route path="*" element={<NotFoundPage />} />
             </Route>
@@ -93,6 +98,8 @@ export default function App() {
               <Route path="attendance" element={<AttendancePage autoApprove />} />
               <Route path="assignments" element={<AssignmentsPage />} />
               <Route path="materials" element={<MaterialsPage allowEveryone={false} />} />
+              <Route path="curriculum" element={<CurriculumPage />} />
+              <Route path="curriculum/:batchId" element={<CurriculumPage />} />
               <Route path="*" element={<NotFoundPage />} />
             </Route>
           </Route>
@@ -103,6 +110,7 @@ export default function App() {
               <Route path="attendance" element={<PortalAttendancePage />} />
               <Route path="assignments" element={<PortalAssignmentsPage />} />
               <Route path="materials" element={<PortalMaterialsPage />} />
+              <Route path="curriculum" element={<PortalCurriculumPage />} />
               <Route path="profile" element={<PortalProfilePage />} />
               <Route path="feedback" element={<PortalFeedbackPage />} />
               {/* Fees moved inside the profile. Kept so a bookmark still lands somewhere. */}

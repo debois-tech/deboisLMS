@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { lazy, Suspense, useState, useCallback, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Archive, ArrowLeft, Edit3, UserMinus, Users, GraduationCap, Layers, ClipboardCheck, FileText, Plus, Trash2, ChevronRight, CalendarDays, Upload, Download } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
@@ -44,6 +44,8 @@ import { useConfirm } from '@/lib/context/ConfirmContext';
 import { errorMessage } from '@/lib/utils/errors';
 import { useInitialLoad, useReloadableSection } from '@/lib/hooks/useInitialLoad';
 
+// React Flow is ~65 kB gzipped: fetched when the tab opens, not with every batch page.
+const CurriculumCanvas = lazy(() => import('@/components/curriculum/CurriculumCanvas').then((m) => ({ default: m.CurriculumCanvas })));
 
 export default function BatchDetailPage() {
   const { batchId } = useParams();
@@ -132,6 +134,7 @@ export default function BatchDetailPage() {
           { label: 'Attendance', value: 'attendance' },
           { label: 'Finance', value: 'finance' },
           { label: 'Assignments', value: 'assignments' },
+          { label: 'Curriculum', value: 'curriculum' },
           { label: 'Material', value: 'material' },
         ]}
         defaultValue="overview"
@@ -145,6 +148,11 @@ export default function BatchDetailPage() {
             {active === 'attendance' && <AttendanceTab batchId={batch.id} batchName={batch.name} />}
             {active === 'finance' && <FinanceTab batchId={batch.id} />}
             {active === 'assignments' && <AssignmentsTab batchId={batch.id} />}
+            {active === 'curriculum' && (
+              <Suspense fallback={<Spinner centered />}>
+                <CurriculumCanvas batchId={batch.id} batchName={batch.name} role="admin" height="calc(100vh - 17rem)" />
+              </Suspense>
+            )}
             {active === 'material' && <BatchMaterials batchId={batch.id} batchCode={batch.batch_code} />}
           </>
         )}

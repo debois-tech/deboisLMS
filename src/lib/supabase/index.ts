@@ -17,3 +17,5 @@ export type { DashboardStats, RecentActivity, TutorDashboardStats } from './quer
 export { getMyFeedback, submitFeedback, getAllFeedback, setFeedbackStatus } from './queries/feedback';
 export { getMaintenanceMode, setMaintenanceMode } from './queries/settings';
 export { submitPaymentClaim, getPendingClaims, approvePaymentClaim, dismissPaymentClaim, exportPaymentClaimsCsv, getPaymentQrUrl } from './queries/paymentClaims';
+export { getCurriculumNodes, getLatestCurriculumRequest, saveCurriculum, proposeCurriculum, reviewCurriculum, setCurriculumStatus, getCurriculumOverview } from './queries/curriculum';
+export type { CurriculumOverview } from './queries/curriculum';

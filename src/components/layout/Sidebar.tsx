@@ -10,6 +10,7 @@ import {
   DollarSign,
   FileText,
   BookOpen,
+  LibraryBig,
   MessageSquare,
   Plus,
   X,
@@ -32,6 +33,7 @@ const navItems: SidebarNavItem[] = [
   { label: 'Attendance', to: '/attendance', icon: ClipboardCheck },
   { label: 'Finance', to: '/fees', icon: DollarSign },
   { label: 'Assignments', to: '/assignments', icon: FileText },
+  { label: 'Curriculum', to: '/curriculum', icon: LibraryBig },
   { label: 'Study Material', to: '/materials', icon: BookOpen },
   { label: 'Feedback', to: '/feedback', icon: MessageSquare },
 ];

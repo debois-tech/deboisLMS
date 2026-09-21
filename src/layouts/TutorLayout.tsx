@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, ClipboardCheck, FileText, BookOpen } from 'lucide-react';
+import { LayoutDashboard, Users, ClipboardCheck, FileText, BookOpen, LibraryBig } from 'lucide-react';
 import { Navbar } from '@/components/layout/Navbar';
 import { Sidebar } from '@/components/layout/Sidebar';
 
@@ -9,6 +9,7 @@ const TUTOR_NAV_ITEMS = [
   { label: 'Students', to: '/tutor/students', icon: Users },
   { label: 'Attendance', to: '/tutor/attendance', icon: ClipboardCheck },
   { label: 'Assignments', to: '/tutor/assignments', icon: FileText },
+  { label: 'Curriculum', to: '/tutor/curriculum', icon: LibraryBig },
   { label: 'Study Material', to: '/tutor/materials', icon: BookOpen },
 ];
 

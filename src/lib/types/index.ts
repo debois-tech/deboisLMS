@@ -333,3 +333,30 @@ export interface NavItem {
   href: string;
   icon?: string;
 }
+
+export type CurriculumKind = 'module' | 'topic' | 'subtopic';
+export type CurriculumStatus = 'todo' | 'done' | 'skipped';
+
+export interface CurriculumNode {
+  id: string;
+  batch_id: string;
+  parent_id: string | null;
+  kind: CurriculumKind;
+  title: string;
+  position: number;
+  status: CurriculumStatus;
+  /** The day it was taught (YYYY-MM-DD). Set only while done. */
+  done_on: string | null;
+}
+
+/** What a proposal stores per node; status and date stay on the live tree. */
+export type CurriculumDraftNode = Pick<CurriculumNode, 'id' | 'parent_id' | 'kind' | 'title' | 'position'>;
+
+export interface CurriculumRequest {
+  id: string;
+  batch_id: string;
+  nodes: CurriculumDraftNode[];
+  status: 'pending' | 'approved' | 'denied';
+  created_at: string;
+  decided_at: string | null;
+}
