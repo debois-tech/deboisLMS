@@ -4030,3 +4030,286 @@ body:has([role="dialog"]) .claims-notice { display: none; }
   animation: shimmer 1.5s infinite;
   border-radius: var(--radius-md);
 }
+
+/* ── Curriculum canvas ─────────────────────────────────────────
+   A dark void with the batch's outline floating in it. The void stays dark
+   in the dark theme and goes pale grey in the light one; cards use the
+   normal surface tokens either way. */
+.cv-canvas {
+  --cv-void: #070B09;
+  --cv-dot: rgba(255, 255, 255, 0.12);
+  --cv-line: rgba(163, 184, 175, 0.38);
+  --cv-on-primary: #04130D;
+  position: relative;
+  overflow: hidden;
+  background: var(--cv-void);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+html.light .cv-canvas {
+  --cv-void: #EBEFED;
+  --cv-dot: rgba(17, 24, 39, 0.18);
+  --cv-line: rgba(55, 65, 81, 0.4);
+  --cv-on-primary: #FFFFFF;
+}
+.cv-canvas .react-flow {
+  --xy-background-color: transparent;
+  --xy-controls-button-background-color: var(--bg-surface);
+  --xy-controls-button-background-color-hover: var(--bg-elevated);
+  --xy-controls-button-color: var(--text-secondary);
+  --xy-controls-button-color-hover: var(--text-primary);
+  --xy-controls-button-border-color: var(--border);
+  --xy-controls-box-shadow: var(--shadow-md);
+  --xy-attribution-background-color: transparent;
+}
+.cv-canvas .react-flow__attribution a { color: var(--text-muted); }
+/* With nothing draggable or selectable React Flow makes nodes click-through, which kills every button on them. */
+.cv-canvas .react-flow__node { pointer-events: all !important; }
+/* Editing: over the navbar (z 40) and sidebar, under modals and pickers (z 50+). */
+.cv-canvas.is-full { position: fixed; inset: 0; z-index: 45; height: auto; border: 0; border-radius: 0; }
+.cv-canvas .react-flow__node:has(.cv-ghost:hover),
+.cv-canvas .react-flow__node:has(.cv-ghost:focus-visible) { z-index: 1000 !important; }
+
+.cv-canvas .cv-edge .react-flow__edge-path { stroke: var(--cv-line); stroke-width: 1.5; fill: none; }
+.cv-canvas .cv-edge.is-done .react-flow__edge-path { stroke: var(--primary); opacity: 0.7; }
+
+.cv-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 300px;
+  height: 84px;
+  padding: 0.7rem 0.8rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  transition: border-color 0.2s ease, opacity 0.2s ease;
+}
+.cv-card.is-done { border-color: color-mix(in srgb, var(--primary) 50%, var(--border-strong)); }
+.cv-card.is-skipped { opacity: 0.7; }
+.cv-card.is-new { border-style: dashed; border-color: var(--primary); }
+.cv-root { background: var(--bg-elevated); }
+.cv-root-icon { flex-shrink: 0; color: var(--primary); }
+
+.cv-row { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
+.cv-row-foot { min-height: 1.75rem; }
+.cv-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.cv-title.is-skipped { color: var(--text-muted); text-decoration: line-through; }
+.cv-kind-icon { flex-shrink: 0; color: var(--text-muted); }
+.cv-muted { font-size: 0.75rem; color: var(--text-muted); }
+.cv-new {
+  flex-shrink: 0;
+  padding: 0 0.45rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--primary);
+  border: 1px solid var(--primary);
+  border-radius: 999px;
+}
+.cv-handle { width: 1px; height: 1px; min-width: 0; min-height: 0; border: 0; opacity: 0; pointer-events: none; }
+/* Where a stack's connector leaves the card, just left of its children's indent. */
+.cv-handle.is-trunk { left: 12px; }
+
+.cv-input {
+  flex: 1;
+  min-width: 0;
+  height: 1.75rem;
+  padding: 0 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.cv-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-glow-soft); }
+.cv-input::placeholder { color: var(--text-muted); font-weight: 400; }
+
+.cv-icon-btn {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 1.75rem;
+  height: 1.75rem;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+.cv-icon-btn:hover { color: var(--text-primary); background: var(--bg-elevated); }
+.cv-icon-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+
+/* Empty, done (filled) or skipped (red with a dash): three clear states, not colour alone. */
+.cv-box {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 1.375rem;
+  height: 1.375rem;
+  color: var(--cv-on-primary, #fff);
+  background: transparent;
+  border: 1.5px solid var(--text-muted);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+}
+.cv-box:hover:not(:disabled) { border-color: var(--primary); }
+.cv-box:active:not(:disabled) { transform: scale(0.9); }
+.cv-box:disabled { cursor: default; }
+.cv-box:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.cv-box.is-done { background: var(--primary); border-color: var(--primary); }
+.cv-box.is-skipped { background: var(--danger); border-color: var(--danger); color: #fff; }
+
+.cv-progress { display: flex; flex: 1; align-items: center; gap: 0.6rem; min-width: 0; }
+.cv-bar { flex: 1; height: 6px; overflow: hidden; background: var(--bg-overlay); border-radius: 999px; }
+.cv-bar > span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--primary);
+  border-radius: inherit;
+  transform-origin: left;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.cv-progress-text {
+  min-width: 2.25rem;
+  font-size: 0.75rem;
+  text-align: right;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.cv-card .datepicker-trigger { min-height: 1.75rem; width: auto; padding: 0 0.6rem; gap: 0.4rem; font-size: 0.75rem; }
+
+.cv-ghost {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  color: var(--text-secondary);
+  background: var(--bg-surface);
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+.cv-ghost:hover, .cv-ghost:focus-visible { color: var(--primary); border-color: var(--primary); background: var(--primary-glow-soft); outline: none; }
+.cv-ghost::after {
+  content: attr(data-hint);
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  z-index: 5;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--text-primary);
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-4px, -50%);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.cv-ghost:hover::after, .cv-ghost:focus-visible::after { opacity: 1; transform: translate(0, -50%); }
+
+.cv-canvas .cv-toolbar { display: flex; gap: 0.5rem; margin: 0.75rem; }
+.cv-canvas .cv-banner-slot { margin-top: 0.75rem; max-width: min(34rem, calc(100% - 24rem)); }
+.cv-banner {
+  padding: 0.5rem 0.8rem;
+  font-size: 0.8125rem;
+  text-align: center;
+  color: var(--text-secondary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+.cv-banner.is-warn { color: var(--warning-text); }
+.cv-banner-action {
+  font-weight: 600;
+  color: var(--primary);
+  background: none;
+  border: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+@media (max-width: 860px) {
+  .cv-canvas .cv-banner-slot { margin-top: 4rem; max-width: calc(100% - 1.5rem); }
+}
+
+.cv-canvas .cv-calendar-slot { display: flex; flex-direction: column; align-items: flex-end; gap: 0.5rem; margin: 0.75rem; }
+.cv-calendar-btn {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  color: var(--text-secondary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.cv-calendar-btn:hover, .cv-calendar-btn.is-open { color: var(--primary); border-color: var(--primary); }
+.cv-calendar-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+.cv-calendar {
+  width: 20rem;
+  max-width: calc(100vw - 2rem);
+  padding: 0.75rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  animation: cvPop 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes cvPop { from { opacity: 0; transform: translateY(8px) scale(0.98); } }
+.cv-calendar-head { display: flex; align-items: center; gap: 0.25rem; margin-bottom: 0.5rem; }
+.cv-calendar-month { flex: 1; font-size: 0.875rem; font-weight: 600; text-align: center; color: var(--text-primary); }
+.cv-calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.cv-calendar-weekday { padding: 0.25rem 0; font-size: 0.6875rem; text-align: center; color: var(--text-muted); }
+.cv-calendar-day {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.cv-calendar-day:hover { background: var(--bg-elevated); }
+.cv-calendar-day:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.cv-calendar-day.is-outside { color: var(--text-muted); opacity: 0.6; }
+.cv-calendar-day.is-today { border-color: var(--border-strong); }
+.cv-calendar-day.has-items { font-weight: 700; background: var(--primary-glow-soft); }
+.cv-calendar-day.is-selected { color: var(--cv-on-primary); background: var(--primary); }
+.cv-calendar-count { position: absolute; bottom: 3px; width: 4px; height: 4px; background: currentColor; border-radius: 50%; }
+.cv-calendar-list { max-height: 11rem; margin-top: 0.75rem; padding-top: 0.75rem; overflow-y: auto; border-top: 1px solid var(--border); }
+.cv-calendar-list li { display: flex; flex-direction: column; padding: 0.3rem 0; list-style: none; }
+.cv-calendar-date { margin-bottom: 0.25rem; font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); }
+.cv-calendar-item { font-size: 0.8125rem; color: var(--text-primary); }
+.cv-calendar-path, .cv-calendar-empty { font-size: 0.75rem; color: var(--text-muted); }

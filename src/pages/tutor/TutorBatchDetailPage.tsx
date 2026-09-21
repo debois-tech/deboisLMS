@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { lazy, Suspense, useCallback, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Users } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
@@ -16,6 +16,8 @@ import { getBatchById, getBatchPrograms, getBatchStudents } from '@/lib/supabase
 import type { Batch, BatchProgramOption, BatchStudentMapping, Student } from '@/lib/types';
 import { formatDate } from '@/lib/utils/format';
 import { useInitialLoad, useReloadableSection } from '@/lib/hooks/useInitialLoad';
+
+const CurriculumCanvas = lazy(() => import('@/components/curriculum/CurriculumCanvas').then((m) => ({ default: m.CurriculumCanvas })));
 
 // Same shell as the admin BatchDetailPage, reusing its Overview/Lectures/
 // Attendance/Assignments tabs verbatim (RLS already scopes them). No Tutors
@@ -62,6 +64,7 @@ export default function TutorBatchDetailPage() {
           { label: 'Lectures', value: 'lectures' },
           { label: 'Attendance', value: 'attendance' },
           { label: 'Assignments', value: 'assignments' },
+          { label: 'Curriculum', value: 'curriculum' },
           { label: 'Material', value: 'material' },
         ]}
         defaultValue="overview"
@@ -73,6 +76,11 @@ export default function TutorBatchDetailPage() {
             {active === 'lectures' && <LecturesTab batchId={batch.id} />}
             {active === 'attendance' && <AttendanceTab batchId={batch.id} batchName={batch.name} />}
             {active === 'assignments' && <AssignmentsTab batchId={batch.id} />}
+            {active === 'curriculum' && (
+              <Suspense fallback={<Spinner centered />}>
+                <CurriculumCanvas batchId={batch.id} batchName={batch.name} role="tutor" height="calc(100vh - 17rem)" />
+              </Suspense>
+            )}
             {active === 'material' && <BatchMaterials batchId={batch.id} batchCode={batch.batch_code} />}
           </>
         )}

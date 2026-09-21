@@ -1515,3 +1515,214 @@ end $$;
 
 revoke all on function approve_payment_claim(uuid) from public;
 grant execute on function approve_payment_claim(uuid) to authenticated;
+
+
+-- 15. CURRICULUM
+-- The batch's table of contents: module > topic > subtopic, no dates. A node is
+-- ticked done, or skipped (never taught); the calendar reads done_on. curriculum_nodes
+-- is always the approved, live tree. Structure changes reach it only through
+-- save_curriculum (admin) or an approved curriculum_requests row (tutor proposal).
+do $$ begin create type curriculum_kind           as enum ('module', 'topic', 'subtopic');   exception when duplicate_object then null; end $$;
+do $$ begin create type curriculum_status         as enum ('todo', 'done', 'skipped');       exception when duplicate_object then null; end $$;
+do $$ begin create type curriculum_request_status as enum ('pending', 'approved', 'denied'); exception when duplicate_object then null; end $$;
+
+create table if not exists curriculum_nodes (
+  id         uuid primary key default gen_random_uuid(),
+  batch_id   uuid references batches(id) on delete cascade not null,
+  parent_id  uuid references curriculum_nodes(id) on delete cascade,
+  kind       curriculum_kind not null,
+  title      text not null check (length(btrim(title)) > 0),
+  -- Order among siblings, set from the draft's order on save.
+  position   int not null default 0,
+  status     curriculum_status not null default 'todo',
+  -- The day it was taught, a plain date so no timezone can shift it. Set only while done.
+  done_on    date,
+  created_at timestamptz default now(),
+  check ((kind = 'module') = (parent_id is null)),
+  check (status = 'done' or done_on is null)
+);
+
+create index if not exists idx_curriculum_nodes_batch  on curriculum_nodes(batch_id);
+create index if not exists idx_curriculum_nodes_parent on curriculum_nodes(parent_id);
+
+-- A tutor's proposed tree: the whole draft as [{id, parent_id, kind, title, position}].
+-- One pending request per batch.
+create table if not exists curriculum_requests (
+  id          uuid primary key default gen_random_uuid(),
+  batch_id    uuid references batches(id) on delete cascade not null,
+  proposed_by uuid references tutors(id) on delete set null,
+  nodes       jsonb not null,
+  status      curriculum_request_status not null default 'pending',
+  created_at  timestamptz default now(),
+  decided_at  timestamptz
+);
+
+create unique index if not exists idx_curriculum_requests_pending
+  on curriculum_requests(batch_id) where status = 'pending';
+
+alter table curriculum_nodes    enable row level security;
+alter table curriculum_requests enable row level security;
+
+drop policy if exists admin_full_access on curriculum_nodes;
+create policy admin_full_access on curriculum_nodes
+  for all using (is_admin()) with check (is_admin());
+drop policy if exists admin_full_access on curriculum_requests;
+create policy admin_full_access on curriculum_requests
+  for all using (is_admin()) with check (is_admin());
+
+-- Tutors and students only read. Every write goes through the functions below.
+drop policy if exists tutor_read_own on curriculum_nodes;
+create policy tutor_read_own on curriculum_nodes
+  for select using (batch_id in (select batch_id from tutor_batch_mapping where tutor_id = (select current_tutor_id())));
+drop policy if exists tutor_read_own on curriculum_requests;
+create policy tutor_read_own on curriculum_requests
+  for select using (batch_id in (select batch_id from tutor_batch_mapping where tutor_id = (select current_tutor_id())));
+
+drop policy if exists student_read_own on curriculum_nodes;
+create policy student_read_own on curriculum_nodes
+  for select using (
+    batch_id in (select batch_id from batch_student_mapping where student_id = (select current_student_id()))
+  );
+
+-- Makes the live tree equal p_nodes: upserts by id (a kept node keeps its status),
+-- deletes the rest. Not granted to anyone; only the functions below call it.
+create or replace function apply_curriculum_nodes(p_batch uuid, p_nodes jsonb)
+returns void
+language plpgsql
+set search_path = public
+as $$
+begin
+  if jsonb_typeof(p_nodes) <> 'array' then
+    raise exception 'Invalid curriculum';
+  end if;
+
+  if exists (
+    select 1
+    from jsonb_to_recordset(p_nodes) as x(id uuid, parent_id uuid, kind curriculum_kind)
+    left join jsonb_to_recordset(p_nodes) as p(id uuid, kind curriculum_kind) on p.id = x.parent_id
+    where (x.kind = 'module'   and x.parent_id is not null)
+       or (x.kind = 'topic'    and p.kind is distinct from 'module')
+       or (x.kind = 'subtopic' and p.kind is distinct from 'topic')
+  ) then
+    raise exception 'Invalid curriculum structure';
+  end if;
+
+  if exists (
+    select 1 from curriculum_nodes
+    where batch_id <> p_batch and id in (select id from jsonb_to_recordset(p_nodes) as x(id uuid))
+  ) then
+    raise exception 'Invalid curriculum';
+  end if;
+
+  delete from curriculum_nodes
+  where batch_id = p_batch
+    and id not in (select id from jsonb_to_recordset(p_nodes) as x(id uuid));
+
+  insert into curriculum_nodes (id, batch_id, parent_id, kind, title, position)
+  select id, p_batch, parent_id, kind, btrim(title), coalesce(position, 0)
+  from jsonb_to_recordset(p_nodes) as x(id uuid, parent_id uuid, kind curriculum_kind, title text, position int)
+  on conflict (id) do update
+    set parent_id = excluded.parent_id, kind = excluded.kind,
+        title = excluded.title, position = excluded.position;
+end $$;
+
+revoke all on function apply_curriculum_nodes(uuid, jsonb) from public;
+
+-- Admin's own edits go live at once; a tutor proposal still pending is now stale.
+create or replace function save_curriculum(p_batch uuid, p_nodes jsonb)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not is_admin() then
+    raise exception 'Admin only';
+  end if;
+  perform apply_curriculum_nodes(p_batch, p_nodes);
+  update curriculum_requests set status = 'denied', decided_at = now()
+  where batch_id = p_batch and status = 'pending';
+end $$;
+
+revoke all on function save_curriculum(uuid, jsonb) from public;
+grant execute on function save_curriculum(uuid, jsonb) to authenticated;
+
+create or replace function propose_curriculum(p_batch uuid, p_nodes jsonb)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not exists (
+    select 1 from tutor_batch_mapping where tutor_id = current_tutor_id() and batch_id = p_batch
+  ) then
+    raise exception 'Not your batch';
+  end if;
+  if jsonb_typeof(p_nodes) <> 'array' then
+    raise exception 'Invalid curriculum';
+  end if;
+  if exists (select 1 from curriculum_requests where batch_id = p_batch and status = 'pending') then
+    raise exception 'A submission is already waiting for approval';
+  end if;
+  insert into curriculum_requests (batch_id, proposed_by, nodes)
+  values (p_batch, current_tutor_id(), p_nodes);
+end $$;
+
+revoke all on function propose_curriculum(uuid, jsonb) from public;
+grant execute on function propose_curriculum(uuid, jsonb) to authenticated;
+
+create or replace function review_curriculum(p_request uuid, p_approve boolean)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare r curriculum_requests%rowtype;
+begin
+  if not is_admin() then
+    raise exception 'Admin only';
+  end if;
+  select * into r from curriculum_requests where id = p_request and status = 'pending' for update;
+  if not found then
+    raise exception 'This submission was not found or has already been handled';
+  end if;
+  if p_approve then
+    perform apply_curriculum_nodes(r.batch_id, r.nodes);
+  end if;
+  update curriculum_requests
+  set status = case when p_approve then 'approved'::curriculum_request_status else 'denied'::curriculum_request_status end,
+      decided_at = now()
+  where id = r.id;
+end $$;
+
+revoke all on function review_curriculum(uuid, boolean) from public;
+grant execute on function review_curriculum(uuid, boolean) to authenticated;
+
+-- Ticking is not an edit: admin and the batch's tutors do it directly. Sending
+-- 'done' again with a new date moves the day.
+create or replace function set_curriculum_status(p_node uuid, p_status curriculum_status, p_done_on date default null)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare b uuid;
+begin
+  select batch_id into b from curriculum_nodes where id = p_node;
+  if b is null then
+    raise exception 'Not found';
+  end if;
+  if not (is_admin() or exists (
+    select 1 from tutor_batch_mapping where tutor_id = current_tutor_id() and batch_id = b
+  )) then
+    raise exception 'Not your batch';
+  end if;
+  update curriculum_nodes
+  set status = p_status,
+      done_on = case when p_status = 'done' then coalesce(p_done_on, current_date) else null end
+  where id = p_node;
+end $$;
+
+revoke all on function set_curriculum_status(uuid, curriculum_status, date) from public;
+grant execute on function set_curriculum_status(uuid, curriculum_status, date) to authenticated;
