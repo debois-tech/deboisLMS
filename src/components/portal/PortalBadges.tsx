@@ -1,17 +1,35 @@
 import { useMemo, useState } from 'react';
-import { Lock, X } from 'lucide-react';
+import { Download, ExternalLink, Lock, X } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import { badgeImageUrl } from '@/lib/supabase';
+import { badgeImageUrl, downloadBadgeImage, linkedInAddToProfileUrl } from '@/lib/supabase';
 import type { MyBadges } from '@/lib/supabase';
 import type { BatchBadge } from '@/lib/types';
 import { useNow } from '@/lib/hooks/useNow';
+import { useToast } from '@/lib/context/ToastContext';
 import { toDateValue } from '@/lib/utils/date';
+import { errorMessage } from '@/lib/utils/errors';
 import { formatDate } from '@/lib/utils/format';
 
 const RECENT_MS = 7 * 24 * 60 * 60 * 1000;
 
-/** One badge up close. `earnedAt` absent means it is still locked: same art, greyed, no date. */
+/** One badge up close. `earnedAt` absent means it is still locked: same art, greyed, no download or LinkedIn. */
 function BadgeModal({ badge, earnedAt, onClose }: { badge: BatchBadge | null; earnedAt?: string; onClose: () => void }) {
+  const { showToast } = useToast();
+  const [downloading, setDownloading] = useState(false);
+
+  const download = async () => {
+    if (!badge) return;
+    setDownloading(true);
+    try {
+      await downloadBadgeImage(badge);
+    } catch (err) {
+      showToast(errorMessage(err, 'Could not download the badge'), 'error');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   return (
     <Modal open={badge !== null} onClose={onClose} title={badge?.name ?? ''} size="sm">
       {badge && (
@@ -23,6 +41,21 @@ function BadgeModal({ badge, earnedAt, onClose }: { badge: BatchBadge | null; ea
           />
           {badge.description && <p>{badge.description}</p>}
           <p className="portal-badge-when">{earnedAt ? `Earned ${formatDate(earnedAt)}` : 'Not earned yet'}</p>
+          {earnedAt && (
+            <div className="portal-badge-actions">
+              <Button variant="secondary" className="action-button-compact" onClick={() => void download()} loading={downloading}>
+                <Download size={14} /> Download
+              </Button>
+              <a
+                href={linkedInAddToProfileUrl(badge.name, earnedAt)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="portal-badge-linkedin"
+              >
+                Add to LinkedIn <ExternalLink size={14} aria-hidden="true" />
+              </a>
+            </div>
+          )}
         </div>
       )}
     </Modal>

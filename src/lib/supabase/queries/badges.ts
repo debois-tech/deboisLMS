@@ -13,6 +13,41 @@ export function badgeImageUrl(path: string): string {
   return supabase.storage.from('assets').getPublicUrl(path).data.publicUrl;
 }
 
+/** Deboistech's LinkedIn company page id, so "Add to profile" links the real page instead of matching bare text. */
+const LINKEDIN_ORG_ID = '134393964';
+
+/**
+ * LinkedIn's "Add to profile" form, pre-filled. No `certUrl`/`certId` — there is no public
+ * verification page yet, and both are optional on the form.
+ */
+export function linkedInAddToProfileUrl(badgeName: string, issuedAt: string): string {
+  const issued = new Date(issuedAt);
+  const params = new URLSearchParams({
+    startTask: 'CERTIFICATION_NAME',
+    name: badgeName,
+    organizationId: LINKEDIN_ORG_ID,
+    issueYear: String(issued.getFullYear()),
+    issueMonth: String(issued.getMonth() + 1),
+  });
+  return `https://www.linkedin.com/profile/add?${params.toString()}`;
+}
+
+/** Fetched fresh each time rather than reusing the public URL: a cross-origin `download` attribute is ignored by most browsers. */
+export async function downloadBadgeImage(badge: BatchBadge): Promise<void> {
+  const { data, error } = await supabase.storage.from('assets').download(badge.image_path);
+  if (error || !data) throw new Error('Could not download the badge image.');
+
+  const url = URL.createObjectURL(data);
+  try {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${badge.name}.${extensionOf(badge.image_path) || 'png'}`;
+    link.click();
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 export type BadgeWithHolders = BatchBadge & { holders: number };
 
 export async function getBatchBadges(batchId: string): Promise<BadgeWithHolders[]> {
