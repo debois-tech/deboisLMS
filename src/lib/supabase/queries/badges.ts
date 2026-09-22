@@ -32,20 +32,40 @@ export function linkedInAddToProfileUrl(badgeName: string, issuedAt: string): st
   return `https://www.linkedin.com/profile/add?${params.toString()}`;
 }
 
-/** Fetched fresh each time rather than reusing the public URL: a cross-origin `download` attribute is ignored by most browsers. */
-export async function downloadBadgeImage(badge: BatchBadge): Promise<void> {
+async function fetchBadgeFile(badge: BatchBadge): Promise<File> {
   const { data, error } = await supabase.storage.from('assets').download(badge.image_path);
   if (error || !data) throw new Error('Could not download the badge image.');
+  return new File([data], `${badge.name}.${extensionOf(badge.image_path) || 'png'}`, { type: data.type });
+}
 
-  const url = URL.createObjectURL(data);
+export async function downloadBadgeImage(badge: BatchBadge): Promise<void> {
+  const file = await fetchBadgeFile(badge);
+  const url = URL.createObjectURL(file);
   try {
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${badge.name}.${extensionOf(badge.image_path) || 'png'}`;
+    link.download = file.name;
     link.click();
   } finally {
     URL.revokeObjectURL(url);
   }
+}
+
+/** True on the browsers whose share sheet can take a file at all — mobile Chrome/Safari, current desktop Chrome/Edge. */
+export function canShareBadgeImage(): boolean {
+  return typeof navigator !== 'undefined' && 'share' in navigator && 'canShare' in navigator;
+}
+
+/**
+ * Hands the image to the OS share sheet — WhatsApp, Instagram, whatever the student has
+ * installed — instead of a download-then-attach-it-yourself round trip. A cancelled share
+ * throws `AbortError`, which the caller treats as nothing happening, not a failure.
+ */
+export async function shareBadgeImage(badge: BatchBadge): Promise<void> {
+  const file = await fetchBadgeFile(badge);
+  const share = { files: [file], title: badge.name, text: `I just earned my ${badge.name} badge from Deboistech!` };
+  if (!navigator.canShare(share)) throw new Error('Sharing isn’t supported on this device.');
+  await navigator.share(share);
 }
 
 export type BadgeWithHolders = BatchBadge & { holders: number };

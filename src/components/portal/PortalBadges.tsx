@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
-import { Download, ExternalLink, Lock, X } from 'lucide-react';
+import { Download, ExternalLink, Lock, Share2, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import { badgeImageUrl, downloadBadgeImage, linkedInAddToProfileUrl } from '@/lib/supabase';
+import { badgeImageUrl, canShareBadgeImage, downloadBadgeImage, linkedInAddToProfileUrl, shareBadgeImage } from '@/lib/supabase';
 import type { MyBadges } from '@/lib/supabase';
 import type { BatchBadge } from '@/lib/types';
 import { useNow } from '@/lib/hooks/useNow';
@@ -17,6 +17,7 @@ const RECENT_MS = 7 * 24 * 60 * 60 * 1000;
 function BadgeModal({ badge, earnedAt, onClose }: { badge: BatchBadge | null; earnedAt?: string; onClose: () => void }) {
   const { showToast } = useToast();
   const [downloading, setDownloading] = useState(false);
+  const [sharing, setSharing] = useState(false);
 
   const download = async () => {
     if (!badge) return;
@@ -27,6 +28,21 @@ function BadgeModal({ badge, earnedAt, onClose }: { badge: BatchBadge | null; ea
       showToast(errorMessage(err, 'Could not download the badge'), 'error');
     } finally {
       setDownloading(false);
+    }
+  };
+
+  const share = async () => {
+    if (!badge) return;
+    setSharing(true);
+    try {
+      await shareBadgeImage(badge);
+    } catch (err) {
+      // Cancelling the share sheet is not a failure — nothing to tell the student.
+      if (err instanceof Error && err.name !== 'AbortError') {
+        showToast(errorMessage(err, 'Could not share the badge'), 'error');
+      }
+    } finally {
+      setSharing(false);
     }
   };
 
@@ -43,6 +59,11 @@ function BadgeModal({ badge, earnedAt, onClose }: { badge: BatchBadge | null; ea
           <p className="portal-badge-when">{earnedAt ? `Earned ${formatDate(earnedAt)}` : 'Not earned yet'}</p>
           {earnedAt && (
             <div className="portal-badge-actions">
+              {canShareBadgeImage() && (
+                <Button className="action-button-compact" onClick={() => void share()} loading={sharing}>
+                  <Share2 size={14} /> Share
+                </Button>
+              )}
               <Button variant="secondary" className="action-button-compact" onClick={() => void download()} loading={downloading}>
                 <Download size={14} /> Download
               </Button>
