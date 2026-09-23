@@ -3,6 +3,7 @@ import { PartyPopper, UserPlus, Wallet } from 'lucide-react';
 import {
   PaymentClaimModal,
   PortalAmount,
+  PortalBadgeGrid,
   PortalEmpty,
   PortalFacts,
   PortalIdentity,
@@ -16,10 +17,12 @@ import {
 import {
   getBatchById,
   getFeePaymentLogsByStudent,
+  getMyBadges,
   getMyFeeDues,
   getStudentBatches,
   getStudentById,
 } from '@/lib/supabase';
+import type { MyBadges } from '@/lib/supabase';
 import type { Batch, BatchStudentMapping, FeePaymentLog, Student, StudentFeeDue } from '@/lib/types';
 import { useAuth } from '@/lib/context/AuthContext';
 import { useToast } from '@/lib/context/ToastContext';
@@ -33,13 +36,6 @@ const METHOD_LABELS: Record<string, string> = {
   other: 'Payment',
 };
 
-/**
- * Everything the portal holds about the student themselves — who they are and
- * what they owe, on one page and read-only. Fees live here rather than on their
- * own screen: a balance is a fact about a person, not a section of the product.
- *
- * Reads `student_fee_dues`, so total_fee never reaches the browser.
- */
 export default function PortalProfilePage() {
   const studentId = usePortalStudentId();
   const { user } = useAuth();
@@ -50,15 +46,21 @@ export default function PortalProfilePage() {
   const [payments, setPayments] = useState<FeePaymentLog[]>([]);
   const [enrollments, setEnrollments] = useState<(BatchStudentMapping & { batch?: Batch })[]>([]);
   const [batchNames, setBatchNames] = useState<Map<string, string>>(new Map());
+  const [myBadges, setMyBadges] = useState<MyBadges | null>(null);
 
   const { loading, error, retry } = useInitialLoad(async () => {
     if (!studentId) return;
 
-    const [record, mappings, feeRows, paymentRows] = await Promise.all([
+    const [record, mappings, feeRows, paymentRows, badgeSet] = await Promise.all([
       getStudentById(studentId),
       getStudentBatches(studentId),
       getMyFeeDues(),
       getFeePaymentLogsByStudent(studentId),
+      // A badge hiccup must not take the profile down with it.
+      getMyBadges().catch((err) => {
+        console.error(err);
+        return null;
+      }),
     ]);
 
     // Enrolments already carry their batch, so only a batch named by a fee or a
@@ -74,6 +76,7 @@ export default function PortalProfilePage() {
     setFees(feeRows);
     setPayments(paymentRows);
     setBatchNames(names);
+    setMyBadges(badgeSet);
   }, true);
 
   const outstanding = fees.reduce((sum, fee) => sum + Math.max(0, Number(fee.amount_due)), 0);
@@ -126,9 +129,12 @@ export default function PortalProfilePage() {
             )}
           </PortalSection>
 
-          {/* Only the balance is ever spelled out. What the student was charged,
-              and what has been paid against it, stay in the database. Home no
-              longer carries this figure, so it gets the weight here. */}
+          {myBadges && myBadges.badges.length > 0 && (
+            <PortalSection title="Badges">
+              <PortalBadgeGrid {...myBadges} />
+            </PortalSection>
+          )}
+
           <PortalSection title="Fees">
             {fees.length === 0 ? (
               <PortalEmpty icon={Wallet}>No fee set yet.</PortalEmpty>
@@ -169,9 +175,6 @@ export default function PortalProfilePage() {
             )}
           </PortalSection>
 
-          {/* Answers "did my payment land?". The note is what the office wrote on
-              the payment — a student reading "Registration fee" knows which one
-              this is, where the amount and method alone left them guessing. */}
           <PortalSection title="Your payments">
             {payments.length === 0 ? (
               <PortalEmpty icon={outstanding > 0 ? Wallet : PartyPopper}>No payments recorded yet.</PortalEmpty>

@@ -20,11 +20,13 @@ interface ModalProps {
   children?: ReactNode;
   footer?: ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl';
+  /** Override modal-body's own padding/scroll, e.g. when children manage their own fixed header + scrolling list. */
+  bodyClassName?: string;
 }
 
 const sizes = { sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-2xl', xl: 'max-w-4xl' };
 
-export function Modal({ open, onClose, title, description, children, footer, size = 'md' }: ModalProps) {
+export function Modal({ open, onClose, title, description, children, footer, size = 'md', bodyClassName }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   // Held in a ref so the key handler reads the current `onClose` without re-subscribing.
   const onCloseRef = useRef(onClose);
@@ -134,7 +136,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
           </button>
         </div>
 
-        {children && <div className="modal-body">{children}</div>}
+        {children && <div className={clsx('modal-body', bodyClassName)}>{children}</div>}
 
         {footer && (
           <div className="modal-footer flex items-center justify-end gap-3">

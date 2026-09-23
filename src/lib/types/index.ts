@@ -352,6 +352,24 @@ export interface CurriculumNode {
 /** What a proposal stores per node; status and date stay on the live tree. */
 export type CurriculumDraftNode = Pick<CurriculumNode, 'id' | 'parent_id' | 'kind' | 'title' | 'position'>;
 
+/** Artwork made for one batch. `image_path` is a public file in the assets bucket. */
+export interface BatchBadge {
+  id: string;
+  batch_id: string;
+  name: string;
+  description?: string | null;
+  image_path: string;
+  created_at?: string;
+}
+
+/** One student holding one badge. Deleting the row takes the badge away. */
+export interface StudentBadge {
+  id: string;
+  student_id: string;
+  badge_id: string;
+  issued_at: string;
+}
+
 export interface CurriculumRequest {
   id: string;
   batch_id: string;

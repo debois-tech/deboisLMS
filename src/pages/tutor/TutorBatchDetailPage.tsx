@@ -11,6 +11,7 @@ import { NotFound } from '@/components/ui/NotFound';
 import { Avatar } from '@/components/ui/Avatar';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import { BatchMaterials } from '@/components/materials/BatchMaterials';
+import { BatchBadges } from '@/components/badges/BatchBadges';
 import { OverviewTab, LecturesTab, AttendanceTab, AssignmentsTab } from '@/pages/batches/BatchDetailPage';
 import { getBatchById, getBatchPrograms, getBatchStudents } from '@/lib/supabase';
 import type { Batch, BatchProgramOption, BatchStudentMapping, Student } from '@/lib/types';
@@ -65,6 +66,7 @@ export default function TutorBatchDetailPage() {
           { label: 'Attendance', value: 'attendance' },
           { label: 'Assignments', value: 'assignments' },
           { label: 'Curriculum', value: 'curriculum' },
+          { label: 'Badges', value: 'badges' },
           { label: 'Material', value: 'material' },
         ]}
         defaultValue="overview"
@@ -81,6 +83,7 @@ export default function TutorBatchDetailPage() {
                 <CurriculumCanvas batchId={batch.id} batchName={batch.name} role="tutor" height="calc(100vh - 17rem)" />
               </Suspense>
             )}
+            {active === 'badges' && <BatchBadges batchId={batch.id} />}
             {active === 'material' && <BatchMaterials batchId={batch.id} batchCode={batch.batch_code} />}
           </>
         )}

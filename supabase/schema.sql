@@ -1726,3 +1726,116 @@ end $$;
 
 revoke all on function set_curriculum_status(uuid, curriculum_status, date) from public;
 grant execute on function set_curriculum_status(uuid, curriculum_status, date) to authenticated;
+
+
+-- 16. BADGES
+-- A badge is artwork a tutor or admin uploads for one batch. Giving it to a student is a
+-- student_badges row; taking it away deletes the row. The artwork is a public file in the
+-- assets bucket at badges/<batch_id>/<file>, so the image needs no signed URL.
+create table if not exists batch_badges (
+  id          uuid primary key default gen_random_uuid(),
+  batch_id    uuid references batches(id) on delete cascade not null,
+  name        text not null check (length(btrim(name)) > 0),
+  description text,
+  image_path  text not null,
+  created_at  timestamptz default now()
+);
+
+create index if not exists idx_batch_badges_batch on batch_badges(batch_id);
+
+create table if not exists student_badges (
+  id         uuid primary key default gen_random_uuid(),
+  student_id uuid references students(id) on delete cascade not null,
+  badge_id   uuid references batch_badges(id) on delete cascade not null,
+  -- The tutor who gave it. Null when an admin did.
+  issued_by  uuid references tutors(id) on delete set null default current_tutor_id(),
+  issued_at  timestamptz not null default now(),
+  unique (student_id, badge_id)
+);
+
+create index if not exists idx_student_badges_student on student_badges(student_id);
+create index if not exists idx_student_badges_badge   on student_badges(badge_id);
+
+alter table batch_badges   enable row level security;
+alter table student_badges enable row level security;
+
+drop policy if exists admin_full_access on batch_badges;
+create policy admin_full_access on batch_badges
+  for all using (is_admin()) with check (is_admin());
+drop policy if exists admin_full_access on student_badges;
+create policy admin_full_access on student_badges
+  for all using (is_admin()) with check (is_admin());
+
+-- Tutors manage the badges of their own batches.
+drop policy if exists tutor_manage_own on batch_badges;
+create policy tutor_manage_own on batch_badges
+  for all
+  using (batch_id in (select batch_id from tutor_batch_mapping where tutor_id = (select current_tutor_id())))
+  with check (batch_id in (select batch_id from tutor_batch_mapping where tutor_id = (select current_tutor_id())));
+
+-- Students see every badge of a batch they are in, so unearned ones can show as locked.
+drop policy if exists student_read_own on batch_badges;
+create policy student_read_own on batch_badges
+  for select using (
+    batch_id in (select batch_id from batch_student_mapping where student_id = (select current_student_id()))
+  );
+
+drop policy if exists student_read_own on student_badges;
+create policy student_read_own on student_badges
+  for select using (student_id = (select current_student_id()));
+
+-- A tutor sees, gives and takes back the badges of their own batches. Giving is only
+-- allowed to a student who is active in the badge's batch.
+drop policy if exists tutor_read_own on student_badges;
+create policy tutor_read_own on student_badges
+  for select using (
+    badge_id in (
+      select id from batch_badges
+      where batch_id in (select batch_id from tutor_batch_mapping where tutor_id = (select current_tutor_id()))
+    )
+  );
+
+drop policy if exists tutor_give_own on student_badges;
+create policy tutor_give_own on student_badges
+  for insert with check (
+    exists (
+      select 1
+      from batch_badges bb
+      join batch_student_mapping m on m.batch_id = bb.batch_id
+      where bb.id = student_badges.badge_id
+        and m.student_id = student_badges.student_id
+        and m.status = 'active'
+        and bb.batch_id in (select batch_id from tutor_batch_mapping where tutor_id = (select current_tutor_id()))
+    )
+  );
+
+drop policy if exists tutor_take_own on student_badges;
+create policy tutor_take_own on student_badges
+  for delete using (
+    badge_id in (
+      select id from batch_badges
+      where batch_id in (select batch_id from tutor_batch_mapping where tutor_id = (select current_tutor_id()))
+    )
+  );
+
+-- A tutor uploads badge art for their own batches only, and only as png, jpeg or webp:
+-- the assets bucket also accepts svg, which can carry script once it is served publicly.
+-- Admin already manages every file in the bucket through "admin manages asset files".
+drop policy if exists "tutor manages badge files" on storage.objects;
+create policy "tutor manages badge files" on storage.objects
+  for all
+  using (
+    bucket_id = 'assets'
+    and split_part(storage.objects.name, '/', 1) = 'badges'
+    and safe_uuid(split_part(storage.objects.name, '/', 2)) in (
+      select batch_id from tutor_batch_mapping where tutor_id = (select current_tutor_id())
+    )
+  )
+  with check (
+    bucket_id = 'assets'
+    and split_part(storage.objects.name, '/', 1) = 'badges'
+    and safe_uuid(split_part(storage.objects.name, '/', 2)) in (
+      select batch_id from tutor_batch_mapping where tutor_id = (select current_tutor_id())
+    )
+    and lower(storage.extension(storage.objects.name)) in ('png', 'jpg', 'jpeg', 'webp')
+  );
