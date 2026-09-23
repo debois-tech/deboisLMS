@@ -76,9 +76,7 @@ export function BatchBadges({ batchId }: { batchId: string }) {
       {badges.length === 0 ? (
         <EmptyState
           icon={<Award size={22} />}
-          title="No badges for this batch yet"
-          description="Upload the artwork, then give it to the students who earned it."
-        />
+          title="No badges for this batch yet"        />
       ) : (
         <ul className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(14rem,1fr))]">
           {badges.map((badge) => (
