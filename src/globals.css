@@ -1881,10 +1881,13 @@ html.light .glass {
   transition: border-color 0.18s, color 0.18s;
 }
 
-.import-dropzone:hover {
+.import-dropzone:hover,
+.import-dropzone.is-active {
   color: var(--text-primary);
   border-color: var(--primary);
 }
+
+.import-dropzone.is-active { background: var(--primary-glow-soft); }
 
 .drop-zone {
   display: flex;

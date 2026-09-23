@@ -25,7 +25,7 @@ import {
 import type { BadgeHolder, BadgeWithHolders } from '@/lib/supabase';
 import type { Student } from '@/lib/types';
 import { errorMessage } from '@/lib/utils/errors';
-import { extensionOf } from '@/lib/utils/files';
+import { extensionOf, filesFromDataTransfer } from '@/lib/utils/files';
 import { formatDate, formatFileSize } from '@/lib/utils/format';
 
 /** A batch's badges: upload the art, give it to students, take it back. Shared by admin and tutor. */
@@ -162,14 +162,13 @@ function AddBadgeModal({ open, batchId, onClose, onSaved }: {
   const [description, setDescription] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const preview = useMemo(() => (file ? URL.createObjectURL(file) : null), [file]);
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
 
-  const pick = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const chosen = event.target.files?.[0];
-    if (fileRef.current) fileRef.current.value = '';
+  const takeFile = (chosen?: File) => {
     if (!chosen) return;
     if (!(BADGE_EXTENSIONS as readonly string[]).includes(extensionOf(chosen.name))) {
       showToast('Use a PNG, JPEG or WebP image.', 'error');
@@ -178,6 +177,20 @@ function AddBadgeModal({ open, batchId, onClose, onSaved }: {
     } else {
       setFile(chosen);
     }
+  };
+
+  const pick = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const chosen = event.target.files?.[0];
+    if (fileRef.current) fileRef.current.value = '';
+    takeFile(chosen);
+  };
+
+  const drop = async (event: React.DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    setDragOver(false);
+    if (saving) return;
+    const [dropped] = await filesFromDataTransfer(event.dataTransfer);
+    takeFile(dropped?.file);
   };
 
   const save = async () => {
@@ -214,9 +227,14 @@ function AddBadgeModal({ open, batchId, onClose, onSaved }: {
           <textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={3} maxLength={300} />
         </FormField>
         <FormField label="Image" required>
-          <label className="import-dropzone">
+          <label
+            className={`import-dropzone${dragOver ? ' is-active' : ''}`}
+            onDragOver={(event) => { event.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(event) => void drop(event)}
+          >
             <ImagePlus size={16} />
-            {file ? 'Choose a different image' : 'PNG, JPEG or WebP, up to 5 MB'}
+            {dragOver ? 'Drop to use this image' : file ? 'Choose a different image, or drop one' : 'PNG, JPEG or WebP, up to 5 MB — drag and drop or click'}
             <input ref={fileRef} type="file" accept={BADGE_ACCEPT} onChange={pick} className="hidden" disabled={saving} />
           </label>
           {preview && (

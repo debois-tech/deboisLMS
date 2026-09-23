@@ -106,10 +106,11 @@ export async function createBatchBadge({ batchId, name, description, file }: New
   return row<BatchBadge>(created, 'Could not save the badge');
 }
 
-/** The students holding it lose it with the row, through the cascade. */
 export async function deleteBatchBadge(badge: BatchBadge): Promise<void> {
   ok(await supabase.from('batch_badges').delete().eq('id', badge.id), 'Could not delete the badge');
-  await supabase.storage.from('assets').remove([badge.image_path]);
+  const { error } = await supabase.storage.from('assets').remove([badge.image_path]);
+  // ponytail: an orphaned file is a harmless storage-cleanup gap, not worth a retry queue for now.
+  if (error) console.error('[deleteBatchBadge] file left behind:', badge.image_path, error);
 }
 
 export type BadgeHolder = StudentBadge & { student: Pick<Student, 'id' | 'name' | 'student_code'> };
