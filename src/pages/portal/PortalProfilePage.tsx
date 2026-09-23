@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Award, PartyPopper, UserPlus, Wallet } from 'lucide-react';
+import { PartyPopper, UserPlus, Wallet } from 'lucide-react';
 import {
   PaymentClaimModal,
   PortalAmount,
@@ -36,13 +36,6 @@ const METHOD_LABELS: Record<string, string> = {
   other: 'Payment',
 };
 
-/**
- * Everything the portal holds about the student themselves — who they are and
- * what they owe, on one page and read-only. Fees live here rather than on their
- * own screen: a balance is a fact about a person, not a section of the product.
- *
- * Reads `student_fee_dues`, so total_fee never reaches the browser.
- */
 export default function PortalProfilePage() {
   const studentId = usePortalStudentId();
   const { user } = useAuth();
@@ -136,19 +129,12 @@ export default function PortalProfilePage() {
             )}
           </PortalSection>
 
-          {myBadges && (
+          {myBadges && myBadges.badges.length > 0 && (
             <PortalSection title="Badges">
-              {myBadges.badges.length === 0 ? (
-                <PortalEmpty icon={Award}>No badges yet.</PortalEmpty>
-              ) : (
-                <PortalBadgeGrid {...myBadges} />
-              )}
+              <PortalBadgeGrid {...myBadges} />
             </PortalSection>
           )}
 
-          {/* Only the balance is ever spelled out. What the student was charged,
-              and what has been paid against it, stay in the database. Home no
-              longer carries this figure, so it gets the weight here. */}
           <PortalSection title="Fees">
             {fees.length === 0 ? (
               <PortalEmpty icon={Wallet}>No fee set yet.</PortalEmpty>
@@ -189,9 +175,6 @@ export default function PortalProfilePage() {
             )}
           </PortalSection>
 
-          {/* Answers "did my payment land?". The note is what the office wrote on
-              the payment — a student reading "Registration fee" knows which one
-              this is, where the amount and method alone left them guessing. */}
           <PortalSection title="Your payments">
             {payments.length === 0 ? (
               <PortalEmpty icon={outstanding > 0 ? Wallet : PartyPopper}>No payments recorded yet.</PortalEmpty>
