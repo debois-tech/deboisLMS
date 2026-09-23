@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Download, ExternalLink, Lock, Share2, X } from 'lucide-react';
+import { Check, Download, ExternalLink, Lock, Share2, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { badgeImageUrl, canShareBadgeImage, downloadBadgeImage, linkedInAddToProfileUrl, shareBadgeImage } from '@/lib/supabase';
@@ -50,13 +50,16 @@ function BadgeModal({ badge, earnedAt, onClose }: { badge: BatchBadge | null; ea
     <Modal open={badge !== null} onClose={onClose} title={badge?.name ?? ''} size="sm">
       {badge && (
         <div className="portal-badge-detail">
-          <img
-            src={badgeImageUrl(badge.image_path)}
-            alt={badge.name}
-            className={earnedAt ? undefined : 'is-locked'}
-          />
-          {badge.description && <p>{badge.description}</p>}
-          <p className="portal-badge-when">{earnedAt ? `Earned ${formatDate(earnedAt)}` : 'Not earned yet'}</p>
+          <div className={`portal-badge-detail-art${earnedAt ? '' : ' is-locked'}`}>
+            <img src={badgeImageUrl(badge.image_path)} alt={badge.name} />
+          </div>
+          <div className="portal-badge-detail-copy">
+            <span className={`portal-badge-status${earnedAt ? ' is-earned' : ''}`}>
+              {earnedAt ? <><Check size={13} aria-hidden="true" /> Earned</> : <><Lock size={13} aria-hidden="true" /> Locked</>}
+            </span>
+            {badge.description && <p>{badge.description}</p>}
+            <p className="portal-badge-when">{earnedAt ? `Earned ${formatDate(earnedAt)}` : 'Keep learning to unlock this badge'}</p>
+          </div>
           {earnedAt && (
             <div className="portal-badge-actions">
               {canShareBadgeImage() && (
@@ -104,8 +107,12 @@ export function PortalBadgeGrid({ badges, earned }: MyBadges) {
                 type="button"
                 className={`portal-badge-tile${held ? '' : ' is-locked'}`}
                 onClick={() => setOpen(badge)}
+                aria-label={`${badge.name}, ${held ? `earned ${formatDate(held.issued_at)}` : 'locked'}`}
               >
-                <img src={badgeImageUrl(badge.image_path)} alt="" />
+                <span className="portal-badge-art">
+                  <img src={badgeImageUrl(badge.image_path)} alt="" />
+                  <span className="portal-badge-state" aria-hidden="true">{held ? <Check size={12} /> : <Lock size={12} />}</span>
+                </span>
                 <span className="portal-badge-name">{badge.name}</span>
                 <span className="portal-badge-meta">
                   {held ? formatDate(held.issued_at) : <><Lock size={12} aria-hidden="true" /> Locked</>}
@@ -162,12 +169,16 @@ export function PortalBadgeCard({ studentId, badges, earned }: MyBadges & { stud
   return (
     <div className="portal-badge-card">
       <button type="button" className="portal-badge-open" onClick={() => setOpen(true)}>
-        <img src={badgeImageUrl(badge.image_path)} alt="" />
-        <span className="portal-badge-copy">
-          <span className="portal-badge-title">You earned {badge.name} recently!</span>
-          <span className="portal-badge-detail-line">Share it with your friends!</span>
-          {others.length > 0 && <span className="portal-badge-more">+{others.length} more</span>}
+        <span className="portal-badge-card-art">
+          <img src={badgeImageUrl(badge.image_path)} alt="" />
         </span>
+        <span className="portal-badge-copy">
+          <span className="portal-badge-kicker">New achievement</span>
+          <span className="portal-badge-title">{badge.name}</span>
+          <span className="portal-badge-detail-line">Earned {formatDate(held.issued_at)} · Tap to view</span>
+          {others.length > 0 && <span className="portal-badge-more">+{others.length} more recent</span>}
+        </span>
+        <span className="portal-badge-open-arrow" aria-hidden="true">→</span>
       </button>
       <button type="button" className="portal-badge-close" onClick={hide} aria-label="Hide until tomorrow">
         <X size={16} aria-hidden="true" />
