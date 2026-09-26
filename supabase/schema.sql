@@ -310,6 +310,8 @@ create table if not exists student_fees (
   expected_on_exit numeric,
   -- What they had paid that day. Anything above it since is recovered void.
   paid_at_exit     numeric,
+  -- Set once by transfer_students(); makes student_fee_dues judge instalments by payment logs.
+  transferred      boolean not null default false,
   discount_type    discount_type not null default 'percentage',
   discount_value   numeric not null default 0 check (discount_value >= 0),
   status      fee_status generated always as (
@@ -318,6 +320,9 @@ create table if not exists student_fees (
   updated_at  timestamptz default now(),
   unique (student_id, batch_id)
 );
+
+-- Re-running this file on a database created before transferred existed.
+alter table student_fees add column if not exists transferred boolean not null default false;
 
 create index if not exists idx_fees_student on student_fees(student_id);
 create index if not exists idx_fees_batch   on student_fees(batch_id);
@@ -818,6 +823,12 @@ select
   case
     when sf.total_fee <= 0 then 2
     when sf.paid_amount >= sf.total_fee then 2
+    -- Moved fee: any payment besides the registration fee counts as the 1st instalment.
+    when sf.transferred then
+      case when exists (
+        select 1 from fee_payment_logs l
+        where l.student_fee_id = sf.id and l.notes is distinct from 'Registration fee'
+      ) then 1 else 0 end
     when sf.paid_amount >= least(1000, sf.total_fee)
                          + round(greatest(sf.total_fee - 1000, 0) / 2.0) then 1
     else 0
@@ -1237,6 +1248,98 @@ end $$;
 
 revoke all on function terminate_enrolment(uuid, date) from public;
 grant execute on function terminate_enrolment(uuid, date) to authenticated;
+
+-- Moves students to another batch of the same base fee. Fee row, payment logs and claims
+-- follow them; everything else they had in the old batch is deleted. One transaction:
+-- any failure rolls every student back.
+create or replace function transfer_students(p_mapping_ids uuid[], p_to_batch uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  mapping_id uuid;
+  m          batch_student_mapping%rowtype;
+  target     batches%rowtype;
+  source_fee numeric;
+  who        text;
+  moved      int := 0;
+begin
+  if not is_admin() then
+    raise exception 'Admin only';
+  end if;
+
+  if p_mapping_ids is null or cardinality(p_mapping_ids) = 0 then
+    raise exception 'Select at least one student';
+  end if;
+
+  select * into target from batches where id = p_to_batch;
+  if not found then
+    raise exception 'Target batch not found';
+  end if;
+  if target.ended_at is not null or target.status = 'completed' then
+    raise exception 'The target batch has ended';
+  end if;
+
+  foreach mapping_id in array p_mapping_ids loop
+    select * into m from batch_student_mapping where id = mapping_id for update;
+    if not found then
+      raise exception 'Enrolment not found';
+    end if;
+
+    select name into who from students where id = m.student_id;
+
+    if m.status <> 'active' then
+      raise exception '% is not active in this batch', who;
+    end if;
+    select base_fee into source_fee from batches where id = m.batch_id;
+    if source_fee <> target.base_fee then
+      raise exception 'Both batches must have the same base fee';
+    end if;
+
+    if exists (
+      select 1 from batch_student_mapping where batch_id = p_to_batch and student_id = m.student_id
+    ) or exists (
+      select 1 from student_fees where batch_id = p_to_batch and student_id = m.student_id
+    ) then
+      raise exception '% is already in the target batch', who;
+    end if;
+
+    insert into batch_student_mapping (batch_id, student_id, joined_at)
+    values (p_to_batch, m.student_id, m.joined_at);
+
+    -- An update, so log_registration_fee() (insert-only) does not book another 1000.
+    update student_fees
+    set batch_id = p_to_batch, transferred = true, updated_at = now()
+    where student_id = m.student_id and batch_id = m.batch_id;
+
+    update fee_payment_logs set batch_id = p_to_batch
+    where student_id = m.student_id and batch_id = m.batch_id;
+
+    update payment_claims set batch_id = p_to_batch
+    where student_id = m.student_id and batch_id = m.batch_id;
+
+    delete from attendance where student_id = m.student_id and batch_id = m.batch_id;
+    delete from assignment_completions
+    where student_id = m.student_id
+      and assignment_id in (select id from assignments where batch_id = m.batch_id);
+    delete from student_badges
+    where student_id = m.student_id
+      and badge_id in (select id from batch_badges where batch_id = m.batch_id);
+    delete from material_views
+    where student_id = m.student_id
+      and material_id in (select id from materials where batch_id = m.batch_id);
+
+    delete from batch_student_mapping where id = m.id;
+    moved := moved + 1;
+  end loop;
+
+  return jsonb_build_object('transferred', moved);
+end $$;
+
+revoke all on function transfer_students(uuid[], uuid) from public;
+grant execute on function transfer_students(uuid[], uuid) to authenticated;
 
 create or replace function revoke_expired_student_logins()
 returns int

@@ -257,6 +257,14 @@ export async function addStudentToBatch(
   return mapping;
 }
 
+// Moves the fee, logs and claims to the target batch and deletes the rest of the old batch's data.
+export async function transferStudents(mappingIds: string[], toBatchId: string): Promise<{ transferred: number }> {
+  return row<{ transferred: number }>(
+    await supabase.rpc('transfer_students', { p_mapping_ids: mappingIds, p_to_batch: toBatchId }),
+    'Could not transfer the students',
+  );
+}
+
 export interface TerminationResult {
   instalments_due: number;
   expected_on_exit: number;
