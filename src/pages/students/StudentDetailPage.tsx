@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Mail, Phone, Layers, CalendarDays, History, Edit3, ExternalLink, UserMinus } from 'lucide-react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Mail, Phone, Layers, CalendarDays, History, Edit3, ExternalLink, UserMinus, Trash2 } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { StatusPill } from '@/components/ui/StatusPill';
@@ -14,6 +14,7 @@ import { StudentLoginCard } from '@/components/students/StudentLoginCard';
 import { StudentIdChip } from '@/components/students/StudentLink';
 import { Badge } from '@/components/ui/Badge';
 import { ClaimActions } from '@/components/finance/ClaimActions';
+import { DeleteStudentModal } from '@/components/students/DeleteStudentModal';
 import { getStudentById, getStudentBatches, getFeesByStudent, getLecturesByBatch, getFeePaymentLogsByStudent, getPendingClaims, terminateEnrolment } from '@/lib/supabase';
 import type { Student, BatchStudentMapping, Batch, StudentFee, Lecture, FeePaymentLog, PaymentClaim } from '@/lib/types';
 import { formatDate, formatCurrency } from '@/lib/utils/format';
@@ -23,6 +24,8 @@ import { errorMessage } from '@/lib/utils/errors';
 
 export default function StudentDetailPage() {
   const { studentId } = useParams();
+  const navigate = useNavigate();
+  const [deleting, setDeleting] = useState(false);
   const [student, setStudent] = useState<Student | null>(null);
   const [batchMappings, setBatchMappings] = useState<(BatchStudentMapping & { batch?: Batch })[]>([]);
   const [currentFee, setCurrentFee] = useState<StudentFee | null>(null);
@@ -139,6 +142,13 @@ export default function StudentDetailPage() {
               <UserMinus size={14} /> Terminate
             </Button>
           )}
+          <Button
+            variant="outline"
+            className="action-button-compact action-button-danger"
+            onClick={() => setDeleting(true)}
+          >
+            <Trash2 size={14} /> Delete
+          </Button>
         </div>
       </div>
 
@@ -315,6 +325,16 @@ export default function StudentDetailPage() {
           </Table>
         )}
       </Card>
+
+      <DeleteStudentModal
+        key={deleting ? 'open' : 'closed'}
+        open={deleting}
+        studentId={student.id}
+        studentName={student.name}
+        confirmWord={student.student_code ?? student.name}
+        onClose={() => setDeleting(false)}
+        onDeleted={() => navigate('/students')}
+      />
     </div>
   );
 }

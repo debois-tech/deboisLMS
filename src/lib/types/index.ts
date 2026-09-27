@@ -150,6 +150,7 @@ export interface StudentFee {
   paid_amount: number;
   /** What the fee rule said was owed the day they left. Null while enrolled. */
   expected_on_exit?: number | null;
+  transferred?: boolean;
   status: FeeStatus;
   updated_at: string;
   student?: Student;

@@ -257,6 +257,52 @@ export async function addStudentToBatch(
   return mapping;
 }
 
+// Moves the fee, logs and claims to the target batch and deletes the rest of the old batch's data.
+export async function transferStudents(mappingIds: string[], toBatchId: string): Promise<{ transferred: number }> {
+  return row<{ transferred: number }>(
+    await supabase.rpc('transfer_students', { p_mapping_ids: mappingIds, p_to_batch: toBatchId }),
+    'Could not transfer the students',
+  );
+}
+
+export interface StudentDeletionCounts {
+  batches: number;
+  fees: number;
+  payments: number;
+  attendance: number;
+  submissions: number;
+  badges: number;
+  claims: number;
+}
+
+export async function getStudentDeletionCounts(studentId: string): Promise<StudentDeletionCounts> {
+  const count = async (table: string) => {
+    const { count: total, error } = await supabase
+      .from(table)
+      .select('*', { count: 'exact', head: true })
+      .eq('student_id', studentId);
+    if (error) throw new Error(`Could not count ${table}: ${error.message}`);
+    return total ?? 0;
+  };
+
+  const [batches, fees, payments, attendance, submissions, badges, claims] = await Promise.all([
+    count('batch_student_mapping'),
+    count('student_fees'),
+    count('fee_payment_logs'),
+    count('attendance'),
+    count('assignment_completions'),
+    count('student_badges'),
+    count('payment_claims'),
+  ]);
+
+  return { batches, fees, payments, attendance, submissions, badges, claims };
+}
+
+// Deletes the login first — see delete_student() in schema.sql — then the student row; everything else cascades.
+export async function deleteStudent(id: string): Promise<void> {
+  ok(await supabase.rpc('delete_student', { p_student_id: id }), 'Could not delete this student');
+}
+
 export interface TerminationResult {
   instalments_due: number;
   expected_on_exit: number;
