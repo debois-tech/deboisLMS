@@ -1341,6 +1341,35 @@ end $$;
 revoke all on function transfer_students(uuid[], uuid) from public;
 grant execute on function transfer_students(uuid[], uuid) to authenticated;
 
+-- Deletes the login row first: students.auth_user_id -> auth.users is not on delete cascade,
+-- and the client has no rights on auth.users at all. Everything else cascades off students.id.
+create or replace function delete_student(p_student_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare auth_id uuid;
+begin
+  if not is_admin() then
+    raise exception 'Admin only';
+  end if;
+
+  select auth_user_id into auth_id from students where id = p_student_id;
+  if not found then
+    raise exception 'Student not found';
+  end if;
+
+  if auth_id is not null then
+    delete from auth.users where id = auth_id;
+  end if;
+
+  delete from students where id = p_student_id;
+end $$;
+
+revoke all on function delete_student(uuid) from public;
+grant execute on function delete_student(uuid) to authenticated;
+
 create or replace function revoke_expired_student_logins()
 returns int
 language plpgsql
