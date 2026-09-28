@@ -242,7 +242,15 @@ export interface BatchStudentMapping {
   /** Set only once terminated. */
   left_on?: string | null;
   status: MappingStatus;
+  /** Generated once, right when the row is created, and stored in the private `documents` bucket. */
+  offer_letter_path?: string | null;
+  cert_path?: string | null;
+  /** Whether the student can see/download/be emailed the doc above. Set by the admin on /documents. */
+  offer_letter_shared: boolean;
+  cert_shared: boolean;
 }
+
+export type DocumentKind = 'offer_letter' | 'cert';
 
 /** Metadata only; the file lives in the private bucket and is served watermarked. */
 export interface Material {

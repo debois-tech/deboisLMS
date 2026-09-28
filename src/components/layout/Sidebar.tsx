@@ -12,6 +12,7 @@ import {
   BookOpen,
   LibraryBig,
   MessageSquare,
+  ScrollText,
   Plus,
   X,
   PanelLeft,
@@ -34,6 +35,7 @@ const navItems: SidebarNavItem[] = [
   { label: 'Finance', to: '/fees', icon: DollarSign },
   { label: 'Assignments', to: '/assignments', icon: FileText },
   { label: 'Curriculum', to: '/curriculum', icon: LibraryBig },
+  { label: 'Documents', to: '/documents', icon: ScrollText },
   { label: 'Study Material', to: '/materials', icon: BookOpen },
   { label: 'Feedback', to: '/feedback', icon: MessageSquare },
 ];

@@ -43,6 +43,7 @@ const TutorBatchDetailPage = lazy(() => import('@/pages/tutor/TutorBatchDetailPa
 
 const CurriculumPage = lazy(() => import('@/pages/curriculum/CurriculumPage'));
 const PortalCurriculumPage = lazy(() => import('@/pages/portal/PortalCurriculumPage'));
+const DocumentsPage = lazy(() => import('@/pages/documents/DocumentsPage'));
 
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
 
@@ -84,6 +85,7 @@ export default function App() {
               <Route path="materials" element={<MaterialsPage />} />
               <Route path="curriculum" element={<CurriculumPage />} />
               <Route path="curriculum/:batchId" element={<CurriculumPage />} />
+              <Route path="documents" element={<DocumentsPage />} />
               <Route path="feedback" element={<FeedbackPage />} />
               <Route path="*" element={<NotFoundPage />} />
             </Route>
