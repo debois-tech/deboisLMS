@@ -248,6 +248,9 @@ export interface BatchStudentMapping {
   /** Whether the student can see/download/be emailed the doc above. Set by the admin on /documents. */
   offer_letter_shared: boolean;
   cert_shared: boolean;
+  /** Set only when the flag above flips to true — drives the portal's 7-day "ready" focus card. */
+  offer_letter_shared_at?: string | null;
+  cert_shared_at?: string | null;
 }
 
 export type DocumentKind = 'offer_letter' | 'cert';

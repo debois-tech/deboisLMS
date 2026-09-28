@@ -4,6 +4,7 @@ import { CalendarCheck, CalendarClock, FileText, PartyPopper, UserPlus, Wallet }
 import {
   PaymentClaimModal,
   PortalBadgeCard,
+  PortalDocumentCard,
   PortalEmpty,
   PortalFocus,
   PortalList,
@@ -104,9 +105,10 @@ export default function PortalOverviewPage() {
     setMyBadges(badgeSet);
   }, true);
 
-  const currentBatch = enrollments
+  const currentMapping = enrollments
     .filter((enrollment) => enrollment.status === 'active')
-    .sort((a, b) => new Date(b.joined_at).getTime() - new Date(a.joined_at).getTime())[0]?.batch;
+    .sort((a, b) => new Date(b.joined_at).getTime() - new Date(a.joined_at).getTime())[0];
+  const currentBatch = currentMapping?.batch;
 
   const attended = attendance.filter((record) => record.status !== 'absent').length;
   const attendanceRate = attendance.length > 0 ? Math.round((attended / attendance.length) * 100) : null;
@@ -151,6 +153,7 @@ export default function PortalOverviewPage() {
       ) : (
         <>
           {myBadges && <PortalBadgeCard studentId={studentId} {...myBadges} />}
+          <PortalDocumentCard studentId={studentId} mapping={currentMapping} />
 
           <NextUp
             batchName={currentBatch?.name}

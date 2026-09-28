@@ -1978,10 +1978,14 @@ create policy "tutor manages badge files" on storage.objects
 -- <mapping_id>/<offer_letter|cert>.pdf. A student can only view/download/be emailed a doc once the
 -- admin flips its "shared" flag on /documents — enforced both in the storage policy below and again
 -- server-side in the send-document edge function.
-alter table batch_student_mapping add column if not exists offer_letter_path   text;
-alter table batch_student_mapping add column if not exists cert_path           text;
-alter table batch_student_mapping add column if not exists offer_letter_shared boolean not null default false;
-alter table batch_student_mapping add column if not exists cert_shared         boolean not null default false;
+alter table batch_student_mapping add column if not exists offer_letter_path      text;
+alter table batch_student_mapping add column if not exists cert_path              text;
+alter table batch_student_mapping add column if not exists offer_letter_shared    boolean not null default false;
+alter table batch_student_mapping add column if not exists cert_shared            boolean not null default false;
+-- Set only when a share flag flips to true (see setDocumentShared) — drives the portal's
+-- "ready" focus card, the same 7-day-recency rule the badge card uses off issued_at.
+alter table batch_student_mapping add column if not exists offer_letter_shared_at timestamptz;
+alter table batch_student_mapping add column if not exists cert_shared_at         timestamptz;
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('documents', 'documents', false, 5242880, array['application/pdf'])

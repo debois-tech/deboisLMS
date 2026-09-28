@@ -9,6 +9,10 @@ const SHARE_COLUMN: Record<DocumentKind, 'offer_letter_shared' | 'cert_shared'> 
   offer_letter: 'offer_letter_shared',
   cert: 'cert_shared',
 };
+const SHARED_AT_COLUMN: Record<DocumentKind, 'offer_letter_shared_at' | 'cert_shared_at'> = {
+  offer_letter: 'offer_letter_shared_at',
+  cert: 'cert_shared_at',
+};
 const PATH_COLUMN: Record<DocumentKind, 'offer_letter_path' | 'cert_path'> = {
   offer_letter: 'offer_letter_path',
   cert: 'cert_path',
@@ -17,9 +21,7 @@ const KINDS: DocumentKind[] = ['offer_letter', 'cert'];
 
 /**
  * Generated once — right when the mapping row is created (see addStudentToBatch) — and stored, so
- * every later view, download or email just reads this same copy back. Re-runnable: called again
- * from the admin's "Generate" fallback for a row from before this existed, `upsert: true` replaces
- * whatever was there.
+ * every later view, download or email just reads this same copy back.
  */
 export async function generateAndStoreDocuments(
   mapping: BatchStudentMapping,
@@ -44,11 +46,19 @@ export async function generateAndStoreDocuments(
   return patch as Pick<BatchStudentMapping, 'offer_letter_path' | 'cert_path'>;
 }
 
-export async function setDocumentShared(mappingId: string, kind: DocumentKind, shared: boolean): Promise<void> {
+type SharePatch = Pick<BatchStudentMapping, 'offer_letter_shared' | 'cert_shared' | 'offer_letter_shared_at' | 'cert_shared_at'>;
+
+export async function setDocumentShared(mappingId: string, kind: DocumentKind, shared: boolean): Promise<SharePatch> {
+  const patch: Record<string, boolean | string> = { [SHARE_COLUMN[kind]]: shared };
+  // Only set on the way to true — un-sharing keeps the last share date rather than clearing it.
+  if (shared) patch[SHARED_AT_COLUMN[kind]] = new Date().toISOString();
+
   ok(
-    await supabase.from('batch_student_mapping').update({ [SHARE_COLUMN[kind]]: shared }).eq('id', mappingId),
+    await supabase.from('batch_student_mapping').update(patch).eq('id', mappingId),
     'Could not update the release',
   );
+
+  return patch as unknown as SharePatch;
 }
 
 /** RLS enforces the shared flag on the bucket too — this is not the only gate, just the UI's. */
