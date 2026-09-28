@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { ScrollText, Send } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Search, ScrollText, Send } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { BatchSelect } from '@/components/ui/BatchSelect';
 import { Button } from '@/components/ui/Button';
@@ -7,6 +7,7 @@ import { Card, CardHeader } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { SearchFilterBar } from '@/components/ui/SearchFilterBar';
 import { Spinner } from '@/components/ui/Spinner';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/Table';
 import { useToast } from '@/lib/context/ToastContext';
@@ -17,8 +18,20 @@ import { errorMessage } from '@/lib/utils/errors';
 
 type Row = Student & { mapping: BatchStudentMapping };
 type Patch = Partial<Pick<BatchStudentMapping, 'offer_letter_path' | 'cert_path' | 'offer_letter_shared' | 'cert_shared'>>;
+type RowStatus = 'missing' | 'pending' | 'shared';
 
 const LABELS: Record<DocumentKind, string> = { offer_letter: 'Offer Letter', cert: 'Certificate' };
+
+const STATUS_OPTIONS = [
+  { value: 'missing', label: 'Not generated' },
+  { value: 'pending', label: 'Generated, not shared' },
+  { value: 'shared', label: 'Fully shared' },
+];
+
+function rowStatus(mapping: BatchStudentMapping): RowStatus {
+  if (!mapping.offer_letter_path || !mapping.cert_path) return 'missing';
+  return mapping.offer_letter_shared && mapping.cert_shared ? 'shared' : 'pending';
+}
 
 /**
  * One doc's cell. Rows added before this feature existed have no stored file yet — "Generate"
@@ -102,6 +115,8 @@ export default function DocumentsPage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [rosterError, setRosterError] = useState('');
   const [rosterLoading, setRosterLoading] = useState(false);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<RowStatus | null>(null);
 
   const { loading, error, retry } = useInitialLoad(async () => {
     setBatches(await getBatches());
@@ -111,6 +126,8 @@ export default function DocumentsPage() {
 
   const pickBatch = async (id: string) => {
     setBatchId(id);
+    setSearch('');
+    setStatusFilter(null);
     setRosterLoading(true);
     setRosterError('');
     try {
@@ -128,6 +145,15 @@ export default function DocumentsPage() {
       current.map((row) => (row.id === studentId ? { ...row, mapping: { ...row.mapping, ...patch } } : row)),
     );
 
+  const filteredRows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return rows.filter((row) => {
+      const matchesSearch = !q || row.name.toLowerCase().includes(q) || (row.student_code ?? '').toLowerCase().includes(q);
+      const matchesStatus = !statusFilter || rowStatus(row.mapping) === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [rows, search, statusFilter]);
+
   if (loading) return <Spinner centered />;
   if (error) return <ErrorState centered message={error} onRetry={retry} />;
 
@@ -142,7 +168,7 @@ export default function DocumentsPage() {
 
       {batchId && selectedBatch && (
         <Card>
-          <CardHeader title={selectedBatch.name} />
+          <CardHeader title={selectedBatch.name} className="mb-5" />
           {rosterLoading ? (
             <Spinner centered />
           ) : rosterError ? (
@@ -150,31 +176,50 @@ export default function DocumentsPage() {
           ) : rows.length === 0 ? (
             <EmptyState icon={<ScrollText size={20} />} title="No active students in this batch" />
           ) : (
-            <Table>
-              <THead>
-                <TR>
-                  <TH>Student</TH>
-                  <TH>Offer Letter</TH>
-                  <TH>Certificate</TH>
-                </TR>
-              </THead>
-              <TBody>
-                {rows.map((row) => (
-                  <TR key={row.id}>
-                    <TD>
-                      <span className="font-medium text-[var(--text-primary)]">{row.name}</span>
-                      <span className="ml-2 text-xs text-[var(--text-muted)]">{row.student_code}</span>
-                    </TD>
-                    <TD>
-                      <DocCell row={row} batch={selectedBatch} kind="offer_letter" onPatch={(p) => patchRow(row.id, p)} />
-                    </TD>
-                    <TD>
-                      <DocCell row={row} batch={selectedBatch} kind="cert" onPatch={(p) => patchRow(row.id, p)} />
-                    </TD>
-                  </TR>
-                ))}
-              </TBody>
-            </Table>
+            <div className="table-block">
+              <SearchFilterBar
+                className="max-w-md"
+                value={search}
+                onChange={setSearch}
+                placeholder="Search by name or ID"
+                filterLabel="Status"
+                allLabel="All students"
+                filterValue={statusFilter}
+                filterOptions={STATUS_OPTIONS}
+                onFilterChange={(value) => setStatusFilter(value as RowStatus | null)}
+              />
+
+              {filteredRows.length === 0 ? (
+                <EmptyState icon={<Search size={20} />} title="No students match" />
+              ) : (
+                <Table>
+                  <THead>
+                    <TR>
+                      <TH>Student</TH>
+                      <TH>ID</TH>
+                      <TH>Offer Letter</TH>
+                      <TH>Certificate</TH>
+                    </TR>
+                  </THead>
+                  <TBody>
+                    {filteredRows.map((row) => (
+                      <TR key={row.id}>
+                        <TD>
+                          <span className="font-medium text-[var(--text-primary)]">{row.name}</span>
+                        </TD>
+                        <TD className="cell-secondary font-mono">{row.student_code || '—'}</TD>
+                        <TD>
+                          <DocCell row={row} batch={selectedBatch} kind="offer_letter" onPatch={(p) => patchRow(row.id, p)} />
+                        </TD>
+                        <TD>
+                          <DocCell row={row} batch={selectedBatch} kind="cert" onPatch={(p) => patchRow(row.id, p)} />
+                        </TD>
+                      </TR>
+                    ))}
+                  </TBody>
+                </Table>
+              )}
+            </div>
           )}
         </Card>
       )}
