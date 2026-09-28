@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/Badge';
 import { BatchSelect } from '@/components/ui/BatchSelect';
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
+import { StudentLink } from '@/components/students/StudentLink';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -205,7 +206,7 @@ export default function DocumentsPage() {
                     {filteredRows.map((row) => (
                       <TR key={row.id}>
                         <TD>
-                          <span className="font-medium text-[var(--text-primary)]">{row.name}</span>
+                          <StudentLink studentId={row.id} name={row.name} className="font-medium text-[var(--text-primary)] hover:underline" />
                         </TD>
                         <TD className="cell-secondary font-mono">{row.student_code || '—'}</TD>
                         <TD>
