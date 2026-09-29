@@ -9,6 +9,7 @@ import {
   PortalFocus,
   PortalList,
   PortalPage,
+  PortalQuizCard,
   PortalRow,
   PortalSection,
   PortalStat,
@@ -23,10 +24,11 @@ import {
   getMyFeeDues,
   getLecturesByBatch,
   getMyBadges,
+  getOpenQuizzes,
   getStudentById,
   getStudentBatches,
 } from '@/lib/supabase';
-import type { MyBadges } from '@/lib/supabase';
+import type { MyBadges, OpenQuiz } from '@/lib/supabase';
 import type {
   Assignment,
   AssignmentCompletion,
@@ -62,12 +64,13 @@ export default function PortalOverviewPage() {
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [assignments, setAssignments] = useState<StudentAssignment[]>([]);
   const [myBadges, setMyBadges] = useState<MyBadges | null>(null);
+  const [openQuizzes, setOpenQuizzes] = useState<OpenQuiz[]>([]);
   const now = useNow();
   const { loading, error, retry } = useInitialLoad(async () => {
     if (!studentId) return;
 
     // Fees across every batch, matching the Fees tab — one batch's balance meant a different number.
-    const [record, mappings, records, work, feeRows, badgeSet] = await Promise.all([
+    const [record, mappings, records, work, feeRows, badgeSet, quizzes] = await Promise.all([
       getStudentById(studentId),
       getStudentBatches(studentId),
       getApprovedAttendanceByStudent(studentId),
@@ -77,6 +80,10 @@ export default function PortalOverviewPage() {
       getMyBadges().catch((err) => {
         console.error(err);
         return null;
+      }),
+      getOpenQuizzes().catch((err) => {
+        console.error(err);
+        return [];
       }),
     ]);
 
@@ -103,6 +110,7 @@ export default function PortalOverviewPage() {
     setAttendance(records);
     setAssignments(work);
     setMyBadges(badgeSet);
+    setOpenQuizzes(quizzes);
   }, true);
 
   const currentMapping = enrollments
@@ -152,6 +160,7 @@ export default function PortalOverviewPage() {
         <PortalEmpty icon={UserPlus}>Student record not linked.</PortalEmpty>
       ) : (
         <>
+          {openQuizzes[0] && <PortalQuizCard quiz={openQuizzes[0]} more={openQuizzes.length - 1} />}
           {myBadges && <PortalBadgeCard studentId={studentId} {...myBadges} />}
           <PortalDocumentCard studentId={studentId} mapping={currentMapping} />
 

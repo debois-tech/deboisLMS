@@ -44,6 +44,11 @@ const TutorBatchDetailPage = lazy(() => import('@/pages/tutor/TutorBatchDetailPa
 const CurriculumPage = lazy(() => import('@/pages/curriculum/CurriculumPage'));
 const PortalCurriculumPage = lazy(() => import('@/pages/portal/PortalCurriculumPage'));
 const DocumentsPage = lazy(() => import('@/pages/documents/DocumentsPage'));
+const ExamsPage = lazy(() => import('@/pages/exams/ExamsPage'));
+const ExamBuilderPage = lazy(() => import('@/pages/exams/ExamBuilderPage'));
+const ExamRunPage = lazy(() => import('@/pages/exams/ExamRunPage'));
+const PortalQuizzesPage = lazy(() => import('@/pages/portal/PortalQuizzesPage'));
+const PortalQuizPage = lazy(() => import('@/pages/portal/PortalQuizPage'));
 
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
 
@@ -86,6 +91,10 @@ export default function App() {
               <Route path="curriculum" element={<CurriculumPage />} />
               <Route path="curriculum/:batchId" element={<CurriculumPage />} />
               <Route path="documents" element={<DocumentsPage />} />
+              <Route path="exams" element={<ExamsPage />} />
+              <Route path="exams/new" element={<ExamBuilderPage />} />
+              <Route path="exams/:quizId" element={<ExamRunPage />} />
+              <Route path="exams/:quizId/edit" element={<ExamBuilderPage />} />
               <Route path="feedback" element={<FeedbackPage />} />
               <Route path="*" element={<NotFoundPage />} />
             </Route>
@@ -102,6 +111,10 @@ export default function App() {
               <Route path="materials" element={<MaterialsPage allowEveryone={false} />} />
               <Route path="curriculum" element={<CurriculumPage />} />
               <Route path="curriculum/:batchId" element={<CurriculumPage />} />
+              <Route path="exams" element={<ExamsPage />} />
+              <Route path="exams/new" element={<ExamBuilderPage />} />
+              <Route path="exams/:quizId" element={<ExamRunPage />} />
+              <Route path="exams/:quizId/edit" element={<ExamBuilderPage />} />
               <Route path="*" element={<NotFoundPage />} />
             </Route>
           </Route>
@@ -113,6 +126,8 @@ export default function App() {
               <Route path="assignments" element={<PortalAssignmentsPage />} />
               <Route path="materials" element={<PortalMaterialsPage />} />
               <Route path="curriculum" element={<PortalCurriculumPage />} />
+              <Route path="quizzes" element={<PortalQuizzesPage />} />
+              <Route path="quizzes/:quizId" element={<PortalQuizPage />} />
               <Route path="profile" element={<PortalProfilePage />} />
               <Route path="feedback" element={<PortalFeedbackPage />} />
               {/* Fees moved inside the profile. Kept so a bookmark still lands somewhere. */}
