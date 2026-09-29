@@ -3,18 +3,23 @@ import { createPortal } from 'react-dom';
 import {
   Background,
   BackgroundVariant,
-  Controls,
   Handle,
   Panel,
   Position,
   ReactFlow,
+  useOnViewportChange,
+  useReactFlow,
   type Edge,
   type Node,
   type NodeProps,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { BookOpen, CalendarDays, Check, FileText, Layers, LibraryBig, Minus, Pencil, Plus, Trash2 } from 'lucide-react';
+import {
+  BookOpen, CalendarDays, Check, ChevronDown, ChevronsDownUp, ChevronsUpDown, FileText, Layers, LibraryBig, Maximize2, Minimize2, Minus,
+  Pencil, Plus, Scan, Trash2, ZoomIn, ZoomOut,
+} from 'lucide-react';
 import { clsx } from 'clsx';
+import { QuizSegment } from '@/components/exams/QuizParts';
 import { Button } from '@/components/ui/Button';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -35,13 +40,16 @@ import {
 import type { CurriculumKind, CurriculumNode, CurriculumRequest, CurriculumStatus } from '@/lib/types';
 import {
   childMap,
+  countBelow,
   diffSummary,
+  filterTree,
   layoutTree,
   nextPosition,
   nextStatus,
   progressOf,
   removeSubtree,
   toDraft,
+  type CurriculumFilter,
 } from '@/lib/utils/curriculum';
 import { formatDateValue, toDateValue } from '@/lib/utils/date';
 import { errorMessage } from '@/lib/utils/errors';
@@ -56,6 +64,11 @@ interface CardData extends Record<string, unknown> {
   canTick: boolean;
   isNew: boolean;
   autoFocus: boolean;
+  // Cards with something under them get a fold handle; `hidden` is how many a folded one is holding back.
+  foldable: boolean;
+  folded: boolean;
+  hidden: number;
+  onFold: (id: string) => void;
   onCycle: (node: CurriculumNode) => void;
   onDate: (node: CurriculumNode, date: string) => void;
   onRename: (id: string, title: string) => void;
@@ -115,7 +128,7 @@ function RootCard({ data }: NodeProps<RootNode>) {
 }
 
 function CurriculumCard({ data }: NodeProps<CardNode>) {
-  const { node, done, total, view, canTick, isNew, autoFocus } = data;
+  const { node, done, total, view, canTick, isNew, autoFocus, foldable, folded, hidden } = data;
   const Icon = KIND_ICON[node.kind];
   const editing = view === 'edit';
 
@@ -166,6 +179,18 @@ function CurriculumCard({ data }: NodeProps<CardNode>) {
         )}
         {isNew && <span className="cv-new">New</span>}
       </div>
+      {foldable && (
+        <button
+          type="button"
+          className={clsx('cv-fold nodrag', folded && 'is-folded')}
+          aria-expanded={!folded}
+          aria-label={folded ? `Show ${hidden} ${hidden === 1 ? 'item' : 'items'} under ${node.title || node.kind}` : `Hide what is under ${node.title || node.kind}`}
+          onClick={() => data.onFold(node.id)}
+        >
+          <ChevronDown size={13} strokeWidth={2.5} aria-hidden="true" />
+          {folded && <span>{hidden}</span>}
+        </button>
+      )}
     </div>
   );
 }
@@ -183,12 +208,110 @@ const nodeTypes = { root: RootCard, card: CurriculumCard, ghost: GhostAdd };
 
 type Role = 'admin' | 'tutor' | 'student';
 
+const MIN_ZOOM = 0.25;
+const MAX_ZOOM = 1.6;
+const FIT = { padding: 0.25, maxZoom: 1 };
+
+// Code-driven camera moves take their time; a reader who asked for less motion gets the same moves at once.
+const ms = (n: number) => (window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : n);
+const easeOut = (t: number) => 1 - (1 - t) ** 3;
+
+// The camera. Wheel zoom is eased and anchored on the cursor, a drag glides on after release, and the
+// buttons animate. `fitTick` re-frames the whole tree after a change that reshapes it.
+function CanvasCamera({ fitTick, boxRef }: { fitTick: number; boxRef: React.RefObject<HTMLDivElement | null> }) {
+  const { getViewport, setViewport, zoomIn, zoomOut, fitView } = useReactFlow();
+  const aim = useRef<{ x: number; y: number; zoom: number } | null>(null);
+  const lastWheel = useRef(0);
+  // True while a move was started by code, so it never earns a glide of its own.
+  const scripted = useRef(false);
+  const trail = useRef<{ t: number; x: number; y: number; zoom: number }[]>([]);
+
+  useEffect(() => {
+    const box = boxRef.current;
+    if (!box) return;
+    const onWheel = (event: WheelEvent) => {
+      if ((event.target as Element).closest('.nowheel, .cv-calendar-slot, .cv-toolbar')) return;
+      event.preventDefault();
+      const now = performance.now();
+      // Rapid ticks build on where the last one is heading, not on where the camera happens to be mid-glide.
+      const from = aim.current && now - lastWheel.current < 300 ? aim.current : getViewport();
+      lastWheel.current = now;
+      const delta = event.deltaY * (event.deltaMode === 1 ? 33 : 1);
+      const zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, from.zoom * Math.exp(-delta * (event.ctrlKey ? 0.01 : 0.0018))));
+      const rect = box.getBoundingClientRect();
+      const px = event.clientX - rect.left;
+      const py = event.clientY - rect.top;
+      const k = zoom / from.zoom;
+      aim.current = { x: px - (px - from.x) * k, y: py - (py - from.y) * k, zoom };
+      scripted.current = true;
+      void setViewport(aim.current, { duration: ms(140), ease: (t) => t });
+    };
+    box.addEventListener('wheel', onWheel, { passive: false });
+    return () => box.removeEventListener('wheel', onWheel);
+  }, [boxRef, getViewport, setViewport]);
+
+  useOnViewportChange({
+    onStart: () => { trail.current = []; },
+    onChange: (view) => {
+      const t = performance.now();
+      trail.current.push({ t, ...view });
+      while (trail.current.length > 1 && t - trail.current[0].t > 100) trail.current.shift();
+    },
+    onEnd: (view) => {
+      const [first] = trail.current;
+      const last = trail.current[trail.current.length - 1];
+      trail.current = [];
+      if (scripted.current) {
+        scripted.current = false;
+        return;
+      }
+      // Released while still moving, and it was a pan rather than a zoom.
+      if (!first || !last || last.t === first.t || performance.now() - last.t > 60 || Math.abs(last.zoom - first.zoom) > 0.001) return;
+      const vx = (last.x - first.x) / (last.t - first.t);
+      const vy = (last.y - first.y) / (last.t - first.t);
+      const speed = Math.hypot(vx, vy);
+      if (speed < 0.3) return;
+      const reach = Math.min(speed, 3) * 260;
+      scripted.current = true;
+      void setViewport({ x: view.x + (vx / speed) * reach, y: view.y + (vy / speed) * reach, zoom: view.zoom }, { duration: ms(600), ease: easeOut });
+    },
+  });
+
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    // After the cards have started to move, so the frame is the new shape and not the old one.
+    const id = window.setTimeout(() => void fitView({ ...FIT, duration: ms(500), ease: easeOut }), 90);
+    return () => window.clearTimeout(id);
+  }, [fitTick, fitView]);
+
+  return (
+    <Panel position="bottom-left" className="cv-controls">
+      <button type="button" className="cv-tool is-small" aria-label="Zoom in" onClick={() => void zoomIn({ duration: ms(220) })}><ZoomIn size={16} /></button>
+      <button type="button" className="cv-tool is-small" aria-label="Zoom out" onClick={() => void zoomOut({ duration: ms(220) })}><ZoomOut size={16} /></button>
+      <button type="button" className="cv-tool is-small" aria-label="Fit to screen" onClick={() => void fitView({ ...FIT, duration: ms(500), ease: easeOut })}><Scan size={16} /></button>
+    </Panel>
+  );
+}
+
 function summarize(diff: ReturnType<typeof diffSummary>): string {
   return [
     diff.added.length && `${diff.added.length} added`,
     diff.removed.length && `${diff.removed.length} removed`,
     diff.renamed.length && `${diff.renamed.length} renamed`,
   ].filter(Boolean).join(', ');
+}
+
+// Which cards a reader folded, kept per batch in this browser.
+function readFolded(batchId: string): Set<string> {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(`cv-folded:${batchId}`) ?? '[]') as string[]);
+  } catch {
+    return new Set();
+  }
 }
 
 interface CurriculumCanvasProps {
@@ -211,6 +334,14 @@ export function CurriculumCanvas({ batchId, batchName, role, height = 'calc(100v
   const [focusId, setFocusId] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [filter, setFilter] = useState<CurriculumFilter>('all');
+  const [folded, setFolded] = useState<Set<string>>(() => readFolded(batchId));
+  // While cards travel to new places their connectors would jump ahead of them, so they step aside.
+  const [settled, setSettled] = useState(0);
+  const [settledSeen, setSettledSeen] = useState(0);
+  const [fitTick, setFitTick] = useState(0);
+  const boxRef = useRef<HTMLDivElement>(null);
   const calendarRef = useRef<HTMLDivElement>(null);
 
   // Clicking anywhere off the calendar (or its button) closes it.
@@ -223,13 +354,34 @@ export function CurriculumCanvas({ batchId, batchName, role, height = 'calc(100v
     return () => document.removeEventListener('pointerdown', away, true);
   }, [calendarOpen]);
 
-  // Editing takes the whole screen: nothing else on the dashboard is reachable until Save or Discard.
-  const fullscreen = view === 'edit';
+  // Editing always takes the whole screen (nothing else is reachable until Save or Discard); anyone may ask for it.
+  const fullscreen = view === 'edit' || expanded;
   useEffect(() => {
     if (!fullscreen) return;
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = ''; };
   }, [fullscreen]);
+
+  useEffect(() => {
+    if (!expanded) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented || view === 'edit') return;
+      if ((event.target as Element).closest('input, textarea') || document.querySelector('[role="dialog"]')) return;
+      setExpanded(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [expanded, view]);
+
+  // Each layout change bumps `settled`; the connectors come back once it has stopped changing for a beat.
+  const settling = settled !== settledSeen;
+  useEffect(() => {
+    if (!settling) return;
+    const id = window.setTimeout(() => setSettledSeen(settled), 420);
+    return () => window.clearTimeout(id);
+  }, [settling, settled]);
+
+  const settle = useCallback(() => setSettled((n) => n + 1), []);
 
   const canEdit = role !== 'student';
   const pending = request?.status === 'pending' ? request : undefined;
@@ -288,6 +440,33 @@ export function CurriculumCanvas({ batchId, batchName, role, height = 'calc(100v
     const status = nextStatus(node.status);
     return mark(node, status, status === 'done' ? toDateValue(new Date()) : null);
   }, [mark]);
+
+  const keepFolded = useCallback((next: Set<string>) => {
+    setFolded(next);
+    settle();
+    try {
+      localStorage.setItem(`cv-folded:${batchId}`, JSON.stringify([...next]));
+    } catch {
+      // Private mode: the folds last until the page reloads.
+    }
+  }, [batchId, settle]);
+
+  const toggleFold = useCallback((id: string) => {
+    const next = new Set(folded);
+    if (!next.delete(id)) next.add(id);
+    keepFolded(next);
+  }, [folded, keepFolded]);
+
+  const foldEverything = (fold: boolean) => {
+    keepFolded(new Set(fold ? [...childMap(shown).keys()].filter((id): id is string => id !== null) : []));
+    setFitTick((n) => n + 1);
+  };
+
+  const pickFilter = (next: CurriculumFilter) => {
+    setFilter(next);
+    settle();
+    setFitTick((n) => n + 1);
+  };
 
   const addNode = useCallback((parentId: string | null, kind: CurriculumKind) => {
     const id = crypto.randomUUID();
@@ -384,13 +563,15 @@ export function CurriculumCanvas({ batchId, batchName, role, height = 'calc(100v
     [pending, live],
   );
 
-  const { flowNodes, flowEdges } = useMemo(() => {
-    const byParent = childMap(shown);
-    const slots = layoutTree(byParent, view === 'edit');
+  const { flowNodes, flowEdges, nothingShown } = useMemo(() => {
+    // Layout follows what is visible; the bars always count the whole tree.
+    const visible = view === 'view' ? filterTree(shown, filter) : shown;
+    const full = childMap(shown);
+    const byParent = childMap(visible);
+    const slots = layoutTree(byParent, view === 'edit', folded);
     const byId = new Map(shown.map((node) => [node.id, node]));
     const newIds = view === 'review' ? new Set(reviewDiff?.added.map((node) => node.id)) : new Set<string>();
-    const modules = byParent.get(null) ?? [];
-    const overall = progressOf(modules);
+    const overall = progressOf(full.get(null) ?? []);
 
     const flowNodes: (RootNode | CardNode | GhostNode)[] = [];
     const flowEdges: Edge[] = [];
@@ -416,14 +597,17 @@ export function CurriculumCanvas({ batchId, batchName, role, height = 'calc(100v
         flowEdges.push({ id: `e-${slot.id}`, source: parentId ?? 'root', target: slot.id, type: 'smoothstep', style: { strokeDasharray: '4 4' }, className: 'cv-edge is-ghost' });
       } else {
         const node = byId.get(slot.id)!;
-        const kids = byParent.get(node.id) ?? [];
         flowNodes.push({
           id: node.id,
           type: 'card',
           position,
           data: {
             node,
-            ...progressOf(kids),
+            ...progressOf(full.get(node.id) ?? []),
+            foldable: (byParent.get(node.id)?.length ?? 0) > 0,
+            folded: folded.has(node.id),
+            hidden: countBelow(byParent, node.id),
+            onFold: toggleFold,
             view,
             canTick: canEdit && view === 'view',
             isNew: newIds.has(node.id),
@@ -438,8 +622,8 @@ export function CurriculumCanvas({ batchId, batchName, role, height = 'calc(100v
         flowEdges.push({ id: `e-${node.id}`, source: node.parent_id ?? 'root', target: node.id, type: 'smoothstep', className: clsx('cv-edge', node.status === 'done' && 'is-done') });
       }
     }
-    return { flowNodes, flowEdges };
-  }, [shown, view, batchName, canEdit, focusId, reviewDiff, addNode, cycle, mark, rename, remove]);
+    return { flowNodes, flowEdges, nothingShown: view === 'view' && filter !== 'all' && visible.length === 0 };
+  }, [shown, view, filter, folded, batchName, canEdit, focusId, reviewDiff, addNode, cycle, mark, rename, remove, toggleFold]);
 
   if (loading) return <Spinner centered />;
   if (error) return <ErrorState centered message={error} onRetry={retry} />;
@@ -455,16 +639,17 @@ export function CurriculumCanvas({ batchId, batchName, role, height = 'calc(100v
   }
 
   const canvas = (
-    <div className={clsx('cv-canvas', fullscreen && 'is-full')} style={fullscreen ? undefined : { height, minHeight: 520 }}>
+    <div ref={boxRef} className={clsx('cv-canvas', fullscreen && 'is-full', settling && 'is-settling')} style={fullscreen ? undefined : { height, minHeight: 520 }}>
       <ReactFlow
         key={batchId}
         nodes={flowNodes}
         edges={flowEdges}
         nodeTypes={nodeTypes}
         fitView
-        fitViewOptions={{ padding: 0.25, maxZoom: 1 }}
-        minZoom={0.25}
-        maxZoom={1.6}
+        fitViewOptions={FIT}
+        minZoom={MIN_ZOOM}
+        maxZoom={MAX_ZOOM}
+        zoomOnScroll={false}
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable={false}
@@ -474,11 +659,10 @@ export function CurriculumCanvas({ batchId, batchName, role, height = 'calc(100v
         attributionPosition="bottom-center"
       >
         <Background variant={BackgroundVariant.Dots} gap={22} size={1.4} color="var(--cv-dot)" />
-        <Controls showInteractive={false} position="bottom-left" />
+        <CanvasCamera fitTick={fitTick} boxRef={boxRef} />
 
-        {canEdit && (
-          <Panel position="top-left" className="cv-toolbar">
-            {view === 'view' && (
+        <Panel position="top-left" className="cv-toolbar">
+            {canEdit && view === 'view' && (
               <Button variant="secondary" className="action-button-compact" onClick={startEdit} disabled={Boolean(pending) && role === 'tutor'}>
                 <Pencil size={14} /> Edit curriculum
               </Button>
@@ -498,12 +682,37 @@ export function CurriculumCanvas({ batchId, batchName, role, height = 'calc(100v
                 <Button className="action-button-compact" onClick={() => void decide(true)} loading={busy}>Approve</Button>
               </>
             )}
+            {view === 'view' && (
+              <QuizSegment
+                label="Show"
+                value={filter}
+                onChange={pickFilter}
+                options={[{ value: 'all', label: 'All' }, { value: 'done', label: 'Completed' }, { value: 'todo', label: 'Incomplete' }]}
+              />
+            )}
+            <button type="button" className="cv-tool" aria-label="Fold everything" title="Fold everything" onClick={() => foldEverything(true)}><ChevronsDownUp size={17} /></button>
+            <button type="button" className="cv-tool" aria-label="Unfold everything" title="Unfold everything" onClick={() => foldEverything(false)}><ChevronsUpDown size={17} /></button>
+        </Panel>
+
+        {view !== 'edit' && (
+          <Panel position="top-right" className="cv-fullscreen-slot">
+            <button
+              type="button"
+              className="cv-tool"
+              aria-pressed={expanded}
+              aria-label={expanded ? 'Exit full screen' : 'Full screen'}
+              title={expanded ? 'Exit full screen (Esc)' : 'Full screen'}
+              onClick={() => setExpanded((open) => !open)}
+            >
+              {expanded ? <Minimize2 size={17} /> : <Maximize2 size={17} />}
+            </button>
           </Panel>
         )}
 
-        {canEdit && (
+        {(canEdit || nothingShown) && (
           <Panel position="top-center" className="cv-banner-slot">
-            {view === 'edit' && <p className="cv-banner">Editing. Checkboxes are paused until you save or discard.</p>}
+            {nothingShown && <p className="cv-banner">{filter === 'done' ? 'Nothing is marked done yet.' : 'Everything is done.'}</p>}
+            {canEdit && view === 'edit' && <p className="cv-banner">Editing. Checkboxes are paused until you save or discard.</p>}
             {view === 'review' && reviewDiff && (
               <p className="cv-banner">Proposed changes: {summarize(reviewDiff) || 'none'}.{reviewDiff.removed.length > 0 && ` Removed: ${reviewDiff.removed.slice(0, 4).map((node) => node.title).join(', ')}${reviewDiff.removed.length > 4 ? '…' : ''}.`}</p>
             )}

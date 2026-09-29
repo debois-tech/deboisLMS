@@ -25,6 +25,25 @@ export function nextStatus(status: CurriculumStatus): CurriculumStatus {
   return status === 'todo' ? 'done' : status === 'done' ? 'skipped' : 'todo';
 }
 
+export type CurriculumFilter = 'all' | 'done' | 'todo';
+
+// Matches keep their ancestors for context; a parent is judged by its own box, and skipped counts as not done.
+export function filterTree<T extends Linked & { status: CurriculumStatus }>(nodes: T[], filter: CurriculumFilter): T[] {
+  if (filter === 'all') return nodes;
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const keep = new Set<string>();
+  for (const node of nodes) {
+    if ((node.status === 'done') !== (filter === 'done')) continue;
+    for (let at: T | undefined = node; at && !keep.has(at.id); at = at.parent_id ? byId.get(at.parent_id) : undefined) keep.add(at.id);
+  }
+  return nodes.filter((node) => keep.has(node.id));
+}
+
+// Everything under a node, however deep: what a folded card hides.
+export function countBelow(byParent: Map<string | null, Linked[]>, id: string): number {
+  return (byParent.get(id) ?? []).reduce((sum, kid) => sum + 1 + countBelow(byParent, kid.id), 0);
+}
+
 /** Only done counts: a skipped child keeps the bar below full. */
 export function progressOf(kids: { status: CurriculumStatus }[]): { done: number; total: number } {
   return { done: kids.filter((kid) => kid.status === 'done').length, total: kids.length };
@@ -89,9 +108,13 @@ const MODULE_Y = 132;
 /**
  * Batch card on top, modules in a row under it. Each module owns a column: its topics stack below it,
  * a topic's subtopics below that, each level indented. While editing, a "+" ends every stack and
- * one sits after the last module.
+ * one sits after the last module. A folded node keeps its own slot and gives up everything below it.
  */
-export function layoutTree(byParent: Map<string | null, (Linked & { kind: CurriculumKind })[]>, editable: boolean): Slot[] {
+export function layoutTree(
+  byParent: Map<string | null, (Linked & { kind: CurriculumKind })[]>,
+  editable: boolean,
+  folded: ReadonlySet<string> = new Set(),
+): Slot[] {
   const slots: Slot[] = [];
   const modules = byParent.get(null) ?? [];
 
@@ -105,14 +128,14 @@ export function layoutTree(byParent: Map<string | null, (Linked & { kind: Curric
         slots.push({ id: node.id, x: x + INDENT * level, y });
         y += ROW;
         const below = CHILD_KIND[node.kind];
-        if (below) stack(node.id, below, level + 1);
+        if (below && !folded.has(node.id)) stack(node.id, below, level + 1);
       }
       if (editable) {
         slots.push({ id: `ghost:${parentId}`, x: x + INDENT * level, y, ghost: { parentId, kind } });
         y += GHOST_ROW;
       }
     };
-    stack(module.id, 'topic', 1);
+    if (!folded.has(module.id)) stack(module.id, 'topic', 1);
   });
 
   const columns = modules.length + (editable ? 1 : 0);

@@ -4063,12 +4063,6 @@ html.light .cv-canvas {
 }
 .cv-canvas .react-flow {
   --xy-background-color: transparent;
-  --xy-controls-button-background-color: var(--bg-surface);
-  --xy-controls-button-background-color-hover: var(--bg-elevated);
-  --xy-controls-button-color: var(--text-secondary);
-  --xy-controls-button-color-hover: var(--text-primary);
-  --xy-controls-button-border-color: var(--border);
-  --xy-controls-box-shadow: var(--shadow-md);
   --xy-attribution-background-color: transparent;
 }
 .cv-canvas .react-flow__attribution a { color: var(--text-muted); }
@@ -4904,3 +4898,65 @@ button.qz-dot:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .qz-chevron { flex: 0 0 auto; color: var(--text-muted); transition: transform 0.2s ease; }
 .qz-chevron.is-open { transform: rotate(90deg); }
+
+/* ── Curriculum motion and controls ─────────────────────────── */
+/* Cards glide to a new place instead of jumping; the viewport's own pan and zoom are a different transform and stay untouched. */
+.cv-canvas .react-flow__node { transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+/* Connectors are redrawn, not moved, so they step aside while the cards travel and return once they have landed. */
+.cv-canvas .react-flow__edges { transition: opacity 0.3s ease; }
+.cv-canvas.is-settling .react-flow__edges { opacity: 0; transition-duration: 0.08s; }
+.cv-canvas .cv-card { animation: cvEnter 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+@keyframes cvEnter { from { opacity: 0; transform: scale(0.96); } }
+.cv-canvas.is-full { animation: cvFull 0.26s cubic-bezier(0.16, 1, 0.3, 1); }
+@keyframes cvFull { from { opacity: 0; transform: scale(0.985); } }
+
+/* The fold handle sits where the branch leaves the card, so it reads as the branch's own switch. */
+.cv-fold {
+  position: absolute;
+  left: 2px;
+  bottom: -11px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+.cv-fold svg { transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+.cv-fold.is-folded svg { transform: rotate(-90deg); }
+.cv-fold:hover, .cv-fold.is-folded { color: var(--primary); border-color: var(--primary); }
+.cv-fold.is-folded { background: color-mix(in srgb, var(--primary) 10%, var(--bg-surface)); }
+.cv-fold:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+.cv-tool {
+  display: inline-grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  color: var(--text-secondary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease, transform 0.12s ease;
+}
+.cv-tool.is-small { width: 2.25rem; height: 2.25rem; }
+.cv-tool:hover { color: var(--text-primary); background: var(--bg-elevated); border-color: var(--border-strong); }
+.cv-tool:active { transform: scale(0.94); }
+.cv-tool[aria-pressed='true'] { color: var(--primary); border-color: var(--primary); }
+.cv-tool:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.cv-canvas .cv-controls { display: flex; flex-direction: column; gap: 0.375rem; margin: 0.75rem; }
+.cv-canvas .cv-fullscreen-slot { margin: 0.75rem; }
+.cv-canvas .cv-toolbar { flex-wrap: wrap; align-items: center; max-width: calc(100% - 5rem); }
+.cv-toolbar .qz-seg { background: var(--bg-surface); box-shadow: var(--shadow-sm); }
+@media (max-width: 64rem) { .cv-canvas .cv-banner-slot { margin-top: 4.5rem; max-width: calc(100% - 1.5rem); } }
