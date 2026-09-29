@@ -8,18 +8,23 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatCard } from '@/components/ui/StatCard';
-import { getBatches, getTutorDashboardStats } from '@/lib/supabase';
+import { getBatches, getCurriculumProgress, getTutorDashboardStats } from '@/lib/supabase';
+import { CurriculumAverage } from '@/components/curriculum/CurriculumAverage';
+import { ProgressBar } from '@/components/ui/ProgressBar';
+import { averageProgress } from '@/lib/utils/curriculum';
 import type { TutorDashboardStats } from '@/lib/supabase';
 import type { Batch } from '@/lib/types';
 
 export default function TutorDashboardPage() {
   const [stats, setStats] = useState<TutorDashboardStats | null>(null);
   const [batches, setBatches] = useState<Batch[]>([]);
+  const [progress, setProgress] = useState<Map<string, { done: number; total: number }>>(new Map());
 
   const { loading, error, retry } = useInitialLoad(async () => {
-    const [s, b] = await Promise.all([getTutorDashboardStats(), getBatches()]);
+    const [s, b, p] = await Promise.all([getTutorDashboardStats(), getBatches(), getCurriculumProgress()]);
     setStats(s);
     setBatches(b);
+    setProgress(p);
   });
 
   if (loading) return <Spinner centered />;
@@ -27,6 +32,9 @@ export default function TutorDashboardPage() {
 
   // One batch is the common case — go straight to it, nothing to pick between.
   if (batches.length === 1) return <Navigate to={`/tutor/batches/${batches[0].id}`} replace />;
+
+  const ongoing = batches.filter((batch) => batch.status === 'ongoing');
+  const average = averageProgress(progress, ongoing.map((batch) => batch.id));
 
   return (
     <div className="page-section">
@@ -38,6 +46,8 @@ export default function TutorDashboardPage() {
         <StatCard label="Pending Grading" value={stats?.pending_grading ?? 0} valueClassName="text-[var(--danger-text)]" />
       </div>
 
+      <CurriculumAverage average={average} outOf={ongoing.length} />
+
       <Card>
         <CardHeader title="My Batches" />
         <div className="dashboard-section-content">
@@ -45,19 +55,25 @@ export default function TutorDashboardPage() {
             <EmptyState icon={<Layers size={32} />} title="No batches assigned yet" />
           ) : (
             <div className="flex flex-col gap-2">
-              {batches.map((batch) => (
+              {batches.map((batch) => {
+                const topics = progress.get(batch.id);
+                return (
                 <Link
                   key={batch.id}
                   to={`/tutor/batches/${batch.id}`}
                   className="dashboard-item flex min-h-[4.5rem] items-center justify-between gap-4 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-elevated)]/40 hover:bg-[var(--bg-elevated)] transition-colors group"
                 >
-                  <div className="flex min-w-0 flex-1 items-center justify-between gap-4">
-                    <p className="text-sm font-semibold leading-5 text-[var(--text-primary)] break-words">{batch.name}</p>
-                    <p className="shrink-0 text-right text-xs leading-4 text-[var(--text-muted)]">{batch.program ?? ''}</p>
+                  <div className="flex min-w-0 flex-1 flex-col gap-2">
+                    <div className="flex items-center justify-between gap-4">
+                      <p className="text-sm font-semibold leading-5 text-[var(--text-primary)] break-words">{batch.name}</p>
+                      <p className="shrink-0 text-right text-xs leading-4 text-[var(--text-muted)]">{batch.program ?? ''}</p>
+                    </div>
+                    {topics && <ProgressBar count done={topics.done} total={topics.total} label={`${batch.name} course progress`} />}
                   </div>
                   <ArrowUpRight size={16} className="text-[var(--text-muted)] opacity-0 group-hover:opacity-100 transition-opacity" />
                 </Link>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

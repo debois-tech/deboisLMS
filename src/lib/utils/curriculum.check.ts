@@ -1,5 +1,5 @@
 // Run: node src/lib/utils/curriculum.check.ts
-import { childMap, countBelow, diffSummary, filterTree, layoutTree, nextPosition, nextStatus, progressOf, removeSubtree } from './curriculum.ts';
+import { averageProgress, childMap, countBelow, diffSummary, filterTree, layoutTree, nextPosition, nextStatus, progressOf, removeSubtree } from './curriculum.ts';
 
 const must = (cond: boolean, msg: string) => {
   if (!cond) throw new Error(msg);
@@ -49,4 +49,8 @@ must(filterTree(marked, 'all') === marked, 'all is untouched');
 must(filterTree(marked, 'done').map((n) => n.id).join() === 'm,t1,s1', 'done: the match plus its parents, nothing else');
 must(filterTree(marked, 'todo').map((n) => n.id).join() === 'm,t1,t2,s2', 'not done: todo and skipped, with parents');
 must(filterTree(tree.map((n) => ({ ...n, status: 'todo' as const })), 'done').length === 0, 'nothing done: nothing shown');
+// Dashboard average: per batch, then averaged; empty curricula do not count.
+const prog = new Map([['a', { done: 1, total: 4 }], ['b', { done: 3, total: 3 }], ['c', { done: 0, total: 0 }]]);
+must(averageProgress(prog, ['a', 'b'])!.percent === 63 && averageProgress(prog, ['a', 'b'])!.batches === 2, 'batches weigh the same, 25% and 100% average to 63%');
+must(averageProgress(prog, ['c', 'zzz']) === null, 'no curriculum anywhere: no average');
 console.log('curriculum ok');

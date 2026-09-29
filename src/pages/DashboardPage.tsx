@@ -9,7 +9,10 @@ import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatCard } from '@/components/ui/StatCard';
 import { getDashboardStats, getRecentActivity, type DashboardStats, type RecentActivity } from '@/lib/supabase';
-import { getBatches, getEarningBreakdown } from '@/lib/supabase';
+import { getBatches, getCurriculumProgress, getEarningBreakdown } from '@/lib/supabase';
+import { CurriculumAverage } from '@/components/curriculum/CurriculumAverage';
+import { ProgressBar } from '@/components/ui/ProgressBar';
+import { averageProgress } from '@/lib/utils/curriculum';
 import { EarningBreakdownModal } from '@/components/finance/EarningBreakdownModal';
 import type { Batch, EarningBreakdown } from '@/lib/types';
 import { timeAgo, formatCurrency } from '@/lib/utils/format';
@@ -20,24 +23,28 @@ export default function DashboardPage() {
   const [batches, setBatches] = useState<Batch[]>([]);
   const [breakdown, setBreakdown] = useState<EarningBreakdown[]>([]);
   const [breakdownOpen, setBreakdownOpen] = useState(false);
+  const [progress, setProgress] = useState<Map<string, { done: number; total: number }>>(new Map());
 
   const { loading, error, retry } = useInitialLoad(async () => {
-    const [s, a, b, e] = await Promise.all([
+    const [s, a, b, e, p] = await Promise.all([
       getDashboardStats(),
       getRecentActivity(),
       getBatches(),
       getEarningBreakdown(),
+      getCurriculumProgress(),
     ]);
     setStats(s);
     setActivity(a);
     setBatches(b);
     setBreakdown(e);
+    setProgress(p);
   });
 
   if (loading) return <Spinner centered />;
   if (error) return <ErrorState centered message={error} onRetry={retry} />;
 
   const ongoingBatches = batches.filter((b) => b.status === 'ongoing');
+  const average = averageProgress(progress, ongoingBatches.map((batch) => batch.id));
 
   return (
     <div className="page-section">
@@ -70,6 +77,8 @@ export default function DashboardPage() {
         />
       </div>
 
+      <CurriculumAverage average={average} outOf={ongoingBatches.length} />
+
       <EarningBreakdownModal
         open={breakdownOpen}
         onClose={() => setBreakdownOpen(false)}
@@ -84,19 +93,25 @@ export default function DashboardPage() {
             <EmptyState icon={<Layers size={32} />} title="No active batches" />
           ) : (
             <div className="flex flex-col gap-2">
-              {ongoingBatches.map((batch) => (
+              {ongoingBatches.map((batch) => {
+                const topics = progress.get(batch.id);
+                return (
                 <Link
                   key={batch.id}
                   to={`/batches/${batch.id}`}
                   className="dashboard-item flex min-h-[4.5rem] items-center justify-between gap-4 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-elevated)]/40 hover:bg-[var(--bg-elevated)] transition-colors group"
                 >
-                  <div className="flex min-w-0 flex-1 items-center justify-between gap-4">
-                    <p className="text-sm font-semibold leading-5 text-[var(--text-primary)] break-words">{batch.name}</p>
-                    <p className="shrink-0 text-right text-xs leading-4 text-[var(--text-muted)]">{batch.program ?? ''}</p>
+                  <div className="flex min-w-0 flex-1 flex-col gap-2">
+                    <div className="flex items-center justify-between gap-4">
+                      <p className="text-sm font-semibold leading-5 text-[var(--text-primary)] break-words">{batch.name}</p>
+                      <p className="shrink-0 text-right text-xs leading-4 text-[var(--text-muted)]">{batch.program ?? ''}</p>
+                    </div>
+                    {topics && <ProgressBar count done={topics.done} total={topics.total} label={`${batch.name} course progress`} />}
                   </div>
                   <ArrowUpRight size={16} className="text-[var(--text-muted)] opacity-0 group-hover:opacity-100 transition-opacity" />
                 </Link>
-              ))}
+                );
+              })}
             </div>
           )}
           </div>

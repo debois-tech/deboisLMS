@@ -21,6 +21,7 @@ import {
 import { clsx } from 'clsx';
 import { QuizSegment } from '@/components/exams/QuizParts';
 import { Button } from '@/components/ui/Button';
+import { ProgressBar } from '@/components/ui/ProgressBar';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -84,18 +85,6 @@ type RootNode = Node<RootData, 'root'>;
 
 const KIND_ICON = { module: Layers, topic: BookOpen, subtopic: FileText } as const;
 
-function Bar({ done, total, label }: { done: number; total: number; label: string }) {
-  const pct = total ? Math.round((done / total) * 100) : 0;
-  return (
-    <div className="cv-progress">
-      <div className="cv-bar" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={label}>
-        <span style={{ transform: `scaleX(${pct / 100})` }} />
-      </div>
-      <span className="cv-progress-text">{done}/{total}</span>
-    </div>
-  );
-}
-
 function TriBox({ status, disabled, label, onClick }: { status: CurriculumStatus; disabled: boolean; label: string; onClick: () => void }) {
   return (
     <button
@@ -122,7 +111,7 @@ function RootCard({ data }: NodeProps<RootNode>) {
         <LibraryBig size={18} className="cv-root-icon" aria-hidden="true" />
         <span className="cv-title">{data.name}</span>
       </div>
-      <Bar done={data.done} total={data.total} label={`${data.name} overall progress`} />
+      <ProgressBar count done={data.done} total={data.total} label={`${data.name} overall progress`} />
     </div>
   );
 }
@@ -167,7 +156,7 @@ function CurriculumCard({ data }: NodeProps<CardNode>) {
       </div>
       <div className="cv-row cv-row-foot">
         {total > 0 ? (
-          <Bar done={done} total={total} label={`${node.title} progress`} />
+          <ProgressBar count done={done} total={total} label={`${node.title} progress`} />
         ) : node.status === 'done' && node.done_on ? (
           canTick && !editing ? (
             <DatePicker value={node.done_on} clearable={false} max={toDateValue(new Date())} ariaLabel={`Date ${node.title} was taught`} className="cv-date nodrag" onChange={(date) => date && data.onDate(node, date)} />
