@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { PartyPopper, UserPlus, Wallet } from 'lucide-react';
+import { Download, PartyPopper, UserPlus, Wallet } from 'lucide-react';
 import {
   PaymentClaimModal,
   PortalAmount,
@@ -15,6 +15,7 @@ import {
   usePortalStudentId,
 } from '@/components/portal';
 import {
+  downloadStoredDocument,
   getBatchById,
   getFeePaymentLogsByStudent,
   getMyBadges,
@@ -23,11 +24,14 @@ import {
   getStudentById,
 } from '@/lib/supabase';
 import type { MyBadges } from '@/lib/supabase';
-import type { Batch, BatchStudentMapping, FeePaymentLog, Student, StudentFeeDue } from '@/lib/types';
+import type { Batch, BatchStudentMapping, DocumentKind, FeePaymentLog, Student, StudentFeeDue } from '@/lib/types';
 import { useAuth } from '@/lib/context/AuthContext';
 import { useToast } from '@/lib/context/ToastContext';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
+import { errorMessage } from '@/lib/utils/errors';
 import { formatCurrency, formatDate } from '@/lib/utils/format';
+
+const DOC_LABELS: Record<DocumentKind, string> = { offer_letter: 'Offer Letter', cert: 'Certificate' };
 
 const METHOD_LABELS: Record<string, string> = {
   cash: 'Cash',
@@ -41,6 +45,7 @@ export default function PortalProfilePage() {
   const { user } = useAuth();
   const { showToast } = useToast();
   const [payFee, setPayFee] = useState<StudentFeeDue | null>(null);
+  const [downloading, setDownloading] = useState<DocumentKind | null>(null);
   const [student, setStudent] = useState<Student | null>(null);
   const [fees, setFees] = useState<StudentFeeDue[]>([]);
   const [payments, setPayments] = useState<FeePaymentLog[]>([]);
@@ -93,6 +98,19 @@ export default function PortalProfilePage() {
     .filter((enrollment) => enrollment.status === 'active')
     .sort((a, b) => new Date(b.joined_at).getTime() - new Date(a.joined_at).getTime())[0];
 
+  const downloadDoc = async (kind: DocumentKind) => {
+    const path = kind === 'offer_letter' ? current?.offer_letter_path : current?.cert_path;
+    if (!path) return;
+    setDownloading(kind);
+    try {
+      await downloadStoredDocument(path, `${DOC_LABELS[kind]}-${student?.student_code ?? ''}.pdf`);
+    } catch (err) {
+      showToast(errorMessage(err, `Could not download the ${DOC_LABELS[kind].toLowerCase()}`), 'error');
+    } finally {
+      setDownloading(null);
+    }
+  };
+
   // Built here rather than inline so the empty case can be told apart from a
   // list that simply has few rows. The batch leads: of everything on this page it
   // is the fact a student is most likely to have come to check.
@@ -132,6 +150,32 @@ export default function PortalProfilePage() {
           {myBadges && myBadges.badges.length > 0 && (
             <PortalSection title="Badges">
               <PortalBadgeGrid {...myBadges} />
+            </PortalSection>
+          )}
+
+          {current && (current.offer_letter_shared || current.cert_shared) && (
+            <PortalSection title="Documents">
+              <PortalList>
+                {(['offer_letter', 'cert'] as DocumentKind[])
+                  .filter((kind) => (kind === 'offer_letter' ? current.offer_letter_shared : current.cert_shared))
+                  .map((kind) => (
+                    <PortalRow
+                      key={kind}
+                      primary={DOC_LABELS[kind]}
+                      secondary="Ready to download"
+                      trailing={
+                        <button
+                          type="button"
+                          className="portal-pay-button gap-1.5"
+                          onClick={() => void downloadDoc(kind)}
+                          disabled={downloading === kind}
+                        >
+                          <Download size={14} /> {downloading === kind ? 'Preparing…' : 'Download'}
+                        </button>
+                      }
+                    />
+                  ))}
+              </PortalList>
             </PortalSection>
           )}
 

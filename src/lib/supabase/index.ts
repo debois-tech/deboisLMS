@@ -21,3 +21,4 @@ export { getCurriculumNodes, getLatestCurriculumRequest, saveCurriculum, propose
 export type { CurriculumOverview } from './queries/curriculum';
 export { getBatchBadges, createBatchBadge, deleteBatchBadge, getBadgeHolders, giveBadge, takeBadge, getMyBadges, badgeImageUrl, linkedInAddToProfileUrl, downloadBadgeImage, canShareBadgeImage, shareBadgeImage, BADGE_EXTENSIONS, BADGE_MAX_BYTES, BADGE_ACCEPT } from './queries/badges';
 export type { BadgeWithHolders, BadgeHolder, MyBadges, NewBadgeInput } from './queries/badges';
+export { generateAndStoreDocuments, setDocumentShared, downloadStoredDocument, sendDocumentEmail } from './queries/documents';

@@ -1,4 +1,6 @@
 import { supabase } from '../client';
+import { getBatchById } from './batches';
+import { generateAndStoreDocuments } from './documents';
 import { invokeLoginFunction, maybeRow, ok, row, rows } from './result';
 import type { Batch, Student, BatchStudentMapping, StudentCredentials } from '@/lib/types';
 import { errorMessage } from '@/lib/utils/errors';
@@ -216,7 +218,17 @@ export async function getBatchStudents(batchId: string): Promise<(Student & { ma
 
   return mappings.map((m) => ({
     ...m.students,
-    mapping: { id: m.id, batch_id: m.batch_id, student_id: m.student_id, joined_at: m.joined_at, status: m.status },
+    mapping: {
+      id: m.id,
+      batch_id: m.batch_id,
+      student_id: m.student_id,
+      joined_at: m.joined_at,
+      status: m.status,
+      offer_letter_path: m.offer_letter_path,
+      cert_path: m.cert_path,
+      offer_letter_shared: m.offer_letter_shared,
+      cert_shared: m.cert_shared,
+    },
   }));
 }
 
@@ -253,6 +265,14 @@ export async function addStudentToBatch(
       ),
     'Student was added but the fee could not be set',
   );
+
+  // Best-effort, same as the badge fetch elsewhere: a template hiccup must not block enrolling
+  // the student. getStudentById is this same module's own export, so no round trip is needed for it.
+  void Promise.all([getStudentById(studentId), getBatchById(batchId)])
+    .then(([student, batch]) => {
+      if (student && batch) return generateAndStoreDocuments(mapping, student, batch);
+    })
+    .catch((err) => console.error('[addStudentToBatch] documents', err));
 
   return mapping;
 }

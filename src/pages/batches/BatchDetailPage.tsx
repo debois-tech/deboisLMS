@@ -23,6 +23,7 @@ import { NewAssignmentModal } from '@/components/assignments/NewAssignmentModal'
 import { AssignmentFiles } from '@/components/assignments/AssignmentFiles';
 import { BatchMaterials } from '@/components/materials/BatchMaterials';
 import { BatchBadges } from '@/components/badges/BatchBadges';
+import { BatchDocuments } from '@/components/documents/BatchDocuments';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { StudentLink } from '@/components/students/StudentLink';
 import { PaymentLogModal, type PaymentLogFormState } from '@/components/finance/PaymentLogModal';
@@ -138,6 +139,7 @@ export default function BatchDetailPage() {
           { label: 'Assignments', value: 'assignments' },
           { label: 'Curriculum', value: 'curriculum' },
           { label: 'Badges', value: 'badges' },
+          { label: 'Documents', value: 'documents' },
           { label: 'Material', value: 'material' },
         ]}
         defaultValue="overview"
@@ -157,6 +159,7 @@ export default function BatchDetailPage() {
               </Suspense>
             )}
             {active === 'badges' && <BatchBadges batchId={batch.id} />}
+            {active === 'documents' && <BatchDocuments batch={batch} />}
             {active === 'material' && <BatchMaterials batchId={batch.id} batchCode={batch.batch_code} />}
           </>
         )}

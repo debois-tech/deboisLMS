@@ -1971,3 +1971,46 @@ create policy "tutor manages badge files" on storage.objects
     )
     and lower(storage.extension(storage.objects.name)) in ('png', 'jpg', 'jpeg', 'webp')
   );
+
+-- 17. DOCUMENTS (experimental v1)
+-- Both documents are generated once, right when a student is added to a batch (dummy template,
+-- pdf-lib, filled from live student/batch data), and stored in the private `documents` bucket at
+-- <mapping_id>/<offer_letter|cert>.pdf. A student can only view/download/be emailed a doc once the
+-- admin flips its "shared" flag on /documents — enforced both in the storage policy below and again
+-- server-side in the send-document edge function.
+alter table batch_student_mapping add column if not exists offer_letter_path      text;
+alter table batch_student_mapping add column if not exists cert_path              text;
+alter table batch_student_mapping add column if not exists offer_letter_shared    boolean not null default false;
+alter table batch_student_mapping add column if not exists cert_shared            boolean not null default false;
+-- Set only when a share flag flips to true (see setDocumentShared) — drives the portal's
+-- "ready" focus card, the same 7-day-recency rule the badge card uses off issued_at.
+alter table batch_student_mapping add column if not exists offer_letter_shared_at timestamptz;
+alter table batch_student_mapping add column if not exists cert_shared_at         timestamptz;
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('documents', 'documents', false, 5242880, array['application/pdf'])
+on conflict (id) do update
+  set public             = excluded.public,
+      file_size_limit    = excluded.file_size_limit,
+      allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "admin manages document files" on storage.objects;
+create policy "admin manages document files" on storage.objects
+  for all
+  using (bucket_id = 'documents' and is_admin())
+  with check (bucket_id = 'documents' and is_admin());
+
+drop policy if exists "student reads own shared documents" on storage.objects;
+create policy "student reads own shared documents" on storage.objects
+  for select using (
+    bucket_id = 'documents'
+    and exists (
+      select 1 from batch_student_mapping m
+      where m.id = safe_uuid(split_part(storage.objects.name, '/', 1))
+        and m.student_id = (select current_student_id())
+        and (
+          (split_part(storage.objects.name, '/', 2) = 'offer_letter.pdf' and m.offer_letter_shared)
+          or (split_part(storage.objects.name, '/', 2) = 'cert.pdf' and m.cert_shared)
+        )
+    )
+  );
