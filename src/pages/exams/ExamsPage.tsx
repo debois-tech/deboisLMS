@@ -108,8 +108,7 @@ function LiveQuizzes({ base }: { base: string }) {
       {shown.length === 0 ? (
         <EmptyState
           icon={<Radio size={22} />}
-          title={quizzes.length === 0 ? 'No quizzes yet' : 'Nothing here'}
-          action={quizzes.length === 0 ? { label: 'Create a quiz', onClick: () => navigate(`${base}/new`) } : undefined}
+          title={quizzes.length === 0 ? 'No quizzes yet. Create New One!' : 'Nothing here'}
         />
       ) : (
         <Table maxHeight="none">

@@ -43,7 +43,11 @@ export default function PortalQuizPage() {
         const [mine, ranking] = await Promise.all([getQuizResult(quizId), getQuizScoreboard(quizId)]);
         setResult(mine);
         setBoard(ranking);
-      } catch {
+      } catch (err) {
+        // A dropped connection is not "you were not there": try again on the next load.
+        fetchedResult.current = false;
+        if (!/did not take part/i.test(errorMessage(err, ''))) throw err;
+        fetchedResult.current = true;
         setAbsent(true);
       }
     }

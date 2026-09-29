@@ -125,7 +125,8 @@ export function ExamHost({ quizId, onLeave, onEnded }: ExamHostProps) {
     const onKey = (event: KeyboardEvent) => {
       const el = event.target as HTMLElement;
       if (busy || el.closest('input, textarea, [role="dialog"]')) return;
-      if (event.key === 'ArrowRight') void primary.go();
+      // Only moves between questions already closed; starting, closing and finishing take a click.
+      if (event.key === 'ArrowRight' && !lobby && !answering && !(isLast && position === quiz?.furthest)) void primary.go();
       if (event.key === 'ArrowLeft' && canBack) void run(() => quizGo(quizId, position - 1));
     };
     window.addEventListener('keydown', onKey);

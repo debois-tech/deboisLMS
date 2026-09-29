@@ -50,6 +50,8 @@ export default function ExamBuilderPage() {
   const [tried, setTried] = useState(false);
   const [importing, setImporting] = useState(false);
   const [missing, setMissing] = useState(false);
+  // An admin's null batch means everyone, so it must be a choice and not a default.
+  const [audienceSet, setAudienceSet] = useState(false);
 
   const { loading, error, retry } = useInitialLoad(async () => {
     const [batchRows, source] = await Promise.all([getBatches(), quizId || from ? getQuiz((quizId ?? from)!) : undefined]);
@@ -67,10 +69,14 @@ export default function ExamBuilderPage() {
       setDraft(loaded);
       setOpen(loaded.questions[0]?.key ?? null);
       setDirty(Boolean(from));
+      setAudienceSet(true);
     } else {
       const fresh = newDraft();
       // A tutor with one batch has nothing to choose.
-      if (!isAdmin && batchRows.length === 1) fresh.batch_id = batchRows[0].id;
+      if (!isAdmin && batchRows.length === 1) {
+        fresh.batch_id = batchRows[0].id;
+        setAudienceSet(true);
+      }
       setDraft(fresh);
       setOpen(fresh.questions[0].key);
     }
@@ -85,7 +91,7 @@ export default function ExamBuilderPage() {
     change((current) => ({ ...current, questions: current.questions.map((question) => (question.key === key ? fn(question) : question)) }));
 
   const issues = draftIssues(draft);
-  const audienceMissing = !isAdmin && !draft.batch_id;
+  const audienceMissing = !audienceSet;
 
   const addQuestion = () => {
     const question = blankQuestion();
@@ -194,8 +200,11 @@ export default function ExamBuilderPage() {
                 <FormField label="Who can join" required>
                   <BatchSelect
                     batches={batches}
-                    value={draft.batch_id ?? (isAdmin ? EVERYONE : null)}
-                    onChange={(id) => patch({ batch_id: id === EVERYONE ? null : id })}
+                    value={audienceSet ? draft.batch_id ?? EVERYONE : null}
+                    onChange={(id) => {
+                      setAudienceSet(true);
+                      patch({ batch_id: id === EVERYONE ? null : id });
+                    }}
                     extraOptions={isAdmin ? [{ id: EVERYONE, name: 'Everyone (all students)' }] : []}
                     placeholder="Choose a batch"
                   />
@@ -266,7 +275,7 @@ export default function ExamBuilderPage() {
                   issue={issues.questions[index]}
                   defaultSeconds={draft.seconds_per_question}
                   batchId={draft.batch_id}
-                  canUpload={isAdmin || Boolean(draft.batch_id)}
+                  canUpload={isAdmin ? audienceSet : Boolean(draft.batch_id)}
                   onToggle={() => setOpen(open === question.key ? null : question.key)}
                   onChange={(fn) => patchQuestion(question.key, fn)}
                   onMove={(delta) => move(question.key, delta)}

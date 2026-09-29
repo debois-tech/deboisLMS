@@ -133,14 +133,23 @@ export async function getQuizParticipants(id: string): Promise<QuizParticipant[]
   );
 }
 
+// The API returns at most 1000 rows a call, and a class times its questions can pass that.
 export async function getQuizAnswers(id: string): Promise<QuizAnswer[]> {
-  return rows<QuizAnswer>(
-    await supabase
-      .from('quiz_answers')
-      .select('question_id, student_id, option_ids, is_correct, points, elapsed_ms')
-      .eq('quiz_id', id),
-    'Could not load the answers',
-  );
+  const PAGE = 1000;
+  const all: QuizAnswer[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const page = rows<QuizAnswer>(
+      await supabase
+        .from('quiz_answers')
+        .select('question_id, student_id, option_ids, is_correct, points, elapsed_ms')
+        .eq('quiz_id', id)
+        .order('id')
+        .range(from, from + PAGE - 1),
+      'Could not load the answers',
+    );
+    all.push(...page);
+    if (page.length < PAGE) return all;
+  }
 }
 
 export async function getQuizScoreboard(id: string): Promise<QuizScoreRow[]> {
