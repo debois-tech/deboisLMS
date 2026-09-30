@@ -19,7 +19,6 @@ import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { useToast } from '@/lib/context/ToastContext';
 import type { Batch, InternshipRole, StudentCredentials } from '@/lib/types';
 import { errorMessage } from '@/lib/utils/errors';
-import { toDateValue } from '@/lib/utils/date';
 import { feeFromDiscountValue, formatCurrency } from '@/lib/utils/format';
 
 export default function NewStudentPage() {
@@ -35,8 +34,8 @@ export default function NewStudentPage() {
   const [discountType, setDiscountType] = useState<'percentage' | 'amount'>('percentage');
   // Empty until picked; meanwhile the batch's programme suggests one.
   const [pickedRole, setPickedRole] = useState<InternshipRole | ''>('');
-  // Start is today unless changed; the end is left for the batch's end date to fill, or an admin.
-  const [internshipStart, setInternshipStart] = useState(() => toDateValue(new Date()));
+  // Start is the batch's start date unless changed; the end is left for the batch's end date to fill, or an admin.
+  const [pickedStart, setPickedStart] = useState<string | null>(null);
   const [internshipEnd, setInternshipEnd] = useState('');
   // Mirrors STUDENT_IMPORT_FIELDS, so a student typed in here carries the same
   // profile as one that arrived on a CSV.
@@ -56,6 +55,7 @@ export default function NewStudentPage() {
 
   const batch = batches.find((option) => option.id === batchId);
   const role = pickedRole || roleForBatch(batch) || '';
+  const internshipStart = pickedStart ?? batch?.start_date?.slice(0, 10) ?? '';
   const baseFee = batch?.base_fee ?? null;
   const payable = baseFee === null ? null : feeFromDiscountValue(baseFee, Number(discount) || 0, discountType);
 
@@ -194,7 +194,7 @@ export default function NewStudentPage() {
           </FormField>
           <div className="grid gap-4 md:grid-cols-2">
             <FormField label="Internship Start">
-              <DatePicker value={internshipStart} onChange={setInternshipStart} placeholder="Pick a date" ariaLabel="Internship start date" clearable={false} />
+              <DatePicker value={internshipStart} onChange={setPickedStart} placeholder="Pick a date" ariaLabel="Internship start date" />
             </FormField>
             <FormField label="Internship End">
               <DatePicker value={internshipEnd} onChange={setInternshipEnd} min={internshipStart || undefined} placeholder="Set when the batch ends" ariaLabel="Internship end date" />

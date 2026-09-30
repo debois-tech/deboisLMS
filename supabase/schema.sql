@@ -2717,8 +2717,8 @@ grant execute on function quiz_save(jsonb), quiz_open_lobby(uuid), quiz_go(uuid,
 -- internship's start and end date). One set per student, edited on the student form.
 -- Role: defaults from the programme of the batch they join. A new programme needs a new value first:
 --   alter type internship_role add value '...';
--- Start date: today for a new student. End date: filled by end_batch() with the batch's end date when the batch is
--- ended (only where still empty, so a date typed by hand is kept). Both stay editable.
+-- Start date: the batch's start date, set when the student is enrolled. End date: the batch's end date, filled by
+-- end_batch() when the batch is ended. Both only where still empty, so a date typed by hand is kept, and both stay editable.
 do $$ begin
   create type internship_role as enum ('devops_engineering_intern', 'ai_ml_engineering_intern', 'cloud_engineering_intern');
 exception when duplicate_object then null; end $$;
@@ -2726,8 +2726,8 @@ exception when duplicate_object then null; end $$;
 alter table students add column if not exists internship_role       internship_role;
 alter table students add column if not exists internship_start_date date;
 alter table students add column if not exists internship_end_date   date;
--- Set after the column exists so students already in the table stay empty until the backfill, not "today".
-alter table students alter column internship_start_date set default current_date;
+-- No default: an earlier version of this migration set one (today). Dropping it is harmless if it never ran.
+alter table students alter column internship_start_date drop default;
 
 do $$ begin
   alter table students add constraint students_internship_dates_ordered

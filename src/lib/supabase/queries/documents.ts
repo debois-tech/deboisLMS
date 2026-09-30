@@ -1,6 +1,6 @@
 import { supabase } from '../client';
 import { ok } from './result';
-import type { BatchStudentMapping, DocumentKind, Student } from '@/lib/types';
+import type { Batch, BatchStudentMapping, DocumentKind, Student } from '@/lib/types';
 import { fromDateValue } from '@/lib/utils/date';
 import { buildDocumentPdf, type DocumentAssets } from '@/lib/utils/documents';
 import { INTERNSHIP_ROLE_LABELS } from '@/lib/utils/studentImport';
@@ -46,22 +46,22 @@ function loadAssets(): Promise<DocumentAssets> {
 }
 
 /**
- * One document, drawn from the student's own data and stored under the enrolment. The offer letter is made when the
- * student is enrolled (see addStudentToBatch); the certificate only when an admin generates it, dated that day and
- * carrying the student's internship start and end dates. Every later view, download or email reads the stored copy back.
+ * One document, drawn from the student's own data and stored under the enrolment. Always on an admin's click: nothing
+ * is generated when a student is enrolled, and each new student needs their own click. Every date comes from
+ * the batch: the student's internship start and end date, which default to the batch's start and end date. Every later
+ * view, download or email reads the stored copy back.
  */
 export async function generateAndStoreDocument(
   kind: DocumentKind,
   mapping: BatchStudentMapping,
   student: Student,
+  batch: Batch,
 ): Promise<Pick<BatchStudentMapping, 'offer_letter_path' | 'cert_path'>> {
   if (!student.internship_role) throw new Error(`Set ${student.name}'s internship role first (Edit student).`);
-  const enrolledOn = fromDateValue(mapping.joined_at) ?? new Date();
-  const startOn = (student.internship_start_date && fromDateValue(student.internship_start_date)) || enrolledOn;
-  const endOn = (student.internship_end_date && fromDateValue(student.internship_end_date)) || undefined;
-  if (kind === 'cert' && !(student.internship_start_date && endOn)) {
-    throw new Error(`Set ${student.name}'s internship start and end dates first (Edit student).`);
-  }
+  const day = (value?: string | null) => (value ? fromDateValue(value.slice(0, 10)) : null);
+  const startOn = day(student.internship_start_date) ?? day(batch.start_date) ?? day(mapping.joined_at) ?? new Date();
+  const endOn = day(student.internship_end_date) ?? day(batch.ended_at);
+  if (kind === 'cert' && !endOn) throw new Error(`${student.name} has no internship end date: end the batch, or set it on Edit student.`);
 
   const bytes = await buildDocumentPdf(
     kind,
@@ -69,10 +69,8 @@ export async function generateAndStoreDocument(
       name: student.name.trim(),
       code: student.student_code ?? '',
       role: INTERNSHIP_ROLE_LABELS[student.internship_role],
-      enrolledOn,
       startOn,
-      endOn,
-      issuedOn: new Date(),
+      endOn: endOn ?? undefined,
     },
     await loadAssets(),
   );

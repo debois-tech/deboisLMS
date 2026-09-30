@@ -247,7 +247,7 @@ export interface BatchStudentMapping {
   /** Set only once terminated. */
   left_on?: string | null;
   status: MappingStatus;
-  /** The offer letter is made when the row is created; the certificate only when an admin generates it. Both live in the private `documents` bucket. */
+  /** Made only when an admin clicks Generate on the roster; both live in the private `documents` bucket. */
   offer_letter_path?: string | null;
   cert_path?: string | null;
   /** Whether the student can see/download/be emailed the doc above. Set by the admin on /documents. */

@@ -1,8 +1,8 @@
 import type { PDFFont } from 'pdf-lib';
 import type { DocumentKind } from '@/lib/types';
 
-// Offer letter and internship certificate, drawn as real text on the letterhead. The layout follows
-// temp_md/offer_letter.html and temp_md/inter_cert.html: same box, sizes, line heights and spacing.
+// Offer letter and internship certificate, drawn as real text on the letterhead. The layout is a port of the two
+// original HTML templates (content box at 13% / 19.5%, 10.2pt at line-height 1.48, the same margins and <br> gaps).
 
 export interface DocumentData {
   name: string;
@@ -10,13 +10,10 @@ export interface DocumentData {
   code: string;
   // Already a display label, e.g. "DevOps Engineering Intern".
   role: string;
-  // The offer's date.
-  enrolledOn: Date;
-  // The internship's first and last day: the offer's joining date, the certificate's start and end date.
+  // The internship's first day: the offer's date and joining date, the certificate's start date.
   startOn: Date;
+  // Its last day: the certificate's date and end date. Not used by the offer letter.
   endOn?: Date;
-  // The day the certificate is issued: its date.
-  issuedOn: Date;
 }
 
 export interface DocumentAssets {
@@ -77,7 +74,7 @@ const SPECS: Record<DocumentKind, Spec> = {
     footBrInside: 11,
     footBrOutside: 0,
     footMargin: 24,
-    date: (d) => d.enrolledOn,
+    date: (d) => d.startOn,
     paragraphs: (d) => [
       `We are pleased to offer you the position of **${d.role}** at **${COMPANY}**. We are delighted to welcome you to our team and look forward to supporting your professional growth.`,
       `Your engagement will commence from **${longDate(d.startOn)}** and will be based at **${PLACE}**. Your employment will be subject to the applicable company policies, terms of employment, confidentiality obligations, and other conditions communicated by the Company.`,
@@ -99,10 +96,10 @@ const SPECS: Record<DocumentKind, Spec> = {
     footBrInside: 0,
     footBrOutside: 4,
     footMargin: 55,
-    date: (d) => d.issuedOn,
+    date: (d) => d.endOn ?? d.startOn,
     paragraphs: (d) => [
       `This is to formally certify that **${d.name}** has successfully completed an internship with **${COMPANY}** in the position of **${d.role}**.`,
-      `The internship was undertaken from **${longDate(d.startOn)}** to **${longDate(d.endOn ?? d.issuedOn)}** and was based at **${PLACE}**. During this period, the candidate was associated with the Company and participated in assigned projects, tasks, and professional activities related to their role.`,
+      `The internship was undertaken from **${longDate(d.startOn)}** to **${longDate(d.endOn ?? d.startOn)}** and was based at **${PLACE}**. During this period, the candidate was associated with the Company and participated in assigned projects, tasks, and professional activities related to their role.`,
       'Throughout the internship, the candidate demonstrated commitment towards the assigned responsibilities and gained practical exposure to industry-oriented practices, technical processes, and project-based work. The candidate completed the internship period in accordance with the requirements communicated by the Company.',
       `This certificate is being issued in recognition of the successful completion of the internship and may be used as official documentation of the candidate's internship association with **${COMPANY}**.`,
       "We appreciate the candidate's contribution during the internship and wish them continued success in their academic and professional endeavors.",

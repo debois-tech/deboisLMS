@@ -1,6 +1,5 @@
 import { supabase } from '../client';
 import { getBatchById } from './batches';
-import { generateAndStoreDocument } from './documents';
 import { invokeLoginFunction, maybeRow, ok, row, rows } from './result';
 import type { Batch, Student, BatchStudentMapping, StudentCredentials } from '@/lib/types';
 import { errorMessage } from '@/lib/utils/errors';
@@ -266,16 +265,17 @@ export async function addStudentToBatch(
     'Student was added but the fee could not be set',
   );
 
-  // Best-effort, same as the badge fetch elsewhere: a template hiccup must not block enrolling the student.
-  // A student with no internship role yet gets the one for this batch's programme, then the offer letter is made.
+  // Best-effort: this must never block enrolling the student. Documents are not made here, an admin generates them.
   void Promise.all([getStudentById(studentId), getBatchById(batchId)])
     .then(async ([student, batch]) => {
       if (!student || !batch) return;
+      // What the student has not been given yet comes from the batch: the role, and the internship's start date.
       const role = student.internship_role ? undefined : roleForBatch(batch);
-      const current = role ? (await updateStudent(student.id, { internship_role: role })) ?? student : student;
-      return generateAndStoreDocument('offer_letter', mapping, current);
+      const start = !student.internship_start_date && batch.start_date ? batch.start_date.slice(0, 10) : undefined;
+      const fill = { ...(role ? { internship_role: role } : {}), ...(start ? { internship_start_date: start } : {}) };
+      if (role || start) await updateStudent(student.id, fill);
     })
-    .catch((err) => console.error('[addStudentToBatch] documents', err));
+    .catch((err) => console.error('[addStudentToBatch] fill', err));
 
   return mapping;
 }

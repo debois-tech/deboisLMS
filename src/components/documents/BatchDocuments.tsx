@@ -47,7 +47,7 @@ function statusOf(mapping: BatchStudentMapping, kind: DocumentKind): RowStatus {
 }
 
 /** One doc's cell, for whichever kind the dropdown currently has selected. */
-function DocCell({ row, kind, onPatch }: { row: Row; kind: DocumentKind; onPatch: (patch: Patch) => void }) {
+function DocCell({ row, batch, kind, onPatch }: { row: Row; batch: Batch; kind: DocumentKind; onPatch: (patch: Patch) => void }) {
   const { showToast } = useToast();
   const [busy, setBusy] = useState(false);
   const path = pathOf(row.mapping, kind);
@@ -56,7 +56,7 @@ function DocCell({ row, kind, onPatch }: { row: Row; kind: DocumentKind; onPatch
   const generate = async () => {
     setBusy(true);
     try {
-      onPatch(await generateAndStoreDocument(kind, row.mapping, row));
+      onPatch(await generateAndStoreDocument(kind, row.mapping, row, batch));
     } catch (err) {
       showToast(errorMessage(err, `Could not generate the ${LABELS[kind].toLowerCase()}`), 'error');
     } finally {
@@ -64,8 +64,8 @@ function DocCell({ row, kind, onPatch }: { row: Row; kind: DocumentKind; onPatch
     }
   };
 
-  // The certificate is only ever made here, dated the day it is clicked. An offer letter appears here
-  // only when the automatic one at enrolment failed, e.g. the student had no internship role yet.
+  // Nothing is generated automatically, not even for a student who has just joined: every document is made
+  // by this button, from the student's role and the batch's dates.
   if (!path) {
     return (
       <Button size="sm" variant="secondary" className="action-button-compact" loading={busy} onClick={() => void generate()}>
@@ -251,7 +251,7 @@ export function BatchDocuments({ batch }: { batch: Batch }) {
                   </TD>
                   <TD className="cell-secondary font-mono">{row.student_code || '—'}</TD>
                   <TD>
-                    <DocCell row={row} kind={docType} onPatch={(p) => patchRow(row.id, p)} />
+                    <DocCell row={row} batch={batch} kind={docType} onPatch={(p) => patchRow(row.id, p)} />
                   </TD>
                 </TR>
               );
