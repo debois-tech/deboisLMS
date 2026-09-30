@@ -107,20 +107,27 @@ export interface Slot {
   ghost?: { parentId: string | null; kind: CurriculumKind };
 }
 
-/** Pixels. A card is CARD_W x CARD_H; a ghost (the "+") is GHOST square. */
+/** Pixels. A card is CARD_W x CARD_H (a subtopic SUB_W wide); a ghost (the "+") is GHOST square. */
 const CARD_W = 300;
+const SUB_W = 260;
 const CARD_H = 84;
 const GHOST = 42;
-const COL = 400;
-const INDENT = 24;
+// Topics sit this far in from their module's edge, leaving room for the stem down the side.
+const INDENT = 48;
+// Between a topic and the column of its subtopics.
+const SUB_GAP = 88;
+const MODULE_GAP = 96;
+// One topic with nothing beside it: the card plus the air under it.
 const ROW = 108;
-const GHOST_ROW = 72;
+const SUB_ROW = 96;
+const GHOST_GAP = 12;
 const MODULE_Y = 132;
 
 /**
- * Batch card on top, modules in a row under it. Each module owns a column: its topics stack below it,
- * a topic's subtopics below that, each level indented. While editing, a "+" ends every stack and
- * one sits after the last module. A folded node keeps its own slot and gives up everything below it.
+ * Batch card on top, modules in a row under it. A module's topics stack below it; a topic's subtopics stand in a
+ * column to its right, centred on it, like the branches of an org chart. So a topic's row grows with its subtopics
+ * and a module's column is only as wide as it needs to be. While editing, a "+" ends every column and one sits after
+ * the last module. A folded node keeps its own slot and gives up everything below it.
  */
 export function layoutTree(
   byParent: Map<string | null, (Linked & { kind: CurriculumKind })[]>,
@@ -129,36 +136,62 @@ export function layoutTree(
 ): Slot[] {
   const slots: Slot[] = [];
   const modules = byParent.get(null) ?? [];
+  const centres: number[] = [];
+  let x = 0;
 
-  modules.forEach((module, index) => {
-    const x = index * COL;
+  for (const module of modules) {
     slots.push({ id: module.id, x, y: MODULE_Y });
-    let y = MODULE_Y + ROW;
+    centres.push(x + CARD_W / 2);
+    let width = CARD_W;
+    let y = MODULE_Y + CARD_H + 24;
 
-    const stack = (parentId: string, kind: CurriculumKind, level: number) => {
-      for (const node of byParent.get(parentId) ?? []) {
-        slots.push({ id: node.id, x: x + INDENT * level, y });
-        y += ROW;
-        const below = CHILD_KIND[node.kind];
-        if (below && !folded.has(node.id)) stack(node.id, below, level + 1);
-      }
-      if (editable) {
-        slots.push({ id: `ghost:${parentId}`, x: x + INDENT * level, y, ghost: { parentId, kind } });
-        y += GHOST_ROW;
-      }
-    };
-    if (!folded.has(module.id)) stack(module.id, 'topic', 1);
-  });
+    if (!folded.has(module.id)) {
+      const topics = byParent.get(module.id) ?? [];
+      const subsOf = (topic: Linked) => (folded.has(topic.id) ? [] : byParent.get(topic.id) ?? []);
+      // Subtopics show unless their topic is folded; while editing, a topic with none still shows its "+".
+      const wantsSubs = (topic: Linked) => !folded.has(topic.id) && (editable || subsOf(topic).length > 0);
+      const subX = x + INDENT + CARD_W + SUB_GAP;
+      if (topics.some(wantsSubs)) width = INDENT + CARD_W + SUB_GAP + SUB_W;
+      else if (topics.length > 0 || editable) width = INDENT + CARD_W;
 
-  const columns = modules.length + (editable ? 1 : 0);
+      for (const topic of topics) {
+        const subs = subsOf(topic);
+        const withGhost = wantsSubs(topic) && editable;
+        const block = subs.length > 0
+          ? (subs.length - 1) * SUB_ROW + CARD_H + (withGhost ? GHOST_GAP + GHOST : 0)
+          : withGhost ? GHOST : 0;
+        const rowHeight = Math.max(ROW, block + 24);
+        // A tall row centres its topic; the column of subtopics is centred on the same line.
+        const top = y + (rowHeight - ROW) / 2;
+        slots.push({ id: topic.id, x: x + INDENT, y: top });
+        const blockTop = top + CARD_H / 2 - block / 2;
+        subs.forEach((sub, index) => slots.push({ id: sub.id, x: subX, y: blockTop + index * SUB_ROW }));
+        if (withGhost) {
+          slots.push({
+            id: `ghost:${topic.id}`,
+            x: subX,
+            y: subs.length > 0 ? blockTop + block - GHOST : blockTop,
+            ghost: { parentId: topic.id, kind: 'subtopic' },
+          });
+        }
+        y += rowHeight;
+      }
+      if (editable) slots.push({ id: `ghost:${module.id}`, x: x + INDENT, y, ghost: { parentId: module.id, kind: 'topic' } });
+    }
+    x += width + MODULE_GAP;
+  }
+
   if (editable) {
     slots.push({
       id: 'ghost:root',
-      x: modules.length * COL + (CARD_W - GHOST) / 2,
+      x: x + (CARD_W - GHOST) / 2,
       y: MODULE_Y + (CARD_H - GHOST) / 2,
       ghost: { parentId: null, kind: 'module' },
     });
+    centres.push(x + CARD_W / 2);
   }
-  slots.push({ id: 'root', x: (Math.max(columns, 1) - 1) * COL / 2, y: 0 });
+  const first = centres[0] ?? CARD_W / 2;
+  const last = centres[centres.length - 1] ?? first;
+  slots.push({ id: 'root', x: (first + last) / 2 - CARD_W / 2, y: 0 });
   return slots;
 }

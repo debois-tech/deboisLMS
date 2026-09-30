@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import {
   Background,
   BackgroundVariant,
+  BaseEdge,
+  getSmoothStepPath,
   Handle,
   Panel,
   Position,
@@ -10,6 +12,7 @@ import {
   useOnViewportChange,
   useReactFlow,
   type Edge,
+  type EdgeProps,
   type Node,
   type NodeProps,
 } from '@xyflow/react';
@@ -51,6 +54,7 @@ import {
   removeSubtree,
   toDraft,
   type CurriculumFilter,
+  type Slot,
 } from '@/lib/utils/curriculum';
 import { formatDateValue, toDateValue } from '@/lib/utils/date';
 import { errorMessage } from '@/lib/utils/errors';
@@ -69,6 +73,9 @@ interface CardData extends Record<string, unknown> {
   foldable: boolean;
   folded: boolean;
   hidden: number;
+  // Folding into its parent: drawn at the parent and faded out. Coming out of it: an offset back to the parent to start from.
+  gone: boolean;
+  enter: { dx: number; dy: number } | null;
   onFold: (id: string) => void;
   onCycle: (node: CurriculumNode) => void;
   onDate: (node: CurriculumNode, date: string) => void;
@@ -76,7 +83,7 @@ interface CardData extends Record<string, unknown> {
   onRemove: (node: CurriculumNode) => void;
 }
 /** `beside`: the next-module "+", which hangs off the batch card; every other "+" ends a stack. */
-interface GhostData extends Record<string, unknown> { hint: string; beside: boolean; onAdd: () => void }
+interface GhostData extends Record<string, unknown> { hint: string; beside: boolean; gone: boolean; enter: { dx: number; dy: number } | null; onAdd: () => void }
 interface RootData extends Record<string, unknown> { name: string; done: number; total: number }
 
 type CardNode = Node<CardData, 'card'>;
@@ -117,14 +124,22 @@ function RootCard({ data }: NodeProps<RootNode>) {
 }
 
 function CurriculumCard({ data }: NodeProps<CardNode>) {
-  const { node, done, total, view, canTick, isNew, autoFocus, foldable, folded, hidden } = data;
+  const { node, done, total, view, canTick, isNew, autoFocus, foldable, folded, hidden, gone, enter } = data;
   const Icon = KIND_ICON[node.kind];
   const editing = view === 'edit';
 
   return (
-    <div className={clsx('cv-card', `is-${node.status}`, isNew && 'is-new')}>
+    <div
+      className={clsx('cv-card', `is-${node.status}`, node.kind === 'subtopic' && 'is-sub', isNew && 'is-new', gone && 'is-gone', enter && 'is-entering')}
+      style={enter ? ({ '--dx': `${enter.dx}px`, '--dy': `${enter.dy}px` } as React.CSSProperties) : undefined}
+    >
       <Handle type="target" position={node.kind === 'module' ? Position.Top : Position.Left} className="cv-handle" isConnectable={false} />
-      <Handle type="source" position={Position.Bottom} className="cv-handle is-trunk" isConnectable={false} />
+      {/* A module's topics hang from a stem down its side; a topic's subtopics fan out to its right. */}
+      {node.kind === 'topic' ? (
+        <Handle type="source" position={Position.Right} className="cv-handle" isConnectable={false} />
+      ) : (
+        <Handle type="source" position={Position.Bottom} className="cv-handle is-trunk" isConnectable={false} />
+      )}
       <div className="cv-row">
         <TriBox
           status={node.status}
@@ -171,7 +186,7 @@ function CurriculumCard({ data }: NodeProps<CardNode>) {
       {foldable && (
         <button
           type="button"
-          className={clsx('cv-fold nodrag', folded && 'is-folded')}
+          className={clsx('cv-fold nodrag', node.kind === 'topic' && 'is-side', folded && 'is-folded')}
           aria-expanded={!folded}
           aria-label={folded ? `Show ${hidden} ${hidden === 1 ? 'item' : 'items'} under ${node.title || node.kind}` : `Hide what is under ${node.title || node.kind}`}
           onClick={() => data.onFold(node.id)}
@@ -186,7 +201,11 @@ function CurriculumCard({ data }: NodeProps<CardNode>) {
 
 function GhostAdd({ data }: NodeProps<GhostNode>) {
   return (
-    <button type="button" className="cv-ghost nodrag" data-hint={data.hint} aria-label={data.hint} onClick={data.onAdd}>
+    <button
+      type="button"
+      className={clsx('cv-ghost nodrag', data.gone && 'is-gone', data.enter && 'is-entering')}
+      style={data.enter ? ({ '--dx': `${data.enter.dx}px`, '--dy': `${data.enter.dy}px` } as React.CSSProperties) : undefined}
+      data-hint={data.hint} aria-label={data.hint} onClick={data.onAdd}>
       <Handle type="target" position={data.beside ? Position.Top : Position.Left} className="cv-handle" isConnectable={false} />
       <Plus size={18} />
     </button>
@@ -194,6 +213,17 @@ function GhostAdd({ data }: NodeProps<GhostNode>) {
 }
 
 const nodeTypes = { root: RootCard, card: CurriculumCard, ghost: GhostAdd };
+
+// Every connector is square with rounded corners: siblings share one stem or spine, and each branch sweeps off it
+// through an arc of its own size (fixed per branch, so it never shifts), which keeps the tree one drawing but not a
+// ruled one.
+function BranchEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, style }: EdgeProps) {
+  const seed = [...id].reduce((sum, char) => (sum * 31 + char.charCodeAt(0)) % 997, 7);
+  const [path] = getSmoothStepPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition, borderRadius: 20 + (seed % 17) });
+  return <BaseEdge path={path} style={style} />;
+}
+
+const edgeTypes = { branch: BranchEdge };
 
 type Role = 'admin' | 'tutor' | 'student';
 
@@ -301,6 +331,57 @@ function readFolded(batchId: string): Set<string> {
   } catch {
     return new Set();
   }
+}
+
+type Travelling = Slot & { gone?: boolean; from?: { dx: number; dy: number } };
+
+// The slots as drawn. A card that goes folds back into its parent (drawn at the parent, faded out, so the node's own
+// transition carries it there), one that appears is animated out of its parent (a keyframe from an offset), and everything
+// else glides to its new place on its own. `anchorOf` names a card's parent.
+function useTravel(target: Slot[], anchorOf: (id: string) => string | null): { slots: Travelling[]; moving: boolean } {
+  const [drawn, setDrawn] = useState<Travelling[]>(target);
+  const before = useRef(target);
+  const anchor = useRef(anchorOf);
+  useEffect(() => {
+    anchor.current = anchorOf;
+  });
+
+  useEffect(() => {
+    const was = new Map(before.current.map((slot) => [slot.id, slot]));
+    const now = new Map(target.map((slot) => [slot.id, slot]));
+    before.current = target;
+    // Nearest ancestor that is still on the canvas: what a card travels to or from.
+    const home = (id: string) => {
+      let at = anchor.current(id);
+      while (at && !now.has(at)) at = anchor.current(at);
+      return at ? now.get(at) : undefined;
+    };
+
+    const leaving: Travelling[] = [];
+    for (const slot of was.values()) {
+      const to = now.has(slot.id) || was.size <= 1 ? undefined : home(slot.id);
+      if (to) leaving.push({ ...slot, x: to.x, y: to.y, gone: true });
+    }
+    const entering = new Map<string, Travelling>();
+    for (const slot of target) {
+      const from = was.has(slot.id) || was.size <= 1 ? undefined : home(slot.id);
+      if (from) entering.set(slot.id, { ...slot, from: { dx: from.x - slot.x, dy: from.y - slot.y } });
+    }
+
+    if (leaving.length === 0 && entering.size === 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setDrawn(target);
+      return;
+    }
+    setDrawn([...leaving, ...target.map((slot) => entering.get(slot.id) ?? slot)]);
+    // The leavers are dropped once they have landed.
+    const done = window.setTimeout(() => setDrawn(target), 460);
+    return () => window.clearTimeout(done);
+  }, [target]);
+
+  // Only the batch card so far: the first fill is not a journey.
+  const slots: Travelling[] = drawn.length <= 1 ? target : drawn;
+  return { slots, moving: slots.some((slot) => slot.gone || slot.from) };
 }
 
 interface CurriculumCanvasProps {
@@ -552,13 +633,26 @@ export function CurriculumCanvas({ batchId, batchName, role, height = 'calc(100v
     [pending, live],
   );
 
-  const { flowNodes, flowEdges, nothingShown } = useMemo(() => {
+  const layout = useMemo(() => {
     // Layout follows what is visible; the bars always count the whole tree.
     const visible = view === 'view' ? filterTree(shown, filter) : shown;
-    const full = childMap(shown);
     const byParent = childMap(visible);
-    const slots = layoutTree(byParent, view === 'edit', folded);
-    const byId = new Map(shown.map((node) => [node.id, node]));
+    return {
+      slots: layoutTree(byParent, view === 'edit', folded),
+      byParent,
+      full: childMap(shown),
+      byId: new Map(shown.map((node) => [node.id, node])),
+      nothingShown: view === 'view' && filter !== 'all' && visible.length === 0,
+    };
+  }, [shown, view, filter, folded]);
+
+  const { slots, moving } = useTravel(layout.slots, (id) =>
+    id === 'root' ? null : id === 'ghost:root' ? 'root' : id.startsWith('ghost:') ? id.slice(6) : layout.byId.get(id)?.parent_id ?? 'root',
+  );
+  const { nothingShown } = layout;
+
+  const { flowNodes, flowEdges } = useMemo(() => {
+    const { byParent, full, byId } = layout;
     const newIds = view === 'review' ? new Set(reviewDiff?.added.map((node) => node.id)) : new Set<string>();
     const overall = progressOf(full.get(null) ?? []);
 
@@ -567,6 +661,7 @@ export function CurriculumCanvas({ batchId, batchName, role, height = 'calc(100v
 
     for (const slot of slots) {
       const position = { x: slot.x, y: slot.y };
+      const gone = Boolean(slot.gone);
       if (slot.id === 'root') {
         flowNodes.push({ id: 'root', type: 'root', position, data: { name: batchName, ...overall }, draggable: false, selectable: false, focusable: false });
       } else if (slot.ghost) {
@@ -580,12 +675,16 @@ export function CurriculumCanvas({ batchId, batchName, role, height = 'calc(100v
           id: slot.id,
           type: 'ghost',
           position,
-          data: { hint, beside: kind === 'module', onAdd: () => addNode(parentId, kind) },
+          data: { hint, beside: kind === 'module', gone, enter: slot.from ?? null, onAdd: () => addNode(parentId, kind) },
           draggable: false, selectable: false, focusable: false,
         });
-        flowEdges.push({ id: `e-${slot.id}`, source: parentId ?? 'root', target: slot.id, type: 'smoothstep', style: { strokeDasharray: '4 4' }, className: 'cv-edge is-ghost' });
+        if (!gone) {
+          flowEdges.push({ id: `e-${slot.id}`, source: parentId ?? 'root', target: slot.id, type: 'branch', style: { strokeDasharray: '4 4' }, className: 'cv-edge is-ghost' });
+        }
       } else {
-        const node = byId.get(slot.id)!;
+        const node = byId.get(slot.id);
+        // Gone from the tree itself (removed while editing): nothing left to fold into its parent.
+        if (!node) continue;
         flowNodes.push({
           id: node.id,
           type: 'card',
@@ -596,6 +695,8 @@ export function CurriculumCanvas({ batchId, batchName, role, height = 'calc(100v
             foldable: (byParent.get(node.id)?.length ?? 0) > 0,
             folded: folded.has(node.id),
             hidden: countBelow(byParent, node.id),
+            gone,
+            enter: slot.from ?? null,
             onFold: toggleFold,
             view,
             canTick: canEdit && view === 'view',
@@ -608,11 +709,13 @@ export function CurriculumCanvas({ batchId, batchName, role, height = 'calc(100v
           },
           draggable: false, selectable: false, focusable: false,
         });
-        flowEdges.push({ id: `e-${node.id}`, source: node.parent_id ?? 'root', target: node.id, type: 'smoothstep', className: clsx('cv-edge', node.status === 'done' && 'is-done') });
+        if (!gone) {
+          flowEdges.push({ id: `e-${node.id}`, source: node.parent_id ?? 'root', target: node.id, type: 'branch', className: clsx('cv-edge', node.status === 'done' && 'is-done') });
+        }
       }
     }
-    return { flowNodes, flowEdges, nothingShown: view === 'view' && filter !== 'all' && visible.length === 0 };
-  }, [shown, view, filter, folded, batchName, canEdit, focusId, reviewDiff, addNode, cycle, mark, rename, remove, toggleFold]);
+    return { flowNodes, flowEdges };
+  }, [layout, slots, view, folded, batchName, canEdit, focusId, reviewDiff, addNode, cycle, mark, rename, remove, toggleFold]);
 
   if (loading) return <Spinner centered />;
   if (error) return <ErrorState centered message={error} onRetry={retry} />;
@@ -628,12 +731,13 @@ export function CurriculumCanvas({ batchId, batchName, role, height = 'calc(100v
   }
 
   const canvas = (
-    <div ref={boxRef} className={clsx('cv-canvas', fullscreen && 'is-full', settling && 'is-settling')} style={fullscreen ? undefined : { height, minHeight: 520 }}>
+    <div ref={boxRef} className={clsx('cv-canvas', fullscreen && 'is-full', (settling || moving) && 'is-settling')} style={fullscreen ? undefined : { height, minHeight: 520 }}>
       <ReactFlow
         key={batchId}
         nodes={flowNodes}
         edges={flowEdges}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         fitView
         fitViewOptions={FIT}
         minZoom={MIN_ZOOM}

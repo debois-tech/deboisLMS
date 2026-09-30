@@ -4901,12 +4901,19 @@ button.qz-dot:disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* ── Curriculum motion and controls ─────────────────────────── */
 /* Cards glide to a new place instead of jumping; the viewport's own pan and zoom are a different transform and stay untouched. */
-.cv-canvas .react-flow__node { transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+.cv-canvas .react-flow__node { transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1); }
 /* Connectors are redrawn, not moved, so they step aside while the cards travel and return once they have landed. */
 .cv-canvas .react-flow__edges { transition: opacity 0.3s ease; }
 .cv-canvas.is-settling .react-flow__edges { opacity: 0; transition-duration: 0.08s; }
-.cv-canvas .cv-card { animation: cvEnter 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
-@keyframes cvEnter { from { opacity: 0; transform: scale(0.96); } }
+/* A card folding into its parent, or coming out of it, is drawn at the parent and faded out; the node's own transition does the travelling. */
+.cv-card { transition: border-color 0.2s ease, opacity 0.3s ease, transform 0.45s cubic-bezier(0.16, 1, 0.3, 1); }
+.cv-card.is-gone { opacity: 0; transform: scale(0.9); pointer-events: none; }
+.cv-card.is-entering, .cv-ghost.is-entering { animation: cvEmerge 0.45s cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+@keyframes cvEmerge { from { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0.9); } }
+.cv-ghost { transition: opacity 0.3s ease, color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease; }
+.cv-ghost.is-gone { opacity: 0; pointer-events: none; }
+.cv-card.is-sub { width: 260px; }
+.cv-canvas .cv-edge .react-flow__edge-path { stroke-linecap: round; }
 .cv-canvas.is-full { animation: cvFull 0.26s cubic-bezier(0.16, 1, 0.3, 1); }
 @keyframes cvFull { from { opacity: 0; transform: scale(0.985); } }
 
@@ -4937,6 +4944,10 @@ button.qz-dot:disabled { opacity: 0.45; cursor: not-allowed; }
 .cv-fold:hover, .cv-fold.is-folded { color: var(--primary); border-color: var(--primary); }
 .cv-fold.is-folded { background: color-mix(in srgb, var(--primary) 10%, var(--bg-surface)); }
 .cv-fold:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+/* A topic's subtopics are beside it, so its handle is on its right edge and points along the branch. */
+.cv-fold.is-side { left: calc(100% - 11px); bottom: auto; top: calc(50% - 11px); }
+.cv-fold.is-side svg { transform: rotate(-90deg); }
+.cv-fold.is-side.is-folded svg { transform: rotate(90deg); }
 
 .cv-tool {
   display: inline-grid;
