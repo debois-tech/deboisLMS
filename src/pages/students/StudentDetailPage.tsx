@@ -18,6 +18,7 @@ import { DeleteStudentModal } from '@/components/students/DeleteStudentModal';
 import { getStudentById, getStudentBatches, getFeesByStudent, getLecturesByBatch, getFeePaymentLogsByStudent, getPendingClaims, terminateEnrolment } from '@/lib/supabase';
 import type { Student, BatchStudentMapping, Batch, StudentFee, Lecture, FeePaymentLog, PaymentClaim } from '@/lib/types';
 import { formatDate, formatCurrency } from '@/lib/utils/format';
+import { INTERNSHIP_ROLE_LABELS } from '@/lib/utils/studentImport';
 import { useToast } from '@/lib/context/ToastContext';
 import { useConfirm } from '@/lib/context/ConfirmContext';
 import { errorMessage } from '@/lib/utils/errors';
@@ -120,6 +121,9 @@ export default function StudentDetailPage() {
     { label: 'Branch', value: student.branch ?? '' },
     { label: 'Current Year', value: student.current_year ?? '' },
     { label: 'Graduation Year', value: student.graduation_year ? String(student.graduation_year) : '' },
+    { label: 'Internship Role', value: student.internship_role ? INTERNSHIP_ROLE_LABELS[student.internship_role] : '' },
+    { label: 'Internship Start', value: student.internship_start_date ? formatDate(student.internship_start_date) : '' },
+    { label: 'Internship End', value: student.internship_end_date ? formatDate(student.internship_end_date) : '' },
   ].filter((fact) => fact.value);
 
   return (

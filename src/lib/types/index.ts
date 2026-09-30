@@ -71,6 +71,11 @@ export interface Student {
   graduation_year?: number;
   github_url?: string;
   linkedin_url?: string;
+  /** Stamped on the offer letter and the certificate. */
+  internship_role?: InternshipRole | null;
+  /** `YYYY-MM-DD`. Today for a new student; the end date is the batch's when it is ended. Both editable. */
+  internship_start_date?: string | null;
+  internship_end_date?: string | null;
   created_at: string;
   /** auth.users id once a portal login has been created for this student. */
   auth_user_id?: string;
@@ -242,7 +247,7 @@ export interface BatchStudentMapping {
   /** Set only once terminated. */
   left_on?: string | null;
   status: MappingStatus;
-  /** Generated once, right when the row is created, and stored in the private `documents` bucket. */
+  /** The offer letter is made when the row is created; the certificate only when an admin generates it. Both live in the private `documents` bucket. */
   offer_letter_path?: string | null;
   cert_path?: string | null;
   /** Whether the student can see/download/be emailed the doc above. Set by the admin on /documents. */
@@ -254,6 +259,8 @@ export interface BatchStudentMapping {
 }
 
 export type DocumentKind = 'offer_letter' | 'cert';
+
+export type InternshipRole = 'devops_engineering_intern' | 'ai_ml_engineering_intern' | 'cloud_engineering_intern';
 
 /** Metadata only; the file lives in the private bucket and is served watermarked. */
 export interface Material {

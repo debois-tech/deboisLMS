@@ -11,7 +11,7 @@ import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/Table';
 import { StudentLink } from '@/components/students/StudentLink';
 import { useToast } from '@/lib/context/ToastContext';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
-import { generateAndStoreDocuments, getBatchStudents, sendDocumentEmail, setDocumentShared } from '@/lib/supabase';
+import { generateAndStoreDocument, getBatchStudents, sendDocumentEmail, setDocumentShared } from '@/lib/supabase';
 import type { Batch, DocumentKind, Student, BatchStudentMapping } from '@/lib/types';
 import { errorMessage } from '@/lib/utils/errors';
 
@@ -47,7 +47,7 @@ function statusOf(mapping: BatchStudentMapping, kind: DocumentKind): RowStatus {
 }
 
 /** One doc's cell, for whichever kind the dropdown currently has selected. */
-function DocCell({ row, batch, kind, onPatch }: { row: Row; batch: Batch; kind: DocumentKind; onPatch: (patch: Patch) => void }) {
+function DocCell({ row, kind, onPatch }: { row: Row; kind: DocumentKind; onPatch: (patch: Patch) => void }) {
   const { showToast } = useToast();
   const [busy, setBusy] = useState(false);
   const path = pathOf(row.mapping, kind);
@@ -56,16 +56,16 @@ function DocCell({ row, batch, kind, onPatch }: { row: Row; batch: Batch; kind: 
   const generate = async () => {
     setBusy(true);
     try {
-      onPatch(await generateAndStoreDocuments(row.mapping, row, batch));
+      onPatch(await generateAndStoreDocument(kind, row.mapping, row));
     } catch (err) {
-      showToast(errorMessage(err, 'Could not generate the documents'), 'error');
+      showToast(errorMessage(err, `Could not generate the ${LABELS[kind].toLowerCase()}`), 'error');
     } finally {
       setBusy(false);
     }
   };
 
-  // Missing, not stale: generation already runs automatically on enrolment, so this only
-  // covers a row from before that existed, or one where the background attempt failed.
+  // The certificate is only ever made here, dated the day it is clicked. An offer letter appears here
+  // only when the automatic one at enrolment failed, e.g. the student had no internship role yet.
   if (!path) {
     return (
       <Button size="sm" variant="secondary" className="action-button-compact" loading={busy} onClick={() => void generate()}>
@@ -251,7 +251,7 @@ export function BatchDocuments({ batch }: { batch: Batch }) {
                   </TD>
                   <TD className="cell-secondary font-mono">{row.student_code || '—'}</TD>
                   <TD>
-                    <DocCell row={row} batch={batch} kind={docType} onPatch={(p) => patchRow(row.id, p)} />
+                    <DocCell row={row} kind={docType} onPatch={(p) => patchRow(row.id, p)} />
                   </TD>
                 </TR>
               );

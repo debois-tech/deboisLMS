@@ -8,7 +8,7 @@ import { FormField } from '@/components/ui/FormField';
 import { BatchSelect } from '@/components/ui/BatchSelect';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { SearchSelect } from '@/components/ui/SearchSelect';
-import { GENDER_OPTIONS } from '@/lib/utils/studentImport';
+import { GENDER_OPTIONS, INTERNSHIP_ROLE_OPTIONS, roleForBatch } from '@/lib/utils/studentImport';
 import { Spinner } from '@/components/ui/Spinner';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -17,8 +17,9 @@ import { InlineAlert } from '@/components/ui/InlineAlert';
 import { addStudentToBatch, createOrReuseStudent, createStudentLogin, getBatches } from '@/lib/supabase';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { useToast } from '@/lib/context/ToastContext';
-import type { Batch, StudentCredentials } from '@/lib/types';
+import type { Batch, InternshipRole, StudentCredentials } from '@/lib/types';
 import { errorMessage } from '@/lib/utils/errors';
+import { toDateValue } from '@/lib/utils/date';
 import { feeFromDiscountValue, formatCurrency } from '@/lib/utils/format';
 
 export default function NewStudentPage() {
@@ -32,6 +33,11 @@ export default function NewStudentPage() {
   // however they were added. The fee itself is derived from the batch.
   const [discount, setDiscount] = useState('');
   const [discountType, setDiscountType] = useState<'percentage' | 'amount'>('percentage');
+  // Empty until picked; meanwhile the batch's programme suggests one.
+  const [pickedRole, setPickedRole] = useState<InternshipRole | ''>('');
+  // Start is today unless changed; the end is left for the batch's end date to fill, or an admin.
+  const [internshipStart, setInternshipStart] = useState(() => toDateValue(new Date()));
+  const [internshipEnd, setInternshipEnd] = useState('');
   // Mirrors STUDENT_IMPORT_FIELDS, so a student typed in here carries the same
   // profile as one that arrived on a CSV.
   const [form, setForm] = useState({
@@ -49,6 +55,7 @@ export default function NewStudentPage() {
   });
 
   const batch = batches.find((option) => option.id === batchId);
+  const role = pickedRole || roleForBatch(batch) || '';
   const baseFee = batch?.base_fee ?? null;
   const payable = baseFee === null ? null : feeFromDiscountValue(baseFee, Number(discount) || 0, discountType);
 
@@ -64,6 +71,14 @@ export default function NewStudentPage() {
       showToast('Pick a date of birth', 'error');
       return;
     }
+    if (!role) {
+      showToast('Pick an internship role', 'error');
+      return;
+    }
+    if (internshipEnd && internshipStart && internshipEnd < internshipStart) {
+      showToast('The internship cannot end before it starts', 'error');
+      return;
+    }
     if (payable === null) {
       showToast(`${batch?.name ?? 'This batch'} has no base fee. Set one on the batch first.`, 'error');
       return;
@@ -76,6 +91,9 @@ export default function NewStudentPage() {
       const student = await createOrReuseStudent({
         ...Object.fromEntries(Object.entries(text).filter(([, value]) => value !== '')),
         ...(graduation_year ? { graduation_year: Number(graduation_year) } : {}),
+        internship_role: role,
+        ...(internshipStart ? { internship_start_date: internshipStart } : {}),
+        ...(internshipEnd ? { internship_end_date: internshipEnd } : {}),
       } as Parameters<typeof createOrReuseStudent>[0]);
       setCreatedStudentId(student.id);
       // An existing student already on this batch is the goal, not an error — the
@@ -163,6 +181,25 @@ export default function NewStudentPage() {
               Set one on the batch, then add the student.
             </InlineAlert>
           )}
+          <FormField label="Internship Role" required>
+            <SearchSelect
+              showSearch={false}
+              options={INTERNSHIP_ROLE_OPTIONS}
+              value={role || null}
+              onChange={(value) => setPickedRole(value as InternshipRole)}
+              placeholder="Select a role"
+              searchPlaceholder="Search"
+              emptyText="No match"
+            />
+          </FormField>
+          <div className="grid gap-4 md:grid-cols-2">
+            <FormField label="Internship Start">
+              <DatePicker value={internshipStart} onChange={setInternshipStart} placeholder="Pick a date" ariaLabel="Internship start date" clearable={false} />
+            </FormField>
+            <FormField label="Internship End">
+              <DatePicker value={internshipEnd} onChange={setInternshipEnd} min={internshipStart || undefined} placeholder="Set when the batch ends" ariaLabel="Internship end date" />
+            </FormField>
+          </div>
           <div className="grid gap-4 md:grid-cols-2">
             <FormField label="Date of Birth" required>
               <DatePicker

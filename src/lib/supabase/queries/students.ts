@@ -1,10 +1,10 @@
 import { supabase } from '../client';
 import { getBatchById } from './batches';
-import { generateAndStoreDocuments } from './documents';
+import { generateAndStoreDocument } from './documents';
 import { invokeLoginFunction, maybeRow, ok, row, rows } from './result';
 import type { Batch, Student, BatchStudentMapping, StudentCredentials } from '@/lib/types';
 import { errorMessage } from '@/lib/utils/errors';
-import { getImportDiscount, toStudentInput } from '@/lib/utils/studentImport';
+import { getImportDiscount, roleForBatch, toStudentInput } from '@/lib/utils/studentImport';
 import { feeFromDiscountValue } from '@/lib/utils/format';
 
 export async function getStudents(): Promise<Student[]> {
@@ -266,11 +266,14 @@ export async function addStudentToBatch(
     'Student was added but the fee could not be set',
   );
 
-  // Best-effort, same as the badge fetch elsewhere: a template hiccup must not block enrolling
-  // the student. getStudentById is this same module's own export, so no round trip is needed for it.
+  // Best-effort, same as the badge fetch elsewhere: a template hiccup must not block enrolling the student.
+  // A student with no internship role yet gets the one for this batch's programme, then the offer letter is made.
   void Promise.all([getStudentById(studentId), getBatchById(batchId)])
-    .then(([student, batch]) => {
-      if (student && batch) return generateAndStoreDocuments(mapping, student, batch);
+    .then(async ([student, batch]) => {
+      if (!student || !batch) return;
+      const role = student.internship_role ? undefined : roleForBatch(batch);
+      const current = role ? (await updateStudent(student.id, { internship_role: role })) ?? student : student;
+      return generateAndStoreDocument('offer_letter', mapping, current);
     })
     .catch((err) => console.error('[addStudentToBatch] documents', err));
 

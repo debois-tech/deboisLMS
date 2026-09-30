@@ -1,7 +1,15 @@
 import { supabase } from '../client';
 import { ok } from './result';
-import type { Batch, BatchStudentMapping, DocumentKind, Student } from '@/lib/types';
-import { generateDocumentPdf } from '@/lib/utils/documents';
+import type { BatchStudentMapping, DocumentKind, Student } from '@/lib/types';
+import { fromDateValue } from '@/lib/utils/date';
+import { buildDocumentPdf, type DocumentAssets } from '@/lib/utils/documents';
+import { INTERNSHIP_ROLE_LABELS } from '@/lib/utils/studentImport';
+import regularFont from '@/assets/fonts/manrope-400.woff?url';
+import mediumFont from '@/assets/fonts/manrope-500.woff?url';
+import boldFont from '@/assets/fonts/manrope-700.woff?url';
+
+// The company letterhead both documents are drawn on, hosted where the HTML templates already point.
+const LETTERHEAD_URL = 'https://res.cloudinary.com/uxbtmcpx/image/upload/v1790672578/Copy_of_Official_Letterhead.png';
 
 const BUCKET = 'documents';
 
@@ -17,33 +25,66 @@ const PATH_COLUMN: Record<DocumentKind, 'offer_letter_path' | 'cert_path'> = {
   offer_letter: 'offer_letter_path',
   cert: 'cert_path',
 };
-const KINDS: DocumentKind[] = ['offer_letter', 'cert'];
+const NAMES: Record<DocumentKind, string> = { offer_letter: 'Offer-Letter', cert: 'Internship-Certificate' };
+
+const fetchBytes = async (url: string) => {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Could not load ${url.split('/').pop()}`);
+  return new Uint8Array(await response.arrayBuffer());
+};
+
+// Fonts and letterhead are fetched once per session, and again after a failure.
+let assets: Promise<DocumentAssets> | undefined;
+function loadAssets(): Promise<DocumentAssets> {
+  assets ??= Promise.all([fetchBytes(regularFont), fetchBytes(mediumFont), fetchBytes(boldFont), fetchBytes(LETTERHEAD_URL)])
+    .then(([regular, medium, bold, letterhead]) => ({ regular, medium, bold, letterhead }))
+    .catch((err) => {
+      assets = undefined;
+      throw err;
+    });
+  return assets;
+}
 
 /**
- * Generated once — right when the mapping row is created (see addStudentToBatch) — and stored, so
- * every later view, download or email just reads this same copy back.
+ * One document, drawn from the student's own data and stored under the enrolment. The offer letter is made when the
+ * student is enrolled (see addStudentToBatch); the certificate only when an admin generates it, dated that day and
+ * carrying the student's internship start and end dates. Every later view, download or email reads the stored copy back.
  */
-export async function generateAndStoreDocuments(
+export async function generateAndStoreDocument(
+  kind: DocumentKind,
   mapping: BatchStudentMapping,
   student: Student,
-  batch: Batch,
 ): Promise<Pick<BatchStudentMapping, 'offer_letter_path' | 'cert_path'>> {
-  const patch: Partial<Record<'offer_letter_path' | 'cert_path', string>> = {};
-
-  for (const kind of KINDS) {
-    const file = await generateDocumentPdf(kind, student, batch);
-    const path = `${mapping.id}/${kind}.pdf`;
-    const { error } = await supabase.storage.from(BUCKET).upload(path, file, { contentType: 'application/pdf', upsert: true });
-    if (error) throw new Error(`Could not store the ${kind === 'offer_letter' ? 'offer letter' : 'certificate'}: ${error.message}`);
-    patch[PATH_COLUMN[kind]] = path;
+  if (!student.internship_role) throw new Error(`Set ${student.name}'s internship role first (Edit student).`);
+  const enrolledOn = fromDateValue(mapping.joined_at) ?? new Date();
+  const startOn = (student.internship_start_date && fromDateValue(student.internship_start_date)) || enrolledOn;
+  const endOn = (student.internship_end_date && fromDateValue(student.internship_end_date)) || undefined;
+  if (kind === 'cert' && !(student.internship_start_date && endOn)) {
+    throw new Error(`Set ${student.name}'s internship start and end dates first (Edit student).`);
   }
 
-  ok(
-    await supabase.from('batch_student_mapping').update(patch).eq('id', mapping.id),
-    'The documents were stored but the record could not be updated',
+  const bytes = await buildDocumentPdf(
+    kind,
+    {
+      name: student.name.trim(),
+      code: student.student_code ?? '',
+      role: INTERNSHIP_ROLE_LABELS[student.internship_role],
+      enrolledOn,
+      startOn,
+      endOn,
+      issuedOn: new Date(),
+    },
+    await loadAssets(),
   );
+  const file = new File([bytes as BlobPart], `${NAMES[kind]}-${student.student_code ?? student.id}.pdf`, { type: 'application/pdf' });
 
-  return patch as Pick<BatchStudentMapping, 'offer_letter_path' | 'cert_path'>;
+  const path = `${mapping.id}/${kind}.pdf`;
+  const { error } = await supabase.storage.from(BUCKET).upload(path, file, { contentType: 'application/pdf', upsert: true });
+  if (error) throw new Error(`Could not store the ${kind === 'offer_letter' ? 'offer letter' : 'certificate'}: ${error.message}`);
+
+  const patch = { [PATH_COLUMN[kind]]: path };
+  ok(await supabase.from('batch_student_mapping').update(patch).eq('id', mapping.id), 'The document was stored but the record could not be updated');
+  return patch;
 }
 
 type SharePatch = Pick<BatchStudentMapping, 'offer_letter_shared' | 'cert_shared' | 'offer_letter_shared_at' | 'cert_shared_at'>;
