@@ -28,7 +28,8 @@ import { DatePicker } from '@/components/ui/DatePicker';
 import { StudentLink } from '@/components/students/StudentLink';
 import { PaymentLogModal, type PaymentLogFormState } from '@/components/finance/PaymentLogModal';
 import { BatchSelect } from '@/components/ui/BatchSelect';
-import { getBatchById, getBatches, getBatchPrograms, endBatch } from '@/lib/supabase';
+import { getBatchById, getBatches, getBatchPrograms, endBatch, getCurriculumProgress } from '@/lib/supabase';
+import { ProgressBar } from '@/components/ui/ProgressBar';
 import { getBatchStudents, addStudentToBatch, terminateEnrolment, transferStudents, getStudents, createStudentLoginsBulk, importStudentsIntoBatch, deleteFeePayment } from '@/lib/supabase';
 import type { BulkLoginResult } from '@/lib/supabase';
 import { BulkLoginsModal } from '@/components/students/BulkLoginsModal';
@@ -181,11 +182,13 @@ export default function BatchDetailPage() {
 export function OverviewTab({ batch, programLabel, showFees = true }: { batch: Batch; programLabel?: string; showFees?: boolean }) {
   const [students, setStudents] = useState<(Student & { mapping: BatchStudentMapping })[]>([]);
   const [lectures, setLectures] = useState<Lecture[]>([]);
+  const [topics, setTopics] = useState<{ done: number; total: number } | undefined>();
 
   const load = useCallback(async () => {
-    const [s, l] = await Promise.all([getBatchStudents(batch.id), getLecturesByBatch(batch.id)]);
+    const [s, l, progress] = await Promise.all([getBatchStudents(batch.id), getLecturesByBatch(batch.id), getCurriculumProgress(batch.id)]);
     setStudents(s);
     setLectures(l);
+    setTopics(progress.get(batch.id));
   }, [batch.id]);
 
   const { error, reload } = useReloadableSection(load);
@@ -193,27 +196,44 @@ export function OverviewTab({ batch, programLabel, showFees = true }: { batch: B
   if (error) return <ErrorState message={error} onRetry={reload} />;
 
   return (
-    <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${showFees ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
-      <Card padding="sm">
-        <p className="text-xs text-[var(--text-muted)]">Total Students</p>
-        <p className="text-lg font-bold text-[var(--text-primary)] mt-1">{students.filter((s) => s.mapping.status === 'active').length}</p>
-      </Card>
-      <Card padding="sm">
-        <p className="text-xs text-[var(--text-muted)]">Lectures Held</p>
-        <p className="text-lg font-bold text-[var(--text-primary)] mt-1">{lectures.length}</p>
-      </Card>
-      <Card padding="sm">
-        <p className="text-xs text-[var(--text-muted)]">Programme</p>
-        <p className="text-lg font-bold text-[var(--text-primary)] mt-1 truncate">{programLabel ?? 'Not set'}</p>
-      </Card>
-      {showFees && (
+    <div className="flex flex-col gap-4">
+      <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${showFees ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
         <Card padding="sm">
-          <p className="text-xs text-[var(--text-muted)]">Regular Fees</p>
-          <p className="text-lg font-bold text-[var(--text-primary)] mt-1">
-            {batch.base_fee == null ? 'Not set' : formatCurrency(batch.base_fee)}
-          </p>
+          <p className="text-xs text-[var(--text-muted)]">Total Students</p>
+          <p className="text-lg font-bold text-[var(--text-primary)] mt-1">{students.filter((s) => s.mapping.status === 'active').length}</p>
         </Card>
-      )}
+        <Card padding="sm">
+          <p className="text-xs text-[var(--text-muted)]">Lectures Held</p>
+          <p className="text-lg font-bold text-[var(--text-primary)] mt-1">{lectures.length}</p>
+        </Card>
+        <Card padding="sm">
+          <p className="text-xs text-[var(--text-muted)]">Programme</p>
+          <p className="text-lg font-bold text-[var(--text-primary)] mt-1 truncate">{programLabel ?? 'Not set'}</p>
+        </Card>
+        {showFees && (
+          <Card padding="sm">
+            <p className="text-xs text-[var(--text-muted)]">Regular Fees</p>
+            <p className="text-lg font-bold text-[var(--text-primary)] mt-1">
+              {batch.base_fee == null ? 'Not set' : formatCurrency(batch.base_fee)}
+            </p>
+          </Card>
+        )}
+      </div>
+      <Card padding="sm">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+          <div>
+            <p className="text-xs text-[var(--text-muted)]">Course progress</p>
+            <p className="text-lg font-bold text-[var(--text-primary)] tabular-nums">
+              {topics ? `${Math.round((topics.done / topics.total) * 100)}%` : 'No curriculum yet'}
+            </p>
+          </div>
+          {topics && (
+            <div className="min-w-[10rem] flex-1">
+              <ProgressBar count done={topics.done} total={topics.total} label="Course progress" />
+            </div>
+          )}
+        </div>
+      </Card>
     </div>
   );
 }

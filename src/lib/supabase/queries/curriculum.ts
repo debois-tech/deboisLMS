@@ -49,6 +49,27 @@ export async function setCurriculumStatus(nodeId: string, status: CurriculumStat
   );
 }
 
+// Topics done over topics, per batch (just one when given). A batch without topics is absent.
+// Paged, because the API hands back at most 1000 rows a call.
+export async function getCurriculumProgress(batchId?: string): Promise<Map<string, { done: number; total: number }>> {
+  const PAGE = 1000;
+  const progress = new Map<string, { done: number; total: number }>();
+  for (let from = 0; ; from += PAGE) {
+    const base = supabase.from('curriculum_nodes').select('batch_id, status').eq('kind', 'topic');
+    const page = rows<{ batch_id: string; status: CurriculumStatus }>(
+      await (batchId ? base.eq('batch_id', batchId) : base).order('id').range(from, from + PAGE - 1),
+      'Could not load curriculum progress',
+    );
+    for (const { batch_id, status } of page) {
+      const entry = progress.get(batch_id) ?? { done: 0, total: 0 };
+      entry.total += 1;
+      if (status === 'done') entry.done += 1;
+      progress.set(batch_id, entry);
+    }
+    if (page.length < PAGE) return progress;
+  }
+}
+
 export interface CurriculumOverview {
   /** Per batch: done modules over all modules. Absent = no curriculum yet. */
   progress: Map<string, { done: number; total: number }>;

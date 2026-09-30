@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Search, ScrollText, Send, Share2 } from 'lucide-react';
+import { FilePlus2, Search, ScrollText, Send, Share2 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -11,7 +11,7 @@ import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/Table';
 import { StudentLink } from '@/components/students/StudentLink';
 import { useToast } from '@/lib/context/ToastContext';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
-import { generateAndStoreDocuments, getBatchStudents, sendDocumentEmail, setDocumentShared } from '@/lib/supabase';
+import { generateAndStoreDocument, getBatchStudents, sendDocumentEmail, setDocumentShared } from '@/lib/supabase';
 import type { Batch, DocumentKind, Student, BatchStudentMapping } from '@/lib/types';
 import { errorMessage } from '@/lib/utils/errors';
 
@@ -56,16 +56,16 @@ function DocCell({ row, batch, kind, onPatch }: { row: Row; batch: Batch; kind: 
   const generate = async () => {
     setBusy(true);
     try {
-      onPatch(await generateAndStoreDocuments(row.mapping, row, batch));
+      onPatch(await generateAndStoreDocument(kind, row.mapping, row, batch));
     } catch (err) {
-      showToast(errorMessage(err, 'Could not generate the documents'), 'error');
+      showToast(errorMessage(err, `Could not generate the ${LABELS[kind].toLowerCase()}`), 'error');
     } finally {
       setBusy(false);
     }
   };
 
-  // Missing, not stale: generation already runs automatically on enrolment, so this only
-  // covers a row from before that existed, or one where the background attempt failed.
+  // Nothing is generated automatically, not even for a student who has just joined: every document is made
+  // by this button, from the student's role and the batch's dates.
   if (!path) {
     return (
       <Button size="sm" variant="secondary" className="action-button-compact" loading={busy} onClick={() => void generate()}>
@@ -130,11 +130,38 @@ export function BatchDocuments({ batch }: { batch: Batch }) {
     });
   }, [rows, search, statusFilter, docType]);
 
-  const selectableRows = filteredRows.filter((row) => pathOf(row.mapping, docType));
-  const allSelected = selectableRows.length > 0 && selectableRows.every((row) => selected.has(row.id));
+  const allSelected = filteredRows.length > 0 && filteredRows.every((row) => selected.has(row.id));
 
   const toggleAll = () =>
-    setSelected(allSelected ? new Set() : new Set(selectableRows.map((row) => row.id)));
+    setSelected(allSelected ? new Set() : new Set(filteredRows.map((row) => row.id)));
+
+  // Generating, sharing and emailing each act on the selected students they apply to: share and email need a
+  // generated document, generate needs one that does not exist yet.
+  const picked = rows.filter((row) => selected.has(row.id));
+  const toGenerate = picked.filter((row) => !pathOf(row.mapping, docType));
+  const toSend = picked.filter((row) => pathOf(row.mapping, docType));
+
+  // One at a time: each is a PDF built in the browser and an upload, and the first failure is worth reading.
+  const bulkGenerate = async () => {
+    setBulkBusy(true);
+    const failures: string[] = [];
+    for (const row of toGenerate) {
+      try {
+        patchRow(row.id, await generateAndStoreDocument(docType, row.mapping, row, batch));
+      } catch (err) {
+        failures.push(`${row.name}: ${errorMessage(err, 'failed')}`);
+      }
+    }
+    const ok = toGenerate.length - failures.length;
+    showToast(
+      failures.length === 0
+        ? `Generated ${ok}`
+        : `Generated ${ok} of ${toGenerate.length}. ${failures[0]}${failures.length > 1 ? ` (+${failures.length - 1} more)` : ''}`,
+      failures.length === 0 ? 'success' : 'error',
+    );
+    setSelected(new Set());
+    setBulkBusy(false);
+  };
 
   const toggleOne = (id: string) =>
     setSelected((current) => {
@@ -145,12 +172,9 @@ export function BatchDocuments({ batch }: { batch: Batch }) {
 
   const bulkShare = async () => {
     setBulkBusy(true);
-    const ids = [...selected];
+    const ids = toSend.map((row) => row.id);
     const outcomes = await Promise.allSettled(
-      ids.map(async (id) => {
-        const target = rows.find((row) => row.id === id)!;
-        patchRow(id, await setDocumentShared(target.mapping.id, docType, true));
-      }),
+      toSend.map(async (row) => patchRow(row.id, await setDocumentShared(row.mapping.id, docType, true))),
     );
     const ok = outcomes.filter((o) => o.status === 'fulfilled').length;
     showToast(ok === ids.length ? `Shared with ${ok}` : `Shared with ${ok} of ${ids.length}`, ok === ids.length ? 'success' : 'error');
@@ -160,7 +184,7 @@ export function BatchDocuments({ batch }: { batch: Batch }) {
 
   const bulkEmail = async () => {
     setBulkBusy(true);
-    const ids = [...selected];
+    const ids = toSend.map((row) => row.id);
     const outcomes = await Promise.allSettled(ids.map((id) => sendDocumentEmail(id, batch.id, docType)));
     const ok = outcomes.filter((o) => o.status === 'fulfilled').length;
     showToast(ok === ids.length ? `Emailed ${ok}` : `Emailed ${ok} of ${ids.length}`, ok === ids.length ? 'success' : 'error');
@@ -202,12 +226,21 @@ export function BatchDocuments({ batch }: { batch: Batch }) {
         ) : (
           <div className="table-toolbar">
             <span className="text-xs text-[var(--text-muted)]">{selected.size} selected</span>
-            <Button size="sm" variant="secondary" className="action-button-compact" loading={bulkBusy} onClick={() => void bulkShare()}>
-              <Share2 size={14} /> Share
-            </Button>
-            <Button size="sm" className="action-button-compact" loading={bulkBusy} onClick={() => void bulkEmail()}>
-              <Send size={14} /> Email
-            </Button>
+            {toGenerate.length > 0 && (
+              <Button size="sm" className="action-button-compact" loading={bulkBusy} disabled={bulkBusy} onClick={() => void bulkGenerate()}>
+                <FilePlus2 size={14} /> Generate {toGenerate.length}
+              </Button>
+            )}
+            {toSend.length > 0 && (
+              <>
+                <Button size="sm" variant="secondary" className="action-button-compact" loading={bulkBusy} disabled={bulkBusy} onClick={() => void bulkShare()}>
+                  <Share2 size={14} /> Share {toSend.length}
+                </Button>
+                <Button size="sm" variant="secondary" className="action-button-compact" loading={bulkBusy} disabled={bulkBusy} onClick={() => void bulkEmail()}>
+                  <Send size={14} /> Email {toSend.length}
+                </Button>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -223,7 +256,6 @@ export function BatchDocuments({ batch }: { batch: Batch }) {
                   type="checkbox"
                   className="data-table-checkbox"
                   checked={allSelected}
-                  disabled={selectableRows.length === 0}
                   onChange={toggleAll}
                 />
               </TH>
@@ -233,16 +265,13 @@ export function BatchDocuments({ batch }: { batch: Batch }) {
             </TR>
           </THead>
           <TBody>
-            {filteredRows.map((row) => {
-              const path = pathOf(row.mapping, docType);
-              return (
+            {filteredRows.map((row) => (
                 <TR key={row.id}>
                   <TD align="center">
                     <input
                       type="checkbox"
                       className="data-table-checkbox"
                       checked={selected.has(row.id)}
-                      disabled={!path}
                       onChange={() => toggleOne(row.id)}
                     />
                   </TD>
@@ -254,8 +283,7 @@ export function BatchDocuments({ batch }: { batch: Batch }) {
                     <DocCell row={row} batch={batch} kind={docType} onPatch={(p) => patchRow(row.id, p)} />
                   </TD>
                 </TR>
-              );
-            })}
+            ))}
           </TBody>
         </Table>
       )}

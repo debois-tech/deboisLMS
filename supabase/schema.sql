@@ -1160,6 +1160,13 @@ begin
     raise exception 'Batch not found';
   end if;
 
+  -- Students active in the batch get its end date as their internship end date, unless one is already set.
+  update students
+  set internship_end_date = updated.ended_at
+  where internship_end_date is null
+    and (internship_start_date is null or internship_start_date <= updated.ended_at)
+    and id in (select student_id from batch_student_mapping where batch_id = p_batch_id and status = 'active');
+
   return updated;
 end $$;
 
@@ -2014,3 +2021,737 @@ create policy "student reads own shared documents" on storage.objects
         )
     )
   );
+
+-- 18. LIVE QUIZ
+-- A tutor (or an admin, for everyone) builds an MCQ quiz, opens a lobby, then steps through the questions
+-- while students answer on their own screens. Students never read quiz tables: they call quiz_state() and
+-- quiz_answer(), so the answer key stays server-side until a question closes. A quiz is one run:
+-- draft -> lobby -> live -> ended. "Play again" is a duplicate on the client.
+do $$ begin create type quiz_status as enum ('draft', 'lobby', 'live', 'ended');  exception when duplicate_object then null; end $$;
+do $$ begin create type quiz_phase  as enum ('answering', 'closed');              exception when duplicate_object then null; end $$;
+
+create table if not exists quizzes (
+  id                 uuid primary key default gen_random_uuid(),
+  title              text not null check (length(btrim(title)) > 0),
+  -- Null means everyone; only an admin can create one of those.
+  batch_id           uuid references batches(id) on delete cascade,
+  created_by         uuid references tutors(id) on delete set null default current_tutor_id(),
+  status             quiz_status not null default 'draft',
+  seconds_per_question int not null default 20 check (seconds_per_question between 5 and 300),
+  show_answer        boolean not null default true,
+  live_leaderboard   boolean not null default false,
+  student_review     boolean not null default true,
+  -- Which question the students are looking at, the furthest one ever opened, and whether it takes answers.
+  current_position   int not null default -1,
+  furthest           int not null default -1,
+  phase              quiz_phase not null default 'closed',
+  started_at         timestamptz,
+  ended_at           timestamptz,
+  created_at         timestamptz not null default now()
+);
+
+create table if not exists quiz_questions (
+  id         uuid primary key default gen_random_uuid(),
+  quiz_id    uuid references quizzes(id) on delete cascade not null,
+  position   int not null,
+  body       text not null default '',
+  image_path text,
+  -- Null uses the quiz's default.
+  seconds    int check (seconds between 5 and 300),
+  opened_at  timestamptz,
+  closes_at  timestamptz,
+  unique (quiz_id, position)
+);
+
+create table if not exists quiz_options (
+  id          uuid primary key default gen_random_uuid(),
+  question_id uuid references quiz_questions(id) on delete cascade not null,
+  position    int not null,
+  label       text not null default '',
+  is_correct  boolean not null default false,
+  unique (question_id, position)
+);
+
+create table if not exists quiz_participants (
+  quiz_id    uuid references quizzes(id) on delete cascade not null,
+  student_id uuid references students(id) on delete cascade not null,
+  joined_at  timestamptz not null default now(),
+  primary key (quiz_id, student_id)
+);
+
+-- One row per student per question. Each change rewrites it: the last change is the answer, and its
+-- time since the question opened is the speed, so dithering between options costs points.
+create table if not exists quiz_answers (
+  id          uuid primary key default gen_random_uuid(),
+  quiz_id     uuid references quizzes(id) on delete cascade not null,
+  question_id uuid references quiz_questions(id) on delete cascade not null,
+  student_id  uuid references students(id) on delete cascade not null,
+  option_ids  uuid[] not null,
+  is_correct  boolean not null,
+  points      int not null default 0,
+  elapsed_ms  int not null,
+  answered_at timestamptz not null default now(),
+  unique (question_id, student_id)
+);
+
+create index if not exists idx_quizzes_batch       on quizzes(batch_id);
+create index if not exists idx_quiz_questions_quiz on quiz_questions(quiz_id);
+create index if not exists idx_quiz_options_q      on quiz_options(question_id);
+create index if not exists idx_quiz_answers_quiz   on quiz_answers(quiz_id);
+create index if not exists idx_quiz_answers_student on quiz_answers(student_id);
+
+alter table quizzes           enable row level security;
+alter table quiz_questions    enable row level security;
+alter table quiz_options      enable row level security;
+alter table quiz_participants enable row level security;
+alter table quiz_answers      enable row level security;
+
+do $$
+declare t text;
+begin
+  foreach t in array array['quizzes', 'quiz_questions', 'quiz_options', 'quiz_participants', 'quiz_answers'] loop
+    execute format('drop policy if exists admin_full_access on %I', t);
+    execute format('create policy admin_full_access on %I for all using (is_admin()) with check (is_admin())', t);
+  end loop;
+end $$;
+
+-- A tutor reads (and deletes) their batches' quizzes; every write goes through the functions below.
+drop policy if exists tutor_read_own on quizzes;
+create policy tutor_read_own on quizzes
+  for select using (batch_id in (select batch_id from tutor_batch_mapping where tutor_id = (select current_tutor_id())));
+
+drop policy if exists tutor_delete_own on quizzes;
+create policy tutor_delete_own on quizzes
+  for delete using (batch_id in (select batch_id from tutor_batch_mapping where tutor_id = (select current_tutor_id())));
+
+drop policy if exists tutor_read_own on quiz_questions;
+create policy tutor_read_own on quiz_questions
+  for select using ((select is_tutor()) and quiz_id in (select id from quizzes));
+
+drop policy if exists tutor_read_own on quiz_options;
+create policy tutor_read_own on quiz_options
+  for select using ((select is_tutor()) and question_id in (select id from quiz_questions));
+
+drop policy if exists tutor_read_own on quiz_participants;
+create policy tutor_read_own on quiz_participants
+  for select using ((select is_tutor()) and quiz_id in (select id from quizzes));
+
+drop policy if exists tutor_read_own on quiz_answers;
+create policy tutor_read_own on quiz_answers
+  for select using ((select is_tutor()) and quiz_id in (select id from quizzes));
+
+-- A student sees the row (title, status, position: no secrets) of a quiz they may join, which is also
+-- what lets Realtime push its changes to them. Everything else about a quiz comes through quiz_state().
+drop policy if exists student_read_open on quizzes;
+create policy student_read_open on quizzes
+  for select using (
+    status <> 'draft'
+    and (select current_student_id()) is not null
+    and (
+      batch_id is null
+      or batch_id in (
+        select batch_id from batch_student_mapping
+        where student_id = (select current_student_id()) and status = 'active'
+      )
+    )
+  );
+
+-- Quiz images live at quizzes/<batch_id or 'all'>/<file> in the public assets bucket.
+drop policy if exists "tutor manages quiz files" on storage.objects;
+create policy "tutor manages quiz files" on storage.objects
+  for all
+  using (
+    bucket_id = 'assets'
+    and split_part(storage.objects.name, '/', 1) = 'quizzes'
+    and safe_uuid(split_part(storage.objects.name, '/', 2)) in (
+      select batch_id from tutor_batch_mapping where tutor_id = (select current_tutor_id())
+    )
+  )
+  with check (
+    bucket_id = 'assets'
+    and split_part(storage.objects.name, '/', 1) = 'quizzes'
+    and safe_uuid(split_part(storage.objects.name, '/', 2)) in (
+      select batch_id from tutor_batch_mapping where tutor_id = (select current_tutor_id())
+    )
+    and lower(storage.extension(storage.objects.name)) in ('png', 'jpg', 'jpeg', 'webp')
+  );
+
+-- Live updates: the host watches answers and joins, everyone watches the quiz row.
+do $$
+declare t text;
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    foreach t in array array['quizzes', 'quiz_participants', 'quiz_answers'] loop
+      begin
+        execute format('alter publication supabase_realtime add table %I', t);
+      exception when duplicate_object then null;
+      end;
+    end loop;
+  end if;
+end $$;
+
+-- Helpers. Not granted to anyone: only the functions below call them.
+create or replace function quiz_host_ok(p_quiz uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select is_admin() or exists (
+    select 1
+    from quizzes z
+    join tutor_batch_mapping m on m.batch_id = z.batch_id
+    where z.id = p_quiz and m.tutor_id = current_tutor_id()
+  );
+$$;
+
+create or replace function quiz_student_ok(p_quiz uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select current_student_id() is not null and exists (
+    select 1 from quizzes z
+    where z.id = p_quiz
+      and z.status <> 'draft'
+      and (
+        z.batch_id is null
+        or exists (
+          select 1 from batch_student_mapping m
+          where m.batch_id = z.batch_id and m.student_id = current_student_id() and m.status = 'active'
+        )
+      )
+  );
+$$;
+
+-- Points, then total time of the correct answers, decide the rank. Ties share a rank.
+create or replace function quiz_scores(p_quiz uuid)
+returns table (student_id uuid, name text, code text, points bigint, correct bigint, answered bigint, time_ms bigint, rank bigint)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with t as (
+    select p.student_id, s.name, s.student_code as code,
+      coalesce(sum(a.points), 0)::bigint as points,
+      (count(*) filter (where a.is_correct))::bigint as correct,
+      count(a.id)::bigint as answered,
+      coalesce(sum(a.elapsed_ms) filter (where a.is_correct), 0)::bigint as time_ms
+    from quiz_participants p
+    join students s on s.id = p.student_id
+    left join quiz_answers a on a.quiz_id = p.quiz_id and a.student_id = p.student_id
+    where p.quiz_id = p_quiz
+    group by p.student_id, s.name, s.student_code
+  )
+  select t.student_id, t.name, t.code, t.points, t.correct, t.answered, t.time_ms,
+         rank() over (order by t.points desc, t.time_ms asc)
+  from t;
+$$;
+
+-- The rules a quiz has to meet before students can see it: shared by opening the lobby and by editing while it is open.
+create or replace function quiz_validate(p_quiz uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  q record;
+begin
+  if not exists (select 1 from quiz_questions where quiz_id = p_quiz) then raise exception 'Add at least one question'; end if;
+
+  for q in select id, position, body from quiz_questions where quiz_id = p_quiz order by position loop
+    if length(btrim(q.body)) = 0 then raise exception 'Question % has no text', q.position + 1; end if;
+    if (select count(*) from quiz_options where question_id = q.id and length(btrim(label)) > 0) < 2 then
+      raise exception 'Question % needs at least two options', q.position + 1;
+    end if;
+    if exists (select 1 from quiz_options where question_id = q.id and length(btrim(label)) = 0) then
+      raise exception 'Question % has an empty option', q.position + 1;
+    end if;
+    if not exists (select 1 from quiz_options where question_id = q.id and is_correct) then
+      raise exception 'Question % needs a correct answer', q.position + 1;
+    end if;
+  end loop;
+end;
+$$;
+
+-- Builder: the whole quiz in one call, replacing its questions. A draft can change, and so can a quiz whose lobby is open
+-- but has not started.
+-- p_quiz = {id, title, batch_id, seconds_per_question, show_answer, live_leaderboard, student_review,
+--           questions: [{body, image_path, seconds, options: [{label, correct}]}]}
+create or replace function quiz_save(p_quiz jsonb)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_id    uuid := (p_quiz ->> 'id')::uuid;
+  v_batch uuid := nullif(p_quiz ->> 'batch_id', '')::uuid;
+  v_q     jsonb;
+  v_o     jsonb;
+  v_qid   uuid;
+  v_qpos  int := 0;
+  v_opos  int;
+  v_status quiz_status;
+  v_was   uuid;
+begin
+  if v_id is null then raise exception 'The quiz has no id'; end if;
+
+  if v_batch is null then
+    if not is_admin() then raise exception 'Only an admin can run a quiz for everyone'; end if;
+  elsif not (is_admin() or exists (
+    select 1 from tutor_batch_mapping where batch_id = v_batch and tutor_id = current_tutor_id()
+  )) then
+    raise exception 'You are not assigned to that batch';
+  end if;
+
+  select status, batch_id into v_status, v_was from quizzes where id = v_id;
+  if found then
+    if not quiz_host_ok(v_id) then raise exception 'Not allowed'; end if;
+    -- A draft, or a quiz whose lobby is open but whose first question has not been shown yet.
+    if v_status not in ('draft', 'lobby') then
+      raise exception 'A quiz that has started can no longer be edited';
+    end if;
+    if v_status = 'lobby' and v_was is distinct from v_batch then
+      raise exception 'Who can join cannot change once the lobby is open';
+    end if;
+    update quizzes set
+      title = btrim(p_quiz ->> 'title'),
+      batch_id = v_batch,
+      seconds_per_question = (p_quiz ->> 'seconds_per_question')::int,
+      show_answer = (p_quiz ->> 'show_answer')::boolean,
+      live_leaderboard = (p_quiz ->> 'live_leaderboard')::boolean,
+      student_review = (p_quiz ->> 'student_review')::boolean
+    where id = v_id;
+  else
+    insert into quizzes (id, title, batch_id, seconds_per_question, show_answer, live_leaderboard, student_review)
+    values (
+      v_id, btrim(p_quiz ->> 'title'), v_batch,
+      (p_quiz ->> 'seconds_per_question')::int,
+      (p_quiz ->> 'show_answer')::boolean,
+      (p_quiz ->> 'live_leaderboard')::boolean,
+      (p_quiz ->> 'student_review')::boolean
+    );
+  end if;
+
+  delete from quiz_questions where quiz_id = v_id;
+
+  for v_q in select * from jsonb_array_elements(coalesce(p_quiz -> 'questions', '[]'::jsonb)) loop
+    insert into quiz_questions (quiz_id, position, body, image_path, seconds)
+    values (
+      v_id, v_qpos, btrim(coalesce(v_q ->> 'body', '')),
+      nullif(v_q ->> 'image_path', ''), nullif(v_q ->> 'seconds', '')::int
+    )
+    returning id into v_qid;
+
+    v_opos := 0;
+    for v_o in select * from jsonb_array_elements(coalesce(v_q -> 'options', '[]'::jsonb)) loop
+      insert into quiz_options (question_id, position, label, is_correct)
+      values (v_qid, v_opos, btrim(coalesce(v_o ->> 'label', '')), coalesce((v_o ->> 'correct')::boolean, false));
+      v_opos := v_opos + 1;
+    end loop;
+
+    v_qpos := v_qpos + 1;
+  end loop;
+
+  -- Students are already waiting: the edited quiz must still be runnable, or the whole edit is undone.
+  if v_status = 'lobby' then perform quiz_validate(v_id); end if;
+
+  return v_id;
+end;
+$$;
+
+-- Draft -> lobby, once every question is answerable.
+create or replace function quiz_open_lobby(p_quiz uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not quiz_host_ok(p_quiz) then raise exception 'Not allowed'; end if;
+  if (select status from quizzes where id = p_quiz) <> 'draft' then raise exception 'This quiz is already open'; end if;
+  perform quiz_validate(p_quiz);
+  update quizzes set status = 'lobby' where id = p_quiz;
+end;
+$$;
+
+-- Host navigation. The next unopened question starts its timer; anything earlier replays, closed.
+create or replace function quiz_go(p_quiz uuid, p_position int)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  z quizzes;
+  n int;
+begin
+  if not quiz_host_ok(p_quiz) then raise exception 'Not allowed'; end if;
+  select * into z from quizzes where id = p_quiz for update;
+  if z.status not in ('lobby', 'live') then raise exception 'The quiz is not running'; end if;
+
+  select count(*) into n from quiz_questions where quiz_id = p_quiz;
+  if p_position < 0 or p_position >= n then raise exception 'No such question'; end if;
+  if p_position = z.current_position then return; end if;
+
+  if z.phase = 'answering' then
+    update quiz_questions set closes_at = least(closes_at, now())
+    where quiz_id = p_quiz and position = z.current_position;
+  end if;
+
+  if p_position <= z.furthest then
+    update quizzes set current_position = p_position, phase = 'closed' where id = p_quiz;
+  elsif p_position = z.furthest + 1 then
+    update quiz_questions
+    set opened_at = now(), closes_at = now() + make_interval(secs => coalesce(seconds, z.seconds_per_question))
+    where quiz_id = p_quiz and position = p_position;
+    update quizzes
+    set status = 'live', current_position = p_position, furthest = p_position, phase = 'answering',
+        started_at = coalesce(started_at, now())
+    where id = p_quiz;
+  else
+    raise exception 'Questions run in order';
+  end if;
+end;
+$$;
+
+create or replace function quiz_close(p_quiz uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  z quizzes;
+begin
+  if not quiz_host_ok(p_quiz) then raise exception 'Not allowed'; end if;
+  select * into z from quizzes where id = p_quiz for update;
+  if z.status <> 'live' or z.phase <> 'answering' then return; end if;
+  update quiz_questions set closes_at = least(closes_at, now()) where quiz_id = p_quiz and position = z.current_position;
+  update quizzes set phase = 'closed' where id = p_quiz;
+end;
+$$;
+
+create or replace function quiz_extend(p_quiz uuid, p_seconds int)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  z quizzes;
+begin
+  if not quiz_host_ok(p_quiz) then raise exception 'Not allowed'; end if;
+  select * into z from quizzes where id = p_quiz for update;
+  if z.status <> 'live' or z.phase <> 'answering' then raise exception 'No question is open'; end if;
+  update quiz_questions
+  set closes_at = closes_at + make_interval(secs => greatest(least(p_seconds, 60), 1))
+  where quiz_id = p_quiz and position = z.current_position and closes_at > now();
+end;
+$$;
+
+create or replace function quiz_end(p_quiz uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  z quizzes;
+begin
+  if not quiz_host_ok(p_quiz) then raise exception 'Not allowed'; end if;
+  select * into z from quizzes where id = p_quiz for update;
+  if z.status not in ('lobby', 'live') then return; end if;
+  if z.phase = 'answering' then
+    update quiz_questions set closes_at = least(closes_at, now()) where quiz_id = p_quiz and position = z.current_position;
+  end if;
+  update quizzes set status = 'ended', phase = 'closed', ended_at = now() where id = p_quiz;
+end;
+$$;
+
+create or replace function quiz_join(p_quiz uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not quiz_student_ok(p_quiz) then raise exception 'This quiz is not available to you'; end if;
+  if (select status from quizzes where id = p_quiz) not in ('lobby', 'live') then raise exception 'This quiz is over'; end if;
+  insert into quiz_participants (quiz_id, student_id) values (p_quiz, current_student_id()) on conflict do nothing;
+end;
+$$;
+
+-- Kahoot-style: a right answer earns 1000 down to 500 as the time it was last changed nears the limit.
+create or replace function quiz_answer(p_question uuid, p_options uuid[])
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  me      uuid := current_student_id();
+  q       quiz_questions;
+  z       quizzes;
+  picked  uuid[];
+  want    uuid[];
+  is_right boolean;
+  spent   numeric;
+  span    numeric;
+  earned  int;
+begin
+  if me is null then raise exception 'Only students answer'; end if;
+  select * into q from quiz_questions where id = p_question;
+  if q.id is null or not quiz_student_ok(q.quiz_id) then raise exception 'This quiz is not available to you'; end if;
+
+  select * into z from quizzes where id = q.quiz_id;
+  if z.status <> 'live' or z.current_position <> q.position or z.phase <> 'answering' or now() >= q.closes_at then
+    raise exception 'Time is up for this question';
+  end if;
+
+  select coalesce(array_agg(distinct x), '{}') into picked from unnest(p_options) x;
+  if cardinality(picked) = 0 then raise exception 'Pick an answer'; end if;
+  if exists (select 1 from unnest(picked) x where x not in (select id from quiz_options where question_id = q.id)) then
+    raise exception 'That is not one of the options';
+  end if;
+
+  select coalesce(array_agg(id), '{}') into want from quiz_options where question_id = q.id and is_correct;
+  is_right := picked <@ want and want <@ picked;
+
+  spent := extract(epoch from now() - q.opened_at);
+  span := greatest(extract(epoch from q.closes_at - q.opened_at), 1);
+  earned := case when is_right then round(1000 * (1 - least(spent / span, 1) / 2))::int else 0 end;
+
+  insert into quiz_participants (quiz_id, student_id) values (q.quiz_id, me) on conflict do nothing;
+
+  insert into quiz_answers (quiz_id, question_id, student_id, option_ids, is_correct, points, elapsed_ms, answered_at)
+  values (q.quiz_id, q.id, me, picked, is_right, earned, round(spent * 1000)::int, now())
+  on conflict (question_id, student_id) do update
+    set option_ids = excluded.option_ids, is_correct = excluded.is_correct, points = excluded.points,
+        elapsed_ms = excluded.elapsed_ms, answered_at = excluded.answered_at;
+end;
+$$;
+
+-- Everything a student's screen needs, and nothing it must not know yet.
+create or replace function quiz_state(p_quiz uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  me      uuid := current_student_id();
+  z       quizzes;
+  q       quiz_questions;
+  a       quiz_answers;
+  shut    boolean;
+  total   int;
+  seen    int;
+  result  jsonb;
+  extra   jsonb;
+  top     jsonb;
+  mine    record;
+begin
+  if not quiz_student_ok(p_quiz) then raise exception 'This quiz is not available to you'; end if;
+  select * into z from quizzes where id = p_quiz;
+  select count(*) into total from quiz_questions where quiz_id = p_quiz;
+  select count(*) into seen from quiz_participants where quiz_id = p_quiz;
+
+  result := jsonb_build_object(
+    'server_now', now(), 'title', z.title, 'status', z.status, 'position', z.current_position,
+    'total', total, 'participants', seen,
+    'joined', exists (select 1 from quiz_participants where quiz_id = p_quiz and student_id = me),
+    'show_answer', z.show_answer, 'live_leaderboard', z.live_leaderboard
+  );
+
+  if z.status <> 'live' or z.current_position < 0 then return result; end if;
+
+  select * into q from quiz_questions where quiz_id = p_quiz and position = z.current_position;
+  shut := z.phase = 'closed' or now() >= q.closes_at;
+  select * into a from quiz_answers where question_id = q.id and student_id = me;
+
+  result := result || jsonb_build_object(
+    'closed', shut,
+    'mine', case when a.id is null then null else to_jsonb(a.option_ids) end,
+    'question', jsonb_build_object(
+      'id', q.id, 'body', q.body, 'image_path', q.image_path,
+      'multi', (select count(*) from quiz_options where question_id = q.id and is_correct) > 1,
+      'opened_at', q.opened_at, 'closes_at', q.closes_at,
+      'options', (select jsonb_agg(jsonb_build_object('id', o.id, 'label', o.label) order by o.position)
+                  from quiz_options o where o.question_id = q.id)
+    )
+  );
+
+  if not shut then return result; end if;
+
+  extra := jsonb_build_object(
+    'answered', (select count(*) from quiz_answers where question_id = q.id),
+    'counts', (select coalesce(jsonb_object_agg(o.id, coalesce(c.n, 0)), '{}'::jsonb)
+               from quiz_options o
+               left join (select unnest(option_ids) as oid, count(*) as n from quiz_answers where question_id = q.id group by 1) c
+                 on c.oid = o.id
+               where o.question_id = q.id)
+  );
+  if z.show_answer then
+    extra := extra || jsonb_build_object(
+      'correct_ids', (select coalesce(jsonb_agg(id), '[]'::jsonb) from quiz_options where question_id = q.id and is_correct),
+      'is_correct', a.is_correct,
+      'points', coalesce(a.points, 0)
+    );
+  end if;
+  result := result || jsonb_build_object('reveal', extra);
+
+  if z.live_leaderboard then
+    select s.rank, s.points into mine from quiz_scores(p_quiz) s where s.student_id = me;
+    select coalesce(jsonb_agg(jsonb_build_object('rank', r.rank, 'name', r.name, 'points', r.points, 'me', r.student_id = me) order by r.rank, r.name), '[]'::jsonb)
+      into top
+      from (select * from quiz_scores(p_quiz) s order by s.rank, s.name limit 5) r;
+    result := result || jsonb_build_object('standing', jsonb_build_object(
+      'rank', mine.rank, 'points', mine.points, 'top', top
+    ));
+  end if;
+
+  return result;
+end;
+$$;
+
+-- Full ranking. A host any time; a student only once the quiz has ended.
+create or replace function quiz_scoreboard(p_quiz uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  me uuid := current_student_id();
+begin
+  if not quiz_host_ok(p_quiz) then
+    if not quiz_student_ok(p_quiz) or (select status from quizzes where id = p_quiz) <> 'ended' then
+      raise exception 'Not allowed';
+    end if;
+  end if;
+
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'student_id', s.student_id, 'rank', s.rank, 'name', s.name, 'code', s.code, 'points', s.points,
+      'correct', s.correct, 'answered', s.answered, 'time_ms', s.time_ms, 'me', s.student_id = me
+    ) order by s.rank, s.name)
+    from quiz_scores(p_quiz) s
+  ), '[]'::jsonb);
+end;
+$$;
+
+-- A student's finished quiz: their standing against the class, and a review if the host allows one.
+create or replace function quiz_my_result(p_quiz uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  me     uuid := current_student_id();
+  z      quizzes;
+  mine   record;
+  review jsonb;
+begin
+  if not quiz_student_ok(p_quiz) then raise exception 'This quiz is not available to you'; end if;
+  select * into z from quizzes where id = p_quiz;
+  if z.status <> 'ended' then raise exception 'This quiz has not finished'; end if;
+
+  select * into mine from quiz_scores(p_quiz) s where s.student_id = me;
+  if mine.student_id is null then raise exception 'You did not take part in this quiz'; end if;
+
+  if z.student_review then
+    select coalesce(jsonb_agg(jsonb_build_object(
+      'position', q.position, 'body', q.body, 'image_path', q.image_path,
+      'answered', (select count(*) from quiz_answers x where x.question_id = q.id),
+      'mine', a.option_ids, 'is_correct', a.is_correct, 'points', coalesce(a.points, 0), 'elapsed_ms', a.elapsed_ms,
+      'options', (
+        select jsonb_agg(jsonb_build_object(
+          'id', o.id, 'label', o.label, 'correct', o.is_correct,
+          'count', (select count(*) from quiz_answers x where x.question_id = q.id and o.id = any (x.option_ids))
+        ) order by o.position)
+        from quiz_options o where o.question_id = q.id
+      )
+    ) order by q.position), '[]'::jsonb)
+    into review
+    from quiz_questions q
+    left join quiz_answers a on a.question_id = q.id and a.student_id = me
+    where q.quiz_id = p_quiz and q.opened_at is not null;
+  end if;
+
+  return jsonb_build_object(
+    'title', z.title, 'ended_at', z.ended_at,
+    'rank', mine.rank, 'points', mine.points, 'correct', mine.correct, 'answered', mine.answered, 'time_ms', mine.time_ms,
+    'questions', (select count(*) from quiz_questions where quiz_id = p_quiz and opened_at is not null),
+    'participants', (select count(*) from quiz_participants where quiz_id = p_quiz),
+    'avg_points', (select coalesce(round(avg(s.points)), 0) from quiz_scores(p_quiz) s),
+    'avg_correct', (select coalesce(round(avg(s.correct), 1), 0) from quiz_scores(p_quiz) s),
+    'review', review
+  );
+end;
+$$;
+
+create or replace function quiz_my_history()
+returns table (quiz_id uuid, title text, ended_at timestamptz, rank bigint, participants bigint, points bigint, correct bigint, questions bigint)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select z.id, z.title, z.ended_at, s.rank,
+         (select count(*) from quiz_participants x where x.quiz_id = z.id),
+         s.points, s.correct,
+         (select count(*) from quiz_questions q where q.quiz_id = z.id and q.opened_at is not null)
+  from quizzes z
+  join quiz_participants p on p.quiz_id = z.id and p.student_id = current_student_id()
+  cross join lateral quiz_scores(z.id) s
+  where z.status = 'ended' and s.student_id = p.student_id
+  order by z.ended_at desc;
+$$;
+
+-- The database's clock, so a host's countdown does not drift with their laptop's.
+create or replace function quiz_clock()
+returns timestamptz
+language sql
+stable
+as $$ select now(); $$;
+
+revoke all on function quiz_host_ok(uuid), quiz_student_ok(uuid), quiz_scores(uuid), quiz_validate(uuid) from public;
+revoke all on function quiz_save(jsonb), quiz_open_lobby(uuid), quiz_go(uuid, int), quiz_close(uuid), quiz_extend(uuid, int),
+  quiz_end(uuid), quiz_join(uuid), quiz_answer(uuid, uuid[]), quiz_state(uuid), quiz_scoreboard(uuid),
+  quiz_my_result(uuid), quiz_my_history(), quiz_clock() from public;
+grant execute on function quiz_save(jsonb), quiz_open_lobby(uuid), quiz_go(uuid, int), quiz_close(uuid), quiz_extend(uuid, int),
+  quiz_end(uuid), quiz_join(uuid), quiz_answer(uuid, uuid[]), quiz_state(uuid), quiz_scoreboard(uuid),
+  quiz_my_result(uuid), quiz_my_history(), quiz_clock() to authenticated;
+
+-- 19. INTERNSHIP ROLE AND DATES
+-- Stamped on the offer letter ("the position of ...", the joining date) and on the certificate (the role, the
+-- internship's start and end date). One set per student, edited on the student form.
+-- Role: defaults from the programme of the batch they join. A new programme needs a new value first:
+--   alter type internship_role add value '...';
+-- Start date: the batch's start date, set when the student is enrolled. End date: the batch's end date, filled by
+-- end_batch() when the batch is ended. Both only where still empty, so a date typed by hand is kept, and both stay editable.
+do $$ begin
+  create type internship_role as enum ('devops_engineering_intern', 'ai_ml_engineering_intern', 'cloud_engineering_intern');
+exception when duplicate_object then null; end $$;
+
+alter table students add column if not exists internship_role       internship_role;
+alter table students add column if not exists internship_start_date date;
+alter table students add column if not exists internship_end_date   date;
+-- No default: an earlier version of this migration set one (today). Dropping it is harmless if it never ran.
+alter table students alter column internship_start_date drop default;
+
+do $$ begin
+  alter table students add constraint students_internship_dates_ordered
+    check (internship_end_date is null or internship_start_date is null or internship_end_date >= internship_start_date);
+exception when duplicate_object then null; end $$;

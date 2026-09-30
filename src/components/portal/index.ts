@@ -11,6 +11,7 @@ export { PortalStatus, statusLabel } from './PortalStatus';
 export { PortalEmpty } from './PortalEmpty';
 export { PortalBadgeGrid, PortalBadgeCard } from './PortalBadges';
 export { PortalDocumentCard } from './PortalDocuments';
+export { PortalQuizCard } from './PortalQuizCard';
 export { AssignmentModal } from './AssignmentModal';
 export type { StudentAssignment } from './AssignmentModal';
 export { PaymentClaimModal } from './PaymentClaimModal';

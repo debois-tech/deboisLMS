@@ -1,7 +1,7 @@
 import { useState, ReactNode } from 'react';
 import { clsx } from 'clsx';
 
-interface Tab { label: string; value: string; badge?: number }
+interface Tab { label: string; value: string; badge?: number; soon?: boolean }
 
 interface TabsProps {
   tabs: Tab[];
@@ -26,14 +26,16 @@ export function Tabs({ tabs, defaultValue, onChange, children }: TabsProps) {
             <button
               key={tab.value}
               onClick={() => handleChange(tab.value)}
+              disabled={tab.soon}
               className={clsx(
-                'batch-tab-button flex items-center gap-2 rounded-[var(--radius-sm)] text-sm font-semibold whitespace-nowrap transition-all duration-200',
+                'batch-tab-button flex items-center gap-2 rounded-[var(--radius-sm)] text-sm font-semibold whitespace-nowrap transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60',
                 active === tab.value
                   ? 'bg-[var(--primary)] text-white shadow-[var(--primary-glow-soft)]'
                   : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-overlay)]'
               )}
             >
               {tab.label}
+              {tab.soon && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-[var(--bg-overlay)] text-[var(--text-muted)]">Soon</span>}
               {tab.badge !== undefined && (
                 <span className={clsx(
                   'text-[10px] font-semibold px-1.5 py-0.5 rounded-full',

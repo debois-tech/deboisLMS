@@ -13,6 +13,7 @@ import {
   LibraryBig,
   MessageSquare,
   ScrollText,
+  ClipboardList,
   Plus,
   X,
   PanelLeft,
@@ -36,6 +37,7 @@ const navItems: SidebarNavItem[] = [
   { label: 'Assignments', to: '/assignments', icon: FileText },
   { label: 'Curriculum', to: '/curriculum', icon: LibraryBig },
   { label: 'Documents', to: '/documents', icon: ScrollText },
+  { label: 'Exams', to: '/exams', icon: ClipboardList },
   { label: 'Study Material', to: '/materials', icon: BookOpen },
   { label: 'Feedback', to: '/feedback', icon: MessageSquare },
 ];

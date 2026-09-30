@@ -1,5 +1,5 @@
 import { Badge } from '@/components/ui/Badge';
-import type { AttendanceStatus, BatchStatus, FeeStatus, FeedbackStatus, MappingStatus } from '@/lib/types';
+import type { AttendanceStatus, BatchStatus, FeeStatus, FeedbackStatus, MappingStatus, QuizStatus } from '@/lib/types';
 
 type Tone = 'default' | 'success' | 'warning' | 'danger' | 'info';
 
@@ -32,14 +32,22 @@ type StatusProps =
   | { kind: 'enrollment'; value: MappingStatus }
   | { kind: 'fee'; value: FeeStatus }
   | { kind: 'attendance'; value: AttendanceStatus }
-  | { kind: 'feedback'; value: FeedbackStatus };
+  | { kind: 'feedback'; value: FeedbackStatus }
+  | { kind: 'quiz'; value: QuizStatus };
 
 const feedback: Record<FeedbackStatus, [string, Tone]> = {
   open: ['Open', 'warning'],
   resolved: ['Resolved', 'success'],
 };
 
-const maps = { batch, enrollment, fee, attendance, feedback };
+const quiz: Record<QuizStatus, [string, Tone]> = {
+  draft: ['Draft', 'default'],
+  lobby: ['Lobby', 'info'],
+  live: ['Live', 'success'],
+  ended: ['Ended', 'default'],
+};
+
+const maps = { batch, enrollment, fee, attendance, feedback, quiz };
 
 export function StatusPill(props: StatusProps) {
   const [label, tone] = (maps[props.kind] as Record<string, [string, Tone]>)[props.value];

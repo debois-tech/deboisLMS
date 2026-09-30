@@ -1,5 +1,5 @@
 import { parseCsvTable } from '@/lib/utils/csvParser';
-import type { BatchProgram, Student } from '@/lib/types';
+import type { BatchProgram, InternshipRole, Student } from '@/lib/types';
 
 /** Add new fields here. Matched on headers, not column order. */
 export const STUDENT_IMPORT_FIELDS = [
@@ -25,6 +25,28 @@ const BATCH_ALIASES = ['batch', 'batch code', 'program', 'programme', 'course ba
 
 /** The gender values the form offers. Free text in the DB, so an import may carry others. */
 export const GENDER_OPTIONS = ['Female', 'Male', 'Other', 'Prefer not to say'] as const;
+
+export const INTERNSHIP_ROLE_LABELS: Record<InternshipRole, string> = {
+  devops_engineering_intern: 'DevOps Engineering Intern',
+  ai_ml_engineering_intern: 'AI/ML Engineering Intern',
+  cloud_engineering_intern: 'Cloud Engineering Intern',
+};
+
+export const INTERNSHIP_ROLE_OPTIONS = (Object.keys(INTERNSHIP_ROLE_LABELS) as InternshipRole[]).map((value) => ({ value, label: INTERNSHIP_ROLE_LABELS[value] }));
+
+// The role a programme's interns hold, found by a programme code appearing in the batch's code (most batches carry
+// the programme TEP, so the code is what tells them apart) or being the batch's programme. A new programme gets a
+// line here once its enum value exists.
+const ROLE_BY_CODE: Record<string, InternshipRole> = {
+  PHR: 'devops_engineering_intern',
+  AML: 'ai_ml_engineering_intern',
+  MCL: 'cloud_engineering_intern',
+};
+
+export function roleForBatch(batch: { program?: BatchProgram; batch_code?: string } | undefined): InternshipRole | undefined {
+  const code = Object.keys(ROLE_BY_CODE).find((key) => batch?.batch_code?.toUpperCase().includes(key) || batch?.program === key);
+  return code ? ROLE_BY_CODE[code] : undefined;
+}
 
 export type StudentImportInput = Omit<Student, 'id' | 'created_at'>;
 

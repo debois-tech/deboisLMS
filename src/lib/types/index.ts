@@ -71,6 +71,11 @@ export interface Student {
   graduation_year?: number;
   github_url?: string;
   linkedin_url?: string;
+  /** Stamped on the offer letter and the certificate. */
+  internship_role?: InternshipRole | null;
+  /** `YYYY-MM-DD`. Today for a new student; the end date is the batch's when it is ended. Both editable. */
+  internship_start_date?: string | null;
+  internship_end_date?: string | null;
   created_at: string;
   /** auth.users id once a portal login has been created for this student. */
   auth_user_id?: string;
@@ -242,7 +247,7 @@ export interface BatchStudentMapping {
   /** Set only once terminated. */
   left_on?: string | null;
   status: MappingStatus;
-  /** Generated once, right when the row is created, and stored in the private `documents` bucket. */
+  /** Made only when an admin clicks Generate on the roster; both live in the private `documents` bucket. */
   offer_letter_path?: string | null;
   cert_path?: string | null;
   /** Whether the student can see/download/be emailed the doc above. Set by the admin on /documents. */
@@ -254,6 +259,8 @@ export interface BatchStudentMapping {
 }
 
 export type DocumentKind = 'offer_letter' | 'cert';
+
+export type InternshipRole = 'devops_engineering_intern' | 'ai_ml_engineering_intern' | 'cloud_engineering_intern';
 
 /** Metadata only; the file lives in the private bucket and is served watermarked. */
 export interface Material {
@@ -389,4 +396,158 @@ export interface CurriculumRequest {
   status: 'pending' | 'approved' | 'denied';
   created_at: string;
   decided_at: string | null;
+}
+
+export type QuizStatus = 'draft' | 'lobby' | 'live' | 'ended';
+export type QuizPhase = 'answering' | 'closed';
+
+export interface Quiz {
+  id: string;
+  title: string;
+  // Null means everyone; only an admin makes those.
+  batch_id: string | null;
+  status: QuizStatus;
+  seconds_per_question: number;
+  show_answer: boolean;
+  live_leaderboard: boolean;
+  student_review: boolean;
+  current_position: number;
+  furthest: number;
+  phase: QuizPhase;
+  started_at: string | null;
+  ended_at: string | null;
+  created_at: string;
+}
+
+export type QuizFull = Quiz & { batches: { name: string } | null; quiz_questions: QuizQuestion[] };
+
+export interface QuizOption {
+  id: string;
+  question_id: string;
+  position: number;
+  label: string;
+  is_correct: boolean;
+}
+
+export interface QuizQuestion {
+  id: string;
+  quiz_id: string;
+  position: number;
+  body: string;
+  image_path: string | null;
+  seconds: number | null;
+  opened_at: string | null;
+  closes_at: string | null;
+  quiz_options: QuizOption[];
+}
+
+export interface QuizAnswer {
+  question_id: string;
+  student_id: string;
+  option_ids: string[];
+  is_correct: boolean;
+  points: number;
+  elapsed_ms: number;
+}
+
+// The builder's working copy: `key`s are local, the database numbers everything on save.
+export interface QuizDraftOption { key: string; label: string; correct: boolean }
+export interface QuizDraftQuestion {
+  key: string;
+  body: string;
+  image_path: string | null;
+  seconds: number | null;
+  options: QuizDraftOption[];
+}
+export interface QuizDraft {
+  id: string;
+  title: string;
+  batch_id: string | null;
+  seconds_per_question: number;
+  show_answer: boolean;
+  live_leaderboard: boolean;
+  student_review: boolean;
+  questions: QuizDraftQuestion[];
+}
+
+export interface QuizScoreRow {
+  student_id: string;
+  rank: number;
+  name: string;
+  code: string | null;
+  points: number;
+  correct: number;
+  answered: number;
+  time_ms: number;
+  me: boolean;
+}
+
+// What a student's screen is told by quiz_state(): nothing about the key until a question closes.
+export interface QuizState {
+  server_now: string;
+  title: string;
+  status: QuizStatus;
+  position: number;
+  total: number;
+  participants: number;
+  joined: boolean;
+  show_answer: boolean;
+  live_leaderboard: boolean;
+  closed?: boolean;
+  mine?: string[] | null;
+  question?: {
+    id: string;
+    body: string;
+    image_path: string | null;
+    multi: boolean;
+    opened_at: string;
+    closes_at: string;
+    options: { id: string; label: string }[];
+  };
+  reveal?: {
+    answered: number;
+    counts: Record<string, number>;
+    correct_ids?: string[];
+    is_correct?: boolean | null;
+    points?: number;
+  };
+  standing?: { rank: number | null; points: number | null; top: { rank: number; name: string; points: number; me: boolean }[] };
+}
+
+export interface QuizReviewItem {
+  position: number;
+  body: string;
+  image_path: string | null;
+  answered: number;
+  mine: string[] | null;
+  is_correct: boolean | null;
+  points: number;
+  elapsed_ms: number | null;
+  options: { id: string; label: string; correct: boolean; count: number }[];
+}
+
+export interface QuizResult {
+  title: string;
+  ended_at: string;
+  rank: number;
+  points: number;
+  correct: number;
+  answered: number;
+  time_ms: number;
+  questions: number;
+  participants: number;
+  avg_points: number;
+  avg_correct: number;
+  review: QuizReviewItem[] | null;
+}
+
+export interface QuizHistoryRow {
+  quiz_id: string;
+  title: string;
+  ended_at: string;
+  rank: number;
+  participants: number;
+  points: number;
+  correct: number;
+  questions: number;
 }

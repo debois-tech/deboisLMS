@@ -17,8 +17,10 @@ export type { DashboardStats, RecentActivity, TutorDashboardStats } from './quer
 export { getMyFeedback, submitFeedback, getAllFeedback, setFeedbackStatus } from './queries/feedback';
 export { getMaintenanceMode, setMaintenanceMode } from './queries/settings';
 export { submitPaymentClaim, getPendingClaims, approvePaymentClaim, dismissPaymentClaim, exportPaymentClaimsCsv, getPaymentQrUrl } from './queries/paymentClaims';
-export { getCurriculumNodes, getLatestCurriculumRequest, saveCurriculum, proposeCurriculum, reviewCurriculum, setCurriculumStatus, getCurriculumOverview } from './queries/curriculum';
+export { getCurriculumNodes, getCurriculumProgress, getLatestCurriculumRequest, saveCurriculum, proposeCurriculum, reviewCurriculum, setCurriculumStatus, getCurriculumOverview } from './queries/curriculum';
 export type { CurriculumOverview } from './queries/curriculum';
 export { getBatchBadges, createBatchBadge, deleteBatchBadge, getBadgeHolders, giveBadge, takeBadge, getMyBadges, badgeImageUrl, linkedInAddToProfileUrl, downloadBadgeImage, canShareBadgeImage, shareBadgeImage, BADGE_EXTENSIONS, BADGE_MAX_BYTES, BADGE_ACCEPT } from './queries/badges';
 export type { BadgeWithHolders, BadgeHolder, MyBadges, NewBadgeInput } from './queries/badges';
-export { generateAndStoreDocuments, setDocumentShared, downloadStoredDocument, sendDocumentEmail } from './queries/documents';
+export { generateAndStoreDocument, setDocumentShared, downloadStoredDocument, sendDocumentEmail } from './queries/documents';
+export { getQuizzes, getQuiz, saveQuiz, deleteQuiz, openQuizLobby, quizGo, closeQuizQuestion, extendQuizQuestion, endQuiz, getClockOffset, getQuizParticipants, getQuizAnswers, getQuizScoreboard, getOpenQuizzes, joinQuiz, answerQuiz, getQuizState, getQuizResult, getQuizHistory, uploadQuizImage, quizImageUrl, QUIZ_IMAGE_ACCEPT, QUIZ_IMAGE_EXTENSIONS, QUIZ_IMAGE_MAX_BYTES } from './queries/quizzes';
+export type { QuizListItem, QuizParticipant, OpenQuiz } from './queries/quizzes';

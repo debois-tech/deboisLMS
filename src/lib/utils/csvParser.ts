@@ -13,7 +13,7 @@ export interface CsvTable {
   rows: Record<string, string>[];
 }
 
-function parseCsvLine(line: string): string[] {
+export function parseCsvLine(line: string): string[] {
   const values: string[] = [];
   let value = '';
   let quoted = false;
