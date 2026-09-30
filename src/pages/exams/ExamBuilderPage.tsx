@@ -50,6 +50,8 @@ export default function ExamBuilderPage() {
   const [tried, setTried] = useState(false);
   const [importing, setImporting] = useState(false);
   const [missing, setMissing] = useState(false);
+  // A quiz whose lobby is open can still be corrected until its first question is shown; who can join is then fixed.
+  const [inLobby, setInLobby] = useState(false);
   // An admin's null batch means everyone, so it must be a choice and not a default.
   const [audienceSet, setAudienceSet] = useState(false);
 
@@ -61,10 +63,11 @@ export default function ExamBuilderPage() {
         setMissing(true);
         return;
       }
-      if (quizId && source.status !== 'draft') {
+      if (quizId && source.status !== 'draft' && source.status !== 'lobby') {
         navigate(`${base}/${quizId}`, { replace: true });
         return;
       }
+      setInLobby(Boolean(quizId) && source.status === 'lobby');
       const loaded = quizToDraft(source, Boolean(from));
       setDraft(loaded);
       setOpen(loaded.questions[0]?.key ?? null);
@@ -136,7 +139,7 @@ export default function ExamBuilderPage() {
       showToast(issues.title ? 'Give the quiz a title' : 'Choose who this quiz is for', 'error');
       return;
     }
-    if (openLobby && issues.count > 0) {
+    if ((openLobby || inLobby) && issues.count > 0) {
       const first = issues.questions.findIndex(Boolean);
       if (first >= 0) setOpen(draft.questions[first].key);
       showToast(first >= 0 ? `Question ${first + 1}: ${issues.questions[first]}` : 'Add at least one question', 'error');
@@ -147,7 +150,7 @@ export default function ExamBuilderPage() {
       const id = await saveQuiz(draft);
       if (openLobby) await openQuizLobby(id);
       setDirty(false);
-      showToast(openLobby ? 'Lobby is open' : 'Draft saved');
+      showToast(inLobby ? 'Changes saved' : openLobby ? 'Lobby is open' : 'Draft saved');
       navigate(`${base}/${id}`);
     } catch (err) {
       showToast(errorMessage(err, 'Could not save the quiz'), 'error');
@@ -161,7 +164,7 @@ export default function ExamBuilderPage() {
       const accepted = await confirm({ title: 'Discard your changes?', message: 'What you entered here is not saved.', confirmLabel: 'Discard', danger: true });
       if (!accepted) return;
     }
-    navigate(base);
+    navigate(inLobby ? `${base}/${quizId}` : base);
   };
 
   const activeQuestion = draft.questions.find((question) => question.key === open) ?? draft.questions[0];
@@ -198,16 +201,20 @@ export default function ExamBuilderPage() {
               </div>
               <div className="qz-wide">
                 <FormField label="Who can join" required>
-                  <BatchSelect
-                    batches={batches}
-                    value={audienceSet ? draft.batch_id ?? EVERYONE : null}
-                    onChange={(id) => {
-                      setAudienceSet(true);
-                      patch({ batch_id: id === EVERYONE ? null : id });
-                    }}
-                    extraOptions={isAdmin ? [{ id: EVERYONE, name: 'Everyone (all students)' }] : []}
-                    placeholder="Choose a batch"
-                  />
+                  {inLobby ? (
+                    <input readOnly value={batches.find((batch) => batch.id === draft.batch_id)?.name ?? 'Everyone (all students)'} />
+                  ) : (
+                    <BatchSelect
+                      batches={batches}
+                      value={audienceSet ? draft.batch_id ?? EVERYONE : null}
+                      onChange={(id) => {
+                        setAudienceSet(true);
+                        patch({ batch_id: id === EVERYONE ? null : id });
+                      }}
+                      extraOptions={isAdmin ? [{ id: EVERYONE, name: 'Everyone (all students)' }] : []}
+                      placeholder="Choose a batch"
+                    />
+                  )}
                   {tried && audienceMissing && <span className="qz-hint is-warn">Choose the batch this quiz is for.</span>}
                 </FormField>
               </div>
@@ -318,8 +325,14 @@ export default function ExamBuilderPage() {
         </div>
         <div className="qz-savebar-actions">
           <Button className="action-button-compact" variant="ghost" onClick={() => void leave()}>Cancel</Button>
-          <Button className="action-button-compact" variant="secondary" loading={saving === 'draft'} disabled={saving !== null} onClick={() => void save(false)}>Save draft</Button>
-          <Button className="action-button-compact" loading={saving === 'lobby'} disabled={saving !== null} onClick={() => void save(true)}>Save and open lobby</Button>
+          {inLobby ? (
+            <Button className="action-button-compact" loading={saving === 'draft'} disabled={saving !== null} onClick={() => void save(false)}>Save changes</Button>
+          ) : (
+            <>
+              <Button className="action-button-compact" variant="secondary" loading={saving === 'draft'} disabled={saving !== null} onClick={() => void save(false)}>Save draft</Button>
+              <Button className="action-button-compact" loading={saving === 'lobby'} disabled={saving !== null} onClick={() => void save(true)}>Save and open lobby</Button>
+            </>
+          )}
         </div>
       </div>
 

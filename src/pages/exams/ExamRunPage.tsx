@@ -38,7 +38,7 @@ export default function ExamRunPage() {
   if (!quiz) return <NotFound label="Quiz" />;
 
   if (quiz.status === 'lobby' || quiz.status === 'live') {
-    return <ExamHost quizId={quiz.id} onLeave={() => navigate(base)} onEnded={() => void reload()} />;
+    return <ExamHost quizId={quiz.id} onLeave={() => navigate(base)} onEnded={() => void reload()} onEdit={() => navigate(`${base}/${quiz.id}/edit`)} />;
   }
 
   const open = async () => {

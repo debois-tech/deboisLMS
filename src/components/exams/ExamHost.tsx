@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, ChevronLeft, ChevronRight, Flag, Play, Plus, Users } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Flag, Pencil, Play, Plus, Users } from 'lucide-react';
 import { QuizBoard, QuizOption, QuizTimer } from '@/components/exams/QuizParts';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -25,10 +25,12 @@ interface ExamHostProps {
   quizId: string;
   onLeave: () => void;
   onEnded: () => void;
+  /** Lobby only: back to the builder to fix a mistake before the first question is shown. */
+  onEdit: () => void;
 }
 
 // The tutor's full-screen console: lobby, then one question at a time. Everything students see follows from here.
-export function ExamHost({ quizId, onLeave, onEnded }: ExamHostProps) {
+export function ExamHost({ quizId, onLeave, onEnded, onEdit }: ExamHostProps) {
   const confirm = useConfirm();
   const { showToast } = useToast();
   const [quiz, setQuiz] = useState<QuizFull | null>(null);
@@ -252,7 +254,9 @@ export function ExamHost({ quizId, onLeave, onEnded }: ExamHostProps) {
       </div>
 
       <footer className="qz-stage-foot">
-        {lobby ? <span /> : (
+        {lobby ? (
+          <Button className="action-button-compact" variant="secondary" onClick={onEdit} disabled={busy}><Pencil size={16} /> Edit questions</Button>
+        ) : (
           <nav className="qz-nav" aria-label="Questions">
             {questions.map((question, index) => {
               const reachable = index <= quiz.furthest && !answering;

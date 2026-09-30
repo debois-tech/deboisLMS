@@ -2252,7 +2252,35 @@ as $$
   from t;
 $$;
 
--- Builder: the whole quiz in one call, replacing its questions. Only a draft can change.
+-- The rules a quiz has to meet before students can see it: shared by opening the lobby and by editing while it is open.
+create or replace function quiz_validate(p_quiz uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  q record;
+begin
+  if not exists (select 1 from quiz_questions where quiz_id = p_quiz) then raise exception 'Add at least one question'; end if;
+
+  for q in select id, position, body from quiz_questions where quiz_id = p_quiz order by position loop
+    if length(btrim(q.body)) = 0 then raise exception 'Question % has no text', q.position + 1; end if;
+    if (select count(*) from quiz_options where question_id = q.id and length(btrim(label)) > 0) < 2 then
+      raise exception 'Question % needs at least two options', q.position + 1;
+    end if;
+    if exists (select 1 from quiz_options where question_id = q.id and length(btrim(label)) = 0) then
+      raise exception 'Question % has an empty option', q.position + 1;
+    end if;
+    if not exists (select 1 from quiz_options where question_id = q.id and is_correct) then
+      raise exception 'Question % needs a correct answer', q.position + 1;
+    end if;
+  end loop;
+end;
+$$;
+
+-- Builder: the whole quiz in one call, replacing its questions. A draft can change, and so can a quiz whose lobby is open
+-- but has not started.
 -- p_quiz = {id, title, batch_id, seconds_per_question, show_answer, live_leaderboard, student_review,
 --           questions: [{body, image_path, seconds, options: [{label, correct}]}]}
 create or replace function quiz_save(p_quiz jsonb)
@@ -2269,6 +2297,8 @@ declare
   v_qid   uuid;
   v_qpos  int := 0;
   v_opos  int;
+  v_status quiz_status;
+  v_was   uuid;
 begin
   if v_id is null then raise exception 'The quiz has no id'; end if;
 
@@ -2280,10 +2310,15 @@ begin
     raise exception 'You are not assigned to that batch';
   end if;
 
-  if exists (select 1 from quizzes where id = v_id) then
+  select status, batch_id into v_status, v_was from quizzes where id = v_id;
+  if found then
     if not quiz_host_ok(v_id) then raise exception 'Not allowed'; end if;
-    if (select status from quizzes where id = v_id) <> 'draft' then
-      raise exception 'A quiz that has been opened can no longer be edited';
+    -- A draft, or a quiz whose lobby is open but whose first question has not been shown yet.
+    if v_status not in ('draft', 'lobby') then
+      raise exception 'A quiz that has started can no longer be edited';
+    end if;
+    if v_status = 'lobby' and v_was is distinct from v_batch then
+      raise exception 'Who can join cannot change once the lobby is open';
     end if;
     update quizzes set
       title = btrim(p_quiz ->> 'title'),
@@ -2324,6 +2359,9 @@ begin
     v_qpos := v_qpos + 1;
   end loop;
 
+  -- Students are already waiting: the edited quiz must still be runnable, or the whole edit is undone.
+  if v_status = 'lobby' then perform quiz_validate(v_id); end if;
+
   return v_id;
 end;
 $$;
@@ -2335,26 +2373,10 @@ language plpgsql
 security definer
 set search_path = public
 as $$
-declare
-  q record;
 begin
   if not quiz_host_ok(p_quiz) then raise exception 'Not allowed'; end if;
   if (select status from quizzes where id = p_quiz) <> 'draft' then raise exception 'This quiz is already open'; end if;
-  if not exists (select 1 from quiz_questions where quiz_id = p_quiz) then raise exception 'Add at least one question'; end if;
-
-  for q in select id, position, body from quiz_questions where quiz_id = p_quiz order by position loop
-    if length(btrim(q.body)) = 0 then raise exception 'Question % has no text', q.position + 1; end if;
-    if (select count(*) from quiz_options where question_id = q.id and length(btrim(label)) > 0) < 2 then
-      raise exception 'Question % needs at least two options', q.position + 1;
-    end if;
-    if exists (select 1 from quiz_options where question_id = q.id and length(btrim(label)) = 0) then
-      raise exception 'Question % has an empty option', q.position + 1;
-    end if;
-    if not exists (select 1 from quiz_options where question_id = q.id and is_correct) then
-      raise exception 'Question % needs a correct answer', q.position + 1;
-    end if;
-  end loop;
-
+  perform quiz_validate(p_quiz);
   update quizzes set status = 'lobby' where id = p_quiz;
 end;
 $$;
@@ -2704,7 +2726,7 @@ language sql
 stable
 as $$ select now(); $$;
 
-revoke all on function quiz_host_ok(uuid), quiz_student_ok(uuid), quiz_scores(uuid) from public;
+revoke all on function quiz_host_ok(uuid), quiz_student_ok(uuid), quiz_scores(uuid), quiz_validate(uuid) from public;
 revoke all on function quiz_save(jsonb), quiz_open_lobby(uuid), quiz_go(uuid, int), quiz_close(uuid), quiz_extend(uuid, int),
   quiz_end(uuid), quiz_join(uuid), quiz_answer(uuid, uuid[]), quiz_state(uuid), quiz_scoreboard(uuid),
   quiz_my_result(uuid), quiz_my_history(), quiz_clock() from public;
