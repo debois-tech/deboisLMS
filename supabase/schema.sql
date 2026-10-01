@@ -1377,6 +1377,35 @@ end $$;
 revoke all on function delete_student(uuid) from public;
 grant execute on function delete_student(uuid) to authenticated;
 
+-- Tutor row first (assignments cascade): tutors.auth_user_id -> auth.users has no cascade. Authored rows keep, author nulled.
+create or replace function delete_tutor(p_tutor_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare auth_id uuid;
+begin
+  if not is_admin() then
+    raise exception 'Admin only';
+  end if;
+
+  select auth_user_id into auth_id from tutors where id = p_tutor_id;
+  if not found then
+    raise exception 'Tutor not found';
+  end if;
+
+  delete from tutors where id = p_tutor_id;
+
+  -- A login shared with a student account is theirs too: keep it.
+  if auth_id is not null and not exists (select 1 from students where auth_user_id = auth_id) then
+    delete from auth.users where id = auth_id;
+  end if;
+end $$;
+
+revoke all on function delete_tutor(uuid) from public;
+grant execute on function delete_tutor(uuid) to authenticated;
+
 create or replace function revoke_expired_student_logins()
 returns int
 language plpgsql

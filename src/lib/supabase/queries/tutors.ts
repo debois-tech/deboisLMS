@@ -63,6 +63,11 @@ export async function removeTutorFromBatch(mappingId: string): Promise<void> {
   );
 }
 
+// Removes the tutor, their batch links and their login — see delete_tutor() in schema.sql.
+export async function deleteTutor(id: string): Promise<void> {
+  ok(await supabase.rpc('delete_tutor', { p_tutor_id: id }), 'Could not delete this tutor');
+}
+
 export async function getTutorByAuthUserId(authUserId: string): Promise<Tutor | undefined> {
   return maybeRow<Tutor>(
     await supabase.from('tutors').select('*').eq('auth_user_id', authUserId).maybeSingle(),

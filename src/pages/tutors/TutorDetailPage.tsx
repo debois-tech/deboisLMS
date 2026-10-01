@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Mail, Phone, Layers, CalendarDays, GraduationCap, Plus, X } from 'lucide-react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Mail, Phone, Layers, CalendarDays, GraduationCap, Plus, X, Trash2 } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -13,7 +13,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { NotFound } from '@/components/ui/NotFound';
 import { TutorLoginCard } from '@/components/tutors/TutorLoginCard';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
-import { getTutorById, getTutorBatches, getBatches, assignTutorToBatch, removeTutorFromBatch } from '@/lib/supabase';
+import { getTutorById, getTutorBatches, getBatches, assignTutorToBatch, removeTutorFromBatch, deleteTutor } from '@/lib/supabase';
 import type { Tutor, TutorBatchMapping, Batch } from '@/lib/types';
 import { formatDate } from '@/lib/utils/format';
 import { useToast } from '@/lib/context/ToastContext';
@@ -28,6 +28,8 @@ export default function TutorDetailPage() {
   const [showAssign, setShowAssign] = useState(false);
   const [assignBatchId, setAssignBatchId] = useState<string | null>(null);
   const [assigning, setAssigning] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const navigate = useNavigate();
   const { showToast } = useToast();
   const confirm = useConfirm();
 
@@ -78,6 +80,27 @@ export default function TutorDetailPage() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!tutor) return;
+    const ok = await confirm({
+      title: `Delete ${tutor.name}?`,
+      message: 'Their batch assignments and portal login are deleted for good. This cannot be undone.',
+      confirmLabel: 'Delete forever',
+      danger: true,
+    });
+    if (!ok) return;
+
+    setDeleting(true);
+    try {
+      await deleteTutor(tutor.id);
+      showToast(`${tutor.name} deleted`);
+      navigate('/tutors');
+    } catch (err) {
+      showToast(errorMessage(err, 'Could not delete this tutor'), 'error');
+      setDeleting(false);
+    }
+  };
+
   if (loading) return <Spinner centered />;
   if (error) return <ErrorState centered message={error} onRetry={retry} />;
   if (!tutor) return <NotFound label="Tutor" />;
@@ -105,6 +128,14 @@ export default function TutorDetailPage() {
               {tutor.phone && <span className="flex items-center gap-1"><Phone size={14} className="shrink-0" /> {tutor.phone}</span>}
             </div>
           </div>
+          <Button
+            variant="outline"
+            className="action-button-compact action-button-danger"
+            onClick={handleDelete}
+            loading={deleting}
+          >
+            <Trash2 size={14} /> Delete
+          </Button>
         </div>
       </Card>
 

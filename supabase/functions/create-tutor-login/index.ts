@@ -110,6 +110,12 @@ Deno.serve(async (req) => {
         email_confirm: true,
         app_metadata: { role: 'tutor', tutor_id: tutor.id },
       });
+      if (error?.code === 'email_exists') {
+        return new Response(JSON.stringify({ error: 'An account with this email already exists' }), {
+          status: 409,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
       if (error) throw error;
 
       await adminClient
