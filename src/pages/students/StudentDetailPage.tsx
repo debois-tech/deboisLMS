@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Mail, Phone, Layers, CalendarDays, History, Edit3, ExternalLink, UserMinus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, Layers, CalendarDays, History, Edit3, ExternalLink, UserMinus, Trash2, Pencil } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { StatusPill } from '@/components/ui/StatusPill';
@@ -15,10 +15,9 @@ import { StudentIdChip } from '@/components/students/StudentLink';
 import { Badge } from '@/components/ui/Badge';
 import { ClaimActions } from '@/components/finance/ClaimActions';
 import { DeleteStudentModal } from '@/components/students/DeleteStudentModal';
-import { getStudentById, getStudentBatches, getFeesByStudent, getLecturesByBatch, getFeePaymentLogsByStudent, getPendingClaims, terminateEnrolment } from '@/lib/supabase';
+import { getStudentById, getStudentBatches, getFeesByStudent, getLecturesByBatch, getFeePaymentLogsByStudent, getPendingClaims, terminateEnrolment, setStudentFee } from '@/lib/supabase';
 import type { Student, BatchStudentMapping, Batch, StudentFee, Lecture, FeePaymentLog, PaymentClaim } from '@/lib/types';
 import { formatDate, formatCurrency } from '@/lib/utils/format';
-import { INTERNSHIP_ROLE_LABELS } from '@/lib/utils/studentImport';
 import { useToast } from '@/lib/context/ToastContext';
 import { useConfirm } from '@/lib/context/ConfirmContext';
 import { errorMessage } from '@/lib/utils/errors';
@@ -34,6 +33,9 @@ export default function StudentDetailPage() {
   const [paymentLogs, setPaymentLogs] = useState<FeePaymentLog[]>([]);
   const [claims, setClaims] = useState<PaymentClaim[]>([]);
   const [terminating, setTerminating] = useState(false);
+  // The fee being typed, or null when the fee is not being edited.
+  const [feeDraft, setFeeDraft] = useState<string | null>(null);
+  const [savingFee, setSavingFee] = useState(false);
   const { showToast } = useToast();
   const confirm = useConfirm();
 
@@ -110,6 +112,44 @@ export default function StudentDetailPage() {
     }
   };
 
+  const baseFee = currentBatch?.base_fee ?? null;
+  const draftFee = feeDraft === null || feeDraft === '' ? null : Number(feeDraft);
+  const feeFlag =
+    draftFee === null || !currentFee ? ''
+      : baseFee !== null && draftFee > baseFee ? `Above base ${formatCurrency(baseFee)}`
+      : draftFee < currentFee.paid_amount ? `Below paid ${formatCurrency(currentFee.paid_amount)}`
+      : '';
+
+  const handleFeeSave = async () => {
+    if (!currentMapping || !currentFee || draftFee === null) return;
+    const accepted = await confirm({
+      title: `Change fee to ${formatCurrency(draftFee)}?`,
+      message: (
+        <>
+          <span className="block">{formatCurrency(currentFee.total_fee)} → {formatCurrency(draftFee)}</span>
+          <span className="block">Discount reset to {formatCurrency(Math.max((baseFee ?? draftFee) - draftFee, 0))}</span>
+          <span className="block">Instalments and dues recalculated</span>
+          <span className="block">Batch fee totals and reports change</span>
+        </>
+      ),
+      confirmLabel: 'Change fee',
+      danger: true,
+    });
+    if (!accepted) return;
+
+    setSavingFee(true);
+    try {
+      await setStudentFee(student.id, currentMapping.batch_id, draftFee);
+      showToast('Fee changed');
+      setFeeDraft(null);
+      retry();
+    } catch (err) {
+      showToast(errorMessage(err, 'Could not change the fee'), 'error');
+    } finally {
+      setSavingFee(false);
+    }
+  };
+
   const batchNameById = new Map(batchMappings.map((m) => [m.batch_id, m.batch?.name ?? m.batch_id]));
 
   // Only what this student actually has — an empty row says nothing worth a line.
@@ -121,7 +161,7 @@ export default function StudentDetailPage() {
     { label: 'Branch', value: student.branch ?? '' },
     { label: 'Current Year', value: student.current_year ?? '' },
     { label: 'Graduation Year', value: student.graduation_year ? String(student.graduation_year) : '' },
-    { label: 'Internship Role', value: student.internship_role ? INTERNSHIP_ROLE_LABELS[student.internship_role] : '' },
+    { label: 'Internship Role', value: student.internship_role ?? '' },
     { label: 'Internship Start', value: student.internship_start_date ? formatDate(student.internship_start_date) : '' },
     { label: 'Internship End', value: student.internship_end_date ? formatDate(student.internship_end_date) : '' },
   ].filter((fact) => fact.value);
@@ -204,8 +244,50 @@ export default function StudentDetailPage() {
           )}
         </Card>
         <Card padding="sm" className="student-summary-card">
-          <p className="student-summary-label">Total Payment</p>
-          {currentBatch && currentFee ? (
+          <div className="flex items-center justify-between gap-2">
+            <p className="student-summary-label">Total Payment</p>
+            {currentBatch && currentFee && feeDraft === null && (
+              <button
+                type="button"
+                onClick={() => setFeeDraft(String(currentFee.total_fee))}
+                aria-label="Edit fee"
+                className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-overlay)] hover:text-[var(--text-primary)]"
+              >
+                <Pencil size={14} />
+              </button>
+            )}
+          </div>
+          {currentBatch && currentFee && feeDraft !== null ? (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={currentFee.paid_amount}
+                  max={baseFee ?? undefined}
+                  value={feeDraft}
+                  onChange={(event) => setFeeDraft(event.target.value)}
+                  aria-invalid={Boolean(feeFlag)}
+                  aria-label="Decided fee"
+                  autoFocus
+                />
+                <Button
+                  size="sm"
+                  className="action-button-compact"
+                  onClick={handleFeeSave}
+                  loading={savingFee}
+                  disabled={draftFee === null || Boolean(feeFlag) || draftFee === currentFee.total_fee}
+                >
+                  Save
+                </Button>
+                <Button size="sm" variant="ghost" className="action-button-compact" onClick={() => setFeeDraft(null)} disabled={savingFee}>
+                  Cancel
+                </Button>
+              </div>
+              {feeFlag ? <p className="field-flag">{feeFlag}</p> : (
+                <p className="field-hint">Base {baseFee === null ? '—' : formatCurrency(baseFee)} · Paid {formatCurrency(currentFee.paid_amount)}</p>
+              )}
+            </div>
+          ) : currentBatch && currentFee ? (
             <div className="student-summary-payment">
               <p className="student-summary-value">{formatCurrency(currentFee.paid_amount)} <span className="student-summary-total">/ {formatCurrency(currentFee.total_fee)}</span></p>
               <p className={`student-summary-status ${currentFee.total_fee - currentFee.paid_amount > 0 ? 'is-due' : 'is-paid'}`}>

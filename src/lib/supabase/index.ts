@@ -1,13 +1,13 @@
 export { getBatches, getBatchById, createBatch, updateBatch, deleteBatch, getBatchDeletionCounts, getBatchPrograms, endBatch, saveBatchProgram, PROGRAM_CODE_PATTERN } from './queries/batches';
 export type { BatchDeletionCounts } from './queries/batches';
-export { getStudents, getStudentById, createStudent, createOrReuseStudent, findExistingStudent, updateStudent, getStudentBatches, getAllBatchStudentMappings, getBatchStudents, addStudentToBatch, terminateEnrolment, transferStudents, getStudentDeletionCounts, deleteStudent, getStudentByAuthUserId, createStudentLogin, createStudentLoginsBulk, sendCredentialsEmail, importStudentsIntoBatch } from './queries/students';
+export { getStudents, getStudentById, createStudent, createOrReuseStudent, findExistingStudent, updateStudent, getStudentBatches, getAllBatchStudentMappings, getBatchStudents, addStudentToBatch, terminateEnrolment, transferStudents, getStudentDeletionCounts, deleteStudent, getStudentByAuthUserId, createStudentLogin, createStudentLoginsBulk, sendCredentialsEmail, importStudentsIntoBatch, getInternshipRoles, addInternshipRole } from './queries/students';
 export type { BulkLoginResult, CredentialEmailResult, TerminationResult, StudentDeletionCounts } from './queries/students';
 export { getTutors, getTutorById, createTutor, getTutorBatches, getBatchTutors, assignTutorToBatch, removeTutorFromBatch, deleteTutor, getTutorByAuthUserId, createTutorLogin } from './queries/tutors';
 export { getLecturesByBatch, getLectureById, createLecture, updateLecture, deleteLecture } from './queries/lectures';
 export { getUploadsByLecture, getAttendanceByLecture, getAttendanceByBatch, getApprovedAttendanceByStudent, insertUploadRows, markAttendance, deleteAttendance, approveAttendance, setAttendanceApproved, bulkApproveAttendance, getUnapprovedCount } from './queries/attendance';
 export { processAttendance, computeStatus, ATTENDANCE_PRESENT_PERCENT, ATTENDANCE_PARTIAL_PERCENT } from '@/lib/attendance/process';
 export type { ProcessingReport, ProcessOptions } from '@/lib/attendance/process';
-export { getFeesByBatch, updateFeePayment, getFeePaymentLogs, addFeePaymentLog, deleteFeePayment, getBatchFeeSummary, getEarningBreakdown, getFeesByStudent, getFeePaymentLogsByStudent, getMyFeeDues } from './queries/fees';
+export { getFeesByBatch, setStudentFee, updateFeePayment, getFeePaymentLogs, addFeePaymentLog, deleteFeePayment, getBatchFeeSummary, getEarningBreakdown, getFeesByStudent, getFeePaymentLogsByStudent, getMyFeeDues } from './queries/fees';
 export { getAssignmentsByBatch, getAssignmentsForStudent, createAssignment, updateAssignment, deleteAssignment, getAssignmentSubmissions, getStudentRepo, saveStudentRepo, submitAssignmentFromPortal, setAssignmentMark } from './queries/assignments';
 export type { AssignmentSubmissionRow } from './queries/assignments';
 export { getMaterialsByBatch, getMaterialsForEveryone, getMaterialsForStudent, getMaterialsByAssignment, getMaterialById, uploadMaterial, uploadMaterials, deleteMaterial, deleteBatchMaterials, getMaterialViews, openMaterial, downloadMaterial, MATERIAL_MAX_BYTES } from './queries/materials';

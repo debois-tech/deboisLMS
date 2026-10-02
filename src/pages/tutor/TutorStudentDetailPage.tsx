@@ -38,6 +38,7 @@ export default function TutorStudentDetailPage() {
     { label: 'Branch', value: student.branch ?? '' },
     { label: 'Current Year', value: student.current_year ?? '' },
     { label: 'Graduation Year', value: student.graduation_year ? String(student.graduation_year) : '' },
+    { label: 'Internship Role', value: student.internship_role ?? '' },
   ].filter((fact) => fact.value);
 
   return (

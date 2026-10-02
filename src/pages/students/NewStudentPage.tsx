@@ -8,18 +8,21 @@ import { FormField } from '@/components/ui/FormField';
 import { BatchSelect } from '@/components/ui/BatchSelect';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { SearchSelect } from '@/components/ui/SearchSelect';
-import { GENDER_OPTIONS, INTERNSHIP_ROLE_OPTIONS, roleForBatch } from '@/lib/utils/studentImport';
+import { GENDER_OPTIONS, cleanRole, normalizeRole, roleForBatch } from '@/lib/utils/studentImport';
 import { Spinner } from '@/components/ui/Spinner';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { CredentialsModal } from '@/components/students/StudentLoginCard';
 import { InlineAlert } from '@/components/ui/InlineAlert';
-import { addStudentToBatch, createOrReuseStudent, createStudentLogin, getBatches } from '@/lib/supabase';
+import { addInternshipRole, addStudentToBatch, createOrReuseStudent, createStudentLogin, getBatches, getInternshipRoles } from '@/lib/supabase';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { useToast } from '@/lib/context/ToastContext';
 import type { Batch, InternshipRole, StudentCredentials } from '@/lib/types';
 import { errorMessage } from '@/lib/utils/errors';
 import { feeFromDiscountValue, formatCurrency } from '@/lib/utils/format';
+
+/** Sentinel for the "not in the list yet" row, which reveals the name field below it. */
+const NEW_ROLE = '__new__';
 
 export default function NewStudentPage() {
   const navigate = useNavigate();
@@ -28,12 +31,15 @@ export default function NewStudentPage() {
   const [createdStudentId, setCreatedStudentId] = useState<string | null>(null);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [batchId, setBatchId] = useState<string | null>(null);
-  // A discount, not an amount — same as the CSV, so a student costs the same
-  // however they were added. The fee itself is derived from the batch.
+  const [roles, setRoles] = useState<string[]>([]);
+  // Discount and Fee are one number seen two ways: typing either fills the other.
+  // `feeText` is null until the Fee field is typed in, then the fee is what was typed.
   const [discount, setDiscount] = useState('');
   const [discountType, setDiscountType] = useState<'percentage' | 'amount'>('percentage');
+  const [feeText, setFeeText] = useState<string | null>(null);
   // Empty until picked; meanwhile the batch's programme suggests one.
   const [pickedRole, setPickedRole] = useState<InternshipRole | ''>('');
+  const [newRoleName, setNewRoleName] = useState('');
   // Start is the batch's start date unless changed; the end is left for the batch's end date to fill, or an admin.
   const [pickedStart, setPickedStart] = useState<string | null>(null);
   const [internshipEnd, setInternshipEnd] = useState('');
@@ -50,14 +56,34 @@ export default function NewStudentPage() {
   const { showToast } = useToast();
 
   const { loading: loadingBatches, error, retry } = useInitialLoad(async () => {
-    setBatches(await getBatches());
+    const [loadedBatches, loadedRoles] = await Promise.all([getBatches(), getInternshipRoles()]);
+    setBatches(loadedBatches);
+    setRoles(loadedRoles);
   });
 
   const batch = batches.find((option) => option.id === batchId);
   const role = pickedRole || roleForBatch(batch) || '';
+  const addingRole = role === NEW_ROLE;
   const internshipStart = pickedStart ?? batch?.start_date?.slice(0, 10) ?? '';
   const baseFee = batch?.base_fee ?? null;
-  const payable = baseFee === null ? null : feeFromDiscountValue(baseFee, Number(discount) || 0, discountType);
+  const typedFee = feeText ? Number(feeText) : null;
+  const payable = baseFee === null ? null : typedFee ?? feeFromDiscountValue(baseFee, Number(discount) || 0, discountType);
+  const feeFlag = baseFee !== null && typedFee !== null && typedFee > baseFee ? `Above base ${formatCurrency(baseFee)}` : '';
+
+  const handleFee = (value: string) => {
+    setFeeText(value);
+    // Above base is flagged and blocked, so the discount is only filled from a fee that can be saved.
+    if (baseFee !== null && value && Number(value) <= baseFee) {
+      setDiscountType('amount');
+      setDiscount(String(baseFee - Number(value)));
+    }
+  };
+
+  const handleDiscount = (value: string, type = discountType) => {
+    setDiscount(value);
+    setDiscountType(type);
+    setFeeText(null);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,8 +97,8 @@ export default function NewStudentPage() {
       showToast('Pick a date of birth', 'error');
       return;
     }
-    if (!role) {
-      showToast('Pick an internship role', 'error');
+    if (!role || (addingRole && !cleanRole(newRoleName))) {
+      showToast(addingRole ? 'Name the new role' : 'Pick an internship role', 'error');
       return;
     }
     if (internshipEnd && internshipStart && internshipEnd < internshipStart) {
@@ -85,13 +111,21 @@ export default function NewStudentPage() {
     }
     setLoading(true);
     try {
+      // The role is written first, so the student is saved with one that exists. A name matching one already there joins it.
+      let internshipRole = role;
+      if (addingRole) {
+        const typed = cleanRole(newRoleName);
+        internshipRole = roles.find((option) => normalizeRole(option) === normalizeRole(typed)) ?? (await addInternshipRole(typed));
+        if (!roles.includes(internshipRole)) setRoles([...roles, internshipRole]);
+      }
+
       // Blank strings would overwrite a reused student's real values with empties,
       // and graduation_year is an int column that cannot take ''.
       const { graduation_year, ...text } = form;
       const student = await createOrReuseStudent({
         ...Object.fromEntries(Object.entries(text).filter(([, value]) => value !== '')),
         ...(graduation_year ? { graduation_year: Number(graduation_year) } : {}),
-        internship_role: role,
+        internship_role: internshipRole,
         ...(internshipStart ? { internship_start_date: internshipStart } : {}),
         ...(internshipEnd ? { internship_end_date: internshipEnd } : {}),
       } as Parameters<typeof createOrReuseStudent>[0]);
@@ -148,7 +182,7 @@ export default function NewStudentPage() {
           </FormField>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_8rem_9rem]">
             <FormField label="Batch" required>
-              <BatchSelect batches={batches} value={batchId} onChange={setBatchId} />
+              <BatchSelect batches={batches} value={batchId} onChange={(id) => { setBatchId(id); setFeeText(null); }} />
             </FormField>
             <FormField label="Discount">
               <div className="relative">
@@ -158,20 +192,28 @@ export default function NewStudentPage() {
                   min="0"
                   max={discountType === 'percentage' ? 100 : undefined}
                   value={discount}
-                  onChange={(e) => setDiscount(e.target.value)}
+                  onChange={(e) => handleDiscount(e.target.value)}
                   aria-label={discountType === 'percentage' ? 'Discount percentage' : 'Discount amount'}
                 />
                 <span aria-hidden className="absolute right-[4.5rem] top-1 bottom-1 w-[2px] bg-[var(--border)]" />
                 <div className="absolute right-1 top-1 bottom-1 flex rounded-[var(--radius-sm)] bg-[var(--bg-elevated)] p-0.5">
-                  <button type="button" onClick={() => setDiscountType('percentage')} aria-pressed={discountType === 'percentage'} className={`min-w-8 rounded-[var(--radius-sm)] px-2 text-xs font-semibold transition-colors ${discountType === 'percentage' ? 'bg-[var(--primary)] text-white' : 'text-[var(--text-muted)]'}`}>%</button>
-                  <button type="button" onClick={() => setDiscountType('amount')} aria-pressed={discountType === 'amount'} className={`min-w-8 rounded-[var(--radius-sm)] px-2 text-xs font-semibold transition-colors ${discountType === 'amount' ? 'bg-[var(--primary)] text-white' : 'text-[var(--text-muted)]'}`}>₹</button>
+                  <button type="button" onClick={() => handleDiscount(discount, 'percentage')} aria-pressed={discountType === 'percentage'} className={`min-w-8 rounded-[var(--radius-sm)] px-2 text-xs font-semibold transition-colors ${discountType === 'percentage' ? 'bg-[var(--primary)] text-white' : 'text-[var(--text-muted)]'}`}>%</button>
+                  <button type="button" onClick={() => handleDiscount(discount, 'amount')} aria-pressed={discountType === 'amount'} className={`min-w-8 rounded-[var(--radius-sm)] px-2 text-xs font-semibold transition-colors ${discountType === 'amount' ? 'bg-[var(--primary)] text-white' : 'text-[var(--text-muted)]'}`}>₹</button>
                 </div>
               </div>
             </FormField>
-            {/* Read-only: the fee is worked out, never typed. Shown as a field
-                rather than a line of prose so it reads as this form's output. */}
             <FormField label="Fee">
-              <input value={payable === null ? '—' : formatCurrency(payable)} readOnly disabled />
+              <input
+                type="number"
+                min="0"
+                max={baseFee ?? undefined}
+                value={feeText ?? (payable === null ? '' : String(payable))}
+                onChange={(e) => handleFee(e.target.value)}
+                disabled={baseFee === null}
+                aria-invalid={Boolean(feeFlag)}
+                aria-label="Fee"
+              />
+              {feeFlag && <p className="field-flag">{feeFlag}</p>}
             </FormField>
           </div>
 
@@ -184,7 +226,7 @@ export default function NewStudentPage() {
           <FormField label="Internship Role" required>
             <SearchSelect
               showSearch={false}
-              options={INTERNSHIP_ROLE_OPTIONS}
+              options={[...roles.map((option) => ({ value: option, label: option })), { value: NEW_ROLE, label: 'Add a new role' }]}
               value={role || null}
               onChange={(value) => setPickedRole(value as InternshipRole)}
               placeholder="Select a role"
@@ -192,6 +234,11 @@ export default function NewStudentPage() {
               emptyText="No match"
             />
           </FormField>
+          {addingRole && (
+            <FormField label="Role Name" required>
+              <input value={newRoleName} onChange={(e) => setNewRoleName(e.target.value)} maxLength={60} required />
+            </FormField>
+          )}
           <div className="grid gap-4 md:grid-cols-2">
             <FormField label="Internship Start">
               <DatePicker value={internshipStart} onChange={setPickedStart} placeholder="Pick a date" ariaLabel="Internship start date" />
@@ -254,7 +301,7 @@ export default function NewStudentPage() {
               className="action-button"
               type="submit"
               loading={loading}
-              disabled={Boolean(batchId) && payable === null}
+              disabled={(Boolean(batchId) && payable === null) || Boolean(feeFlag)}
             >
               Add Student
             </Button>

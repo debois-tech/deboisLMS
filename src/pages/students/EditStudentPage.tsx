@@ -9,11 +9,10 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { FormField } from '@/components/ui/FormField';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { SearchSelect } from '@/components/ui/SearchSelect';
-import { getStudentById, updateStudent } from '@/lib/supabase';
+import { getInternshipRoles, getStudentById, updateStudent } from '@/lib/supabase';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { useToast } from '@/lib/context/ToastContext';
 import type { InternshipRole, Student } from '@/lib/types';
-import { INTERNSHIP_ROLE_OPTIONS } from '@/lib/utils/studentImport';
 import { errorMessage } from '@/lib/utils/errors';
 
 type EditableStudent = Pick<Student, 'name' | 'phone' | 'date_of_birth' | 'college' | 'course' | 'branch' | 'current_year' | 'graduation_year' | 'github_url' | 'linkedin_url' | 'internship_role' | 'internship_start_date' | 'internship_end_date'>;
@@ -24,11 +23,13 @@ export default function EditStudentPage() {
   const [student, setStudent] = useState<Student | null>(null);
   const [form, setForm] = useState<EditableStudent>({ name: '', phone: '', date_of_birth: '', college: '', course: '', branch: '', current_year: '', graduation_year: undefined, github_url: '', linkedin_url: '', internship_role: null, internship_start_date: '', internship_end_date: '' });
   const [saving, setSaving] = useState(false);
+  const [roles, setRoles] = useState<string[]>([]);
   const { showToast } = useToast();
 
   const { loading, error, retry } = useInitialLoad(async () => {
     if (!studentId) return;
-    const record = await getStudentById(studentId);
+    const [record, loadedRoles] = await Promise.all([getStudentById(studentId), getInternshipRoles()]);
+    setRoles(loadedRoles);
     if (!record) return;
     setStudent(record);
     setForm({ name: record.name, phone: record.phone, date_of_birth: record.date_of_birth ?? '', college: record.college ?? '', course: record.course ?? '', branch: record.branch ?? '', current_year: record.current_year ?? '', graduation_year: record.graduation_year, github_url: record.github_url ?? '', linkedin_url: record.linkedin_url ?? '', internship_role: record.internship_role ?? null, internship_start_date: record.internship_start_date ?? '', internship_end_date: record.internship_end_date ?? '' });
@@ -91,7 +92,7 @@ export default function EditStudentPage() {
           <FormField label="Internship Role">
             <SearchSelect
               showSearch={false}
-              options={INTERNSHIP_ROLE_OPTIONS}
+              options={roles.map((option) => ({ value: option, label: option }))}
               value={form.internship_role ?? null}
               onChange={(value) => setForm({ ...form, internship_role: value as InternshipRole })}
               placeholder="Select a role"

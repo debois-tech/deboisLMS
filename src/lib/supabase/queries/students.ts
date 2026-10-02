@@ -3,8 +3,7 @@ import { getBatchById } from './batches';
 import { invokeLoginFunction, maybeRow, ok, row, rows } from './result';
 import type { Batch, Student, BatchStudentMapping, StudentCredentials } from '@/lib/types';
 import { errorMessage } from '@/lib/utils/errors';
-import { getImportDiscount, roleForBatch, toStudentInput } from '@/lib/utils/studentImport';
-import { feeFromDiscountValue } from '@/lib/utils/format';
+import { planImportRows, toStudentInput } from '@/lib/utils/studentImport';
 
 export async function getStudents(): Promise<Student[]> {
   return rows<Student>(
@@ -77,8 +76,8 @@ export async function createOrReuseStudent(input: Omit<Student, 'id' | 'created_
 
 /**
  * The one CSV import path, so both import screens write the same fields.
- * The sheet's Discount column is rupees off and never a percentage — `baseFee`
- * is the batch's own fee, and each student is charged that less their discount.
+ * Each student is charged the sheet's Fee, or the batch's `baseFee` less its Discount — see planImportFee. Rows that
+ * cannot be charged are left out; the import dialog has already named them.
  */
 export async function importStudentsIntoBatch(
   rows: Record<string, string>[],
@@ -86,18 +85,22 @@ export async function importStudentsIntoBatch(
   baseFee: number,
 ): Promise<Student[]> {
   return Promise.all(
-    rows.map(async (row) => {
+    planImportRows(rows, baseFee).ready.map(async ({ row, fee, discount }) => {
       const student = await createOrReuseStudent(toStudentInput(row));
-      const discount = getImportDiscount(row);
-      const fee = feeFromDiscountValue(baseFee, discount, 'amount');
       // The discount is stored alongside the fee it produced, not just baked into it.
-      await addStudentToBatch(student.id, batchId, fee, {
-        type: 'amount',
-        value: discount ?? 0,
-      }).catch(() => undefined);
+      await addStudentToBatch(student.id, batchId, fee, { type: 'amount', value: discount }).catch(() => undefined);
       return student;
     }),
   );
+}
+
+export async function getInternshipRoles(): Promise<string[]> {
+  return row<string[]>(await supabase.rpc('internship_roles'), 'Could not load the roles');
+}
+
+/** Creates the role (an enum value) if it is new; returns it as stored. */
+export async function addInternshipRole(name: string): Promise<string> {
+  return row<string>(await supabase.rpc('add_internship_role', { p_name: name }), `Could not create the role ${name}`);
 }
 
 export async function updateStudent(id: string, input: Partial<Student>): Promise<Student | undefined> {
@@ -269,11 +272,10 @@ export async function addStudentToBatch(
   void Promise.all([getStudentById(studentId), getBatchById(batchId)])
     .then(async ([student, batch]) => {
       if (!student || !batch) return;
-      // What the student has not been given yet comes from the batch: the role, and the internship's start date.
-      const role = student.internship_role ? undefined : roleForBatch(batch);
-      const start = !student.internship_start_date && batch.start_date ? batch.start_date.slice(0, 10) : undefined;
-      const fill = { ...(role ? { internship_role: role } : {}), ...(start ? { internship_start_date: start } : {}) };
-      if (role || start) await updateStudent(student.id, fill);
+      // The internship's start date, if the student has none yet, comes from the batch. The role never does.
+      if (!student.internship_start_date && batch.start_date) {
+        await updateStudent(student.id, { internship_start_date: batch.start_date.slice(0, 10) });
+      }
     })
     .catch((err) => console.error('[addStudentToBatch] fill', err));
 
