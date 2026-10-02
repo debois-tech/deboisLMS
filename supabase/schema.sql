@@ -1139,7 +1139,9 @@ create policy "admin manages asset files" on storage.objects
 
 
 -- 11. BATCH LIFECYCLE AND LEAVERS
-create or replace function end_batch(p_batch_id uuid)
+-- The old one-argument version would make a bare call ambiguous.
+drop function if exists end_batch(uuid);
+create or replace function end_batch(p_batch_id uuid, p_ended_on date default current_date)
 returns batches
 language plpgsql
 security definer
@@ -1150,9 +1152,12 @@ begin
   if not is_admin() then
     raise exception 'Admin only';
   end if;
+  if exists (select 1 from batches where id = p_batch_id and start_date > p_ended_on) then
+    raise exception 'A batch cannot end before it starts';
+  end if;
 
   update batches
-  set status = 'completed', ended_at = coalesce(ended_at, current_date)
+  set status = 'completed', ended_at = p_ended_on
   where id = p_batch_id
   returning * into updated;
 
@@ -1170,8 +1175,8 @@ begin
   return updated;
 end $$;
 
-revoke all on function end_batch(uuid) from public;
-grant execute on function end_batch(uuid) to authenticated;
+revoke all on function end_batch(uuid, date) from public;
+grant execute on function end_batch(uuid, date) to authenticated;
 
 create or replace function terminate_enrolment(p_mapping_id uuid, p_left_on date default current_date)
 returns jsonb

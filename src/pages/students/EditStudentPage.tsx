@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
+import { useGoBack } from '@/components/ui/BackLink';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
@@ -19,7 +20,7 @@ type EditableStudent = Pick<Student, 'name' | 'phone' | 'date_of_birth' | 'colle
 
 export default function EditStudentPage() {
   const { studentId } = useParams();
-  const navigate = useNavigate();
+  const goBack = useGoBack(`/students/${studentId}`);
   const [student, setStudent] = useState<Student | null>(null);
   const [form, setForm] = useState<EditableStudent>({ name: '', phone: '', date_of_birth: '', college: '', course: '', branch: '', current_year: '', graduation_year: undefined, github_url: '', linkedin_url: '', internship_role: null, internship_start_date: '', internship_end_date: '' });
   const [saving, setSaving] = useState(false);
@@ -62,7 +63,7 @@ export default function EditStudentPage() {
         internship_end_date: form.internship_end_date || null,
       });
       showToast('Student updated');
-      navigate(`/students/${student.id}`);
+      goBack();
     } catch (err) {
       showToast(errorMessage(err, 'Failed to save the student'), 'error');
     } finally { setSaving(false); }
@@ -118,7 +119,7 @@ export default function EditStudentPage() {
           </div>
           <div className="flex gap-3 pt-2">
             <Button className="action-button" type="submit" loading={saving}>Save Changes</Button>
-            <Button className="action-button-compact" variant="ghost" onClick={() => navigate(`/students/${student.id}`)}>Cancel</Button>
+            <Button className="action-button-compact" variant="ghost" onClick={goBack}>Cancel</Button>
           </div>
         </form>
       </Card>

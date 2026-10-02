@@ -250,7 +250,7 @@ export async function buildDocumentPdf(kind: DocumentKind, data: DocumentData, a
   lines([[{ text: 'To,', bold: true }], [{ text: data.name, bold: true }], [{ text: ADDRESS }]], BODY, 1.45);
   close(spec.recipientMargin);
 
-  paragraph(`Dear **${data.name}**,`);
+  paragraph(`Dear **${data.name.trim().split(/[\s,]+/)[0]}**,`);
   for (const text of spec.paragraphs(data)) paragraph(text);
 
   // Signature.

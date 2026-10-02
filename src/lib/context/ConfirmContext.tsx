@@ -9,6 +9,8 @@ export interface ConfirmOptions {
   cancelLabel?: string;
   /** Red confirm button. Use for anything that destroys or detaches data. */
   danger?: boolean;
+  /** The word to type back before the confirm button unlocks. */
+  requireText?: string;
 }
 
 interface ConfirmState extends ConfirmOptions {

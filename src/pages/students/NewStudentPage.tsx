@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { useGoBack } from '@/components/ui/BackLink';
 import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { FormField } from '@/components/ui/FormField';
@@ -26,6 +27,7 @@ const NEW_ROLE = '__new__';
 
 export default function NewStudentPage() {
   const navigate = useNavigate();
+  const goBack = useGoBack('/students');
   const [loading, setLoading] = useState(false);
   const [credentials, setCredentials] = useState<StudentCredentials | null>(null);
   const [createdStudentId, setCreatedStudentId] = useState<string | null>(null);
@@ -137,7 +139,7 @@ export default function NewStudentPage() {
 
       // Reusing an existing student would rotate a password they already have — skip those.
       if (student.auth_user_id) {
-        navigate(`/students/${student.id}`);
+        navigate(`/students/${student.id}`, { replace: true });
         return;
       }
 
@@ -146,7 +148,7 @@ export default function NewStudentPage() {
       } catch (loginError) {
         // The record is saved; a failed login just needs a retry from the detail page.
         showToast(errorMessage(loginError, 'Student saved. Login not created.'), 'warning');
-        navigate(`/students/${student.id}`);
+        navigate(`/students/${student.id}`, { replace: true });
       }
     } catch (error) {
       showToast(errorMessage(error, 'Failed to add student'), 'error');
@@ -305,7 +307,7 @@ export default function NewStudentPage() {
             >
               Add Student
             </Button>
-            <Button className='action-button-compact' variant="ghost" onClick={() => navigate('/students')}>Cancel</Button>
+            <Button className='action-button-compact' variant="ghost" onClick={goBack}>Cancel</Button>
           </div>
         </form>
       </Card>
@@ -315,7 +317,7 @@ export default function NewStudentPage() {
         studentId={createdStudentId}
         onClose={() => {
           setCredentials(null);
-          if (createdStudentId) navigate(`/students/${createdStudentId}`);
+          if (createdStudentId) navigate(`/students/${createdStudentId}`, { replace: true });
         }}
       />
     </div>

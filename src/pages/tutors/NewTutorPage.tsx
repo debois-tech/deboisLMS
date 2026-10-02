@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useGoBack } from '@/components/ui/BackLink';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -12,6 +13,7 @@ import type { StudentCredentials } from '@/lib/types';
 
 export default function NewTutorPage() {
   const navigate = useNavigate();
+  const goBack = useGoBack('/tutors');
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', phone: '' });
   const [credentials, setCredentials] = useState<StudentCredentials | null>(null);
@@ -31,7 +33,7 @@ export default function NewTutorPage() {
       } catch (loginError) {
         // The record is saved; a failed login just needs a retry from the detail page.
         showToast(errorMessage(loginError, 'Tutor saved. Login not created.'), 'warning');
-        navigate(`/tutors/${tutor.id}`);
+        navigate(`/tutors/${tutor.id}`, { replace: true });
       }
     } catch (error) {
       showToast(errorMessage(error, 'Failed to add tutor'), 'error');
@@ -58,7 +60,7 @@ export default function NewTutorPage() {
           </div>
           <div className="flex gap-3 pt-2">
             <Button className="action-button-compact" type="submit" loading={loading}>Add Tutor</Button>
-            <Button variant="ghost" onClick={() => navigate('/tutors')}>Cancel</Button>
+            <Button variant="ghost" onClick={goBack}>Cancel</Button>
           </div>
         </form>
       </Card>
@@ -67,7 +69,7 @@ export default function NewTutorPage() {
         credentials={credentials}
         onClose={() => {
           setCredentials(null);
-          if (createdTutorId) navigate(`/tutors/${createdTutorId}`);
+          if (createdTutorId) navigate(`/tutors/${createdTutorId}`, { replace: true });
         }}
       />
     </div>
