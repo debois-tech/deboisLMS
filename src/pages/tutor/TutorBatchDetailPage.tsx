@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Users } from 'lucide-react';
+import { Users } from 'lucide-react';
+import { BackLink } from '@/components/ui/BackLink';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { StatusPill } from '@/components/ui/StatusPill';
 import { Tabs } from '@/components/ui/Tabs';
@@ -43,9 +44,7 @@ export default function TutorBatchDetailPage() {
 
   return (
     <div className="page-section">
-      <Link to="/tutor" className="mb-4 flex w-fit items-center gap-1 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)]">
-        <ArrowLeft size={14} /> Back to Dashboard
-      </Link>
+      <BackLink fallback="/tutor" />
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-3 flex-wrap">

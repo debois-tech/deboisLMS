@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
+import { useGoBack } from '@/components/ui/BackLink';
 import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { FormField } from '@/components/ui/FormField';
@@ -16,6 +17,7 @@ const NEW_PROGRAM = '__new__';
 
 export default function NewBatchPage() {
   const navigate = useNavigate();
+  const goBack = useGoBack('/batches');
   const [loading, setLoading] = useState(false);
   const [programs, setPrograms] = useState<BatchProgramOption[]>([]);
   const [program, setProgram] = useState<string | null>(null);
@@ -57,7 +59,7 @@ export default function NewBatchPage() {
 
       const batch = await createBatch({ ...form, program: code, base_fee: Number(baseFee) });
       showToast('Batch created');
-      navigate(`/batches/${batch.id}`);
+      navigate(`/batches/${batch.id}`, { replace: true });
     } catch (error) {
       showToast(errorMessage(error, 'Failed to create batch'), 'error');
     } finally {
@@ -151,7 +153,7 @@ export default function NewBatchPage() {
             <Button className="action-button-compact" type="submit" loading={loading} disabled={incomplete}>
               Create Batch
             </Button>
-            <Button className="action-button-compact" variant="ghost" onClick={() => navigate('/batches')}>Cancel</Button>
+            <Button className="action-button-compact" variant="ghost" onClick={goBack}>Cancel</Button>
           </div>
         </form>
       </Card>

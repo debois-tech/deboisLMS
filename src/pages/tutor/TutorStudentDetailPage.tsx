@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Mail, Phone, Layers, ExternalLink } from 'lucide-react';
+import { useParams } from 'react-router-dom';
+import { Mail, Phone, Layers, ExternalLink } from 'lucide-react';
+import { BackLink } from '@/components/ui/BackLink';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -43,9 +44,7 @@ export default function TutorStudentDetailPage() {
 
   return (
     <div className="page-section">
-      <Link to="/tutor/students" className="detail-back-link">
-        <ArrowLeft size={14} /> Back to Students
-      </Link>
+      <BackLink fallback="/tutor/students" />
 
       <Card padding="lg">
         <div className="student-identity-row">

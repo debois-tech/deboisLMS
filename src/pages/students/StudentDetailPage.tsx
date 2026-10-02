@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Mail, Phone, Layers, CalendarDays, History, Edit3, ExternalLink, UserMinus, Trash2, Pencil } from 'lucide-react';
+import { BackLink } from '@/components/ui/BackLink';
+import { Mail, Phone, Layers, CalendarDays, History, Edit3, ExternalLink, UserMinus, Trash2, Pencil } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { StatusPill } from '@/components/ui/StatusPill';
@@ -134,6 +135,7 @@ export default function StudentDetailPage() {
       ),
       confirmLabel: 'Change fee',
       danger: true,
+      requireText: 'Confirm',
     });
     if (!accepted) return;
 
@@ -169,9 +171,7 @@ export default function StudentDetailPage() {
   return (
     <div className="page-section">
       <div className="detail-topbar">
-        <Link to="/students" className="detail-back-link">
-          <ArrowLeft size={14} /> Back to Students
-        </Link>
+        <BackLink fallback="/students" />
         <div className="flex items-center gap-2">
           <Link to={`/students/${student.id}/edit`}>
             <Button variant="outline" className="action-button-compact"><Edit3 size={14} /> Edit</Button>
@@ -419,7 +419,7 @@ export default function StudentDetailPage() {
         studentName={student.name}
         confirmWord={student.student_code ?? student.name}
         onClose={() => setDeleting(false)}
-        onDeleted={() => navigate('/students')}
+        onDeleted={() => navigate('/students', { replace: true })}
       />
     </div>
   );

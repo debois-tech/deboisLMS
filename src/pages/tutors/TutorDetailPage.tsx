@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Mail, Phone, Layers, CalendarDays, GraduationCap, Plus, X, Trash2 } from 'lucide-react';
+import { Mail, Phone, Layers, CalendarDays, GraduationCap, Plus, X, Trash2 } from 'lucide-react';
+import { BackLink } from '@/components/ui/BackLink';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -94,7 +95,7 @@ export default function TutorDetailPage() {
     try {
       await deleteTutor(tutor.id);
       showToast(`${tutor.name} deleted`);
-      navigate('/tutors');
+      navigate('/tutors', { replace: true });
     } catch (err) {
       showToast(errorMessage(err, 'Could not delete this tutor'), 'error');
       setDeleting(false);
@@ -111,9 +112,7 @@ export default function TutorDetailPage() {
 
   return (
     <div className="page-section">
-      <Link to="/tutors" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center gap-1 w-fit">
-        <ArrowLeft size={14} /> Back to Tutors
-      </Link>
+      <BackLink fallback="/tutors" />
 
       <Card padding="lg">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-center">

@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState, useCallback, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Archive, ArrowLeft, ArrowRightLeft, Edit3, UserMinus, Users, GraduationCap, Layers, ClipboardCheck, FileText, Plus, Trash2, ChevronRight, CalendarDays, Upload, Download } from 'lucide-react';
+import { BackLink } from '@/components/ui/BackLink';
+import { Archive, ArrowRightLeft, Edit3, UserMinus, Users, GraduationCap, Layers, ClipboardCheck, FileText, Plus, Trash2, ChevronRight, CalendarDays, Upload, Download } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { StatusPill } from '@/components/ui/StatusPill';
@@ -46,6 +47,7 @@ import { StudentImportModal } from '@/components/students/StudentImportModal';
 import { useToast } from '@/lib/context/ToastContext';
 import { useConfirm } from '@/lib/context/ConfirmContext';
 import { errorMessage } from '@/lib/utils/errors';
+import { toDateValue } from '@/lib/utils/date';
 import { useInitialLoad, useReloadableSection } from '@/lib/hooks/useInitialLoad';
 
 // React Flow is ~65 kB gzipped: fetched when the tab opens, not with every batch page.
@@ -56,10 +58,11 @@ export default function BatchDetailPage() {
   const [batch, setBatch] = useState<Batch | null>(null);
   const [programs, setPrograms] = useState<BatchProgramOption[]>([]);
   const [ending, setEnding] = useState(false);
+  const [endOpen, setEndOpen] = useState(false);
+  const [endDate, setEndDate] = useState('');
   const [deleting, setDeleting] = useState(false);
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const confirm = useConfirm();
 
   const { loading, error, retry } = useInitialLoad(async () => {
     if (!batchId) return;
@@ -69,18 +72,11 @@ export default function BatchDetailPage() {
   });
 
   const handleEnd = async () => {
-    if (!batch) return;
-    const ok = await confirm({
-      title: `End ${batch.name}?`,
-      message: 'Students keep their logins for 30 days, then the logins are deleted. Their records stay.',
-      confirmLabel: 'End batch',
-      danger: true,
-    });
-    if (!ok) return;
-
+    if (!batch || !endDate) return;
     setEnding(true);
     try {
-      setBatch(await endBatch(batch.id));
+      setBatch(await endBatch(batch.id, endDate));
+      setEndOpen(false);
       showToast('Batch ended');
     } catch (err) {
       showToast(errorMessage(err, 'Could not end this batch'), 'error');
@@ -97,9 +93,7 @@ export default function BatchDetailPage() {
 
   return (
     <div className="page-section">
-      <Link to="/batches" className="mb-4 flex w-fit items-center gap-1 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)]">
-        <ArrowLeft size={14} /> Back to Batches
-      </Link>
+      <BackLink fallback="/batches" />
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-3 flex-wrap">
@@ -112,7 +106,11 @@ export default function BatchDetailPage() {
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {batch.status !== 'completed' && (
-            <Button variant="outline" className="action-button-compact" onClick={handleEnd} loading={ending}>
+            <Button
+              variant="outline"
+              className="action-button-compact"
+              onClick={() => { setEndDate(toDateValue(new Date())); setEndOpen(true); }}
+            >
               <Archive size={14} /> End Batch
             </Button>
           )}
@@ -166,6 +164,37 @@ export default function BatchDetailPage() {
         )}
       </Tabs>
 
+      <Modal
+        open={endOpen}
+        onClose={() => !ending && setEndOpen(false)}
+        title={`End ${batch.name}?`}
+        size="sm"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setEndOpen(false)} disabled={ending}>Cancel</Button>
+            <Button className="action-button-compact" variant="danger" onClick={handleEnd} loading={ending} disabled={!endDate}>
+              End batch
+            </Button>
+          </>
+        }
+      >
+        <div className="popup-form-spaced">
+          <FormField label="End Date" required>
+            <DatePicker
+              value={endDate}
+              onChange={setEndDate}
+              min={batch.start_date?.slice(0, 10)}
+              placeholder="Pick a date"
+              ariaLabel="Batch end date"
+            />
+          </FormField>
+          <div className="flex flex-col gap-1">
+            <p className="field-hint">Internship end dates set to this date</p>
+            <p className="field-hint">Student logins deleted 30 days after</p>
+          </div>
+        </div>
+      </Modal>
+
       <DeleteBatchModal
         key={deleting ? 'open' : 'closed'}
         open={deleting}
@@ -173,7 +202,7 @@ export default function BatchDetailPage() {
         batchName={batch.name}
         confirmWord={batch.batch_code ?? batch.name}
         onClose={() => setDeleting(false)}
-        onDeleted={() => navigate('/batches')}
+        onDeleted={() => navigate('/batches', { replace: true })}
       />
     </div>
   );

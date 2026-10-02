@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
+import { useGoBack } from '@/components/ui/BackLink';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
@@ -17,7 +18,7 @@ import { errorMessage } from '@/lib/utils/errors';
 
 export default function EditBatchPage() {
   const { batchId } = useParams();
-  const navigate = useNavigate();
+  const goBack = useGoBack(`/batches/${batchId}`);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<Batch | null>(null);
   const [programs, setPrograms] = useState<BatchProgramOption[]>([]);
@@ -45,7 +46,7 @@ export default function EditBatchPage() {
     try {
       await updateBatch(form.id, form);
       showToast('Batch updated');
-      navigate(`/batches/${form.id}`);
+      goBack();
     } catch (error) {
       showToast(errorMessage(error, 'Failed to update batch'), 'error');
     } finally {
@@ -108,7 +109,7 @@ export default function EditBatchPage() {
           </FormField>
           <div className="flex gap-3 pt-2">
             <Button className='action-button-compact' type="submit" loading={saving}>Save Changes</Button>
-            <Button variant="ghost" onClick={() => navigate(`/batches/${form.id}`)}>Cancel</Button>
+            <Button variant="ghost" onClick={goBack}>Cancel</Button>
           </div>
         </form>
       </Card>
