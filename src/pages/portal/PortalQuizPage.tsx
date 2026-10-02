@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Check, Trophy, Zap } from 'lucide-react';
 import { QuizBoard, QuizOption, QuizTimer, QuizVerdict } from '@/components/exams/QuizParts';
 import { PortalEmpty, PortalPage, PortalSection, PortalStat, PortalStatGrid } from '@/components/portal';
@@ -17,6 +17,7 @@ import { ordinal, percent, seconds } from '@/lib/utils/quiz';
 export default function PortalQuizPage() {
   const { quizId = '' } = useParams();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [state, setState] = useState<QuizState | null>(null);
   const [result, setResult] = useState<QuizResult | null>(null);
   const [board, setBoard] = useState<QuizScoreRow[]>([]);
@@ -54,7 +55,12 @@ export default function PortalQuizPage() {
   }, [quizId, syncOffset]);
 
   const { loading, error, retry } = useInitialLoad(load, true);
-  useQuizLive(quizId, () => void load().catch(console.error), { pollMs: state?.status === 'ended' ? 60_000 : 5000 });
+  // A deleted quiz is gone for everyone: back to the list, not a frozen question.
+  const reload = useCallback(() => void load().catch((err) => {
+    if (/not available/i.test(errorMessage(err, ''))) navigate('/portal/quizzes', { replace: true });
+    else console.error(err);
+  }), [load, navigate]);
+  useQuizLive(quizId, reload, { pollMs: state?.status === 'ended' ? 60_000 : 5000 });
 
   const now = useNow(250) + offset;
   const question = state?.question;
@@ -66,9 +72,9 @@ export default function PortalQuizPage() {
   const overdue = state?.status === 'live' && question && !state.closed && timeUp ? question.id : null;
   useEffect(() => {
     if (!overdue) return;
-    const id = window.setTimeout(() => void load().catch(console.error), 400);
+    const id = window.setTimeout(reload, 400);
     return () => window.clearTimeout(id);
-  }, [overdue, state?.server_now, load]);
+  }, [overdue, state?.server_now, reload]);
 
   const shown = question ? picks[question.id] ?? state?.mine ?? [] : [];
 

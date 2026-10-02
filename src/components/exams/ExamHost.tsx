@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, ChevronLeft, ChevronRight, Flag, Pencil, Play, Plus, Users } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Flag, Pencil, Play, Plus, Trash2, Users } from 'lucide-react';
 import { QuizBoard, QuizOption, QuizTimer } from '@/components/exams/QuizParts';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -9,6 +9,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { StatusPill } from '@/components/ui/StatusPill';
 import { useConfirm } from '@/lib/context/ConfirmContext';
 import { useToast } from '@/lib/context/ToastContext';
+import { useDeleteQuiz } from '@/lib/hooks/useDeleteQuiz';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { useNow } from '@/lib/hooks/useNow';
 import { secondsLeft, useQuizLive } from '@/lib/hooks/useQuizLive';
@@ -32,6 +33,7 @@ interface ExamHostProps {
 // The tutor's full-screen console: lobby, then one question at a time. Everything students see follows from here.
 export function ExamHost({ quizId, onLeave, onEnded, onEdit }: ExamHostProps) {
   const confirm = useConfirm();
+  const deleteWithConfirm = useDeleteQuiz();
   const { showToast } = useToast();
   const [quiz, setQuiz] = useState<QuizFull | null>(null);
   const [people, setPeople] = useState<QuizParticipant[]>([]);
@@ -160,6 +162,9 @@ export function ExamHost({ quizId, onLeave, onEnded, onEdit }: ExamHostProps) {
         <StatusPill kind="quiz" value={quiz.status} />
         <Badge><Users size={12} /> {people.length}</Badge>
         {!lobby && current && <span className="qz-play-count">Question {position + 1} of {questions.length}</span>}
+        <Button className="action-button-compact" variant="ghost" size="sm" onClick={() => void deleteWithConfirm(quiz).then((gone) => gone && onLeave())} disabled={busy}>
+          <Trash2 size={14} /> Delete
+        </Button>
         <Button className="action-button-compact" variant="secondary" size="sm" onClick={() => void endNow()} disabled={busy}>End quiz</Button>
       </header>
 

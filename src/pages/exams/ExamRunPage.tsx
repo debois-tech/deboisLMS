@@ -11,10 +11,10 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Spinner } from '@/components/ui/Spinner';
 import { StatusPill } from '@/components/ui/StatusPill';
 import { useAuth } from '@/lib/context/AuthContext';
-import { useConfirm } from '@/lib/context/ConfirmContext';
 import { useToast } from '@/lib/context/ToastContext';
+import { useDeleteQuiz } from '@/lib/hooks/useDeleteQuiz';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
-import { deleteQuiz, getQuiz, openQuizLobby, quizImageUrl } from '@/lib/supabase';
+import { getQuiz, openQuizLobby, quizImageUrl } from '@/lib/supabase';
 import type { QuizFull } from '@/lib/types';
 import { errorMessage } from '@/lib/utils/errors';
 import { formatDateTime } from '@/lib/utils/format';
@@ -25,7 +25,7 @@ export default function ExamRunPage() {
   const { isAdmin } = useAuth();
   const base = isAdmin ? '/exams' : '/tutor/exams';
   const navigate = useNavigate();
-  const confirm = useConfirm();
+  const deleteWithConfirm = useDeleteQuiz();
   const { showToast } = useToast();
   const [quiz, setQuiz] = useState<QuizFull | null>(null);
   const [opening, setOpening] = useState(false);
@@ -54,20 +54,7 @@ export default function ExamRunPage() {
   };
 
   const remove = async () => {
-    const accepted = await confirm({
-      title: `Delete "${quiz.title}"?`,
-      message: quiz.status === 'ended' ? 'Its results are deleted for everyone who took part. This cannot be undone.' : 'This cannot be undone.',
-      confirmLabel: 'Delete quiz',
-      danger: true,
-    });
-    if (!accepted) return;
-    try {
-      await deleteQuiz(quiz.id);
-      showToast('Quiz deleted');
-      navigate(base);
-    } catch (err) {
-      showToast(errorMessage(err, 'Could not delete the quiz'), 'error');
-    }
+    if (await deleteWithConfirm(quiz)) navigate(base, { replace: true });
   };
 
   const draft = quiz.status === 'draft';

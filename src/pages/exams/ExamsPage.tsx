@@ -11,13 +11,11 @@ import { StatusPill } from '@/components/ui/StatusPill';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/Table';
 import { Tabs } from '@/components/ui/Tabs';
 import { useAuth } from '@/lib/context/AuthContext';
-import { useConfirm } from '@/lib/context/ConfirmContext';
-import { useToast } from '@/lib/context/ToastContext';
+import { useDeleteQuiz } from '@/lib/hooks/useDeleteQuiz';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
-import { deleteQuiz, getQuizzes } from '@/lib/supabase';
+import { getQuizzes } from '@/lib/supabase';
 import type { QuizListItem } from '@/lib/supabase';
 import type { QuizStatus } from '@/lib/types';
-import { errorMessage } from '@/lib/utils/errors';
 import { formatDate } from '@/lib/utils/format';
 
 type Filter = 'all' | 'draft' | 'running' | 'ended';
@@ -47,8 +45,7 @@ export default function ExamsPage() {
 
 function LiveQuizzes({ base }: { base: string }) {
   const navigate = useNavigate();
-  const confirm = useConfirm();
-  const { showToast } = useToast();
+  const deleteWithConfirm = useDeleteQuiz();
   const [quizzes, setQuizzes] = useState<QuizListItem[]>([]);
   const [filter, setFilter] = useState<Filter>('all');
 
@@ -57,22 +54,7 @@ function LiveQuizzes({ base }: { base: string }) {
   });
 
   const remove = async (quiz: QuizListItem) => {
-    const accepted = await confirm({
-      title: `Delete "${quiz.title}"?`,
-      message: quiz.status === 'ended'
-        ? 'Its results are deleted for everyone who took part. This cannot be undone.'
-        : 'This cannot be undone.',
-      confirmLabel: 'Delete quiz',
-      danger: true,
-    });
-    if (!accepted) return;
-    try {
-      await deleteQuiz(quiz.id);
-      setQuizzes((rows) => rows.filter((row) => row.id !== quiz.id));
-      showToast('Quiz deleted');
-    } catch (err) {
-      showToast(errorMessage(err, 'Could not delete the quiz'), 'error');
-    }
+    if (await deleteWithConfirm(quiz)) setQuizzes((rows) => rows.filter((row) => row.id !== quiz.id));
   };
 
   if (loading) return <Spinner centered />;
@@ -143,11 +125,9 @@ function LiveQuizzes({ base }: { base: string }) {
                         Resume
                       </Link>
                     )}
-                    {!RUNNING.includes(quiz.status) && (
-                      <button type="button" className="qz-icon-btn is-danger" onClick={() => void remove(quiz)} aria-label={`Delete ${quiz.title}`}>
-                        <Trash2 size={16} />
-                      </button>
-                    )}
+                    <button type="button" className="qz-icon-btn is-danger" onClick={() => void remove(quiz)} aria-label={`Delete ${quiz.title}`}>
+                      <Trash2 size={16} />
+                    </button>
                   </div>
                 </TD>
               </TR>
