@@ -55,6 +55,14 @@ export async function updateFeePayment(id: string, paidAmount: number): Promise<
   );
 }
 
+/** The decided fee for one active enrolment; the discount follows as base minus fee — see set_student_fee(). */
+export async function setStudentFee(studentId: string, batchId: string, fee: number): Promise<StudentFee> {
+  return row<StudentFee>(
+    await supabase.rpc('set_student_fee', { p_student_id: studentId, p_batch_id: batchId, p_fee: fee }),
+    'Could not change the fee',
+  );
+}
+
 export async function getFeePaymentLogs(studentFeeId: string): Promise<FeePaymentLog[]> {
   return rows<FeePaymentLog>(
     await supabase

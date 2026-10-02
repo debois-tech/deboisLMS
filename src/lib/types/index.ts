@@ -260,7 +260,8 @@ export interface BatchStudentMapping {
 
 export type DocumentKind = 'offer_letter' | 'cert';
 
-export type InternshipRole = 'devops_engineering_intern' | 'ai_ml_engineering_intern' | 'cloud_engineering_intern';
+// The DB enum's value is the stamped title, and the CSV import can add values, so this is no closed union.
+export type InternshipRole = string;
 
 /** Metadata only; the file lives in the private bucket and is served watermarked. */
 export interface Material {

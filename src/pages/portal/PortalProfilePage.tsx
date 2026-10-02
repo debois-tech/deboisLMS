@@ -124,6 +124,7 @@ export default function PortalProfilePage() {
     { label: 'Branch', value: student?.branch ?? '' },
     { label: 'Year', value: student?.current_year ?? '' },
     { label: 'Graduating', value: student?.graduation_year ? String(student.graduation_year) : '' },
+    { label: 'Role', value: student?.internship_role ?? '' },
   ].filter((fact) => fact.value);
 
   return (

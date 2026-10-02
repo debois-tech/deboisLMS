@@ -2766,12 +2766,11 @@ grant execute on function quiz_save(jsonb), quiz_open_lobby(uuid), quiz_go(uuid,
 -- 19. INTERNSHIP ROLE AND DATES
 -- Stamped on the offer letter ("the position of ...", the joining date) and on the certificate (the role, the
 -- internship's start and end date). One set per student, edited on the student form.
--- Role: defaults from the programme of the batch they join. A new programme needs a new value first:
---   alter type internship_role add value '...';
+-- Role: the enum value is the title stamped on the documents. New ones come from the CSV import via add_internship_role().
 -- Start date: the batch's start date, set when the student is enrolled. End date: the batch's end date, filled by
 -- end_batch() when the batch is ended. Both only where still empty, so a date typed by hand is kept, and both stay editable.
 do $$ begin
-  create type internship_role as enum ('devops_engineering_intern', 'ai_ml_engineering_intern', 'cloud_engineering_intern');
+  create type internship_role as enum ('Devops Engineering Intern', 'AI/ML Engineering Intern', 'Cloud Engineering Intern');
 exception when duplicate_object then null; end $$;
 
 alter table students add column if not exists internship_role       internship_role;
@@ -2784,3 +2783,94 @@ do $$ begin
   alter table students add constraint students_internship_dates_ordered
     check (internship_end_date is null or internship_start_date is null or internship_end_date >= internship_start_date);
 exception when duplicate_object then null; end $$;
+
+create or replace function internship_roles()
+returns text[]
+language sql
+stable
+set search_path = public
+as $$ select enum_range(null::internship_role)::text[]; $$;
+
+revoke all on function internship_roles() from public;
+grant execute on function internship_roles() to authenticated;
+
+-- Enum values cannot be removed, so the name is trimmed and capped before it becomes one.
+create or replace function add_internship_role(p_name text)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare clean text := regexp_replace(btrim(coalesce(p_name, '')), '\s+', ' ', 'g');
+begin
+  if not is_admin() then
+    raise exception 'Admin only';
+  end if;
+  if clean = '' or length(clean) > 60 then
+    raise exception 'Role must be 1 to 60 characters';
+  end if;
+
+  execute format('alter type internship_role add value if not exists %L', clean);
+  return clean;
+end $$;
+
+revoke all on function add_internship_role(text) from public;
+grant execute on function add_internship_role(text) to authenticated;
+
+-- 20. EDIT A STUDENT'S FEE
+-- The decided fee is the number; the discount is kept as base minus fee, in rupees. Instalments are worked out from
+-- total_fee wherever they are read, so nothing else needs rewriting. Active enrolments only: a terminated row's owed
+-- amount is frozen in expected_on_exit.
+create or replace function set_student_fee(p_student_id uuid, p_batch_id uuid, p_fee numeric)
+returns student_fees
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  base    numeric;
+  fee_row student_fees%rowtype;
+  updated student_fees%rowtype;
+begin
+  if not is_admin() then
+    raise exception 'Admin only';
+  end if;
+  if p_fee is null or p_fee < 0 then
+    raise exception 'Fee must be 0 or more';
+  end if;
+
+  if not exists (
+    select 1 from batch_student_mapping
+    where student_id = p_student_id and batch_id = p_batch_id and status = 'active'
+  ) then
+    raise exception 'Only an active enrolment can change fee';
+  end if;
+
+  select base_fee into base from batches where id = p_batch_id;
+  select * into fee_row from student_fees
+  where student_id = p_student_id and batch_id = p_batch_id
+  for update;
+  if not found then
+    raise exception 'Fee record not found';
+  end if;
+
+  if base is not null and p_fee > base then
+    raise exception 'Fee is above the base fee of %', base;
+  end if;
+  if p_fee < fee_row.paid_amount then
+    raise exception 'Fee is below the % already paid', fee_row.paid_amount;
+  end if;
+
+  update student_fees
+  set total_fee = p_fee,
+      discount_type = 'amount',
+      discount_value = greatest(coalesce(base, p_fee) - p_fee, 0),
+      updated_at = now()
+  where id = fee_row.id
+  returning * into updated;
+
+  return updated;
+end $$;
+
+revoke all on function set_student_fee(uuid, uuid, numeric) from public;
+grant execute on function set_student_fee(uuid, uuid, numeric) to authenticated;

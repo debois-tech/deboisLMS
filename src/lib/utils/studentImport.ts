@@ -1,9 +1,13 @@
-import { parseCsvTable } from '@/lib/utils/csvParser';
+import { parseCsvTable } from './csvParser.ts';
+import { formatCurrency } from './format.ts';
 import type { BatchProgram, InternshipRole, Student } from '@/lib/types';
+
+const NAME_ALIASES = ['name', 'full name', 'student name'];
+const ROLE_ALIASES = ['role', 'internship role', 'position'];
 
 /** Add new fields here. Matched on headers, not column order. */
 export const STUDENT_IMPORT_FIELDS = [
-  { key: 'name', aliases: ['name', 'full name', 'student name'] },
+  { key: 'name', aliases: NAME_ALIASES },
   { key: 'phone', aliases: ['phone', 'ph no', 'phone number', 'mobile', 'whatsapp', 'whatsapp number', 'whatsapp no'] },
   { key: 'email', aliases: ['email', 'email address', 'mail'] },
   { key: 'date_of_birth', aliases: ['dob', 'date of birth', 'birth date', 'birthdate'] },
@@ -15,8 +19,10 @@ export const STUDENT_IMPORT_FIELDS = [
   { key: 'graduation_year', aliases: ['graduation year', 'grad year', 'passing year', 'year of passing'] },
   { key: 'github_url', aliases: ['github', 'github link', 'github url', 'githublink', 'github profile', 'github profile url'] },
   { key: 'linkedin_url', aliases: ['linkedin', 'linkedin link', 'linkedin url', 'linkedinlink', 'linkedin profile', 'linkedin profile url'] },
+  { key: 'internship_role', aliases: ROLE_ALIASES },
 ] as const;
 
+const FEE_ALIASES = ['fee', 'fees', 'decided fee', 'final fee', 'fee amount', 'total fee'];
 const DISCOUNT_ALIASES = [
   'discount', 'discount amount', 'discount amt', 'disc',
   'concession', 'waiver', 'scholarship',
@@ -26,21 +32,13 @@ const BATCH_ALIASES = ['batch', 'batch code', 'program', 'programme', 'course ba
 /** The gender values the form offers. Free text in the DB, so an import may carry others. */
 export const GENDER_OPTIONS = ['Female', 'Male', 'Other', 'Prefer not to say'] as const;
 
-export const INTERNSHIP_ROLE_LABELS: Record<InternshipRole, string> = {
-  devops_engineering_intern: 'DevOps Engineering Intern',
-  ai_ml_engineering_intern: 'AI/ML Engineering Intern',
-  cloud_engineering_intern: 'Cloud Engineering Intern',
-};
-
-export const INTERNSHIP_ROLE_OPTIONS = (Object.keys(INTERNSHIP_ROLE_LABELS) as InternshipRole[]).map((value) => ({ value, label: INTERNSHIP_ROLE_LABELS[value] }));
-
-// The role a programme's interns hold, found by a programme code appearing in the batch's code (most batches carry
+// The role the add-student form suggests, found by a programme code appearing in the batch's code (most batches carry
 // the programme TEP, so the code is what tells them apart) or being the batch's programme. A new programme gets a
 // line here once its enum value exists.
 const ROLE_BY_CODE: Record<string, InternshipRole> = {
-  PHR: 'devops_engineering_intern',
-  AML: 'ai_ml_engineering_intern',
-  MCL: 'cloud_engineering_intern',
+  PHR: 'Devops Engineering Intern',
+  AML: 'AI/ML Engineering Intern',
+  MCL: 'Cloud Engineering Intern',
 };
 
 export function roleForBatch(batch: { program?: BatchProgram; batch_code?: string } | undefined): InternshipRole | undefined {
@@ -60,36 +58,69 @@ export function getImportValue(row: Record<string, string>, aliases: readonly st
   return entry?.[1]?.trim() || undefined;
 }
 
-/** The row's discount in rupees off the batch fee. Undefined when blank or unreadable. */
-export function getImportDiscount(row: Record<string, string>): number | undefined {
-  const raw = getImportValue(row, DISCOUNT_ALIASES);
-  if (!raw) return undefined;
-  // Sheets export "4000", "4,000", "₹4,000" and "4000/-" alike.
-  const cleaned = raw.replace(/[^0-9.]/g, '');
+/** Rupees from a cell. Sheets export "4000", "4,000", "₹4,000" and "4000/-" alike; a minus or '%' is not one. */
+function toAmount(raw: string): number | undefined {
+  const text = raw.replace(/\/-\s*$/, '');
+  if (/[%-]/.test(text)) return undefined;
+  const cleaned = text.replace(/[^0-9.]/g, '');
   const amount = Number(cleaned);
   return cleaned && Number.isFinite(amount) ? amount : undefined;
 }
 
-/** Rows whose Discount cell is filled but isn't an amount the fee can absorb — returned, not thrown. */
-export function findDiscountProblems(
-  rows: Record<string, string>[],
-  baseFee: number | null,
-): { name: string; found: string }[] {
-  return rows.flatMap((row) => {
-    const raw = getImportValue(row, DISCOUNT_ALIASES);
-    if (!raw) return [];
-    const amount = getImportDiscount(row);
-    // A '%' or a minus means the cell holds something other than rupees off the fee.
-    const usable =
-      amount !== undefined &&
-      !/[%-]/.test(raw) &&
-      (baseFee === null || amount <= baseFee);
-    if (usable) return [];
-    return [{
-      name: getImportValue(row, ['name', 'full name', 'student name']) ?? 'Unnamed row',
-      found: raw,
-    }];
-  });
+export type FeePlan = { fee: number; discount: number } | { error: string };
+
+/**
+ * What a row is charged. Fee wins over Discount; a Discount is rupees or a percentage of the base; with neither the
+ * student is free. The discount kept on the fee row is always base minus fee, in rupees.
+ */
+export function planImportFee(row: Record<string, string>, base: number): FeePlan {
+  const feeCell = getImportValue(row, FEE_ALIASES);
+  const discountCell = getImportValue(row, DISCOUNT_ALIASES);
+  let fee = 0;
+
+  if (feeCell) {
+    const amount = toAmount(feeCell);
+    if (amount === undefined) return { error: `Fee "${feeCell}" not a number` };
+    fee = amount;
+  } else if (discountCell) {
+    const percent = discountCell.match(/^(\d+(?:\.\d+)?)\s*%$/)?.[1];
+    const discount = percent === undefined ? toAmount(discountCell) : (base * Number(percent)) / 100;
+    if (discount === undefined) return { error: `Discount "${discountCell}" not a number` };
+    if (discount > base) return { error: `Discount above base ${formatCurrency(base)}` };
+    fee = base - discount;
+  }
+
+  if (fee > base) return { error: `Fee above base ${formatCurrency(base)}` };
+  const rounded = Math.round(fee);
+  return { fee: rounded, discount: base - rounded };
+}
+
+export interface ImportPlan {
+  ready: { row: Record<string, string>; name: string; fee: number; discount: number }[];
+  rejected: { name: string; reason: string }[];
+}
+
+/** Splits rows into those that can be charged and those named back to the admin with a reason. */
+export function planImportRows(rows: Record<string, string>[], base: number): ImportPlan {
+  const plan: ImportPlan = { ready: [], rejected: [] };
+  for (const row of rows) {
+    const result = planImportFee(row, base);
+    const name = getImportValue(row, NAME_ALIASES) ?? 'Unnamed row';
+    if ('error' in result) plan.rejected.push({ name, reason: result.error });
+    else plan.ready.push({ row, name, ...result });
+  }
+  return plan;
+}
+
+export const normalizeRole = (role: string) => role.toLowerCase().replace(/[^a-z0-9]/g, '');
+export const cleanRole = (role: string) => role.trim().replace(/\s+/g, ' ');
+
+export const getImportRole = (row: Record<string, string>) => getImportValue(row, ROLE_ALIASES);
+
+/** The row with its Role cell set to the resolved role, whatever that column was called. */
+export function withImportRole(row: Record<string, string>, role: string): Record<string, string> {
+  const header = Object.keys(row).find((key) => ROLE_ALIASES.some((alias) => normalizeCsvHeader(key) === normalizeCsvHeader(alias)));
+  return { ...row, [header ?? 'Role']: role };
 }
 
 /** The row's programme abbreviation, normalised. Valid codes live in `batch_programs`. */
@@ -112,7 +143,7 @@ export interface ParsedStudentCsv {
 export function parseStudentCsv(text: string): ParsedStudentCsv {
   const table = parseCsvTable(text);
   const rows = table.rows.filter((row) =>
-    getImportValue(row, ['name', 'full name', 'student name']) &&
+    getImportValue(row, NAME_ALIASES) &&
     getImportValue(row, ['email', 'email address', 'mail']) &&
     toIsoDate(getImportValue(row, ['dob', 'date of birth', 'birth date', 'birthdate'])),
   );
@@ -136,7 +167,7 @@ export function findProgramMismatches(
     const program = getImportProgram(row);
     if (program === undefined || program === target) return [];
     return [{
-      name: getImportValue(row, ['name', 'full name', 'student name']) ?? 'Unnamed row',
+      name: getImportValue(row, NAME_ALIASES) ?? 'Unnamed row',
       found: getImportValue(row, BATCH_ALIASES) ?? '—',
     }];
   });

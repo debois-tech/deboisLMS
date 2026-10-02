@@ -3,7 +3,6 @@ import { ok } from './result';
 import type { Batch, BatchStudentMapping, DocumentKind, Student } from '@/lib/types';
 import { fromDateValue } from '@/lib/utils/date';
 import { buildDocumentPdf, type DocumentAssets } from '@/lib/utils/documents';
-import { INTERNSHIP_ROLE_LABELS } from '@/lib/utils/studentImport';
 import regularFont from '@/assets/fonts/manrope-400.woff?url';
 import mediumFont from '@/assets/fonts/manrope-500.woff?url';
 import boldFont from '@/assets/fonts/manrope-700.woff?url';
@@ -68,7 +67,7 @@ export async function generateAndStoreDocument(
     {
       name: student.name.trim(),
       code: student.student_code ?? '',
-      role: INTERNSHIP_ROLE_LABELS[student.internship_role],
+      role: student.internship_role,
       startOn,
       endOn: endOn ?? undefined,
     },

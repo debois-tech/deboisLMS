@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { FileSpreadsheet } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -7,13 +7,17 @@ import { InlineAlert } from '@/components/ui/InlineAlert';
 import { BatchSelect } from '@/components/ui/BatchSelect';
 import { Pager, usePager } from '@/components/ui/Pager';
 import {
-  findDiscountProblems,
+  cleanRole,
   findProgramMismatches,
-  getImportDiscount,
+  getImportRole,
+  normalizeRole,
   parseStudentCsv,
+  planImportRows,
+  withImportRole,
 } from '@/lib/utils/studentImport';
+import { addInternshipRole, getInternshipRoles } from '@/lib/supabase';
 import { errorMessage } from '@/lib/utils/errors';
-import { feeFromDiscountValue, formatCurrency, formatDate } from '@/lib/utils/format';
+import { formatCurrency, formatDate } from '@/lib/utils/format';
 import type { Batch } from '@/lib/types';
 
 interface StudentImportModalProps {
@@ -47,8 +51,17 @@ export function StudentImportModal({ open, onClose, batches, batch, onImport }: 
   const [error, setError] = useState('');
   const [skipped, setSkipped] = useState(0);
   const [importing, setImporting] = useState(false);
+  // Null until loaded: without the list every role in the sheet would look new.
+  const [existingRoles, setExistingRoles] = useState<string[] | null>(null);
+  // Names typed over a new role, by the role's normalised spelling in the sheet.
+  const [roleEdits, setRoleEdits] = useState<Record<string, string>>({});
   const fileRef = useRef<HTMLInputElement>(null);
   const pager = usePager(rows, PREVIEW_ROWS);
+
+  useEffect(() => {
+    if (!open) return;
+    getInternshipRoles().then(setExistingRoles).catch((err) => setError(errorMessage(err, 'Could not load the roles')));
+  }, [open]);
 
   // A finished batch is not something to import a new intake into.
   const options = useMemo(() => (batches ?? []).filter((b) => b.status !== 'completed'), [batches]);
@@ -65,31 +78,46 @@ export function StudentImportModal({ open, onClose, batches, batch, onImport }: 
     () => (target?.program ? findProgramMismatches(rows, target.program) : []),
     [rows, target],
   );
-  const discountProblems = useMemo(() => findDiscountProblems(rows, base), [rows, base]);
 
-  // What the sheet actually does to the money, before anyone commits to it.
-  const outcome = useMemo(() => {
-    if (base === null) return null;
-    const fees = rows.map((row) => feeFromDiscountValue(base, getImportDiscount(row), 'amount'));
-    return {
-      discounted: fees.filter((fee) => fee < base).length,
-      free: fees.filter((fee) => fee === 0).length,
-      // No Discount column, or every cell blank. Legitimate, but a silent
-      // full-price import is not something to find out about afterwards.
-      noDiscounts: rows.every((row) => getImportDiscount(row) === undefined),
-    };
-  }, [rows, base]);
+  // What the sheet does to the money, before anyone commits to it: who is charged what, and who is left out.
+  const plan = useMemo(() => (base === null ? null : planImportRows(rows, base)), [rows, base]);
+  const ready = useMemo(() => plan?.ready ?? [], [plan]);
+  const rejected = plan?.rejected ?? [];
+  const feeOf = useMemo(() => new Map(ready.map((entry) => [entry.row, entry.fee])), [ready]);
+  const discounted = ready.filter((entry) => entry.fee > 0 && entry.fee < (base ?? 0)).length;
+  const free = ready.filter((entry) => entry.fee === 0).map((entry) => entry.name);
+
+  // Roles in the sheet that match no enum value, one editable entry each: [normalised key, spelling in the sheet].
+  const newRoles = useMemo(() => {
+    const found = new Map<string, string>();
+    for (const { row } of ready) {
+      const raw = getImportRole(row);
+      const key = raw ? normalizeRole(raw) : '';
+      if (raw && key && existingRoles && !existingRoles.some((role) => normalizeRole(role) === key) && !found.has(key)) {
+        found.set(key, cleanRole(raw));
+      }
+    }
+    return [...found];
+  }, [ready, existingRoles]);
+
+  // An edit that lands on an existing role joins it; two new roles edited to one name become one.
+  const resolveRole = (raw: string) => {
+    const typed = cleanRole(roleEdits[normalizeRole(raw)] ?? raw);
+    return existingRoles?.find((role) => normalizeRole(role) === normalizeRole(typed)) ?? typed;
+  };
 
   const incomplete =
-    !rows.length ||
+    !ready.length ||
     !target ||
     base === null ||
-    discountProblems.length > 0 ||
-    mismatches.length > 0;
+    mismatches.length > 0 ||
+    existingRoles === null ||
+    newRoles.some(([key, original]) => !cleanRole(roleEdits[key] ?? original));
 
   const reset = () => {
     setRows([]);
     setHeaders([]);
+    setRoleEdits({});
     setPickedId(null);
     pager.reset();
     setCreateLogins(true);
@@ -132,7 +160,15 @@ export function StudentImportModal({ open, onClose, batches, batch, onImport }: 
     setImporting(true);
     setError('');
     try {
-      await onImport(rows, createLogins, target);
+      // Roles first, so every student in the sheet can be saved with one that exists. Adding is idempotent, so a retry is safe.
+      for (const name of new Set(newRoles.map(([, original]) => resolveRole(original)))) {
+        if (!existingRoles?.includes(name)) await addInternshipRole(name);
+      }
+      const resolved = ready.map(({ row }) => {
+        const raw = getImportRole(row);
+        return raw ? withImportRole(row, resolveRole(raw)) : row;
+      });
+      await onImport(resolved, createLogins, target);
       reset();
       onClose();
     } catch (err) {
@@ -169,16 +205,17 @@ export function StudentImportModal({ open, onClose, batches, batch, onImport }: 
         {headers.length > 0 && rows.length > 0 && (
           <div className="space-y-2">
             {/* The whole point of the preview: what each row will be charged, before
-                anyone commits to it. The Fee column is derived, never read. */}
+                anyone commits to it. The Fee column is worked out from Fee or Discount. */}
             <p className="import-summary">
               {base === null ? (
                 <span>{rows.length} students</span>
               ) : (
                 <>
                   <span><strong>{formatCurrency(base)}</strong> Regular Fees</span>
-                  <span>{rows.length} students</span>
-                  {outcome && outcome.discounted > 0 && <span>{outcome.discounted} discounted</span>}
-                  {outcome && outcome.free > 0 && <span>{outcome.free} pay nothing</span>}
+                  <span>{ready.length} students</span>
+                  {discounted > 0 && <span>{discounted} discounted</span>}
+                  {free.length > 0 && <span>{free.length} free</span>}
+                  {rejected.length > 0 && <span>{rejected.length} not added</span>}
                 </>
               )}
               {skipped > 0 && <span>{skipped} skipped</span>}
@@ -196,7 +233,7 @@ export function StudentImportModal({ open, onClose, batches, batch, onImport }: 
                     <tr key={pager.from + index}>
                       {headers.map((header) => <td key={header}>{row[header] || '—'}</td>)}
                       <td className="import-preview-derived">
-                        {base === null ? '—' : formatCurrency(feeFromDiscountValue(base, getImportDiscount(row), 'amount'))}
+                        {feeOf.has(row) ? formatCurrency(feeOf.get(row) ?? 0) : '—'}
                       </td>
                     </tr>
                   ))}
@@ -204,11 +241,33 @@ export function StudentImportModal({ open, onClose, batches, batch, onImport }: 
               </table>
             </div>
             <Pager {...pager} onChange={pager.setPage} />
-            {base !== null && outcome?.noDiscounts && (
+            {free.length > 0 && (
               <p className="text-xs text-[var(--text-muted)]">
-                No discounts in this file — every student is charged the full {formatCurrency(base)}.
+                Free · {free.slice(0, 5).join(', ')}
+                {free.length > 5 ? `, +${free.length - 5} more` : ''}
               </p>
             )}
+          </div>
+        )}
+
+        {newRoles.length > 0 && (
+          <div className="import-roles">
+            <p className="import-summary">
+              <span>{newRoles.length} new {newRoles.length === 1 ? 'role' : 'roles'}</span>
+              <span>Created on import</span>
+            </p>
+            {newRoles.map(([key, original]) => (
+              <div key={key} className="import-role-row">
+                <span className="import-role-from" title={original}>{original}</span>
+                <input
+                  value={roleEdits[key] ?? original}
+                  onChange={(event) => setRoleEdits({ ...roleEdits, [key]: event.target.value })}
+                  maxLength={60}
+                  disabled={importing}
+                  aria-label={`Role name for ${original}`}
+                />
+              </div>
+            ))}
           </div>
         )}
 
@@ -216,13 +275,13 @@ export function StudentImportModal({ open, onClose, batches, batch, onImport }: 
             into without one. Said as soon as it is known, not swallowed as zeroes. */}
         {blocker && <InlineAlert>{blocker}</InlineAlert>}
 
-        {discountProblems.length > 0 && (
+        {rejected.length > 0 && (
           <InlineAlert>
-            {discountProblems.length} {discountProblems.length === 1 ? 'row has' : 'rows have'} a
-            discount that is not an amount between 0 and the batch fee —{' '}
-            {discountProblems.slice(0, 3).map((r) => `${r.name} (${r.found})`).join(', ')}
-            {discountProblems.length > 3 ? `, and ${discountProblems.length - 3} more` : ''}. Fix
-            those cells and choose the file again. A blank cell is full price.
+            <strong className="block">Not added</strong>
+            {rejected.slice(0, 5).map((entry, index) => (
+              <span key={index} className="block">{entry.name} · {entry.reason}</span>
+            ))}
+            {rejected.length > 5 && <span className="block">+{rejected.length - 5} more</span>}
           </InlineAlert>
         )}
 
