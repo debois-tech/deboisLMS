@@ -8,18 +8,21 @@ import { FormField } from '@/components/ui/FormField';
 import { BatchSelect } from '@/components/ui/BatchSelect';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { SearchSelect } from '@/components/ui/SearchSelect';
-import { GENDER_OPTIONS, roleForBatch } from '@/lib/utils/studentImport';
+import { GENDER_OPTIONS, cleanRole, normalizeRole, roleForBatch } from '@/lib/utils/studentImport';
 import { Spinner } from '@/components/ui/Spinner';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { CredentialsModal } from '@/components/students/StudentLoginCard';
 import { InlineAlert } from '@/components/ui/InlineAlert';
-import { addStudentToBatch, createOrReuseStudent, createStudentLogin, getBatches, getInternshipRoles } from '@/lib/supabase';
+import { addInternshipRole, addStudentToBatch, createOrReuseStudent, createStudentLogin, getBatches, getInternshipRoles } from '@/lib/supabase';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { useToast } from '@/lib/context/ToastContext';
 import type { Batch, InternshipRole, StudentCredentials } from '@/lib/types';
 import { errorMessage } from '@/lib/utils/errors';
 import { feeFromDiscountValue, formatCurrency } from '@/lib/utils/format';
+
+/** Sentinel for the "not in the list yet" row, which reveals the name field below it. */
+const NEW_ROLE = '__new__';
 
 export default function NewStudentPage() {
   const navigate = useNavigate();
@@ -36,6 +39,7 @@ export default function NewStudentPage() {
   const [feeText, setFeeText] = useState<string | null>(null);
   // Empty until picked; meanwhile the batch's programme suggests one.
   const [pickedRole, setPickedRole] = useState<InternshipRole | ''>('');
+  const [newRoleName, setNewRoleName] = useState('');
   // Start is the batch's start date unless changed; the end is left for the batch's end date to fill, or an admin.
   const [pickedStart, setPickedStart] = useState<string | null>(null);
   const [internshipEnd, setInternshipEnd] = useState('');
@@ -59,6 +63,7 @@ export default function NewStudentPage() {
 
   const batch = batches.find((option) => option.id === batchId);
   const role = pickedRole || roleForBatch(batch) || '';
+  const addingRole = role === NEW_ROLE;
   const internshipStart = pickedStart ?? batch?.start_date?.slice(0, 10) ?? '';
   const baseFee = batch?.base_fee ?? null;
   const typedFee = feeText ? Number(feeText) : null;
@@ -92,8 +97,8 @@ export default function NewStudentPage() {
       showToast('Pick a date of birth', 'error');
       return;
     }
-    if (!role) {
-      showToast('Pick an internship role', 'error');
+    if (!role || (addingRole && !cleanRole(newRoleName))) {
+      showToast(addingRole ? 'Name the new role' : 'Pick an internship role', 'error');
       return;
     }
     if (internshipEnd && internshipStart && internshipEnd < internshipStart) {
@@ -106,13 +111,21 @@ export default function NewStudentPage() {
     }
     setLoading(true);
     try {
+      // The role is written first, so the student is saved with one that exists. A name matching one already there joins it.
+      let internshipRole = role;
+      if (addingRole) {
+        const typed = cleanRole(newRoleName);
+        internshipRole = roles.find((option) => normalizeRole(option) === normalizeRole(typed)) ?? (await addInternshipRole(typed));
+        if (!roles.includes(internshipRole)) setRoles([...roles, internshipRole]);
+      }
+
       // Blank strings would overwrite a reused student's real values with empties,
       // and graduation_year is an int column that cannot take ''.
       const { graduation_year, ...text } = form;
       const student = await createOrReuseStudent({
         ...Object.fromEntries(Object.entries(text).filter(([, value]) => value !== '')),
         ...(graduation_year ? { graduation_year: Number(graduation_year) } : {}),
-        internship_role: role,
+        internship_role: internshipRole,
         ...(internshipStart ? { internship_start_date: internshipStart } : {}),
         ...(internshipEnd ? { internship_end_date: internshipEnd } : {}),
       } as Parameters<typeof createOrReuseStudent>[0]);
@@ -213,7 +226,7 @@ export default function NewStudentPage() {
           <FormField label="Internship Role" required>
             <SearchSelect
               showSearch={false}
-              options={roles.map((option) => ({ value: option, label: option }))}
+              options={[...roles.map((option) => ({ value: option, label: option })), { value: NEW_ROLE, label: 'Add a new role' }]}
               value={role || null}
               onChange={(value) => setPickedRole(value as InternshipRole)}
               placeholder="Select a role"
@@ -221,6 +234,11 @@ export default function NewStudentPage() {
               emptyText="No match"
             />
           </FormField>
+          {addingRole && (
+            <FormField label="Role Name" required>
+              <input value={newRoleName} onChange={(e) => setNewRoleName(e.target.value)} maxLength={60} required />
+            </FormField>
+          )}
           <div className="grid gap-4 md:grid-cols-2">
             <FormField label="Internship Start">
               <DatePicker value={internshipStart} onChange={setPickedStart} placeholder="Pick a date" ariaLabel="Internship start date" />
