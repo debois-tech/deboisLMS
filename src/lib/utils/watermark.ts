@@ -20,7 +20,7 @@ export async function stampBadgeImage(image: Blob, code: string): Promise<Blob> 
   context.drawImage(bitmap, 0, 0);
   bitmap.close();
 
-  context.font = `700 ${Math.max(10, Math.round(canvas.width * BADGE_STAMP.size))}px Arial, Helvetica, sans-serif`;
+  context.font = `400 ${Math.max(10, Math.round(canvas.width * BADGE_STAMP.size))}px Arial, Helvetica, sans-serif`;
   context.fillStyle = BADGE_STAMP.color;
   context.textAlign = 'right';
   context.fillText(`ID: ${code}`, canvas.width * (1 - BADGE_STAMP.right), canvas.height * BADGE_STAMP.baseline);
