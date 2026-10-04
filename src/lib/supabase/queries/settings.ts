@@ -1,4 +1,16 @@
 import { supabase } from '../client';
+import { row } from './result';
+
+/** The year in student refs and badge IDs for whoever is enrolled next, e.g. 2026 in DBT-INT-2026-001. */
+export async function getStudentCodeYear(): Promise<number> {
+  return Number(row<string>(await supabase.rpc('student_code_year'), 'Could not load the student ref year'));
+}
+
+/** Moves refs to the next year and restarts the count at 001. Returns the new year. */
+export async function rollStudentCodeYear(): Promise<number> {
+  const prefix = row<string>(await supabase.rpc('roll_student_code_year'), 'Could not roll the year');
+  return Number(prefix.match(/\d{4}/)?.[0]);
+}
 
 // Single row, seeded once by schema.sql — read/write it without needing its id.
 export async function getMaintenanceMode(): Promise<boolean> {

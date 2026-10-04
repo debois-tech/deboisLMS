@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Check, Download, ExternalLink, Lock, Share2, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import { badgeImageUrl, canShareBadgeImage, downloadBadgeImage, linkedInAddToProfileUrl, shareBadgeImage } from '@/lib/supabase';
+import { Spinner } from '@/components/ui/Spinner';
+import { badgeImageUrl, canShareBadgeImage, downloadBadgeImage, getBadgeCopy, linkedInAddToProfileUrl, shareBadgeImage } from '@/lib/supabase';
 import type { MyBadges } from '@/lib/supabase';
 import type { BatchBadge } from '@/lib/types';
 import { useNow } from '@/lib/hooks/useNow';
@@ -13,17 +14,44 @@ import { formatDate } from '@/lib/utils/format';
 
 const RECENT_MS = 7 * 24 * 60 * 60 * 1000;
 
-/** One badge up close. `earnedAt` absent means it is still locked: same art, greyed, no download or LinkedIn. */
-function BadgeModal({ badge, earnedAt, onClose }: { badge: BatchBadge | null; earnedAt?: string; onClose: () => void }) {
+/**
+ * One badge up close. `earnedAt` absent means it is still locked: same art, greyed, no download or LinkedIn.
+ * With the student's `code`, what they see, download and share is their copy stamped with it.
+ */
+function BadgeModal({ badge, earnedAt, code, onClose }: { badge: BatchBadge | null; earnedAt?: string; code?: string; onClose: () => void }) {
   const { showToast } = useToast();
   const [downloading, setDownloading] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [stamped, setStamped] = useState<{ key: string; url: string } | null>(null);
+
+  const stampKey = badge && earnedAt && code ? `${badge.id}:${code}` : null;
+  useEffect(() => {
+    if (!badge || !stampKey) return;
+    let live = true;
+    let made = '';
+    getBadgeCopy(badge, code)
+      .then((file) => {
+        made = URL.createObjectURL(file);
+        if (live) setStamped({ key: stampKey, url: made });
+      })
+      .catch((err) => {
+        // The plain art still shows, so a stamping hiccup does not blank the badge.
+        showToast(errorMessage(err, 'Could not stamp the badge'), 'error');
+        if (live) setStamped({ key: stampKey, url: badgeImageUrl(badge.image_path) });
+      });
+    return () => {
+      live = false;
+      if (made) URL.revokeObjectURL(made);
+    };
+  }, [badge, code, stampKey, showToast]);
+
+  const shownUrl = !badge ? '' : !stampKey ? badgeImageUrl(badge.image_path) : stamped?.key === stampKey ? stamped.url : '';
 
   const download = async () => {
     if (!badge) return;
     setDownloading(true);
     try {
-      await downloadBadgeImage(badge);
+      await downloadBadgeImage(badge, code);
     } catch (err) {
       showToast(errorMessage(err, 'Could not download the badge'), 'error');
     } finally {
@@ -35,7 +63,7 @@ function BadgeModal({ badge, earnedAt, onClose }: { badge: BatchBadge | null; ea
     if (!badge) return;
     setSharing(true);
     try {
-      await shareBadgeImage(badge);
+      await shareBadgeImage(badge, code);
     } catch (err) {
       // Cancelling the share sheet is not a failure — nothing to tell the student.
       if (err instanceof Error && err.name !== 'AbortError') {
@@ -51,7 +79,7 @@ function BadgeModal({ badge, earnedAt, onClose }: { badge: BatchBadge | null; ea
       {badge && (
         <div className="portal-badge-detail">
           <div className={`portal-badge-detail-art${earnedAt ? '' : ' is-locked'}`}>
-            <img src={badgeImageUrl(badge.image_path)} alt={badge.name} />
+            {shownUrl ? <img src={shownUrl} alt={badge.name} /> : <Spinner />}
           </div>
           <div className="portal-badge-detail-copy">
             <span className={`portal-badge-status${earnedAt ? ' is-earned' : ''}`}>
@@ -87,7 +115,7 @@ function BadgeModal({ badge, earnedAt, onClose }: { badge: BatchBadge | null; ea
 }
 
 /** Every badge of the student's batches: earned ones in colour with the date, the rest locked. */
-export function PortalBadgeGrid({ badges, earned }: MyBadges) {
+export function PortalBadgeGrid({ badges, earned, codes }: MyBadges) {
   const [open, setOpen] = useState<BatchBadge | null>(null);
 
   // Earned first, so what they have never sits behind what they do not.
@@ -122,7 +150,12 @@ export function PortalBadgeGrid({ badges, earned }: MyBadges) {
           );
         })}
       </ul>
-      <BadgeModal badge={open} earnedAt={open ? earned.get(open.id)?.issued_at : undefined} onClose={() => setOpen(null)} />
+      <BadgeModal
+        badge={open}
+        earnedAt={open ? earned.get(open.id)?.issued_at : undefined}
+        code={open ? codes.get(open.id) : undefined}
+        onClose={() => setOpen(null)}
+      />
     </>
   );
 }
@@ -131,7 +164,7 @@ export function PortalBadgeGrid({ badges, earned }: MyBadges) {
  * Top of Home: the newest badge from the last 7 days. The X hides it for the rest of today
  * on this device and it is back tomorrow, until the 7 days run out.
  */
-export function PortalBadgeCard({ studentId, badges, earned }: MyBadges & { studentId: string }) {
+export function PortalBadgeCard({ studentId, badges, earned, codes }: MyBadges & { studentId: string }) {
   const now = useNow();
   const today = toDateValue(new Date(now));
   const storageKey = `badges-hidden:${studentId}`;
@@ -183,7 +216,7 @@ export function PortalBadgeCard({ studentId, badges, earned }: MyBadges & { stud
       <button type="button" className="portal-badge-close" onClick={hide} aria-label="Hide until tomorrow">
         <X size={16} aria-hidden="true" />
       </button>
-      <BadgeModal badge={open ? badge : null} earnedAt={held.issued_at} onClose={() => setOpen(false)} />
+      <BadgeModal badge={open ? badge : null} earnedAt={held.issued_at} code={codes.get(badge.id)} onClose={() => setOpen(false)} />
     </div>
   );
 }

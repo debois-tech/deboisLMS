@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, ArrowUpRight, Layers } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, Layers, Settings } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
+import { SettingsModal } from '@/components/settings/SettingsModal';
 import { Spinner } from '@/components/ui/Spinner';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -23,6 +25,7 @@ export default function DashboardPage() {
   const [batches, setBatches] = useState<Batch[]>([]);
   const [breakdown, setBreakdown] = useState<EarningBreakdown[]>([]);
   const [breakdownOpen, setBreakdownOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [progress, setProgress] = useState<Map<string, { done: number; total: number }>>(new Map());
 
   const { loading, error, retry } = useInitialLoad(async () => {
@@ -48,7 +51,14 @@ export default function DashboardPage() {
 
   return (
     <div className="page-section">
-      <PageHeader title="Dashboard" />
+      <PageHeader
+        title="Dashboard"
+        action={
+          <Button className="action-button-compact" variant="secondary" size="sm" onClick={() => setSettingsOpen(true)}>
+            <Settings size={14} /> Settings
+          </Button>
+        }
+      />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard label="Total Batches" value={stats?.total_batches ?? 0} />
@@ -78,6 +88,8 @@ export default function DashboardPage() {
       </div>
 
       <CurriculumAverage average={average} outOf={ongoingBatches.length} />
+
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
       <EarningBreakdownModal
         open={breakdownOpen}

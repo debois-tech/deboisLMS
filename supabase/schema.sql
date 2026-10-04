@@ -55,9 +55,15 @@ create or replace function student_code_prefix() returns text
 -- case outright, and the whole thing is one transaction.
 create or replace function set_student_code_year(new_year int) returns text
   language plpgsql
+  security definer
   set search_path = public
   as $$
 begin
+  -- The SQL editor carries no JWT, so "no caller" is allowed. A signed-in caller must be an admin.
+  if auth.uid() is not null and not is_admin() then
+    raise exception 'Admin only';
+  end if;
+
   execute format(
     'create or replace function student_code_year() returns text language sql stable set search_path = public as $f$ select %L::text $f$',
     new_year::text
@@ -71,6 +77,16 @@ begin
   alter sequence student_code_seq restart 1;
   return student_code_prefix();
 end $$;
+
+-- The dashboard's Roll button: the year after the current one.
+create or replace function roll_student_code_year() returns text
+  language sql
+  security definer
+  set search_path = public
+  as $$ select set_student_code_year(student_code_year()::int + 1) $$;
+
+revoke all on function set_student_code_year(int), roll_student_code_year() from public;
+grant execute on function set_student_code_year(int), roll_student_code_year() to authenticated;
 
 create sequence if not exists student_code_seq as bigint start 1;
 
@@ -1928,6 +1944,114 @@ create table if not exists student_badges (
 
 create index if not exists idx_student_badges_student on student_badges(student_id);
 create index if not exists idx_student_badges_badge   on student_badges(badge_id);
+
+-- Each student's ID on each badge: DBT<batch code>-<YY><4-digit ref number>-<5 random>, e.g. DBTPHR-260012-1A3BC.
+-- Made when the badge is given and kept for good, so the same ID returns if it is taken back and given again.
+-- The artwork in storage never carries it: the app stamps it onto the student's copy when they view, download or share.
+create table if not exists badge_codes (
+  student_id uuid references students(id) on delete cascade not null,
+  badge_id   uuid references batch_badges(id) on delete cascade not null,
+  -- The 5 random characters, unique across every badge: at least 2 letters and 2 digits, in any order.
+  suffix     text not null unique check (
+    suffix ~ '^[A-Z0-9]{5}$'
+    and length(regexp_replace(suffix, '[^A-Z]', '', 'g')) >= 2
+    and length(regexp_replace(suffix, '[^0-9]', '', 'g')) >= 2
+  ),
+  -- The whole ID as it was when made, so a later batch code edit or year roll never rewrites it.
+  code       text not null unique,
+  created_at timestamptz not null default now(),
+  primary key (student_id, badge_id)
+);
+
+create or replace function new_badge_suffix() returns text
+language plpgsql
+volatile
+set search_path = public
+as $$
+declare
+  chars text := 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  pick  text;
+begin
+  loop
+    select string_agg(substr(chars, 1 + floor(random() * 36)::int, 1), '') into pick from generate_series(1, 5);
+    if length(regexp_replace(pick, '[^A-Z]', '', 'g')) >= 2
+       and length(regexp_replace(pick, '[^0-9]', '', 'g')) >= 2
+       and not exists (select 1 from badge_codes where suffix = pick) then
+      return pick;
+    end if;
+  end loop;
+end $$;
+
+-- Returns the ID, making it first if the student has none for this badge yet.
+create or replace function issue_badge_code(p_student uuid, p_badge uuid) returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  found_code text;
+  ref        text;
+  bcode      text;
+  head       text;
+  pick       text;
+begin
+  select code into found_code from badge_codes where student_id = p_student and badge_id = p_badge;
+  if found then return found_code; end if;
+
+  select s.student_code, upper(btrim(b.batch_code)) into ref, bcode
+  from students s, batch_badges bb join batches b on b.id = bb.batch_id
+  where s.id = p_student and bb.id = p_badge;
+
+  if coalesce(bcode, '') = '' then
+    raise exception 'Set the batch code on the batch first';
+  end if;
+  if ref is null or ref !~ '^DBT-INT-[0-9]{4}-[0-9]+$' then
+    raise exception 'Student ref % is not in the DBT-INT-YYYY-NNN form', ref;
+  end if;
+
+  -- Year from the student's own ref, number padded to 4 digits and never cut: 12 -> 0012, 1536 -> 1536.
+  head := 'DBT' || bcode || '-' || right(split_part(ref, '-', 3), 2) || lpad(split_part(ref, '-', 4), 4, '0') || '-';
+
+  loop
+    pick := new_badge_suffix();
+    begin
+      insert into badge_codes (student_id, badge_id, suffix, code) values (p_student, p_badge, pick, head || pick);
+      return head || pick;
+    exception when unique_violation then
+      -- Two gives at once, or two students drawing the same suffix: keep ours if it landed, else draw again.
+      select code into found_code from badge_codes where student_id = p_student and badge_id = p_badge;
+      if found then return found_code; end if;
+    end;
+  end loop;
+end $$;
+
+revoke all on function new_badge_suffix(), issue_badge_code(uuid, uuid) from public;
+
+create or replace function student_badges_issue_code() returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform issue_badge_code(new.student_id, new.badge_id);
+  return new;
+end $$;
+
+drop trigger if exists student_badges_code on student_badges;
+create trigger student_badges_code
+  after insert on student_badges
+  for each row execute function student_badges_issue_code();
+
+alter table badge_codes enable row level security;
+
+drop policy if exists admin_full_access on badge_codes;
+create policy admin_full_access on badge_codes
+  for all using (is_admin()) with check (is_admin());
+
+-- A student reads only their own IDs; tutors never read them.
+drop policy if exists student_read_own on badge_codes;
+create policy student_read_own on badge_codes
+  for select using (student_id = (select current_student_id()));
 
 alter table batch_badges   enable row level security;
 alter table student_badges enable row level security;
