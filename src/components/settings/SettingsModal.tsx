@@ -103,10 +103,13 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
           <Switch checked={Boolean(maintenance)} onChange={() => void toggleMaintenance()} label="Maintenance mode" danger disabled={busy || maintenance === null} />
         </div>
         <div className="settings-row">
-          <span className="settings-row-label"><CalendarClock size={17} /> Student ref year · <strong>{year ?? '—'}</strong></span>
-          <Button className="action-button-compact" variant="secondary" size="sm" onClick={() => void roll()} disabled={busy || year === null}>
-            Roll
-          </Button>
+          <span className="settings-row-label"><CalendarClock size={17} /> Student ref year</span>
+          <div className="settings-row-end">
+            <strong className="settings-year">{year ?? '—'}</strong>
+            <Button className="settings-roll" variant="secondary" size="sm" onClick={() => void roll()} disabled={busy || year === null}>
+              Roll
+            </Button>
+          </div>
         </div>
       </div>
     </Modal>
