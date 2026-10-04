@@ -5,6 +5,31 @@ const COMPANY_NAME = 'deboistech';
 
 const IMAGE_TYPES = ['image/png', 'image/jpeg'];
 
+// Fits the white strip under the artwork's footer bar, ending where the green panel does. Shares of the image:
+// the type size and the gap to the right edge of its width, the baseline's distance from the top of its height.
+const BADGE_STAMP = { color: '#545454', size: 0.017, right: 0.076, baseline: 0.982 };
+
+/** A student's copy of a badge: the artwork with "ID: <code>" in the bottom-right corner. Made on demand, never stored. */
+export async function stampBadgeImage(image: Blob, code: string): Promise<Blob> {
+  const bitmap = await createImageBitmap(image);
+  const canvas = document.createElement('canvas');
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Could not prepare the badge image.');
+  context.drawImage(bitmap, 0, 0);
+  bitmap.close();
+
+  context.font = `400 ${Math.max(10, Math.round(canvas.width * BADGE_STAMP.size))}px Arial, Helvetica, sans-serif`;
+  context.fillStyle = BADGE_STAMP.color;
+  context.textAlign = 'right';
+  context.fillText(`ID: ${code}`, canvas.width * (1 - BADGE_STAMP.right), canvas.height * BADGE_STAMP.baseline);
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('Could not stamp the badge image.'))), 'image/png');
+  });
+}
+
 // Bakes the watermark in once, at upload — PDF or image becomes a stamped PDF, everything else passes through.
 export async function stampMaterialFile(file: File): Promise<File> {
   const mimeType = fileMimeType(file);

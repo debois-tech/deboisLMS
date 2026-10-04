@@ -90,15 +90,6 @@ export default function EditBatchPage() {
               required
             />
           </FormField>
-
-          <FormField label="Batch Code">
-            <input
-              value={form.batch_code ?? ''}
-              onChange={(e) => setForm({ ...form, batch_code: e.target.value })}
-              autoCapitalize="characters"
-              spellCheck={false}
-            />
-          </FormField>
           <FormField label="Start Date">
             <DatePicker
               value={form.start_date ?? ''}

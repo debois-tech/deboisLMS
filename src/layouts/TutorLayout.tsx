@@ -37,7 +37,7 @@ export default function TutorLayout() {
     <div className="min-h-screen bg-[var(--bg-base)]">
       <Navbar
         homePath="/tutor"
-        showMaintenanceToggle={false}
+        themeToggle
         onMenuClick={() => {
           setSidebarCollapsed(false);
           setSidebarOpen(true);

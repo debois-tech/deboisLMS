@@ -2,6 +2,7 @@ import { supabase } from '../client';
 import { ok, row, rows } from './result';
 import type { BatchBadge, Student, StudentBadge } from '@/lib/types';
 import { extensionOf } from '@/lib/utils/files';
+import { stampBadgeImage } from '@/lib/utils/watermark';
 
 /** Matches the tutor's storage policy and the assets bucket's 5 MB cap. */
 export const BADGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp'] as const;
@@ -32,14 +33,17 @@ export function linkedInAddToProfileUrl(badgeName: string, issuedAt: string): st
   return `https://www.linkedin.com/profile/add?${params.toString()}`;
 }
 
-async function fetchBadgeFile(badge: BatchBadge): Promise<File> {
+/** The badge as a file. With the student's `code` it is their stamped copy, named just the code; without, the plain artwork. */
+export async function getBadgeCopy(badge: BatchBadge, code?: string): Promise<File> {
   const { data, error } = await supabase.storage.from('assets').download(badge.image_path);
   if (error || !data) throw new Error('Could not download the badge image.');
-  return new File([data], `${badge.name}.${extensionOf(badge.image_path) || 'png'}`, { type: data.type });
+  if (!code) return new File([data], `${badge.name}.${extensionOf(badge.image_path) || 'png'}`, { type: data.type });
+  const stamped = await stampBadgeImage(data, code);
+  return new File([stamped], `${code}.png`, { type: 'image/png' });
 }
 
-export async function downloadBadgeImage(badge: BatchBadge): Promise<void> {
-  const file = await fetchBadgeFile(badge);
+export async function downloadBadgeImage(badge: BatchBadge, code?: string): Promise<void> {
+  const file = await getBadgeCopy(badge, code);
   const url = URL.createObjectURL(file);
   try {
     const link = document.createElement('a');
@@ -61,8 +65,8 @@ export function canShareBadgeImage(): boolean {
  * installed — instead of a download-then-attach-it-yourself round trip. A cancelled share
  * throws `AbortError`, which the caller treats as nothing happening, not a failure.
  */
-export async function shareBadgeImage(badge: BatchBadge): Promise<void> {
-  const file = await fetchBadgeFile(badge);
+export async function shareBadgeImage(badge: BatchBadge, code?: string): Promise<void> {
+  const file = await getBadgeCopy(badge, code);
   const share = { files: [file], title: badge.name, text: `I just earned my ${badge.name} badge from Deboistech!` };
   if (!navigator.canShare(share)) throw new Error('Sharing isn’t supported on this device.');
   await navigator.share(share);
@@ -148,16 +152,20 @@ export interface MyBadges {
   badges: BatchBadge[];
   /** Which of them they hold, keyed by badge id. */
   earned: Map<string, StudentBadge>;
+  /** Their ID on each badge, keyed by badge id. A badge with none shows and downloads unstamped. */
+  codes: Map<string, string>;
 }
 
-/** The student's own view: RLS already limits both lists to them. */
+/** The student's own view: RLS already limits every list to them. */
 export async function getMyBadges(): Promise<MyBadges> {
-  const [badges, earned] = await Promise.all([
+  const [badges, earned, codes] = await Promise.all([
     supabase.from('batch_badges').select('*').order('created_at'),
     supabase.from('student_badges').select('id, student_id, badge_id, issued_at'),
+    supabase.from('badge_codes').select('badge_id, code'),
   ]);
   return {
     badges: rows<BatchBadge>(badges, 'Could not load your badges'),
     earned: new Map(rows<StudentBadge>(earned, 'Could not load your badges').map((badge) => [badge.badge_id, badge])),
+    codes: new Map(rows<{ badge_id: string; code: string }>(codes, 'Could not load your badge IDs').map((entry) => [entry.badge_id, entry.code])),
   };
 }
