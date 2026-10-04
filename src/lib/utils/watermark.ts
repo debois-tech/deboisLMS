@@ -7,7 +7,7 @@ const IMAGE_TYPES = ['image/png', 'image/jpeg'];
 
 // Fits the white strip under the artwork's footer bar, ending where the green panel does. Shares of the image:
 // the type size and the gap to the right edge of its width, the baseline's distance from the top of its height.
-const BADGE_STAMP = { color: '#545454', size: 0.034, right: 0.076, baseline: 0.982 };
+const BADGE_STAMP = { color: '#545454', size: 0.017, right: 0.076, baseline: 0.982 };
 
 /** A student's copy of a badge: the artwork with "ID: <code>" in the bottom-right corner. Made on demand, never stored. */
 export async function stampBadgeImage(image: Blob, code: string): Promise<Blob> {
