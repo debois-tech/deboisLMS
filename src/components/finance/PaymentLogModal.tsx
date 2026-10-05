@@ -53,8 +53,7 @@ export function PaymentLogModal({
 
   // Filtered on render so a previous student's claims never flash on open.
   const shownClaims = fee ? claims.filter((c) => c.student_id === fee.student_id && c.batch_id === fee.batch_id) : [];
-  // Only a terminated enrolment has this, so it doubles as the flag for one.
-  const left = fee?.expected_on_exit != null;
+  const left = fee?.status === 'terminated';
   const remaining = fee
     ? Math.max(0, (left ? Number(fee.expected_on_exit) : fee.total_fee) - fee.paid_amount)
     : 0;

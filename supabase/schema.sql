@@ -10,7 +10,7 @@ do $$ begin create type session_type       as enum ('online', 'offline');       
 do $$ begin create type attendance_status  as enum ('present', 'partial', 'absent');          exception when duplicate_object then null; end $$;
 do $$ begin create type attendance_source  as enum ('manual', 'automated');                   exception when duplicate_object then null; end $$;
 do $$ begin create type mapping_status     as enum ('active', 'dropped', 'terminated');       exception when duplicate_object then null; end $$;
-do $$ begin create type fee_status         as enum ('due', 'paid');                           exception when duplicate_object then null; end $$;
+do $$ begin create type fee_status         as enum ('due', 'paid', 'terminated');             exception when duplicate_object then null; end $$;
 do $$ begin create type payment_method     as enum ('cash', 'upi', 'bank_transfer', 'other'); exception when duplicate_object then null; end $$;
 do $$ begin create type claim_status       as enum ('pending', 'approved', 'dismissed');      exception when duplicate_object then null; end $$;
 
@@ -330,8 +330,13 @@ create table if not exists student_fees (
   transferred      boolean not null default false,
   discount_type    discount_type not null default 'percentage',
   discount_value   numeric not null default 0 check (discount_value >= 0),
+  -- 'terminated' wins over paid/due: expected_on_exit is set only by terminate_enrolment().
   status      fee_status generated always as (
-    case when paid_amount >= total_fee then 'paid'::fee_status else 'due'::fee_status end
+    case
+      when expected_on_exit is not null then 'terminated'::fee_status
+      when paid_amount >= total_fee then 'paid'::fee_status
+      else 'due'::fee_status
+    end
   ) stored,
   updated_at  timestamptz default now(),
   unique (student_id, batch_id)
@@ -393,7 +398,7 @@ begin
     raise exception 'Could not find the fee record';
   end if;
 
-  ceiling := coalesce(fee_row.expected_on_exit, fee_row.total_fee);
+  ceiling := case when fee_row.status = 'terminated' then fee_row.expected_on_exit else fee_row.total_fee end;
   if fee_row.paid_amount + p_amount > ceiling then
     raise exception 'That is more than is owed. At most % can be logged.',
       greatest(ceiling - fee_row.paid_amount, 0);
@@ -1225,7 +1230,8 @@ begin
   where student_id = m.student_id and batch_id = m.batch_id
   for update;
 
-  if found and fee_row.total_fee > 0 then
+  -- Also for a zero fee (expected 0), so every leaver's fee row reads 'terminated'.
+  if found then
     instalment := round(greatest(fee_row.total_fee - 1000, 0) / 2.0);
 
     -- Due on the day itself, so `>=`, not `>`.

@@ -87,8 +87,8 @@ export default function StudentDetailPage() {
   const currentFee = fees.find((f) => f.batch_id === currentMapping?.batch_id) ?? null;
   const nextLecture = currentMapping ? nextLectures[currentMapping.batch_id] : undefined;
   // A leaver owes their void, not the rest of the fee.
-  const left = currentFee?.expected_on_exit != null;
-  const owed = currentFee ? Math.max((currentFee.expected_on_exit ?? currentFee.total_fee) - currentFee.paid_amount, 0) : 0;
+  const left = currentFee?.status === 'terminated';
+  const owed = currentFee ? Math.max((left ? Number(currentFee.expected_on_exit) : currentFee.total_fee) - currentFee.paid_amount, 0) : 0;
 
   // Terminates the current enrolment only. The batch is named in the dialog so
   // there is no doubt which one when a student sits on more than one.
