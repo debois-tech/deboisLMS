@@ -1,4 +1,4 @@
--- DeboisTech ERP — schema
+-- deboistech LMS — schema
 -- The whole database in one file: run it on a fresh project and nothing else.
 -- Assumes an admin user already exists in Supabase Auth — edit the email in §8.
 -- Re-runnable: every statement is guarded and nothing rewrites issued data.

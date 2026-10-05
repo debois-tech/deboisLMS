@@ -1,4 +1,4 @@
-# DeboisTech ERP
+# deboistech LMS
 
 Admin dashboard for running training batches — students, tutors, attendance, fees, assignments and
 study material — plus a read-only student portal and a batch-scoped tutor dashboard.
