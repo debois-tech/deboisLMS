@@ -202,7 +202,11 @@ export default function FeesPage() {
                           {isPaid ? '—' : formatCurrency(remaining)}
                         </span>
                       </TD>
-                      <TD><StatusPill kind="fee" value={isPaid ? 'paid' : 'due'} /></TD>
+                      <TD>
+                        {student?.mapping.status === 'terminated'
+                          ? <StatusPill kind="enrollment" value="terminated" />
+                          : <StatusPill kind="fee" value={isPaid ? 'paid' : 'due'} />}
+                      </TD>
                       <TD>
                         <Button size="sm" className="action-button-compact" onClick={() => openPaymentLogs(fee)}>
                           <Plus size={14} /> Log Payment

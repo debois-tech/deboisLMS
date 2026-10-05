@@ -5,6 +5,7 @@ import { Mail, Phone, Layers, CalendarDays, History, Edit3, ExternalLink, UserMi
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { StatusPill } from '@/components/ui/StatusPill';
+import { EnrolmentSelect } from '@/components/ui/BatchSelect';
 import { Spinner } from '@/components/ui/Spinner';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -29,8 +30,9 @@ export default function StudentDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [student, setStudent] = useState<Student | null>(null);
   const [batchMappings, setBatchMappings] = useState<(BatchStudentMapping & { batch?: Batch })[]>([]);
-  const [currentFee, setCurrentFee] = useState<StudentFee | null>(null);
-  const [nextLecture, setNextLecture] = useState<Lecture | null>(null);
+  const [fees, setFees] = useState<StudentFee[]>([]);
+  const [nextLectures, setNextLectures] = useState<Record<string, Lecture | undefined>>({});
+  const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [paymentLogs, setPaymentLogs] = useState<FeePaymentLog[]>([]);
   const [claims, setClaims] = useState<PaymentClaim[]>([]);
   const [terminating, setTerminating] = useState(false);
@@ -43,47 +45,50 @@ export default function StudentDetailPage() {
   const { loading, error, retry } = useInitialLoad(async () => {
     if (!studentId) return;
 
-    const [s, mappings, logs, pending] = await Promise.all([
+    const [s, mappings, logs, pending, allFees] = await Promise.all([
       getStudentById(studentId),
       getStudentBatches(studentId),
       getFeePaymentLogsByStudent(studentId),
       getPendingClaims(studentId),
+      getFeesByStudent(studentId),
     ]);
     setStudent(s ?? null);
     setPaymentLogs(logs);
     setClaims(pending);
     setBatchMappings(mappings);
+    setFees(allFees);
 
-    // Multiple active batches are possible; the most recently joined one is "current".
-    const activeMappings = mappings.filter((m) => m.status === 'active');
-    const currentMapping = activeMappings.sort(
-      (a, b) => new Date(b.joined_at).getTime() - new Date(a.joined_at).getTime()
-    )[0];
-
-    if (currentMapping) {
-      const [fees, lectures] = await Promise.all([
-        getFeesByStudent(studentId),
-        getLecturesByBatch(currentMapping.batch_id),
-      ]);
-      setCurrentFee(fees.find((f) => f.batch_id === currentMapping.batch_id) ?? null);
-
-      const today = new Date().toISOString().slice(0, 10);
-      const upcoming = lectures
+    // Only a live enrolment has a next lecture.
+    const live = mappings.filter((m) => m.status === 'active');
+    const lectureSets = await Promise.all(live.map((m) => getLecturesByBatch(m.batch_id)));
+    const today = new Date().toISOString().slice(0, 10);
+    setNextLectures(Object.fromEntries(live.map((m, i) => [
+      m.batch_id,
+      lectureSets[i]
         .filter((l) => l.lecture_date.slice(0, 10) >= today)
-        .sort((a, b) => a.lecture_date.localeCompare(b.lecture_date))[0];
-      setNextLecture(upcoming ?? null);
-    }
+        .sort((a, b) => a.lecture_date.localeCompare(b.lecture_date))[0],
+    ])));
   });
 
   if (loading) return <Spinner centered />;
   if (error) return <ErrorState centered message={error} onRetry={retry} />;
   if (!student) return <NotFound label="Student" />;
 
-  const activeMappings = batchMappings.filter((m) => m.status === 'active');
-  const currentMapping = activeMappings.sort(
+  // Default is the most recently joined live batch, else the latest of any status.
+  const newestFirst = [...batchMappings].sort(
     (a, b) => new Date(b.joined_at).getTime() - new Date(a.joined_at).getTime()
-  )[0];
+  );
+  const currentMapping =
+    batchMappings.find((m) => m.batch_id === selectedBatchId)
+    ?? newestFirst.find((m) => m.status === 'active')
+    ?? newestFirst[0];
   const currentBatch = currentMapping?.batch;
+  const isActive = currentMapping?.status === 'active';
+  const currentFee = fees.find((f) => f.batch_id === currentMapping?.batch_id) ?? null;
+  const nextLecture = currentMapping ? nextLectures[currentMapping.batch_id] : undefined;
+  // A leaver owes their void, not the rest of the fee.
+  const left = currentFee?.expected_on_exit != null;
+  const owed = currentFee ? Math.max((currentFee.expected_on_exit ?? currentFee.total_fee) - currentFee.paid_amount, 0) : 0;
 
   // Terminates the current enrolment only. The batch is named in the dialog so
   // there is no doubt which one when a student sits on more than one.
@@ -176,7 +181,7 @@ export default function StudentDetailPage() {
           <Link to={`/students/${student.id}/edit`}>
             <Button variant="outline" className="action-button-compact"><Edit3 size={14} /> Edit</Button>
           </Link>
-          {currentMapping && (
+          {isActive && (
             <Button
               variant="outline"
               className="action-button-compact action-button-danger"
@@ -235,7 +240,9 @@ export default function StudentDetailPage() {
       <div className="student-summary-grid">
         <Card padding="sm" className="student-summary-card">
           <p className="student-summary-label">Current Batch</p>
-          {currentBatch ? (
+          {currentMapping && batchMappings.length > 1 ? (
+            <EnrolmentSelect mappings={newestFirst} value={currentMapping.batch_id} onChange={(id) => { setSelectedBatchId(id); setFeeDraft(null); }} />
+          ) : currentBatch ? (
             <Link to={`/batches/${currentBatch.id}`} className="student-summary-value student-summary-link">
               {currentBatch.name}
             </Link>
@@ -246,7 +253,7 @@ export default function StudentDetailPage() {
         <Card padding="sm" className="student-summary-card">
           <div className="flex items-center justify-between gap-2">
             <p className="student-summary-label">Total Payment</p>
-            {currentBatch && currentFee && feeDraft === null && (
+            {isActive && currentFee && feeDraft === null && (
               <button
                 type="button"
                 onClick={() => setFeeDraft(String(currentFee.total_fee))}
@@ -257,7 +264,7 @@ export default function StudentDetailPage() {
               </button>
             )}
           </div>
-          {currentBatch && currentFee && feeDraft !== null ? (
+          {isActive && currentFee && feeDraft !== null ? (
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-2">
                 <input
@@ -287,11 +294,11 @@ export default function StudentDetailPage() {
                 <p className="field-hint">Base {baseFee === null ? '—' : formatCurrency(baseFee)} · Paid {formatCurrency(currentFee.paid_amount)}</p>
               )}
             </div>
-          ) : currentBatch && currentFee ? (
+          ) : currentFee ? (
             <div className="student-summary-payment">
               <p className="student-summary-value">{formatCurrency(currentFee.paid_amount)} <span className="student-summary-total">/ {formatCurrency(currentFee.total_fee)}</span></p>
-              <p className={`student-summary-status ${currentFee.total_fee - currentFee.paid_amount > 0 ? 'is-due' : 'is-paid'}`}>
-                {currentFee.total_fee - currentFee.paid_amount > 0 ? `${formatCurrency(currentFee.total_fee - currentFee.paid_amount)} due` : 'Paid in full'}
+              <p className={`student-summary-status ${owed > 0 ? 'is-due' : 'is-paid'}`}>
+                {owed > 0 ? `${formatCurrency(owed)} ${left ? 'void' : 'due'}` : left ? 'Nothing void' : 'Paid in full'}
               </p>
             </div>
           ) : (
@@ -300,7 +307,7 @@ export default function StudentDetailPage() {
         </Card>
         <Card padding="sm" className="student-summary-card">
           <p className="student-summary-label">Next Lecture</p>
-          {currentBatch && nextLecture ? (
+          {nextLecture ? (
             <div className="student-summary-lecture">
               <p className="student-summary-value">{formatDate(nextLecture.lecture_date)}</p>
               <p className="student-summary-meta">
@@ -308,7 +315,7 @@ export default function StudentDetailPage() {
               </p>
             </div>
           ) : (
-            <p className="student-summary-empty">{currentBatch ? 'All lectures up to date' : '—'}</p>
+            <p className="student-summary-empty">{isActive ? 'All lectures up to date' : '—'}</p>
           )}
         </Card>
       </div>

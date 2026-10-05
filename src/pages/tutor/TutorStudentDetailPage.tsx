@@ -8,10 +8,11 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NotFound } from '@/components/ui/NotFound';
 import { StatusPill } from '@/components/ui/StatusPill';
+import { EnrolmentSelect } from '@/components/ui/BatchSelect';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { StudentIdChip } from '@/components/students/StudentLink';
-import { getStudentById, getStudentBatches } from '@/lib/supabase';
-import type { Student, BatchStudentMapping, Batch } from '@/lib/types';
+import { getStudentById, getStudentBatches, getLecturesByBatch } from '@/lib/supabase';
+import type { Student, BatchStudentMapping, Batch, Lecture } from '@/lib/types';
 import { formatDate } from '@/lib/utils/format';
 
 // Read-only, and only what a tutor is meant to see: no fees, no login, no edit.
@@ -19,17 +20,40 @@ export default function TutorStudentDetailPage() {
   const { studentId } = useParams();
   const [student, setStudent] = useState<Student | null>(null);
   const [batchMappings, setBatchMappings] = useState<(BatchStudentMapping & { batch?: Batch })[]>([]);
+  const [nextLectures, setNextLectures] = useState<Record<string, Lecture | undefined>>({});
+  const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
 
   const { loading, error, retry } = useInitialLoad(async () => {
     if (!studentId) return;
-    const [s, mappings] = await Promise.all([getStudentById(studentId), getStudentBatches(studentId)]);
+    const [s, all] = await Promise.all([getStudentById(studentId), getStudentBatches(studentId)]);
+    // RLS returns every enrolment but only the tutor's own batches; the rest come back unnamed.
+    const mappings = all.filter((m) => m.batch);
     setStudent(s ?? null);
     setBatchMappings(mappings);
+
+    const live = mappings.filter((m) => m.status === 'active');
+    const lectureSets = await Promise.all(live.map((m) => getLecturesByBatch(m.batch_id)));
+    const today = new Date().toISOString().slice(0, 10);
+    setNextLectures(Object.fromEntries(live.map((m, i) => [
+      m.batch_id,
+      lectureSets[i]
+        .filter((l) => l.lecture_date.slice(0, 10) >= today)
+        .sort((a, b) => a.lecture_date.localeCompare(b.lecture_date))[0],
+    ])));
   });
 
   if (loading) return <Spinner centered />;
   if (error) return <ErrorState centered message={error} onRetry={retry} />;
   if (!student) return <NotFound label="Student" />;
+
+  const newestFirst = [...batchMappings].sort(
+    (a, b) => new Date(b.joined_at).getTime() - new Date(a.joined_at).getTime()
+  );
+  const current =
+    batchMappings.find((m) => m.batch_id === selectedBatchId)
+    ?? newestFirst.find((m) => m.status === 'active')
+    ?? newestFirst[0];
+  const nextLecture = current ? nextLectures[current.batch_id] : undefined;
 
   const profileFacts = [
     { label: 'Date of Birth', value: student.date_of_birth ? formatDate(student.date_of_birth) : '' },
@@ -81,6 +105,39 @@ export default function TutorStudentDetailPage() {
           )}
         </div>
       </Card>
+
+      {current && (
+        <div className="student-summary-grid">
+          <Card padding="sm" className="student-summary-card">
+            <p className="student-summary-label">Current Batch</p>
+            {batchMappings.length > 1 ? (
+              <EnrolmentSelect mappings={newestFirst} value={current.batch_id} onChange={setSelectedBatchId} />
+            ) : (
+              <p className="student-summary-value">{current.batch?.name}</p>
+            )}
+          </Card>
+          <Card padding="sm" className="student-summary-card">
+            <p className="student-summary-label">Enrolment</p>
+            <div className="student-summary-lecture">
+              <StatusPill kind="enrollment" value={current.status} />
+              <p className="student-summary-meta">Joined {formatDate(current.joined_at)}</p>
+            </div>
+          </Card>
+          <Card padding="sm" className="student-summary-card">
+            <p className="student-summary-label">Next Lecture</p>
+            {nextLecture ? (
+              <div className="student-summary-lecture">
+                <p className="student-summary-value">{formatDate(nextLecture.lecture_date)}</p>
+                <p className="student-summary-meta">
+                  {nextLecture.session_type}{nextLecture.meeting_code ? ` • ${nextLecture.meeting_code}` : ''}
+                </p>
+              </div>
+            ) : (
+              <p className="student-summary-empty">{current.status === 'active' ? 'All lectures up to date' : '—'}</p>
+            )}
+          </Card>
+        </div>
+      )}
 
       {profileFacts.length > 0 && (
         <Card>
