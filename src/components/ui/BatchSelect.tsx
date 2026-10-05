@@ -1,5 +1,24 @@
 import { SearchSelect } from '@/components/ui/SearchSelect';
-import type { Batch } from '@/lib/types';
+import type { Batch, BatchStudentMapping } from '@/lib/types';
+
+/** A student's own batches. */
+export function EnrolmentSelect({ mappings, value, onChange }: {
+  mappings: (BatchStudentMapping & { batch?: Batch })[];
+  value: string;
+  onChange: (batchId: string) => void;
+}) {
+  return (
+    <SearchSelect
+      options={mappings.map((m) => ({ value: m.batch_id, label: m.batch?.name ?? m.batch_id }))}
+      value={value}
+      onChange={onChange}
+      placeholder="Select a batch"
+      searchPlaceholder="Search batches"
+      emptyText="No batches"
+      showSearch={false}
+    />
+  );
+}
 
 interface BatchSelectProps {
   batches: Batch[];

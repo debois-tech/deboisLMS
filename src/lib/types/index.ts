@@ -10,7 +10,7 @@ export type MappingStatus = 'active' | 'dropped' | 'terminated';
 export type SubmissionChannel = 'portal';
 /** Open, not a union: admins mint new codes and the valid set lives in `batch_programs`. */
 export type BatchProgram = string;
-export type FeeStatus = 'due' | 'paid';
+export type FeeStatus = 'due' | 'paid' | 'terminated';
 export type PaymentMethod = 'cash' | 'upi' | 'bank_transfer' | 'other';
 export type FeedbackKind = 'bug' | 'request';
 export type FeedbackStatus = 'open' | 'resolved';

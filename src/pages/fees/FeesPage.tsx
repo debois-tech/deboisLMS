@@ -186,7 +186,8 @@ export default function FeesPage() {
                 {fees.map((fee, index) => {
                   const student = students.find((item) => item.id === fee.student_id);
                   // A leaver owes their void; the rest of the fee never became due.
-                  const owed = fee.expected_on_exit ?? fee.total_fee;
+                  const left = fee.status === 'terminated';
+                  const owed = left ? Number(fee.expected_on_exit) : fee.total_fee;
                   const remaining = Math.max(0, owed - fee.paid_amount);
                   const isPaid = fee.status === 'paid' || remaining <= 0;
                   return (
@@ -202,7 +203,7 @@ export default function FeesPage() {
                           {isPaid ? '—' : formatCurrency(remaining)}
                         </span>
                       </TD>
-                      <TD><StatusPill kind="fee" value={isPaid ? 'paid' : 'due'} /></TD>
+                      <TD><StatusPill kind="fee" value={left ? 'terminated' : isPaid ? 'paid' : 'due'} /></TD>
                       <TD>
                         <Button size="sm" className="action-button-compact" onClick={() => openPaymentLogs(fee)}>
                           <Plus size={14} /> Log Payment

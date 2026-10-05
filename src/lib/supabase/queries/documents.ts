@@ -46,9 +46,10 @@ function loadAssets(): Promise<DocumentAssets> {
 
 /**
  * One document, drawn from the student's own data and stored under the enrolment. Always on an admin's click: nothing
- * is generated when a student is enrolled, and each new student needs their own click. Every date comes from
- * the batch: the student's internship start and end date, which default to the batch's start and end date. Every later
- * view, download or email reads the stored copy back.
+ * is generated when a student is enrolled, and each new student needs their own click. Dates come from this batch,
+ * not the student row: that row holds one start and end date for every batch the student is in, so a second batch
+ * would inherit the first one's. The student's own dates only fill in what the batch lacks. Every later view,
+ * download or email reads the stored copy back.
  */
 export async function generateAndStoreDocument(
   kind: DocumentKind,
@@ -58,8 +59,8 @@ export async function generateAndStoreDocument(
 ): Promise<Pick<BatchStudentMapping, 'offer_letter_path' | 'cert_path'>> {
   if (!student.internship_role) throw new Error(`Set ${student.name}'s internship role first (Edit student).`);
   const day = (value?: string | null) => (value ? fromDateValue(value.slice(0, 10)) : null);
-  const startOn = day(student.internship_start_date) ?? day(batch.start_date) ?? day(mapping.joined_at) ?? new Date();
-  const endOn = day(student.internship_end_date) ?? day(batch.ended_at);
+  const startOn = day(batch.start_date) ?? day(student.internship_start_date) ?? day(mapping.joined_at) ?? new Date();
+  const endOn = day(batch.ended_at) ?? day(student.internship_end_date);
   if (kind === 'cert' && !endOn) throw new Error(`${student.name} has no internship end date: end the batch, or set it on Edit student.`);
 
   const bytes = await buildDocumentPdf(

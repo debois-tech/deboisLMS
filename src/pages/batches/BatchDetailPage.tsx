@@ -40,7 +40,7 @@ import { getLecturesByBatch, createLecture, deleteLecture } from '@/lib/supabase
 import { getAttendanceByLecture, setAttendanceApproved, bulkApproveAttendance } from '@/lib/supabase';
 import { getFeesByBatch, getFeePaymentLogs, addFeePaymentLog } from '@/lib/supabase';
 import { getAssignmentsByBatch } from '@/lib/supabase';
-import type { Batch, BatchProgramOption, Student, Tutor, Lecture, AttendanceRecord, StudentFee, FeePaymentLog, Assignment, BatchStudentMapping, TutorBatchMapping } from '@/lib/types';
+import type { Batch, BatchProgramOption, Student, Tutor, Lecture, AttendanceRecord, StudentFee, FeeStatus, FeePaymentLog, Assignment, BatchStudentMapping, TutorBatchMapping } from '@/lib/types';
 import { formatDate, formatCurrency, feeFromDiscount } from '@/lib/utils/format';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { StudentImportModal } from '@/components/students/StudentImportModal';
@@ -889,7 +889,7 @@ function FinanceTab({ batchId }: { batchId: string }) {
   const [logging, setLogging] = useState(false);
   const [deletingLogId, setDeletingLogId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'due' | 'paid' | null>(null);
+  const [statusFilter, setStatusFilter] = useState<FeeStatus | null>(null);
   const { showToast } = useToast();
   const confirm = useConfirm();
 
@@ -960,14 +960,19 @@ function FinanceTab({ batchId }: { batchId: string }) {
     setDeletingLogId(null);
   };
 
-  const totalFee = fees.reduce((s, f) => s + f.total_fee, 0);
+  // Same split as batch_fee_summary: leavers' fees and balances stay out; what they paid is still collected.
+  const enrolled = fees.filter((f) => f.status !== 'terminated');
+  const totalFee = enrolled.reduce((s, f) => s + f.total_fee, 0);
   const totalPaid = fees.reduce((s, f) => s + f.paid_amount, 0);
+  const totalPending = enrolled.reduce((s, f) => s + Math.max(f.total_fee - f.paid_amount, 0), 0);
 
   const feeRows = useMemo(
     () => fees.map((fee) => {
       const student = students.find((s) => s.id === fee.student_id);
-      const remaining = fee.total_fee - fee.paid_amount;
-      return { fee, student, remaining, isPaid: remaining <= 0 };
+      // A leaver owes their void, not the rest of the fee.
+      const remaining = Math.max((fee.status === 'terminated' ? Number(fee.expected_on_exit) : fee.total_fee) - fee.paid_amount, 0);
+      const status: FeeStatus = fee.status === 'terminated' ? 'terminated' : remaining <= 0 ? 'paid' : 'due';
+      return { fee, student, remaining, status };
     }),
     [fees, students],
   );
@@ -975,7 +980,7 @@ function FinanceTab({ batchId }: { batchId: string }) {
   const filteredFeeRows = useMemo(() => {
     const term = search.trim().toLowerCase();
     return feeRows.filter((row) => {
-      if (statusFilter && (statusFilter === 'paid') !== row.isPaid) return false;
+      if (statusFilter && statusFilter !== row.status) return false;
       if (!term) return true;
       return (row.student?.name ?? 'unknown').toLowerCase().includes(term);
     });
@@ -988,7 +993,7 @@ function FinanceTab({ batchId }: { batchId: string }) {
       <div className="grid grid-cols-3 gap-4">
         <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Total Fees</p><p className="text-lg font-bold text-[var(--text-primary)] mt-1">{formatCurrency(totalFee)}</p></Card>
         <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Collected</p><p className="text-lg font-bold text-[var(--success-text)] mt-1">{formatCurrency(totalPaid)}</p></Card>
-        <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Pending Due</p><p className="text-lg font-bold text-[var(--danger-text)] mt-1">{formatCurrency(totalFee - totalPaid)}</p></Card>
+        <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Pending Due</p><p className="text-lg font-bold text-[var(--danger-text)] mt-1">{formatCurrency(totalPending)}</p></Card>
       </div>
 
       <Card>
@@ -1005,8 +1010,8 @@ function FinanceTab({ batchId }: { batchId: string }) {
               filterLabel="Status"
               allLabel="All statuses"
               filterValue={statusFilter}
-              filterOptions={[{ value: 'due', label: 'Due' }, { value: 'paid', label: 'Paid' }]}
-              onFilterChange={(value) => setStatusFilter(value as 'due' | 'paid' | null)}
+              filterOptions={[{ value: 'due', label: 'Due' }, { value: 'paid', label: 'Paid' }, { value: 'terminated', label: 'Terminated' }]}
+              onFilterChange={(value) => setStatusFilter(value as FeeStatus | null)}
             />
 
             {filteredFeeRows.length === 0 ? (
@@ -1025,7 +1030,7 @@ function FinanceTab({ batchId }: { batchId: string }) {
                 </TR>
               </THead>
               <TBody>
-                {filteredFeeRows.map(({ fee, student, remaining, isPaid }, index) => (
+                {filteredFeeRows.map(({ fee, student, remaining, status }, index) => (
                   <TR key={fee.id}>
                     <TD align="center" className="cell-muted">{index + 1}</TD>
                     <TD className="font-medium">
@@ -1034,12 +1039,12 @@ function FinanceTab({ batchId }: { batchId: string }) {
                     <TD>{formatCurrency(fee.total_fee)}</TD>
                     <TD>{formatCurrency(fee.paid_amount)}</TD>
                     <TD>
-                      <span className={!isPaid ? 'text-[var(--danger-text)]' : 'text-[var(--success-text)]'}>
-                        {!isPaid ? formatCurrency(remaining) : '—'}
+                      <span className={remaining > 0 ? 'text-[var(--danger-text)]' : 'text-[var(--success-text)]'}>
+                        {remaining > 0 ? formatCurrency(remaining) : '—'}
                       </span>
                     </TD>
                     <TD>
-                      <StatusPill kind="fee" value={isPaid ? 'paid' : 'due'} />
+                      <StatusPill kind="fee" value={status} />
                     </TD>
                     <TD>
                       <Button size="sm" className="action-button-compact" onClick={() => openPaymentLogs(fee)}>

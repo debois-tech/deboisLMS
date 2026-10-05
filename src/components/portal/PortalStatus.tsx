@@ -13,6 +13,7 @@ const attendance: Record<AttendanceStatus, [string, Tone]> = {
 const fee: Record<FeeStatus, [string, Tone]> = {
   paid: ['Paid', 'success'],
   due: ['Payment pending', 'warning'],
+  terminated: ['Ended', 'default'],
 };
 
 const enrollment: Record<MappingStatus, [string, Tone]> = {
