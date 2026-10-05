@@ -2138,8 +2138,8 @@ create policy "tutor manages badge files" on storage.objects
   );
 
 -- 17. DOCUMENTS (experimental v1)
--- Both documents are generated once, right when a student is added to a batch (dummy template,
--- pdf-lib, filled from live student/batch data), and stored in the private `documents` bucket at
+-- Each document is generated on an admin's click from /documents (pdf-lib, filled from the student's role
+-- and the batch's dates), and stored in the private `documents` bucket at
 -- <mapping_id>/<offer_letter|cert>.pdf. A student can only view/download/be emailed a doc once the
 -- admin flips its "shared" flag on /documents — enforced both in the storage policy below and again
 -- server-side in the send-document edge function.

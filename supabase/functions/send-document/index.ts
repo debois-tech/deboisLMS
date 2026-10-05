@@ -2,8 +2,8 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { encodeBase64 } from 'jsr:@std/encoding@1/base64';
 
 /**
- * Mails a certificate or offer letter that was already generated and stored (see
- * generateAndStoreDocuments) when the student was added. The client sends only ids — this
+ * Mails a certificate or offer letter that an admin already generated and stored (see
+ * generateAndStoreDocument in queries/documents.ts). The client sends only ids — this
  * function reads the stored path and the release flag itself, so a client showing a stale
  * "Shared" state cannot mail a document that was never actually released.
  */
