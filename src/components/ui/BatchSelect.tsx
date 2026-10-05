@@ -1,8 +1,7 @@
 import { SearchSelect } from '@/components/ui/SearchSelect';
-import { StatusPill } from '@/components/ui/StatusPill';
 import type { Batch, BatchStudentMapping } from '@/lib/types';
 
-/** A student's own batches, each tagged with its enrolment status. */
+/** A student's own batches. */
 export function EnrolmentSelect({ mappings, value, onChange }: {
   mappings: (BatchStudentMapping & { batch?: Batch })[];
   value: string;
@@ -10,18 +9,13 @@ export function EnrolmentSelect({ mappings, value, onChange }: {
 }) {
   return (
     <SearchSelect
-      options={mappings.map((m) => ({
-        value: m.batch_id,
-        label: m.batch?.name ?? m.batch_id,
-        meta: <StatusPill kind="enrollment" value={m.status} />,
-      }))}
+      options={mappings.map((m) => ({ value: m.batch_id, label: m.batch?.name ?? m.batch_id }))}
       value={value}
       onChange={onChange}
       placeholder="Select a batch"
       searchPlaceholder="Search batches"
       emptyText="No batches"
       showSearch={false}
-      renderOption={(option) => <><span className="truncate">{option.label}</span>{option.meta}</>}
     />
   );
 }

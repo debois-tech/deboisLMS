@@ -239,7 +239,10 @@ export default function StudentDetailPage() {
 
       <div className="student-summary-grid">
         <Card padding="sm" className="student-summary-card">
-          <p className="student-summary-label">Current Batch</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="student-summary-label">Current Batch</p>
+            {currentMapping && <StatusPill kind="enrollment" value={currentMapping.status} />}
+          </div>
           {currentMapping && batchMappings.length > 1 ? (
             <EnrolmentSelect mappings={newestFirst} value={currentMapping.batch_id} onChange={(id) => { setSelectedBatchId(id); setFeeDraft(null); }} />
           ) : currentBatch ? (
