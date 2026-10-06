@@ -115,6 +115,13 @@ export async function downloadStoredDocument(path: string, filename: string): Pr
   }
 }
 
+/** Opens the stored copy in a new tab, shared or not. */
+export async function viewStoredDocument(path: string): Promise<void> {
+  const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, 60);
+  if (error || !data) throw new Error('The file is missing from storage.');
+  window.open(data.signedUrl, '_blank', 'noopener');
+}
+
 /** The edge function re-reads the stored file and the shared flag itself — nothing to pass but ids. */
 export async function sendDocumentEmail(studentId: string, batchId: string, kind: DocumentKind): Promise<void> {
   const { data, error } = await supabase.functions.invoke('send-document', {

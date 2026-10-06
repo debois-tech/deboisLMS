@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { FilePlus2, Search, ScrollText, Send, Share2 } from 'lucide-react';
+import { Eye, FilePlus2, Search, ScrollText, Send, Share2 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -11,7 +11,7 @@ import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/Table';
 import { StudentLink } from '@/components/students/StudentLink';
 import { useToast } from '@/lib/context/ToastContext';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
-import { generateAndStoreDocument, getBatchStudents, sendDocumentEmail, setDocumentShared } from '@/lib/supabase';
+import { generateAndStoreDocument, getBatchStudents, sendDocumentEmail, setDocumentShared, viewStoredDocument } from '@/lib/supabase';
 import type { Batch, DocumentKind, Student, BatchStudentMapping } from '@/lib/types';
 import { errorMessage } from '@/lib/utils/errors';
 
@@ -85,10 +85,28 @@ function DocCell({ row, batch, kind, onPatch }: { row: Row; batch: Batch; kind: 
     }
   };
 
+  const view = async () => {
+    try {
+      await viewStoredDocument(path);
+    } catch (err) {
+      showToast(errorMessage(err, `Could not open the ${LABELS[kind].toLowerCase()}`), 'error');
+    }
+  };
+
   return (
-    <button type="button" onClick={() => void toggle()} disabled={busy} className="disabled:opacity-50">
-      <Badge variant={shared ? 'success' : 'default'} dot>{shared ? 'Shared' : 'Not shared'}</Badge>
-    </button>
+    <div className="flex items-center gap-2">
+      <button type="button" onClick={() => void toggle()} disabled={busy} className="disabled:opacity-50">
+        <Badge variant={shared ? 'success' : 'default'} dot>{shared ? 'Shared' : 'Not shared'}</Badge>
+      </button>
+      <button
+        type="button"
+        onClick={() => void view()}
+        aria-label={`View ${LABELS[kind].toLowerCase()}`}
+        className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-overlay)] hover:text-[var(--text-primary)]"
+      >
+        <Eye size={15} />
+      </button>
+    </div>
   );
 }
 

@@ -1399,6 +1399,9 @@ begin
   end if;
 
   delete from students where id = p_student_id;
+
+  -- Hand the freed ref back: without this the next student skips it and the dashboard shows a hole.
+  perform resync_student_code_seq();
 end $$;
 
 revoke all on function delete_student(uuid) from public;
