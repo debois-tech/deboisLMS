@@ -15,7 +15,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { CredentialsModal } from '@/components/students/StudentLoginCard';
 import { InlineAlert } from '@/components/ui/InlineAlert';
-import { addInternshipRole, addStudentToBatch, createOrReuseStudent, createStudentLogin, getBatches, getInternshipRoles } from '@/lib/supabase';
+import { addInternshipRole, enrolIfNew, createOrReuseStudent, createStudentLogin, getBatches, getInternshipRoles } from '@/lib/supabase';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { useToast } from '@/lib/context/ToastContext';
 import type { Batch, InternshipRole, StudentCredentials } from '@/lib/types';
@@ -132,9 +132,8 @@ export default function NewStudentPage() {
         ...(internshipEnd ? { internship_end_date: internshipEnd } : {}),
       } as Parameters<typeof createOrReuseStudent>[0]);
       setCreatedStudentId(student.id);
-      // An existing student already on this batch is the goal, not an error — the
-      // unique mapping throws, and the login below should still run.
-      await addStudentToBatch(student.id, batchId, payable, { type: discountType, value: Number(discount) || 0 }).catch(() => undefined);
+      // An existing student already on this batch is the goal, not an error — the login below should still run.
+      await enrolIfNew(student.id, batchId, payable, { type: discountType, value: Number(discount) || 0 });
       showToast('Student added');
 
       // Reusing an existing student would rotate a password they already have — skip those.

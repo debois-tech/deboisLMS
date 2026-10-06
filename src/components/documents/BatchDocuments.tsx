@@ -24,9 +24,15 @@ type RowStatus = 'missing' | 'pending' | 'shared';
 
 const LABELS: Record<DocumentKind, string> = { offer_letter: 'Offer Letter', cert: 'Certificate' };
 
+// "Both" works on the offer letter and the certificate together: one set of buttons, two columns.
+type DocType = DocumentKind | 'both';
+const KINDS: Record<DocType, DocumentKind[]> = { offer_letter: ['offer_letter'], cert: ['cert'], both: ['offer_letter', 'cert'] };
+const TYPE_LABELS: Record<DocType, string> = { ...LABELS, both: 'Both' };
+
 const DOC_TYPE_OPTIONS = [
   { value: 'offer_letter', label: 'Offer Letter' },
   { value: 'cert', label: 'Certificate' },
+  { value: 'both', label: 'Both' },
 ];
 
 const STATUS_OPTIONS = [
@@ -44,6 +50,11 @@ function sharedOf(mapping: BatchStudentMapping, kind: DocumentKind) {
 function statusOf(mapping: BatchStudentMapping, kind: DocumentKind): RowStatus {
   if (!pathOf(mapping, kind)) return 'missing';
   return sharedOf(mapping, kind) ? 'shared' : 'pending';
+}
+/** Across several documents the weakest one decides: any missing, else any unshared, else shared. */
+function statusAcross(mapping: BatchStudentMapping, kinds: DocumentKind[]): RowStatus {
+  const all = kinds.map((kind) => statusOf(mapping, kind));
+  return all.includes('missing') ? 'missing' : all.includes('pending') ? 'pending' : 'shared';
 }
 
 /** One doc's cell, for whichever kind the dropdown currently has selected. */
@@ -119,7 +130,8 @@ export function BatchDocuments({ batch }: { batch: Batch }) {
   const [rows, setRows] = useState<Row[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<RowStatus | null>(null);
-  const [docType, setDocType] = useState<DocumentKind>('offer_letter');
+  const [docType, setDocType] = useState<DocType>('offer_letter');
+  const kinds = KINDS[docType];
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const { showToast } = useToast();
@@ -130,7 +142,7 @@ export function BatchDocuments({ batch }: { batch: Batch }) {
   });
 
   const changeDocType = (value: string) => {
-    setDocType(value as DocumentKind);
+    setDocType(value as DocType);
     setSelected(new Set());
   };
 
@@ -143,7 +155,7 @@ export function BatchDocuments({ batch }: { batch: Batch }) {
     const q = search.trim().toLowerCase();
     return rows.filter((row) => {
       const matchesSearch = !q || row.name.toLowerCase().includes(q) || (row.student_code ?? '').toLowerCase().includes(q);
-      const matchesStatus = !statusFilter || statusOf(row.mapping, docType) === statusFilter;
+      const matchesStatus = !statusFilter || statusAcross(row.mapping, KINDS[docType]) === statusFilter;
       return matchesSearch && matchesStatus;
     });
   }, [rows, search, statusFilter, docType]);
@@ -153,33 +165,44 @@ export function BatchDocuments({ batch }: { batch: Batch }) {
   const toggleAll = () =>
     setSelected(allSelected ? new Set() : new Set(filteredRows.map((row) => row.id)));
 
-  // Generating, sharing and emailing each act on the selected students they apply to: share and email need a
-  // generated document, generate needs one that does not exist yet.
+  // Generating, sharing and emailing each act on the selected documents they apply to: share and email need a
+  // generated one, generate needs one that does not exist yet. With "Both" that is up to two per student.
   const picked = rows.filter((row) => selected.has(row.id));
-  const toGenerate = picked.filter((row) => !pathOf(row.mapping, docType));
-  const toSend = picked.filter((row) => pathOf(row.mapping, docType));
+  const jobs = (wanted: (row: Row, kind: DocumentKind) => boolean) =>
+    picked.flatMap((row) => kinds.filter((kind) => wanted(row, kind)).map((kind) => ({ row, kind })));
+  const toGenerate = jobs((row, kind) => !pathOf(row.mapping, kind));
+  const toSend = jobs((row, kind) => Boolean(pathOf(row.mapping, kind)));
 
-  // One at a time: each is a PDF built in the browser and an upload, and the first failure is worth reading.
-  const bulkGenerate = async () => {
+  // Names the document too when there are two, so a failure points at the right one.
+  const tag = (row: Row, kind: DocumentKind) => (kinds.length > 1 ? `${row.name} (${LABELS[kind]})` : row.name);
+
+  // One at a time, and the first failure is read out: a rate limit or a missing release says so, not just a count.
+  const runOneByOne = async (verb: string, work: typeof toSend, act: (row: Row, kind: DocumentKind) => Promise<void>) => {
     setBulkBusy(true);
     const failures: string[] = [];
-    for (const row of toGenerate) {
+    for (const { row, kind } of work) {
       try {
-        patchRow(row.id, await generateAndStoreDocument(docType, row.mapping, row, batch));
+        await act(row, kind);
       } catch (err) {
-        failures.push(`${row.name}: ${errorMessage(err, 'failed')}`);
+        failures.push(`${tag(row, kind)}: ${errorMessage(err, 'failed')}`);
       }
     }
-    const ok = toGenerate.length - failures.length;
+    const ok = work.length - failures.length;
     showToast(
       failures.length === 0
-        ? `Generated ${ok}`
-        : `Generated ${ok} of ${toGenerate.length}. ${failures[0]}${failures.length > 1 ? ` (+${failures.length - 1} more)` : ''}`,
+        ? `${verb} ${ok}`
+        : `${verb} ${ok} of ${work.length}. ${failures[0]}${failures.length > 1 ? ` (+${failures.length - 1} more)` : ''}`,
       failures.length === 0 ? 'success' : 'error',
     );
     setSelected(new Set());
     setBulkBusy(false);
   };
+
+  // Each is a PDF built in the browser and an upload.
+  const bulkGenerate = () =>
+    runOneByOne('Generated', toGenerate, async (row, kind) => {
+      patchRow(row.id, await generateAndStoreDocument(kind, row.mapping, row, batch));
+    });
 
   const toggleOne = (id: string) =>
     setSelected((current) => {
@@ -188,27 +211,13 @@ export function BatchDocuments({ batch }: { batch: Batch }) {
       return next;
     });
 
-  const bulkShare = async () => {
-    setBulkBusy(true);
-    const ids = toSend.map((row) => row.id);
-    const outcomes = await Promise.allSettled(
-      toSend.map(async (row) => patchRow(row.id, await setDocumentShared(row.mapping.id, docType, true))),
-    );
-    const ok = outcomes.filter((o) => o.status === 'fulfilled').length;
-    showToast(ok === ids.length ? `Shared with ${ok}` : `Shared with ${ok} of ${ids.length}`, ok === ids.length ? 'success' : 'error');
-    setSelected(new Set());
-    setBulkBusy(false);
-  };
+  const bulkShare = () =>
+    runOneByOne('Shared', toSend, async (row, kind) => {
+      patchRow(row.id, await setDocumentShared(row.mapping.id, kind, true));
+    });
 
-  const bulkEmail = async () => {
-    setBulkBusy(true);
-    const ids = toSend.map((row) => row.id);
-    const outcomes = await Promise.allSettled(ids.map((id) => sendDocumentEmail(id, batch.id, docType)));
-    const ok = outcomes.filter((o) => o.status === 'fulfilled').length;
-    showToast(ok === ids.length ? `Emailed ${ok}` : `Emailed ${ok} of ${ids.length}`, ok === ids.length ? 'success' : 'error');
-    setSelected(new Set());
-    setBulkBusy(false);
-  };
+  // Mail goes out one by one: the email service rate-limits a burst. A document still unshared is refused with its reason.
+  const bulkEmail = () => runOneByOne('Emailed', toSend, (row, kind) => sendDocumentEmail(row.id, batch.id, kind));
 
   if (loading) return <Spinner centered />;
   if (error) return <ErrorState centered message={error} onRetry={retry} />;
@@ -235,7 +244,7 @@ export function BatchDocuments({ batch }: { batch: Batch }) {
             value={docType}
             onChange={changeDocType}
             placeholder="Offer Letter"
-            triggerLabel={LABELS[docType]}
+            triggerLabel={TYPE_LABELS[docType]}
             searchPlaceholder=""
             emptyText=""
             showSearch={false}
@@ -279,7 +288,7 @@ export function BatchDocuments({ batch }: { batch: Batch }) {
               </TH>
               <TH>Student</TH>
               <TH>ID</TH>
-              <TH>{LABELS[docType]}</TH>
+              {kinds.map((kind) => <TH key={kind}>{LABELS[kind]}</TH>)}
             </TR>
           </THead>
           <TBody>
@@ -297,9 +306,11 @@ export function BatchDocuments({ batch }: { batch: Batch }) {
                     <StudentLink studentId={row.id} name={row.name} className="font-medium text-[var(--text-primary)] hover:underline" />
                   </TD>
                   <TD className="cell-secondary font-mono">{row.student_code || '—'}</TD>
-                  <TD>
-                    <DocCell row={row} batch={batch} kind={docType} onPatch={(p) => patchRow(row.id, p)} />
-                  </TD>
+                  {kinds.map((kind) => (
+                    <TD key={kind}>
+                      <DocCell row={row} batch={batch} kind={kind} onPatch={(p) => patchRow(row.id, p)} />
+                    </TD>
+                  ))}
                 </TR>
             ))}
           </TBody>

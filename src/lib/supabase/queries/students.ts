@@ -4,7 +4,7 @@ import { removeStoredDocuments } from './documents';
 import { invokeLoginFunction, maybeRow, ok, row, rows } from './result';
 import type { Batch, Student, BatchStudentMapping, StudentCredentials } from '@/lib/types';
 import { errorMessage } from '@/lib/utils/errors';
-import { planImportRows, toStudentInput } from '@/lib/utils/studentImport';
+import { planImportRows, toStudentInput, type ImportFailure } from '@/lib/utils/studentImport';
 
 export async function getStudents(): Promise<Student[]> {
   return rows<Student>(
@@ -84,15 +84,30 @@ export async function importStudentsIntoBatch(
   rows: Record<string, string>[],
   batchId: string,
   baseFee: number,
-): Promise<Student[]> {
-  return Promise.all(
-    planImportRows(rows, baseFee).ready.map(async ({ row, fee, discount }) => {
-      const student = await createOrReuseStudent(toStudentInput(row));
-      // The discount is stored alongside the fee it produced, not just baked into it.
-      await addStudentToBatch(student.id, batchId, fee, { type: 'amount', value: discount }).catch(() => undefined);
-      return student;
-    }),
-  );
+): Promise<{ imported: Student[]; failed: ImportFailure[] }> {
+  const imported: Student[] = [];
+  const failed: ImportFailure[] = [];
+  // One row at a time: a row that repeats an earlier phone or email then finds that student instead of making a twin,
+  // and each row's reason is its own.
+  for (const { row, name, fee, discount } of planImportRows(rows, baseFee).ready) {
+    try {
+      const input = toStudentInput(row);
+      const existing = await findExistingStudent(input);
+      const student = existing ?? (await createStudent(input));
+      try {
+        // The discount is stored alongside the fee it produced, not just baked into it.
+        await enrolIfNew(student.id, batchId, fee, { type: 'amount', value: discount });
+      } catch (err) {
+        // A student made for this row and never enrolled would sit under "No batch": take them back out.
+        if (!existing) await deleteStudent(student.id).catch((cleanup) => console.error('[import] cleanup', cleanup));
+        throw err;
+      }
+      imported.push(student);
+    } catch (err) {
+      failed.push({ row, name, reason: errorMessage(err, 'Could not import this row') });
+    }
+  }
+  return { imported, failed };
 }
 
 export async function getInternshipRoles(): Promise<string[]> {
@@ -281,6 +296,14 @@ export async function addStudentToBatch(
     .catch((err) => console.error('[addStudentToBatch] fill', err));
 
   return mapping;
+}
+
+// For the add and import screens, where a student already on the batch is the goal, not an error. Anything else
+// (a test student into a live batch, a fee that will not save) still throws.
+export async function enrolIfNew(...args: Parameters<typeof addStudentToBatch>): Promise<void> {
+  await addStudentToBatch(...args).catch((err) => {
+    if (!/duplicate key/i.test(errorMessage(err, ''))) throw err;
+  });
 }
 
 // Moves the fee, logs and claims to the target batch and deletes the rest of the old batch's data.

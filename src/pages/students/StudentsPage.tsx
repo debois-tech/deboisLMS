@@ -159,28 +159,23 @@ export default function StudentsPage() {
       throw new Error(`${batch.name} has no base fee. Set one on the batch, then import.`);
     }
 
-    const imported = await importStudentsIntoBatch(rows, batch.id, batch.base_fee);
+    const { imported, failed } = await importStudentsIntoBatch(rows, batch.id, batch.base_fee);
 
     const [studentData, mappingData] = await Promise.all([getStudents(), getAllBatchStudentMappings()]);
     setStudents(studentData);
     setMappings(mappingData);
 
-    if (!createLogins) {
-      showToast('Students imported');
-      return;
-    }
-
     // Students already holding a login are skipped — re-running the edge function
     // would reset a password that may already be in someone's hands.
-    const needLogins = imported.filter((student) => !student.auth_user_id);
-    if (needLogins.length === 0) {
-      showToast('Students imported — logins already existed');
-      return;
+    const needLogins = createLogins ? imported.filter((student) => !student.auth_user_id) : [];
+    if (needLogins.length > 0) {
+      const result = await createStudentLoginsBulk(needLogins.map((s) => ({ id: s.id, name: s.name })));
+      setStudents(await getStudents());
+      setBulkLogins(result);
+    } else if (failed.length === 0) {
+      showToast(createLogins ? 'Students imported — logins already existed' : 'Students imported');
     }
-
-    const result = await createStudentLoginsBulk(needLogins.map((s) => ({ id: s.id, name: s.name })));
-    setStudents(await getStudents());
-    setBulkLogins(result);
+    return failed;
   };
 
   if (loading) return <Spinner centered />;

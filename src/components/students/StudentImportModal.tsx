@@ -14,6 +14,7 @@ import {
   parseStudentCsv,
   planImportRows,
   withImportRole,
+  type ImportFailure,
 } from '@/lib/utils/studentImport';
 import { addInternshipRole, getInternshipRoles } from '@/lib/supabase';
 import { errorMessage } from '@/lib/utils/errors';
@@ -31,12 +32,12 @@ interface StudentImportModalProps {
   batches?: Batch[];
   /** The caller's own batch, from a batch page. Nothing to choose. */
   batch?: Batch;
-  /** Throw to show a message; the modal owns the busy state. */
+  /** Throw to show a message; the modal owns the busy state. Rows returned as failed stay in the dialog for another go. */
   onImport: (
     rows: Record<string, string>[],
     createLogins: boolean,
     batch: Batch,
-  ) => Promise<void>;
+  ) => Promise<ImportFailure[]>;
 }
 
 /** Every row is reachable, a page at a time — a sheet is checked in full or not at all. */
@@ -50,6 +51,7 @@ export function StudentImportModal({ open, onClose, batches, batch, onImport }: 
   const [createLogins, setCreateLogins] = useState(true);
   const [error, setError] = useState('');
   const [skipped, setSkipped] = useState(0);
+  const [failures, setFailures] = useState<ImportFailure[]>([]);
   const [importing, setImporting] = useState(false);
   // Null until loaded: without the list every role in the sheet would look new.
   const [existingRoles, setExistingRoles] = useState<string[] | null>(null);
@@ -122,6 +124,7 @@ export function StudentImportModal({ open, onClose, batches, batch, onImport }: 
     pager.reset();
     setCreateLogins(true);
     setError('');
+    setFailures([]);
     setImporting(false);
     if (fileRef.current) fileRef.current.value = '';
   };
@@ -141,6 +144,7 @@ export function StudentImportModal({ open, onClose, batches, batch, onImport }: 
       setRows(parsed.rows);
       setError(parsed.error);
       setSkipped(parsed.skipped);
+      setFailures([]);
       // A different sheet starts at its own beginning, not wherever the last one left off.
       pager.reset();
     };
@@ -168,9 +172,17 @@ export function StudentImportModal({ open, onClose, batches, batch, onImport }: 
         const raw = getImportRole(row);
         return raw ? withImportRole(row, resolveRole(raw)) : row;
       });
-      await onImport(resolved, createLogins, target);
-      reset();
-      onClose();
+      const failed = await onImport(resolved, createLogins, target);
+      if (failed.length === 0) {
+        reset();
+        onClose();
+        return;
+      }
+      // The rest went in: only the refused rows stay, so Import again retries just those.
+      setFailures(failed);
+      setRows(failed.map((entry) => entry.row));
+      pager.reset();
+      setImporting(false);
     } catch (err) {
       setError(errorMessage(err, 'Import failed. Some rows may already exist.'));
       setImporting(false);
@@ -282,6 +294,16 @@ export function StudentImportModal({ open, onClose, batches, batch, onImport }: 
               <span key={index} className="block">{entry.name} · {entry.reason}</span>
             ))}
             {rejected.length > 5 && <span className="block">+{rejected.length - 5} more</span>}
+          </InlineAlert>
+        )}
+
+        {failures.length > 0 && (
+          <InlineAlert>
+            <strong className="block">Not imported</strong>
+            {failures.slice(0, 5).map((entry, index) => (
+              <span key={index} className="block">{entry.name} · {entry.reason}</span>
+            ))}
+            {failures.length > 5 && <span className="block">+{failures.length - 5} more</span>}
           </InlineAlert>
         )}
 

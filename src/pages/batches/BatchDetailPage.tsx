@@ -5,6 +5,7 @@ import { Archive, ArrowRightLeft, Edit3, UserMinus, Users, GraduationCap, Layers
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { StatusPill } from '@/components/ui/StatusPill';
+import { Badge } from '@/components/ui/Badge';
 import { Tabs } from '@/components/ui/Tabs';
 import { Spinner } from '@/components/ui/Spinner';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -99,6 +100,7 @@ export default function BatchDetailPage() {
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-xl font-bold text-[var(--text-primary)] tracking-tight truncate">{batch.name}</h1>
             <StatusPill kind="batch" value={batch.status} />
+            {batch.is_test && <Badge variant="warning">Test</Badge>}
           </div>
           <p className="text-sm text-[var(--text-muted)] mt-0.5">
             {programLabel ?? 'No programme'} • Started {batch.start_date ? formatDate(batch.start_date) : 'N/A'}
@@ -324,22 +326,33 @@ function StudentsTab({ batch }: { batch: Batch }) {
   const handleAdd = async () => {
     if (!selectedStudents.length || payable === null) return;
     try {
-      await Promise.all(selectedStudents.map((studentId) => addStudentToBatch(studentId, batchId, payable)));
+      const outcomes = await Promise.allSettled(selectedStudents.map((studentId) => addStudentToBatch(studentId, batchId, payable)));
+      const failed = outcomes.flatMap((outcome) => (outcome.status === 'rejected' ? [errorMessage(outcome.reason, 'failed')] : []));
+      void reloadStudents();
+      if (failed.length > 0) {
+        // Whoever went in is in; only the refused stay ticked.
+        setSelectedStudents(selectedStudents.filter((_, index) => outcomes[index].status === 'rejected'));
+        showToast(`Added ${outcomes.length - failed.length} of ${outcomes.length}. ${failed[0]}`, 'error');
+        return;
+      }
       setSelectedStudents([]);
       setDiscount('');
       setShowAdd(false);
-      void reloadStudents();
       showToast('Students added');
     } catch (error) {
       showToast(errorMessage(error, 'Failed to add students'), 'error');
     }
   };
 
-  const available = allStudents.filter((s) => !students.some((e) => e.id === s.id));
+  // A test batch takes test students and a live one takes live students; the database refuses the rest.
+  const available = allStudents.filter(
+    (s) => !students.some((e) => e.id === s.id) && Boolean(s.is_test) === Boolean(batch.is_test),
+  );
 
   // The database refuses anything else; this just keeps the picker honest.
   const transferTargets = allBatches.filter(
-    (b) => b.id !== batchId && !b.ended_at && b.status !== 'completed' && b.base_fee === batch.base_fee,
+    (b) => b.id !== batchId && !b.ended_at && b.status !== 'completed' && b.base_fee === batch.base_fee
+      && Boolean(b.is_test) === Boolean(batch.is_test),
   );
 
   const exitSelecting = () => {
@@ -386,24 +399,19 @@ function StudentsTab({ batch }: { batch: Batch }) {
   const handleImport = async (rows: Record<string, string>[], createLogins: boolean) => {
     if (baseFee == null) throw new Error('This batch has no base fee. Set one on the batch, then import.');
 
-    const imported = await importStudentsIntoBatch(rows, batchId, baseFee);
+    const { imported, failed } = await importStudentsIntoBatch(rows, batchId, baseFee);
     void reloadStudents();
-
-    if (!createLogins) {
-      showToast('Students imported');
-      return;
-    }
 
     // Skip anyone who already has a login: re-running the edge function would
     // reset a password that may already be in the student's hands.
-    const needLogins = imported.filter((student) => !student.auth_user_id);
-    if (needLogins.length === 0) {
-      showToast('Students imported — logins already existed');
-      return;
+    const needLogins = createLogins ? imported.filter((student) => !student.auth_user_id) : [];
+    if (needLogins.length > 0) {
+      setBulkLogins(await createStudentLoginsBulk(needLogins.map((s) => ({ id: s.id, name: s.name }))));
+      void reloadStudents();
+    } else if (failed.length === 0) {
+      showToast(createLogins ? 'Students imported — logins already existed' : 'Students imported');
     }
-
-    setBulkLogins(await createStudentLoginsBulk(needLogins.map((s) => ({ id: s.id, name: s.name }))));
-    void reloadStudents();
+    return failed;
   };
 
   if (loadError) return <Card><ErrorState message={loadError} onRetry={reloadStudents} /></Card>;

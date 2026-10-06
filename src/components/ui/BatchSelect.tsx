@@ -1,4 +1,5 @@
 import { SearchSelect } from '@/components/ui/SearchSelect';
+import { useAuth } from '@/lib/context/AuthContext';
 import type { Batch, BatchStudentMapping } from '@/lib/types';
 
 /** A student's own batches. */
@@ -32,13 +33,16 @@ interface BatchSelectProps {
 }
 
 export function BatchSelect({
-  batches, value, onChange, extraOptions = [], placeholder = 'Select a batch', label = (batch) => batch.name,
+  batches, value, onChange, extraOptions = [], placeholder = 'Select a batch', label,
 }: BatchSelectProps) {
+  const { isAdmin } = useAuth();
+  // Only admins know about test batches.
+  const text = label ?? ((batch: Batch) => (isAdmin && batch.is_test ? `${batch.name} (Test)` : batch.name));
   return (
     <SearchSelect
       options={[
         ...extraOptions.map((option) => ({ value: option.id, label: option.name })),
-        ...batches.map((batch) => ({ value: batch.id, label: label(batch) })),
+        ...batches.map((batch) => ({ value: batch.id, label: text(batch) })),
       ]}
       value={value}
       onChange={onChange}

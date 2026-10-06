@@ -100,6 +100,13 @@ export interface ImportPlan {
   rejected: { name: string; reason: string }[];
 }
 
+/** A row the database refused: kept whole so the dialog can offer it for another go. */
+export interface ImportFailure {
+  row: Record<string, string>;
+  name: string;
+  reason: string;
+}
+
 /** Splits rows into those that can be charged and those named back to the admin with a reason. */
 export function planImportRows(rows: Record<string, string>[], base: number): ImportPlan {
   const plan: ImportPlan = { ready: [], rejected: [] };

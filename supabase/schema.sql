@@ -75,6 +75,7 @@ begin
   end if;
 
   alter sequence student_code_seq restart 1;
+  alter sequence student_test_code_seq restart 1;
   return student_code_prefix();
 end $$;
 
@@ -268,6 +269,11 @@ begin
 
   if exists (select 1 from batch_student_mapping where student_id = new.student_id) then
     raise exception 'A student cannot be in both a test batch and a live batch';
+  end if;
+
+  -- Only a student made a moment ago takes the batch's kind. An older one keeps the ref they were issued.
+  if (select created_at from students where id = new.student_id) < now() - interval '5 minutes' then
+    raise exception 'Only a new student can join a % batch', case when batch_test then 'test' else 'live' end;
   end if;
 
   update students
@@ -1643,8 +1649,10 @@ security definer
 set search_path = public
 as $$
 declare
-  prefix  text := student_code_prefix();
-  highest bigint;
+  prefix       text := student_code_prefix();
+  test_prefix  text := 'DBT-TEST-' || student_code_year() || '-';
+  highest      bigint;
+  highest_test bigint;
 begin
   -- The SQL editor carries no JWT, so "no caller" is allowed — that is where this
   -- gets run. A signed-in caller must be an admin.
@@ -1664,6 +1672,18 @@ begin
     perform setval('student_code_seq', 1, false);
   else
     perform setval('student_code_seq', highest);
+  end if;
+
+  -- The test series rewinds the same way.
+  select max(nullif(regexp_replace(substring(student_code from length(test_prefix) + 1), '\D', '', 'g'), '')::bigint)
+  into highest_test
+  from students
+  where student_code like test_prefix || '%';
+
+  if highest_test is null then
+    perform setval('student_test_code_seq', 1, false);
+  else
+    perform setval('student_test_code_seq', highest_test);
   end if;
 
   -- The code the next student will get. Worked out, not consumed.
