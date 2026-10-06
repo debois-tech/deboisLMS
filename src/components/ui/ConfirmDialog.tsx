@@ -9,9 +9,11 @@ import { useConfirmState } from '@/lib/context/ConfirmContext';
 export function ConfirmDialog() {
   const { state, resolve } = useConfirmState();
   const [typed, setTyped] = useState('');
+  const [checked, setChecked] = useState(false);
 
   const settle = (accepted: boolean) => {
     setTyped('');
+    setChecked(false);
     resolve(accepted);
   };
 
@@ -29,7 +31,7 @@ export function ConfirmDialog() {
             className="action-button-compact"
             variant={state.danger ? 'danger' : 'primary'}
             onClick={() => settle(true)}
-            disabled={Boolean(state.requireText) && typed.trim() !== state.requireText}
+            disabled={(Boolean(state.requireCheck) && !checked) || (Boolean(state.requireText) && typed.trim() !== state.requireText)}
           >
             {state.confirmLabel ?? 'Confirm'}
           </Button>
@@ -45,7 +47,13 @@ export function ConfirmDialog() {
           )}
           {state.message && <p className="confirm-message">{state.message}</p>}
         </div>
-        {state.requireText && (
+        {state.requireCheck && (
+          <label className={`repo-confirm ${checked ? 'is-checked' : ''}`}>
+            <input type="checkbox" checked={checked} onChange={(event) => setChecked(event.target.checked)} />
+            {state.requireCheck}
+          </label>
+        )}
+        {state.requireText && (!state.requireCheck || checked) && (
           <FormField label={`Type ${state.requireText} to confirm`} required>
             <input
               value={typed}

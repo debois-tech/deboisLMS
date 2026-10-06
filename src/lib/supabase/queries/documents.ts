@@ -115,6 +115,15 @@ export async function downloadStoredDocument(path: string, filename: string): Pr
   }
 }
 
+/** The files of enrolments that were just deleted: their rows cascade away, their storage does not. */
+export async function removeStoredDocuments(mappingIds: string[]): Promise<void> {
+  if (mappingIds.length === 0) return;
+  const paths = mappingIds.flatMap((id) => (Object.keys(PATH_COLUMN) as DocumentKind[]).map((kind) => `${id}/${kind}.pdf`));
+  const { error } = await supabase.storage.from(BUCKET).remove(paths);
+  // ponytail: an orphaned file is a harmless storage-cleanup gap, not worth a retry queue for now.
+  if (error) console.error('[removeStoredDocuments] files left behind:', error);
+}
+
 /** Opens the stored copy in a new tab, shared or not. */
 export async function viewStoredDocument(path: string): Promise<void> {
   const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, 60);

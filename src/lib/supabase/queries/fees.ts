@@ -104,7 +104,7 @@ export async function deleteFeePayment(logId: string): Promise<StudentFee> {
 
 export async function getEarningBreakdown(): Promise<EarningBreakdown[]> {
   return rows<EarningBreakdown>(
-    await supabase.from('earning_breakdown').select('*').order('batch_name'),
+    await supabase.from('earning_breakdown').select('*').eq('is_test', false).order('batch_name'),
     'Could not load the earning breakdown',
   );
 }

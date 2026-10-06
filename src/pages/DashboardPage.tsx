@@ -46,7 +46,7 @@ export default function DashboardPage() {
   if (loading) return <Spinner centered />;
   if (error) return <ErrorState centered message={error} onRetry={retry} />;
 
-  const ongoingBatches = batches.filter((b) => b.status === 'ongoing');
+  const ongoingBatches = batches.filter((b) => b.status === 'ongoing' && !b.is_test);
   const average = averageProgress(progress, ongoingBatches.map((batch) => batch.id));
 
   return (

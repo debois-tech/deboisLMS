@@ -49,6 +49,8 @@ export interface Batch {
   ended_at?: string | null;
   /** The batch's full fee. Each imported student's fee is this less their discount. */
   base_fee?: number | null;
+  /** Kept out of every total, one way. Set by convert_batch_to_test(). */
+  is_test?: boolean;
   created_at: string;
   student_count?: number;
 }
@@ -57,6 +59,8 @@ export interface Student {
   id: string;
   /** Permanent institution-wide ID, e.g. DBT0001. Issued by the database — never sent on insert. */
   student_code?: string;
+  /** In a test batch: a DBT-TEST ref, and out of every total. Set by the database. */
+  is_test?: boolean;
   name: string;
   /** Phone/mobile number. Also the source of the portal password suffix. */
   phone: string;
@@ -311,6 +315,7 @@ export interface BatchFeeSummary {
   total_fees: number;
   total_collected: number;
   total_outstanding: number;
+  is_test: boolean;
 }
 
 /** Per batch. `pending` is what active students owe; `void_amount` is what leavers never paid. */
@@ -326,6 +331,7 @@ export interface EarningBreakdown {
   void_amount: number;
   never_due: number;
   recovered: number;
+  is_test: boolean;
 }
 
 export interface BatchAttendanceSummary {

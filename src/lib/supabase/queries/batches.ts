@@ -1,4 +1,5 @@
 import { supabase } from '../client';
+import { removeStoredDocuments } from './documents';
 import { deleteBatchMaterials } from './materials';
 import { maybeRow, ok, row, rows } from './result';
 import { deriveBatchStatus } from '@/lib/utils/format';
@@ -87,10 +88,24 @@ export async function getBatchDeletionCounts(batchId: string): Promise<BatchDele
   return { students, fees, payments, lectures, attendance, assignments, materials, tutors };
 }
 
-// Files first: materials cascade with the batch, taking their storage paths with them.
+// Material files first: materials cascade with the batch, taking their storage paths with them.
+// Document files after: they are named by enrolment, and those cascade too.
 export async function deleteBatch(id: string): Promise<void> {
   await deleteBatchMaterials(id);
+  const enrolments = rows<{ id: string }>(
+    await supabase.from('batch_student_mapping').select('id').eq('batch_id', id),
+    'Could not read the batch enrolments',
+  );
   ok(await supabase.from('batches').delete().eq('id', id), 'Could not delete the batch');
+  await removeStoredDocuments(enrolments.map((e) => e.id));
+}
+
+/** One way: the batch and its students leave every total, and the students take refs from the test series. */
+export async function convertBatchToTest(id: string): Promise<{ converted: number }> {
+  return row<{ converted: number }>(
+    await supabase.rpc('convert_batch_to_test', { p_batch_id: id }),
+    'Could not convert this batch',
+  );
 }
 
 // Every programme, from the database rather than a list in the app.

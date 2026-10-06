@@ -97,6 +97,14 @@ create or replace function next_student_code() returns text
   set search_path = public
   as $$ select student_code_prefix() || lpad(nextval('student_code_seq')::text, 3, '0') $$;
 
+-- Students in a test batch: DBT-TEST-2026-001. Its own counter, so test students never move the live one.
+create sequence if not exists student_test_code_seq as bigint start 1;
+
+create or replace function next_test_student_code() returns text
+  language sql volatile
+  set search_path = public
+  as $$ select 'DBT-TEST-' || student_code_year() || '-' || lpad(nextval('student_test_code_seq')::text, 3, '0') $$;
+
 
 -- 3. CORE TABLES
 create table if not exists tutors (
@@ -155,6 +163,9 @@ create table if not exists batches (
   base_fee   numeric not null check (base_fee >= 0),
   -- Set by end_batch(). Null while the batch is still running.
   ended_at   date,
+  -- A test batch: kept out of every total, and its students draw refs from their own series.
+  -- One way: set by convert_batch_to_test(), never cleared.
+  is_test    boolean not null default false,
   created_at timestamptz default now()
 );
 
@@ -182,12 +193,15 @@ create table if not exists students (
   password_rotated boolean not null default false,
   -- Set once a portal login exists for this student.
   auth_user_id    uuid references auth.users(id) unique,
+  -- In a test batch (see batches.is_test). Set by the enrolment trigger; a student is never both kinds.
+  is_test         boolean not null default false,
   created_at      timestamptz default now()
 );
 
 comment on column students.student_code is
   'Permanent institution-wide student ID. Assigned once on insert and never '
-  'rewritten — batches, drops and re-enrolments do not touch it.';
+  'rewritten — batches, drops and re-enrolments do not touch it. The one exception '
+  'is a student entering a test batch, who moves to the DBT-TEST series.';
 
 create table if not exists batch_student_mapping (
   id         uuid primary key default gen_random_uuid(),
@@ -232,6 +246,45 @@ create trigger bsm_join_date_from_batch
 
 -- Re-running this file on a database created before the trigger existed.
 alter table batch_student_mapping alter column joined_at drop default;
+
+-- A student is test or live, never both: the first batch decides which ref series they draw from, every
+-- later one has to match. The live ref taken when the student row was created goes back to the counter.
+create or replace function enforce_batch_kind()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  batch_test   boolean;
+  student_test boolean;
+begin
+  select is_test into batch_test from batches where id = new.batch_id;
+  select is_test into student_test from students where id = new.student_id;
+
+  if batch_test is not distinct from student_test then
+    return new;
+  end if;
+
+  if exists (select 1 from batch_student_mapping where student_id = new.student_id) then
+    raise exception 'A student cannot be in both a test batch and a live batch';
+  end if;
+
+  update students
+  set is_test = batch_test,
+      student_code = case when batch_test then next_test_student_code() else next_student_code() end
+  where id = new.student_id;
+
+  if batch_test then
+    perform resync_student_code_seq();
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists bsm_kind_guard on batch_student_mapping;
+create trigger bsm_kind_guard
+  before insert on batch_student_mapping
+  for each row execute function enforce_batch_kind();
 
 create table if not exists tutor_batch_mapping (
   id          uuid primary key default gen_random_uuid(),
@@ -766,7 +819,8 @@ select
   count(distinct bsm.student_id) filter (where bsm.status <> 'terminated') as total_students,
   coalesce(sum(sf.total_fee) filter (where bsm.status <> 'terminated'), 0) as total_fees,
   coalesce(sum(sf.paid_amount), 0) as total_collected,
-  coalesce(sum(greatest(sf.total_fee - sf.paid_amount, 0)) filter (where bsm.status <> 'terminated'), 0) as total_outstanding
+  coalesce(sum(greatest(sf.total_fee - sf.paid_amount, 0)) filter (where bsm.status <> 'terminated'), 0) as total_outstanding,
+  b.is_test
 from batches b
 left join batch_student_mapping bsm on bsm.batch_id = b.id
 left join student_fees sf on sf.batch_id = b.id and sf.student_id = bsm.student_id
@@ -812,7 +866,8 @@ select
 
   -- Void that came in after they left. Never more than the void itself.
   coalesce(sum(greatest(sf.paid_amount - coalesce(sf.paid_at_exit, sf.paid_amount), 0))
-    filter (where bsm.status = 'terminated'), 0) as recovered
+    filter (where bsm.status = 'terminated'), 0) as recovered,
+  b.is_test
 from batches b
 left join batch_student_mapping bsm on bsm.batch_id = b.id
 left join student_fees sf on sf.batch_id = b.id and sf.student_id = bsm.student_id
@@ -1406,6 +1461,56 @@ end $$;
 
 revoke all on function delete_student(uuid) from public;
 grant execute on function delete_student(uuid) to authenticated;
+
+-- One way: the batch and everyone in it leave the live numbers for good. Their refs are re-issued from the test
+-- series and the live counter is resynced, so refs at the top of the stack come back and refs in the middle leave a gap.
+create or replace function convert_batch_to_test(p_batch_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  shared text;
+  moved  int;
+begin
+  if not is_admin() then
+    raise exception 'Admin only';
+  end if;
+
+  if not exists (select 1 from batches where id = p_batch_id) then
+    raise exception 'Batch not found';
+  end if;
+  if exists (select 1 from batches where id = p_batch_id and is_test) then
+    raise exception 'Already a test batch';
+  end if;
+
+  -- A student in a live batch as well would be both kinds.
+  select string_agg(s.name, ', ') into shared
+  from batch_student_mapping m
+  join students s on s.id = m.student_id
+  where m.batch_id = p_batch_id
+    and exists (select 1 from batch_student_mapping o where o.student_id = m.student_id and o.batch_id <> p_batch_id);
+  if shared is not null then
+    raise exception 'Also in other batches: %', shared;
+  end if;
+
+  update batches set is_test = true where id = p_batch_id;
+
+  with moved_rows as (
+    update students
+    set is_test = true, student_code = next_test_student_code()
+    where id in (select student_id from batch_student_mapping where batch_id = p_batch_id)
+    returning 1
+  )
+  select count(*) into moved from moved_rows;
+
+  perform resync_student_code_seq();
+  return jsonb_build_object('converted', moved);
+end $$;
+
+revoke all on function convert_batch_to_test(uuid) from public;
+grant execute on function convert_batch_to_test(uuid) to authenticated;
 
 -- Tutor row first (assignments cascade): tutors.auth_user_id -> auth.users has no cascade. Authored rows keep, author nulled.
 create or replace function delete_tutor(p_tutor_id uuid)

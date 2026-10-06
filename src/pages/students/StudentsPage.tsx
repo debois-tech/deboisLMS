@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Plus, Users, Upload, Search } from 'lucide-react';
 import { SearchFilterBar } from '@/components/ui/SearchFilterBar';
 import { FilterTabs } from '@/components/ui/FilterTabs';
+import { SearchSelect } from '@/components/ui/SearchSelect';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -19,6 +20,13 @@ import type { Student, Batch, BatchStudentMapping, MappingStatus } from '@/lib/t
 import { useToast } from '@/lib/context/ToastContext';
 
 const NO_BATCH = 'none';
+
+type StudentView = 'live' | 'test';
+
+const VIEW_OPTIONS = [
+  { value: 'live', label: 'Original' },
+  { value: 'test', label: 'Test' },
+];
 
 type SortKey = 'newest' | 'az' | 'za' | 'idasc' | 'iddesc';
 
@@ -57,6 +65,7 @@ export default function StudentsPage() {
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [sort, setSort] = useState<SortKey>(DEFAULT_SORT);
   const [enrolment, setEnrolment] = useState<MappingStatus>('active');
+  const [view, setView] = useState<StudentView>('live');
   const [showImport, setShowImport] = useState(false);
   const [bulkLogins, setBulkLogins] = useState<BulkLoginResult | null>(null);
   const { showToast } = useToast();
@@ -105,7 +114,11 @@ export default function StudentsPage() {
     );
   };
 
-  const searched = students.filter(matches);
+  // Test students live in their own view, with their own batches to filter by.
+  const isTest = view === 'test';
+  const searched = students.filter((s) => Boolean(s.is_test) === isTest).filter(matches);
+  const batchNames = (studentId: string) =>
+    mappings.filter((m) => m.student_id === studentId).map((m) => batches.find((b) => b.id === m.batch_id)?.name).filter(Boolean).join(', ');
   const tabs = ENROLMENT_TABS.map((tab) => ({
     ...tab,
     count: searched.filter((s) => enrolmentOf(s.id) === tab.value).length,
@@ -128,6 +141,11 @@ export default function StudentsPage() {
 
   const selectBatch = (batchId: string | null) => {
     setSelectedBatchId(batchId);
+  };
+
+  const selectView = (value: string) => {
+    setView(value as StudentView);
+    setSelectedBatchId(null);
   };
 
   // The batch is chosen in the dialog, so there is nothing to resolve and no way
@@ -193,7 +211,7 @@ export default function StudentsPage() {
               allLabel="All batches"
               filterValue={selectedBatchId}
               filterOptions={[
-                ...batches.map((batch) => ({ value: batch.id, label: batch.name })),
+                ...batches.filter((batch) => Boolean(batch.is_test) === isTest).map((batch) => ({ value: batch.id, label: batch.name })),
                 { value: NO_BATCH, label: 'No batch' },
               ]}
               onFilterChange={selectBatch}
@@ -205,8 +223,18 @@ export default function StudentsPage() {
             />
           </div>
 
-          <div className="mb-4">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <FilterTabs tabs={tabs} value={enrolment} onChange={setEnrolment} label="Enrolment" />
+            <SearchSelect
+              options={VIEW_OPTIONS}
+              value={view}
+              onChange={selectView}
+              placeholder="Original"
+              searchPlaceholder=""
+              emptyText=""
+              showSearch={false}
+              className="!w-auto !max-w-none"
+            />
           </div>
 
           {filteredStudents.length === 0 ? (
@@ -217,6 +245,7 @@ export default function StudentsPage() {
                 <TR>
                   <TH>Student</TH>
                   <TH>ID</TH>
+                  {isTest && <TH>Batch</TH>}
                   <TH>Phone</TH>
                   <TH>Email</TH>
                 </TR>
@@ -231,6 +260,7 @@ export default function StudentsPage() {
                       </Link>
                     </TD>
                     <TD className="cell-secondary font-mono">{s.student_code || '—'}</TD>
+                    {isTest && <TD className="cell-secondary">{batchNames(s.id) || '—'}</TD>}
                     <TD className="cell-secondary">{s.phone || '—'}</TD>
                     <TD className="cell-muted">{s.email || '—'}</TD>
                   </TR>

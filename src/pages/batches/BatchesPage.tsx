@@ -11,8 +11,13 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { FilterTabs } from '@/components/ui/FilterTabs';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
-import { getBatches, getBatchPrograms } from '@/lib/supabase';
+import { Badge } from '@/components/ui/Badge';
+import { Switch } from '@/components/ui/Switch';
+import { convertBatchToTest, getBatches, getBatchPrograms, getConversionPreview } from '@/lib/supabase';
 import type { Batch, BatchProgramOption, BatchStatus } from '@/lib/types';
+import { useConfirm } from '@/lib/context/ConfirmContext';
+import { useToast } from '@/lib/context/ToastContext';
+import { errorMessage } from '@/lib/utils/errors';
 import { formatDate } from '@/lib/utils/format';
 
 const TAB_LABELS: Record<BatchStatus, string> = {
@@ -28,6 +33,8 @@ export default function BatchesPage() {
   const [programs, setPrograms] = useState<BatchProgramOption[]>([]);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<BatchStatus>('ongoing');
+  const confirm = useConfirm();
+  const { showToast } = useToast();
 
   const { loading, error, retry } = useInitialLoad(async () => {
     const [batchRows, programRows] = await Promise.all([getBatches(), getBatchPrograms()]);
@@ -55,6 +62,35 @@ export default function BatchesPage() {
   }));
 
   const filteredBatches = batches.filter((batch) => batch.status === status && matchesSearch(batch));
+
+  // One way, behind a ticked box and a typed word. The dialog says when refs in the middle of the stack are involved.
+  const convert = async (batch: Batch) => {
+    try {
+      const { students, midStack } = await getConversionPreview(batch.id);
+      const accepted = await confirm({
+        title: `Make ${batch.name} a test batch?`,
+        message: (
+          <>
+            <span className="block">Out of every total, finance included</span>
+            {students > 0 && <span className="block">{students} {students === 1 ? 'student gets' : 'students get'} test refs</span>}
+            {midStack && <span className="block">Not the latest refs: the live series keeps a gap</span>}
+            <span className="block">Cannot be undone</span>
+          </>
+        ),
+        confirmLabel: 'Convert',
+        danger: true,
+        requireCheck: 'Yes, make this batch unaffecting to the LMS',
+        requireText: 'CONVERT',
+      });
+      if (!accepted) return;
+
+      const { converted } = await convertBatchToTest(batch.id);
+      setBatches((current) => current.map((b) => (b.id === batch.id ? { ...b, is_test: true } : b)));
+      showToast(converted > 0 ? `Converted, ${converted} refs reissued` : 'Converted');
+    } catch (err) {
+      showToast(errorMessage(err, 'Could not convert this batch'), 'error');
+    }
+  };
 
   if (loading) return <Spinner centered />;
   if (error) return <ErrorState centered message={error} onRetry={retry} />;
@@ -97,11 +133,20 @@ export default function BatchesPage() {
                       <Link to={`/batches/${batch.id}`} className="flex items-center gap-3 group">
                         <span className="batch-chip"><Layers size={16} /></span>
                         <span className="font-semibold text-[var(--text-primary)] group-hover:text-[var(--primary)]">{batch.name}</span>
+                        {batch.is_test && <Badge variant="warning">Test</Badge>}
                       </Link>
                     </TD>
                     <TD className="cell-secondary">{programName(batch) || '—'}</TD>
                     <TD>
-                      <StatusPill kind="batch" value={batch.status} />
+                      <div className="flex items-center gap-3">
+                        <StatusPill kind="batch" value={batch.status} />
+                        <Switch
+                          checked={!batch.is_test}
+                          onChange={() => void convert(batch)}
+                          label={`${batch.name} counts toward the LMS`}
+                          disabled={batch.is_test}
+                        />
+                      </div>
                     </TD>
                     <TD className="cell-muted">{batch.start_date ? formatDate(batch.start_date) : '—'}</TD>
                   </TR>

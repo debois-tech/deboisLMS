@@ -2,31 +2,12 @@ import { useEffect, useState } from 'react';
 import { CalendarClock, Construction, Moon, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
+import { Switch } from '@/components/ui/Switch';
 import { useConfirm } from '@/lib/context/ConfirmContext';
 import { useTheme } from '@/lib/context/ThemeContext';
 import { useToast } from '@/lib/context/ToastContext';
 import { getMaintenanceMode, getStudentCodeYear, rollStudentCodeYear, setMaintenanceMode } from '@/lib/supabase';
 import { errorMessage } from '@/lib/utils/errors';
-
-function Switch({ checked, onChange, label, danger, disabled }: {
-  checked: boolean;
-  onChange: () => void;
-  label: string;
-  danger?: boolean;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      onClick={onChange}
-      disabled={disabled}
-      className={`settings-switch${danger ? ' is-danger' : ''}`}
-    />
-  );
-}
 
 /** Admin dashboard settings: theme, maintenance mode, and the yearly roll of student refs and badge IDs. */
 export function SettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {

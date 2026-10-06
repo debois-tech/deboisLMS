@@ -9,6 +9,8 @@ export interface ConfirmOptions {
   cancelLabel?: string;
   /** Red confirm button. Use for anything that destroys or detaches data. */
   danger?: boolean;
+  /** A box to tick first; the typed word, if any, only appears once it is ticked. */
+  requireCheck?: string;
   /** The word to type back before the confirm button unlocks. */
   requireText?: string;
 }

@@ -1,5 +1,6 @@
 import { supabase } from '../client';
 import { getBatchById } from './batches';
+import { removeStoredDocuments } from './documents';
 import { invokeLoginFunction, maybeRow, ok, row, rows } from './result';
 import type { Batch, Student, BatchStudentMapping, StudentCredentials } from '@/lib/types';
 import { errorMessage } from '@/lib/utils/errors';
@@ -290,6 +291,25 @@ export async function transferStudents(mappingIds: string[], toBatchId: string):
   );
 }
 
+/**
+ * What converting a batch to test does to the live refs. `midStack` is true when one of its students holds a ref
+ * below a ref that stays live: giving theirs back then leaves a gap rather than rewinding the counter.
+ */
+export async function getConversionPreview(batchId: string): Promise<{ students: number; midStack: boolean }> {
+  const [all, mappings] = await Promise.all([getStudents(), getAllBatchStudentMappings()]);
+  const inBatch = new Set(mappings.filter((m) => m.batch_id === batchId).map((m) => m.student_id));
+  const parts = (code?: string) => {
+    const match = /^(.*?)(\d+)$/.exec(code ?? '');
+    return match ? { prefix: match[1], n: Number(match[2]) } : null;
+  };
+  const stays = all.filter((s) => !inBatch.has(s.id) && !s.is_test).map((s) => parts(s.student_code));
+  const midStack = all
+    .filter((s) => inBatch.has(s.id))
+    .map((s) => parts(s.student_code))
+    .some((mine) => mine && stays.some((other) => other && other.prefix === mine.prefix && other.n > mine.n));
+  return { students: inBatch.size, midStack };
+}
+
 export interface StudentDeletionCounts {
   batches: number;
   fees: number;
@@ -324,8 +344,11 @@ export async function getStudentDeletionCounts(studentId: string): Promise<Stude
 }
 
 // Deletes the login first — see delete_student() in schema.sql — then the student row; everything else cascades.
+// Their generated documents live in storage, so the enrolment ids are read before the cascade takes them.
 export async function deleteStudent(id: string): Promise<void> {
+  const mappings = await getStudentBatches(id);
   ok(await supabase.rpc('delete_student', { p_student_id: id }), 'Could not delete this student');
+  await removeStoredDocuments(mappings.map((m) => m.id));
 }
 
 export interface TerminationResult {
