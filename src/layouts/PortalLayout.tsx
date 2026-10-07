@@ -7,13 +7,33 @@ import { useAuth } from '@/lib/context/AuthContext';
 import { useTheme } from '@/lib/context/ThemeContext';
 import { supabase } from '@/lib/supabase/client';
 import { getMaintenanceMode } from '@/lib/supabase';
+import { InlineAlert } from '@/components/ui/InlineAlert';
 import { Spinner } from '@/components/ui/Spinner';
+import { PortalBatchProvider, usePortalBatch } from '@/lib/context/PortalBatchContext';
+import { useNow } from '@/lib/hooks/useNow';
+import { formatDate } from '@/lib/utils/format';
+
+// Re-mounts when the page or the chosen batch changes, so every page loads that batch's data
+function PortalMain() {
+  const { pathname } = useLocation();
+  const { batchId, expiresOn } = usePortalBatch();
+  const now = useNow();
+  const daysLeft = expiresOn ? Math.ceil((new Date(expiresOn).getTime() - now) / 86_400_000) : null;
+
+  return (
+    <main key={`${pathname}:${batchId}`} className="portal-main animate-fade-in">
+      {expiresOn && daysLeft !== null && daysLeft <= 14 && (
+        <InlineAlert>Download your documents before {formatDate(expiresOn)}</InlineAlert>
+      )}
+      <Outlet />
+    </main>
+  );
+}
 
 export default function PortalLayout() {
   const { user } = useAuth();
   const { theme, toggle } = useTheme();
   const navigate = useNavigate();
-  const { pathname } = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [maintenance, setMaintenance] = useState<boolean | null>(null);
@@ -44,6 +64,7 @@ export default function PortalLayout() {
   }
 
   return (
+    <PortalBatchProvider>
     <div className="min-h-screen bg-[var(--bg-base)]">
       <header className="portal-topbar">
         <div className="flex min-w-0 items-center gap-2">
@@ -121,9 +142,8 @@ export default function PortalLayout() {
 
       <PortalNav open={navOpen} onClose={() => setNavOpen(false)} />
 
-      <main key={pathname} className="portal-main animate-fade-in">
-        <Outlet />
-      </main>
+      <PortalMain />
     </div>
+    </PortalBatchProvider>
   );
 }

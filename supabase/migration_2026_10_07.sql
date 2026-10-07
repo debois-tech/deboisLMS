@@ -767,3 +767,27 @@ end $$;
 
 revoke all on function transfer_student(uuid, uuid, numeric, boolean, date) from public;
 grant execute on function transfer_student(uuid, uuid, numeric, boolean, date) to authenticated;
+
+-- 27. PORTAL: a quiz result says which batch it belongs to, so the portal can follow the chosen batch
+drop function if exists quiz_my_history();
+
+create or replace function quiz_my_history()
+returns table (quiz_id uuid, batch_id uuid, title text, ended_at timestamptz, rank bigint, participants bigint, points bigint, correct bigint, questions bigint)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select z.id, z.batch_id, z.title, z.ended_at, s.rank,
+         (select count(*) from quiz_participants x where x.quiz_id = z.id),
+         s.points, s.correct,
+         (select count(*) from quiz_questions q where q.quiz_id = z.id and q.opened_at is not null)
+  from quizzes z
+  join quiz_participants p on p.quiz_id = z.id and p.student_id = current_student_id()
+  cross join lateral quiz_scores(z.id) s
+  where z.status = 'ended' and s.student_id = p.student_id
+  order by z.ended_at desc;
+$$;
+
+revoke all on function quiz_my_history() from public;
+grant execute on function quiz_my_history() to authenticated;

@@ -550,6 +550,7 @@ export interface QuizResult {
 
 export interface QuizHistoryRow {
   quiz_id: string;
+  batch_id: string | null;
   title: string;
   ended_at: string;
   rank: number;

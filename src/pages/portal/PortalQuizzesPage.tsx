@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Zap } from 'lucide-react';
 import { PortalEmpty, PortalFocus, PortalList, PortalPage, PortalRow, PortalSection } from '@/components/portal';
+import { usePortalBatch } from '@/lib/context/PortalBatchContext';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { getOpenQuizzes, getQuizHistory } from '@/lib/supabase';
 import type { OpenQuiz } from '@/lib/supabase';
@@ -11,22 +12,27 @@ import { ordinal } from '@/lib/utils/quiz';
 
 const REFRESH_MS = 8000;
 
+// The chosen batch and quizzes for everyone
+const forBatch = <T extends { batch_id: string | null }>(items: T[], batchId: string | null) =>
+  items.filter((item) => !item.batch_id || item.batch_id === batchId);
+
 export default function PortalQuizzesPage() {
   const navigate = useNavigate();
   const [open, setOpen] = useState<OpenQuiz[]>([]);
   const [history, setHistory] = useState<QuizHistoryRow[]>([]);
+  const { batchId } = usePortalBatch();
 
   const { loading, error, retry } = useInitialLoad(async () => {
     const [openNow, past] = await Promise.all([getOpenQuizzes(), getQuizHistory()]);
-    setOpen(openNow);
-    setHistory(past);
+    setOpen(forBatch(openNow, batchId));
+    setHistory(forBatch(past, batchId));
   }, true);
 
   // A quiz opens while this page is showing; no push for the list, so look again now and then.
   useEffect(() => {
-    const id = window.setInterval(() => void getOpenQuizzes().then(setOpen).catch(console.error), REFRESH_MS);
+    const id = window.setInterval(() => void getOpenQuizzes().then((list) => setOpen(forBatch(list, batchId))).catch(console.error), REFRESH_MS);
     return () => window.clearInterval(id);
-  }, []);
+  }, [batchId]);
 
   const [first, ...others] = open;
 

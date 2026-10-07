@@ -13,16 +13,18 @@ import {
 } from '@/components/portal';
 import { ATTENDANCE_PARTIAL_PERCENT, getApprovedAttendanceByStudent } from '@/lib/supabase';
 import type { AttendanceRecord } from '@/lib/types';
+import { usePortalBatch } from '@/lib/context/PortalBatchContext';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { formatDayLabel } from '@/lib/utils/format';
 
 export default function PortalAttendancePage() {
   const studentId = usePortalStudentId();
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
+  const { batchId } = usePortalBatch();
 
   const { loading, error, retry } = useInitialLoad(async () => {
     if (!studentId) return;
-    setRecords(await getApprovedAttendanceByStudent(studentId));
+    setRecords((await getApprovedAttendanceByStudent(studentId)).filter((record) => record.batch_id === batchId));
   }, true);
 
   const attended = records.filter((record) => record.status !== 'absent').length;

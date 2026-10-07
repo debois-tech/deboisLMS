@@ -3172,13 +3172,13 @@ end;
 $$;
 
 create or replace function quiz_my_history()
-returns table (quiz_id uuid, title text, ended_at timestamptz, rank bigint, participants bigint, points bigint, correct bigint, questions bigint)
+returns table (quiz_id uuid, batch_id uuid, title text, ended_at timestamptz, rank bigint, participants bigint, points bigint, correct bigint, questions bigint)
 language sql
 stable
 security definer
 set search_path = public
 as $$
-  select z.id, z.title, z.ended_at, s.rank,
+  select z.id, z.batch_id, z.title, z.ended_at, s.rank,
          (select count(*) from quiz_participants x where x.quiz_id = z.id),
          s.points, s.correct,
          (select count(*) from quiz_questions q where q.quiz_id = z.id and q.opened_at is not null)

@@ -26,21 +26,20 @@ import {
   getMyBadges,
   getOpenQuizzes,
   getStudentById,
-  getStudentBatches,
 } from '@/lib/supabase';
 import type { MyBadges, OpenQuiz } from '@/lib/supabase';
 import type {
   Assignment,
   AssignmentCompletion,
   AttendanceRecord,
-  Batch,
-  BatchStudentMapping,
   Lecture,
   Student,
   StudentFeeDue,
 } from '@/lib/types';
 import { StudentIdChip } from '@/components/students/StudentLink';
+import { EnrolmentSelect } from '@/components/ui/BatchSelect';
 import { useAuth } from '@/lib/context/AuthContext';
+import { usePortalBatch } from '@/lib/context/PortalBatchContext';
 import { useToast } from '@/lib/context/ToastContext';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { useNow } from '@/lib/hooks/useNow';
@@ -49,7 +48,6 @@ import { deriveBatchStatus, formatCurrency, formatDate, formatDayLabel } from '@
 import { behindOnFees, dueInstallment, installmentDetail, installmentLabel } from '@/lib/utils/installments';
 import type { InstallmentDue } from '@/lib/utils/installments';
 
-type Enrollment = BatchStudentMapping & { batch?: Batch };
 type StudentAssignment = Assignment & { completion?: AssignmentCompletion };
 
 export default function PortalOverviewPage() {
@@ -57,8 +55,8 @@ export default function PortalOverviewPage() {
   const { user } = useAuth();
   const { showToast } = useToast();
   const [payOpen, setPayOpen] = useState(false);
+  const { current: currentMapping, mappings: enrollments, batchId, setBatchId } = usePortalBatch();
   const [student, setStudent] = useState<Student | null>(null);
-  const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [fees, setFees] = useState<StudentFeeDue[]>([]);
   const [nextLecture, setNextLecture] = useState<Lecture | null>(null);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
@@ -70,9 +68,8 @@ export default function PortalOverviewPage() {
     if (!studentId) return;
 
     // Fees across every batch, matching the Fees tab — one batch's balance meant a different number.
-    const [record, mappings, records, work, feeRows, badgeSet, quizzes] = await Promise.all([
+    const [record, records, work, feeRows, badgeSet, quizzes] = await Promise.all([
       getStudentById(studentId),
-      getStudentBatches(studentId),
       getApprovedAttendanceByStudent(studentId),
       getAssignmentsForStudent(studentId),
       getMyFeeDues(),
@@ -87,11 +84,6 @@ export default function PortalOverviewPage() {
       }),
     ]);
 
-    // Multiple active batches are possible; the most recently joined one is "current".
-    const currentMapping = mappings
-      .filter((mapping) => mapping.status === 'active')
-      .sort((a, b) => new Date(b.joined_at).getTime() - new Date(a.joined_at).getTime())[0];
-
     let upcoming: Lecture | null = null;
 
     if (currentMapping) {
@@ -103,19 +95,15 @@ export default function PortalOverviewPage() {
     }
 
     setStudent(record ?? null);
-    // `getStudentBatches` joins the batch in, so there is no per-mapping fetch.
-    setEnrollments(mappings);
     setFees(feeRows);
     setNextLecture(upcoming);
-    setAttendance(records);
-    setAssignments(work);
-    setMyBadges(badgeSet);
-    setOpenQuizzes(quizzes);
+    // Only the chosen batch: nothing from the others shows
+    setAttendance(records.filter((record) => record.batch_id === batchId));
+    setAssignments(work.filter((item) => item.batch_id === batchId));
+    setMyBadges(badgeSet && { ...badgeSet, badges: badgeSet.badges.filter((badge) => badge.batch_id === batchId) });
+    setOpenQuizzes(quizzes.filter((quiz) => !quiz.batch_id || quiz.batch_id === batchId));
   }, true);
 
-  const currentMapping = enrollments
-    .filter((enrollment) => enrollment.status === 'active')
-    .sort((a, b) => new Date(b.joined_at).getTime() - new Date(a.joined_at).getTime())[0];
   const currentBatch = currentMapping?.batch;
 
   const attended = attendance.filter((record) => record.status !== 'absent').length;
@@ -161,6 +149,7 @@ export default function PortalOverviewPage() {
         <PortalEmpty icon={UserPlus}>Student record not linked.</PortalEmpty>
       ) : (
         <>
+          {enrollments.length > 1 && <EnrolmentSelect mappings={enrollments} value={batchId ?? ''} onChange={setBatchId} />}
           {openQuizzes[0] && <PortalQuizCard quiz={openQuizzes[0]} more={openQuizzes.length - 1} />}
           {myBadges && <PortalBadgeCard studentId={studentId} {...myBadges} />}
           <PortalDocumentCard studentId={studentId} mapping={currentMapping} />

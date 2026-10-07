@@ -12,6 +12,7 @@ import {
 } from '@/components/portal';
 import { getMaterialsForStudent } from '@/lib/supabase';
 import type { Material } from '@/lib/types';
+import { usePortalBatch } from '@/lib/context/PortalBatchContext';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { formatDate } from '@/lib/utils/format';
 
@@ -21,10 +22,12 @@ export default function PortalMaterialsPage() {
   const [open, setOpen] = useState<Material | null>(null);
   const [query, setQuery] = useState('');
   const [batchId, setBatchId] = useState<string | null>(null);
+  const portal = usePortalBatch();
 
   const { loading, error, retry } = useInitialLoad(async () => {
     if (!studentId) return;
-    setMaterials(await getMaterialsForStudent());
+    // The chosen batch and what is for everyone
+    setMaterials((await getMaterialsForStudent()).filter((material) => !material.batch_id || material.batch_id === portal.batchId));
   }, true);
 
   // Material with no batch is for everyone; it gets its own group and its own

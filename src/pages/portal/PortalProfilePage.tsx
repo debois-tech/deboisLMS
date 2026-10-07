@@ -24,9 +24,9 @@ import {
   getStudentById,
 } from '@/lib/supabase';
 import type { MyBadges } from '@/lib/supabase';
-import type { Batch, BatchStudentMapping, DocumentKind, FeePaymentLog, Student, StudentFeeDue } from '@/lib/types';
-import { EnrolmentSelect } from '@/components/ui/BatchSelect';
+import type { DocumentKind, FeePaymentLog, Student, StudentFeeDue } from '@/lib/types';
 import { useAuth } from '@/lib/context/AuthContext';
+import { usePortalBatch } from '@/lib/context/PortalBatchContext';
 import { useToast } from '@/lib/context/ToastContext';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { errorMessage } from '@/lib/utils/errors';
@@ -50,10 +50,9 @@ export default function PortalProfilePage() {
   const [student, setStudent] = useState<Student | null>(null);
   const [fees, setFees] = useState<StudentFeeDue[]>([]);
   const [payments, setPayments] = useState<FeePaymentLog[]>([]);
-  const [enrollments, setEnrollments] = useState<(BatchStudentMapping & { batch?: Batch })[]>([]);
   const [batchNames, setBatchNames] = useState<Map<string, string>>(new Map());
   const [myBadges, setMyBadges] = useState<MyBadges | null>(null);
-  const [pickedBatchId, setPickedBatchId] = useState<string | null>(null);
+  const { current } = usePortalBatch();
 
   const { loading, error, retry } = useInitialLoad(async () => {
     if (!studentId) return;
@@ -79,7 +78,6 @@ export default function PortalProfilePage() {
     unknownIds.forEach((id, index) => names.set(id, fetched[index]?.name ?? 'Batch'));
 
     setStudent(record ?? null);
-    setEnrollments(mappings);
     setFees(feeRows);
     setPayments(paymentRows);
     setBatchNames(names);
@@ -94,12 +92,6 @@ export default function PortalProfilePage() {
     { label: 'GitHub', href: student?.github_url },
     { label: 'LinkedIn', href: student?.linkedin_url },
   ].filter((link): link is { label: string; href: string } => Boolean(link.href));
-
-  // Multiple active batches are possible; the one picked, else the most recently joined, is "current".
-  const active = enrollments
-    .filter((enrollment) => enrollment.status === 'active')
-    .sort((a, b) => new Date(b.joined_at).getTime() - new Date(a.joined_at).getTime());
-  const current = active.find((enrollment) => enrollment.batch_id === pickedBatchId) ?? active[0];
 
   const downloadDoc = async (kind: DocumentKind) => {
     const path = kind === 'offer_letter' ? current?.offer_letter_path : current?.cert_path;
@@ -118,8 +110,7 @@ export default function PortalProfilePage() {
   // list that simply has few rows. The batch leads: of everything on this page it
   // is the fact a student is most likely to have come to check.
   const facts = [
-    // The switcher names the batch when there is more than one.
-    { label: 'Batch', value: active.length > 1 ? '' : current?.batch?.name ?? '' },
+    { label: 'Batch', value: current?.batch?.name ?? '' },
     { label: 'Enrolled', value: current ? formatDate(current.joined_at) : '' },
     { label: 'Date of birth', value: student?.date_of_birth ? formatDate(student.date_of_birth) : '' },
     { label: 'Gender', value: student?.gender ?? '' },
@@ -145,9 +136,6 @@ export default function PortalProfilePage() {
           />
 
           <PortalSection title="About you">
-            {active.length > 1 && (
-              <EnrolmentSelect mappings={active} value={current.batch_id} onChange={setPickedBatchId} />
-            )}
             {facts.length === 0 ? (
               <PortalEmpty icon={UserPlus}>Nothing recorded yet.</PortalEmpty>
             ) : (
