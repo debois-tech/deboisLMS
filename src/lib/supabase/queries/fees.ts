@@ -1,45 +1,12 @@
 import { supabase } from '../client';
-import { maybeRow, ok, row, rows } from './result';
+import { maybeRow, row, rows } from './result';
 import type { StudentFee, StudentFeeDue, BatchFeeSummary, EarningBreakdown, FeePaymentLog, PaymentMethod } from '@/lib/types';
 
-/** Fees for a batch, backfilling a zeroed row for any active student who has none yet. */
+// Reading never writes: a student with no fee row has no fee yet
 export async function getFeesByBatch(batchId: string): Promise<StudentFee[]> {
-  const existingFees = rows<StudentFee>(
-    await supabase.from('student_fees').select('*').eq('batch_id', batchId),
-    'Could not load fees for this batch',
-  );
-
-  const mappings = rows<{ student_id: string }>(
-    await supabase
-      .from('batch_student_mapping')
-      .select('student_id')
-      .eq('batch_id', batchId)
-      .eq('status', 'active'),
-    'Could not load the batch roster',
-  );
-
-  const existingStudentIds = new Set(existingFees.map((fee) => fee.student_id));
-  const missingStudentIds = mappings
-    .map((mapping) => mapping.student_id)
-    .filter((studentId) => !existingStudentIds.has(studentId));
-
-  if (missingStudentIds.length === 0) return existingFees;
-
-  ok(
-    await supabase.from('student_fees').insert(
-      missingStudentIds.map((student_id) => ({
-        student_id,
-        batch_id: batchId,
-        total_fee: 0,
-        paid_amount: 0,
-      })),
-    ),
-    'Could not create fee records for new students',
-  );
-
   return rows<StudentFee>(
     await supabase.from('student_fees').select('*').eq('batch_id', batchId),
-    'Could not reload fees for this batch',
+    'Could not load fees for this batch',
   );
 }
 

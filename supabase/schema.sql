@@ -86,7 +86,7 @@ create or replace function roll_student_code_year() returns text
   set search_path = public
   as $$ select set_student_code_year(student_code_year()::int + 1) $$;
 
-revoke all on function set_student_code_year(int), roll_student_code_year() from public;
+revoke all on function set_student_code_year(int), roll_student_code_year() from public, anon;
 grant execute on function set_student_code_year(int), roll_student_code_year() to authenticated;
 
 create sequence if not exists student_code_seq as bigint start 1;
@@ -1777,7 +1777,7 @@ begin
   return removed;
 end $$;
 
-revoke all on function expire_students() from public;
+revoke all on function expire_students() from public, anon;
 grant execute on function expire_students() to authenticated;
 
 -- Daily at 02:00 India time. Needs pg_cron; if it is not enabled, run expire_students() by hand
@@ -1879,7 +1879,7 @@ begin
   return prefix || lpad((coalesce(highest, 0) + 1)::text, 3, '0');
 end $$;
 
-revoke all on function resync_student_code_seq() from public;
+revoke all on function resync_student_code_seq() from public, anon;
 grant execute on function resync_student_code_seq() to authenticated;
 
 

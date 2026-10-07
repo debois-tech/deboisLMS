@@ -954,3 +954,9 @@ end $$;
 
 revoke all on function transfer_student(uuid, uuid, numeric, boolean, date, boolean) from public;
 grant execute on function transfer_student(uuid, uuid, numeric, boolean, date, boolean) to authenticated;
+
+-- 30. HARDENING: these run with no login on purpose (cron, the SQL editor), so the public API must not reach them
+-- Supabase grants new functions to anon by name, which revoking from public does not undo
+revoke all on function set_student_code_year(int), roll_student_code_year() from public, anon;
+revoke all on function expire_students() from public, anon;
+revoke all on function resync_student_code_seq() from public, anon;
