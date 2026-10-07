@@ -14,9 +14,10 @@ export function ConfirmDialog() {
   const [typed, setTyped] = useState('');
   const [checked, setChecked] = useState(false);
 
-  const staged = Boolean(state.impact || state.requireCheck);
+  const tick = state.requireCheck ?? (state.danger && !state.quick ? 'Yes, I understand this cannot be undone' : undefined);
+  const staged = Boolean(state.impact || tick);
   const steps: Step[] = staged
-    ? ['review', ...(state.requireCheck ? ['check' as const] : []), ...(state.requireText ? ['type' as const] : [])]
+    ? ['review', ...(tick ? ['check' as const] : []), ...(state.requireText ? ['type' as const] : [])]
     : ['review'];
   const current = steps[Math.min(step, steps.length - 1)];
   const last = step >= steps.length - 1;
@@ -108,10 +109,10 @@ export function ConfirmDialog() {
           </>
         )}
 
-        {current === 'check' && state.requireCheck && (
+        {current === 'check' && tick && (
           <label className={`repo-confirm ${checked ? 'is-checked' : ''}`}>
             <input type="checkbox" checked={checked} onChange={(event) => setChecked(event.target.checked)} />
-            {state.requireCheck}
+            {tick}
           </label>
         )}
 

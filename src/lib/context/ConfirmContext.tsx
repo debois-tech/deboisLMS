@@ -13,8 +13,10 @@ export interface ConfirmOptions {
   impact?: { label: string; count: number }[];
   // A second way out, shown on the first step: closes the dialog, then runs. E.g. "Terminate instead".
   alt?: { label: string; onSelect: () => void };
-  // A box to tick first, as its own step.
+  // A box to tick first, as its own step; any danger confirm gets a plain one unless quick
   requireCheck?: string;
+  // Skips that tick for edits not saved yet, like discarding a draft
+  quick?: boolean;
   // The word to type back before the confirm button unlocks, as the last step.
   requireText?: string;
 }

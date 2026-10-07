@@ -559,6 +559,7 @@ export function CurriculumCanvas({ batchId, batchName, role, height = 'calc(100v
         message: `Its ${inside} ${inside === 1 ? 'item' : 'items'} inside go too. Nothing changes until you save.`,
         confirmLabel: 'Remove',
         danger: true,
+        quick: true,
       });
       if (!accepted) return;
     }
@@ -573,7 +574,7 @@ export function CurriculumCanvas({ batchId, batchName, role, height = 'calc(100v
   const discard = async () => {
     const changed = diffSummary(toDraft(live), toDraft(draft));
     if (summarize(changed)) {
-      const accepted = await confirm({ title: 'Discard your changes?', message: summarize(changed) + '.', confirmLabel: 'Discard', danger: true });
+      const accepted = await confirm({ title: 'Discard your changes?', message: summarize(changed) + '.', confirmLabel: 'Discard', danger: true, quick: true });
       if (!accepted) return;
     }
     setView('view');

@@ -105,7 +105,7 @@ export default function ExamBuilderPage() {
   const removeQuestion = async (key: string) => {
     const question = draft.questions.find((item) => item.key === key)!;
     if (question.body.trim() || question.options.some((option) => option.label.trim())) {
-      const accepted = await confirm({ title: 'Delete this question?', message: 'It cannot be brought back.', confirmLabel: 'Delete question', danger: true });
+      const accepted = await confirm({ title: 'Delete this question?', message: 'It cannot be brought back.', confirmLabel: 'Delete question', danger: true, quick: true });
       if (!accepted) return;
     }
     change((current) => ({ ...current, questions: current.questions.filter((item) => item.key !== key) }));
@@ -161,7 +161,7 @@ export default function ExamBuilderPage() {
 
   const leave = async () => {
     if (dirty) {
-      const accepted = await confirm({ title: 'Discard your changes?', message: 'What you entered here is not saved.', confirmLabel: 'Discard', danger: true });
+      const accepted = await confirm({ title: 'Discard your changes?', message: 'What you entered here is not saved.', confirmLabel: 'Discard', danger: true, quick: true });
       if (!accepted) return;
     }
     navigate(inLobby ? `${base}/${quizId}` : base);
