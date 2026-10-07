@@ -48,7 +48,8 @@ function loadAssets(): Promise<DocumentAssets> {
  * One document, drawn from the student's own data and stored under the enrolment. Always on an admin's click: nothing
  * is generated when a student is enrolled, and each new student needs their own click. Dates come from this batch,
  * not the student row: that row holds one start and end date for every batch the student is in, so a second batch
- * would inherit the first one's. The student's own dates only fill in what the batch lacks. Every later view,
+ * would inherit the first one's. The student's own dates only fill in what the batch lacks. The role is the batch's,
+ * and is copied onto the student once the document is stored. Every later view,
  * download or email reads the stored copy back.
  */
 export async function generateAndStoreDocument(
@@ -57,7 +58,9 @@ export async function generateAndStoreDocument(
   student: Student,
   batch: Batch,
 ): Promise<Pick<BatchStudentMapping, 'offer_letter_path' | 'cert_path'>> {
-  if (!student.internship_role) throw new Error(`Set ${student.name}'s internship role first (Edit student).`);
+  // The batch's role, so a transfer or a second batch needs no student edit. A batch with none yet falls back to the student's.
+  const role = batch.internship_role ?? student.internship_role;
+  if (!role) throw new Error(`Set ${batch.name}'s internship role first (Edit batch).`);
   const day = (value?: string | null) => (value ? fromDateValue(value.slice(0, 10)) : null);
   const startOn = day(batch.start_date) ?? day(student.internship_start_date) ?? day(mapping.joined_at) ?? new Date();
   const endOn = day(batch.ended_at) ?? day(student.internship_end_date);
@@ -68,7 +71,7 @@ export async function generateAndStoreDocument(
     {
       name: student.name.trim(),
       code: student.student_code ?? '',
-      role: student.internship_role,
+      role,
       startOn,
       endOn: endOn ?? undefined,
     },
@@ -82,6 +85,10 @@ export async function generateAndStoreDocument(
 
   const patch = { [PATH_COLUMN[kind]]: path };
   ok(await supabase.from('batch_student_mapping').update(patch).eq('id', mapping.id), 'The document was stored but the record could not be updated');
+  // The role just stamped becomes the student's own.
+  if (student.internship_role !== role) {
+    ok(await supabase.from('students').update({ internship_role: role }).eq('id', student.id), 'The document was stored but the student role could not be updated');
+  }
   return patch;
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { FileSpreadsheet } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -6,17 +6,7 @@ import { FormField } from '@/components/ui/FormField';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { BatchSelect } from '@/components/ui/BatchSelect';
 import { Pager, usePager } from '@/components/ui/Pager';
-import {
-  cleanRole,
-  findProgramMismatches,
-  getImportRole,
-  normalizeRole,
-  parseStudentCsv,
-  planImportRows,
-  withImportRole,
-  type ImportFailure,
-} from '@/lib/utils/studentImport';
-import { addInternshipRole, getInternshipRoles } from '@/lib/supabase';
+import { findProgramMismatches, parseStudentCsv, planImportRows, type ImportFailure } from '@/lib/utils/studentImport';
 import { errorMessage } from '@/lib/utils/errors';
 import { formatCurrency, formatDate } from '@/lib/utils/format';
 import type { Batch } from '@/lib/types';
@@ -53,17 +43,8 @@ export function StudentImportModal({ open, onClose, batches, batch, onImport }: 
   const [skipped, setSkipped] = useState(0);
   const [failures, setFailures] = useState<ImportFailure[]>([]);
   const [importing, setImporting] = useState(false);
-  // Null until loaded: without the list every role in the sheet would look new.
-  const [existingRoles, setExistingRoles] = useState<string[] | null>(null);
-  // Names typed over a new role, by the role's normalised spelling in the sheet.
-  const [roleEdits, setRoleEdits] = useState<Record<string, string>>({});
   const fileRef = useRef<HTMLInputElement>(null);
   const pager = usePager(rows, PREVIEW_ROWS);
-
-  useEffect(() => {
-    if (!open) return;
-    getInternshipRoles().then(setExistingRoles).catch((err) => setError(errorMessage(err, 'Could not load the roles')));
-  }, [open]);
 
   // A finished batch is not something to import a new intake into.
   const options = useMemo(() => (batches ?? []).filter((b) => b.status !== 'completed'), [batches]);
@@ -89,37 +70,11 @@ export function StudentImportModal({ open, onClose, batches, batch, onImport }: 
   const discounted = ready.filter((entry) => entry.fee > 0 && entry.fee < (base ?? 0)).length;
   const free = ready.filter((entry) => entry.fee === 0).map((entry) => entry.name);
 
-  // Roles in the sheet that match no enum value, one editable entry each: [normalised key, spelling in the sheet].
-  const newRoles = useMemo(() => {
-    const found = new Map<string, string>();
-    for (const { row } of ready) {
-      const raw = getImportRole(row);
-      const key = raw ? normalizeRole(raw) : '';
-      if (raw && key && existingRoles && !existingRoles.some((role) => normalizeRole(role) === key) && !found.has(key)) {
-        found.set(key, cleanRole(raw));
-      }
-    }
-    return [...found];
-  }, [ready, existingRoles]);
-
-  // An edit that lands on an existing role joins it; two new roles edited to one name become one.
-  const resolveRole = (raw: string) => {
-    const typed = cleanRole(roleEdits[normalizeRole(raw)] ?? raw);
-    return existingRoles?.find((role) => normalizeRole(role) === normalizeRole(typed)) ?? typed;
-  };
-
-  const incomplete =
-    !ready.length ||
-    !target ||
-    base === null ||
-    mismatches.length > 0 ||
-    existingRoles === null ||
-    newRoles.some(([key, original]) => !cleanRole(roleEdits[key] ?? original));
+  const incomplete = !ready.length || !target || base === null || mismatches.length > 0;
 
   const reset = () => {
     setRows([]);
     setHeaders([]);
-    setRoleEdits({});
     setPickedId(null);
     pager.reset();
     setCreateLogins(true);
@@ -164,15 +119,7 @@ export function StudentImportModal({ open, onClose, batches, batch, onImport }: 
     setImporting(true);
     setError('');
     try {
-      // Roles first, so every student in the sheet can be saved with one that exists. Adding is idempotent, so a retry is safe.
-      for (const name of new Set(newRoles.map(([, original]) => resolveRole(original)))) {
-        if (!existingRoles?.includes(name)) await addInternshipRole(name);
-      }
-      const resolved = ready.map(({ row }) => {
-        const raw = getImportRole(row);
-        return raw ? withImportRole(row, resolveRole(raw)) : row;
-      });
-      const failed = await onImport(resolved, createLogins, target);
+      const failed = await onImport(ready.map(({ row }) => row), createLogins, target);
       if (failed.length === 0) {
         reset();
         onClose();
@@ -259,27 +206,6 @@ export function StudentImportModal({ open, onClose, batches, batch, onImport }: 
                 {free.length > 5 ? `, +${free.length - 5} more` : ''}
               </p>
             )}
-          </div>
-        )}
-
-        {newRoles.length > 0 && (
-          <div className="import-roles">
-            <p className="import-summary">
-              <span>{newRoles.length} new {newRoles.length === 1 ? 'role' : 'roles'}</span>
-              <span>Created on import</span>
-            </p>
-            {newRoles.map(([key, original]) => (
-              <div key={key} className="import-role-row">
-                <span className="import-role-from" title={original}>{original}</span>
-                <input
-                  value={roleEdits[key] ?? original}
-                  onChange={(event) => setRoleEdits({ ...roleEdits, [key]: event.target.value })}
-                  maxLength={60}
-                  disabled={importing}
-                  aria-label={`Role name for ${original}`}
-                />
-              </div>
-            ))}
           </div>
         )}
 

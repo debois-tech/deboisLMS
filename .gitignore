@@ -47,6 +47,7 @@ run_build.md
 ARCHITECTURE.md
 PLAN.md
 temp_md
+/docs
 
 # Sample import/attendance CSVs — real names and addresses, kept locally.
 /test_csv/

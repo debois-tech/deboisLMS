@@ -49,6 +49,8 @@ export interface Batch {
   ended_at?: string | null;
   /** The batch's full fee. Each imported student's fee is this less their discount. */
   base_fee?: number | null;
+  /** The title stamped on this batch's offer letters and certificates. */
+  internship_role?: InternshipRole | null;
   /** Kept out of every total, one way. Set by convert_batch_to_test(). */
   is_test?: boolean;
   created_at: string;

@@ -3029,7 +3029,8 @@ grant execute on function quiz_save(jsonb), quiz_open_lobby(uuid), quiz_go(uuid,
 -- 19. INTERNSHIP ROLE AND DATES
 -- Stamped on the offer letter ("the position of ...", the joining date) and on the certificate (the role, the
 -- internship's start and end date). One set per student, edited on the student form.
--- Role: the enum value is the title stamped on the documents. New ones come from the CSV import via add_internship_role().
+-- Role: the enum value is the title stamped on the documents. It is set on the batch (New Batch / Edit Batch); a new
+-- one is added through add_internship_role(). Generating a document stamps the batch's role and copies it onto the student.
 -- Start date: the batch's start date, set when the student is enrolled. End date: the batch's end date, filled by
 -- end_batch() when the batch is ended. Both only where still empty, so a date typed by hand is kept, and both stay editable.
 do $$ begin
@@ -3037,6 +3038,7 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 
 alter table students add column if not exists internship_role       internship_role;
+alter table batches  add column if not exists internship_role       internship_role;
 alter table students add column if not exists internship_start_date date;
 alter table students add column if not exists internship_end_date   date;
 -- No default: an earlier version of this migration set one (today). Dropping it is harmless if it never ran.

@@ -1,5 +1,5 @@
 // Run: node src/lib/utils/studentImport.check.ts
-import { normalizeRole, planImportFee, planImportRows, withImportRole } from './studentImport.ts';
+import { normalizeRole, planImportFee, planImportRows } from './studentImport.ts';
 
 const must = (cond: boolean, msg: string) => {
   if (!cond) throw new Error(msg);
@@ -22,6 +22,5 @@ const plan = planImportRows([{ Name: 'A', Fee: '9000' }, { Name: 'B', Fee: '9999
 must(plan.ready.length === 1 && plan.rejected[0].name === 'B', 'bad row named, good row kept');
 
 must(normalizeRole('AI/ML Engineering Intern') === normalizeRole('aiml engineering  intern'), 'role match ignores case and punctuation');
-must(withImportRole({ 'Internship Role': 'x' }, 'Y')['Internship Role'] === 'Y', 'role cell replaced in place');
 
 console.log('studentImport ok');

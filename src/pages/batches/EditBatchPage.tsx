@@ -11,7 +11,8 @@ import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { FormField } from '@/components/ui/FormField';
 import { SearchSelect } from '@/components/ui/SearchSelect';
 import { DatePicker } from '@/components/ui/DatePicker';
-import { getBatchById, getBatchPrograms, updateBatch } from '@/lib/supabase';
+import { BatchRoleField, roleReady, saveRole, type RoleDraft } from '@/components/batches/BatchRoleField';
+import { getBatchById, getBatchPrograms, getInternshipRoles, updateBatch } from '@/lib/supabase';
 import type { Batch, BatchProgram, BatchProgramOption } from '@/lib/types';
 import { useToast } from '@/lib/context/ToastContext';
 import { errorMessage } from '@/lib/utils/errors';
@@ -22,13 +23,19 @@ export default function EditBatchPage() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<Batch | null>(null);
   const [programs, setPrograms] = useState<BatchProgramOption[]>([]);
+  const [roles, setRoles] = useState<string[]>([]);
+  const [roleDraft, setRoleDraft] = useState<RoleDraft>({ pick: '', name: '' });
   const { showToast } = useToast();
 
   const { loading, error, retry } = useInitialLoad(async () => {
     if (!batchId) return;
-    const [batch, programRows] = await Promise.all([getBatchById(batchId), getBatchPrograms()]);
-    if (batch) setForm(batch);
+    const [batch, programRows, roleRows] = await Promise.all([getBatchById(batchId), getBatchPrograms(), getInternshipRoles()]);
+    if (batch) {
+      setForm(batch);
+      setRoleDraft({ pick: batch.internship_role ?? '', name: '' });
+    }
     setPrograms(programRows);
+    setRoles(roleRows);
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -42,9 +49,13 @@ export default function EditBatchPage() {
       showToast('Set a base fee for this batch', 'error');
       return;
     }
+    if (!roleReady(roleDraft)) {
+      showToast('Pick an internship role', 'error');
+      return;
+    }
     setSaving(true);
     try {
-      await updateBatch(form.id, form);
+      await updateBatch(form.id, { ...form, internship_role: await saveRole(roleDraft, roles) });
       showToast('Batch updated');
       goBack();
     } catch (error) {
@@ -81,6 +92,7 @@ export default function EditBatchPage() {
               emptyText="No programmes found"
             />
           </FormField>
+          <BatchRoleField roles={roles} draft={roleDraft} onChange={setRoleDraft} />
           <FormField label="Base Fee" required>
             <input
               type="number"

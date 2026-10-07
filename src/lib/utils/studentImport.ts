@@ -3,7 +3,6 @@ import { formatCurrency } from './format.ts';
 import type { BatchProgram, InternshipRole, Student } from '@/lib/types';
 
 const NAME_ALIASES = ['name', 'full name', 'student name'];
-const ROLE_ALIASES = ['role', 'internship role', 'position'];
 
 /** Add new fields here. Matched on headers, not column order. */
 export const STUDENT_IMPORT_FIELDS = [
@@ -19,7 +18,6 @@ export const STUDENT_IMPORT_FIELDS = [
   { key: 'graduation_year', aliases: ['graduation year', 'grad year', 'passing year', 'year of passing'] },
   { key: 'github_url', aliases: ['github', 'github link', 'github url', 'githublink', 'github profile', 'github profile url'] },
   { key: 'linkedin_url', aliases: ['linkedin', 'linkedin link', 'linkedin url', 'linkedinlink', 'linkedin profile', 'linkedin profile url'] },
-  { key: 'internship_role', aliases: ROLE_ALIASES },
 ] as const;
 
 const FEE_ALIASES = ['fee', 'fees', 'decided fee', 'final fee', 'fee amount', 'total fee'];
@@ -32,7 +30,7 @@ const BATCH_ALIASES = ['batch', 'batch code', 'program', 'programme', 'course ba
 /** The gender values the form offers. Free text in the DB, so an import may carry others. */
 export const GENDER_OPTIONS = ['Female', 'Male', 'Other', 'Prefer not to say'] as const;
 
-// The role the add-student form suggests, found by a programme code appearing in the batch's code (most batches carry
+// The role the New Batch form suggests, found by a programme code appearing in the batch's code (most batches carry
 // the programme TEP, so the code is what tells them apart) or being the batch's programme. A new programme gets a
 // line here once its enum value exists.
 const ROLE_BY_CODE: Record<string, InternshipRole> = {
@@ -121,14 +119,6 @@ export function planImportRows(rows: Record<string, string>[], base: number): Im
 
 export const normalizeRole = (role: string) => role.toLowerCase().replace(/[^a-z0-9]/g, '');
 export const cleanRole = (role: string) => role.trim().replace(/\s+/g, ' ');
-
-export const getImportRole = (row: Record<string, string>) => getImportValue(row, ROLE_ALIASES);
-
-/** The row with its Role cell set to the resolved role, whatever that column was called. */
-export function withImportRole(row: Record<string, string>, role: string): Record<string, string> {
-  const header = Object.keys(row).find((key) => ROLE_ALIASES.some((alias) => normalizeCsvHeader(key) === normalizeCsvHeader(alias)));
-  return { ...row, [header ?? 'Role']: role };
-}
 
 /** The row's programme abbreviation, normalised. Valid codes live in `batch_programs`. */
 export function getImportProgram(row: Record<string, string>): BatchProgram | undefined {
