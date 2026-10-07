@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Eye, FilePlus2, Search, ScrollText, Send, Share2 } from 'lucide-react';
+import { Eye, FilePlus2, RotateCw, Search, ScrollText, Send, Share2 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -9,6 +9,7 @@ import { SearchSelect } from '@/components/ui/SearchSelect';
 import { Spinner } from '@/components/ui/Spinner';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/Table';
 import { StudentLink } from '@/components/students/StudentLink';
+import { useConfirm } from '@/lib/context/ConfirmContext';
 import { useToast } from '@/lib/context/ToastContext';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { generateAndStoreDocument, getBatchStudents, sendDocumentEmail, setDocumentShared, viewStoredDocument } from '@/lib/supabase';
@@ -60,6 +61,7 @@ function statusAcross(mapping: BatchStudentMapping, kinds: DocumentKind[]): RowS
 /** One doc's cell, for whichever kind the dropdown currently has selected. */
 function DocCell({ row, batch, kind, onPatch }: { row: Row; batch: Batch; kind: DocumentKind; onPatch: (patch: Patch) => void }) {
   const { showToast } = useToast();
+  const confirm = useConfirm();
   const [busy, setBusy] = useState(false);
   const path = pathOf(row.mapping, kind);
   const shared = sharedOf(row.mapping, kind);
@@ -96,6 +98,19 @@ function DocCell({ row, batch, kind, onPatch }: { row: Row; batch: Batch; kind: 
     }
   };
 
+  // Locked once the batch has ended and both documents are generated and shared
+  const locked = Boolean(batch.ended_at) && statusAcross(row.mapping, KINDS.both) === 'shared';
+
+  const regenerate = async () => {
+    const accepted = await confirm({
+      title: `Regenerate the ${LABELS[kind].toLowerCase()}?`,
+      message: 'Replaces the current file. A copy already emailed stays as it was.',
+      confirmLabel: 'Regenerate',
+      danger: true,
+    });
+    if (accepted) await generate();
+  };
+
   const view = async () => {
     try {
       await viewStoredDocument(path);
@@ -117,6 +132,17 @@ function DocCell({ row, batch, kind, onPatch }: { row: Row; batch: Batch; kind: 
       >
         <Eye size={15} />
       </button>
+      {!locked && (
+        <button
+          type="button"
+          onClick={() => void regenerate()}
+          disabled={busy}
+          aria-label={`Regenerate ${LABELS[kind].toLowerCase()}`}
+          className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-overlay)] hover:text-[var(--text-primary)] disabled:opacity-50"
+        >
+          <RotateCw size={15} />
+        </button>
+      )}
     </div>
   );
 }
@@ -138,7 +164,7 @@ export function BatchDocuments({ batch }: { batch: Batch }) {
 
   const { loading, error, retry } = useInitialLoad(async () => {
     const roster = await getBatchStudents(batch.id);
-    setRows(roster.filter((r) => r.mapping.status === 'active') as Row[]);
+    setRows(roster.filter((r) => r.mapping.status !== 'terminated') as Row[]);
   });
 
   const changeDocType = (value: string) => {
@@ -221,7 +247,7 @@ export function BatchDocuments({ batch }: { batch: Batch }) {
 
   if (loading) return <Spinner centered />;
   if (error) return <ErrorState centered message={error} onRetry={retry} />;
-  if (rows.length === 0) return <EmptyState icon={<ScrollText size={20} />} title="No active students in this batch" />;
+  if (rows.length === 0) return <EmptyState icon={<ScrollText size={20} />} title="No students in this batch" />;
 
   return (
     <div className="table-block">

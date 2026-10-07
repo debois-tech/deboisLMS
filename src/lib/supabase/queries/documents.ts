@@ -44,27 +44,21 @@ function loadAssets(): Promise<DocumentAssets> {
   return assets;
 }
 
-/**
- * One document, drawn from the student's own data and stored under the enrolment. Always on an admin's click: nothing
- * is generated when a student is enrolled, and each new student needs their own click. Dates come from this batch,
- * not the student row: that row holds one start and end date for every batch the student is in, so a second batch
- * would inherit the first one's. The student's own dates only fill in what the batch lacks. The role is the batch's,
- * and is copied onto the student once the document is stored. Every later view,
- * download or email reads the stored copy back.
- */
+// One document on an admin's click, stored under the enrolment; start date is the join date, end date the batch's
 export async function generateAndStoreDocument(
   kind: DocumentKind,
   mapping: BatchStudentMapping,
   student: Student,
   batch: Batch,
 ): Promise<Pick<BatchStudentMapping, 'offer_letter_path' | 'cert_path'>> {
-  // The batch's role, so a transfer or a second batch needs no student edit. A batch with none yet falls back to the student's.
+  // A batch with no role yet falls back to the student's
   const role = batch.internship_role ?? student.internship_role;
   if (!role) throw new Error(`Set ${batch.name}'s internship role first (Edit batch).`);
   const day = (value?: string | null) => (value ? fromDateValue(value.slice(0, 10)) : null);
-  const startOn = day(batch.start_date) ?? day(student.internship_start_date) ?? day(mapping.joined_at) ?? new Date();
-  const endOn = day(batch.ended_at) ?? day(student.internship_end_date);
-  if (kind === 'cert' && !endOn) throw new Error(`${student.name} has no internship end date: end the batch, or set it on Edit student.`);
+  const startOn = day(mapping.joined_at) ?? new Date();
+  const endOn = day(batch.ended_at);
+  if (kind === 'cert' && !endOn) throw new Error(`${batch.name} has not ended: end the batch before making certificates.`);
+  if (endOn && endOn < startOn) throw new Error(`${student.name} joined after ${batch.name} ended.`);
 
   const bytes = await buildDocumentPdf(
     kind,
@@ -85,7 +79,7 @@ export async function generateAndStoreDocument(
 
   const patch = { [PATH_COLUMN[kind]]: path };
   ok(await supabase.from('batch_student_mapping').update(patch).eq('id', mapping.id), 'The document was stored but the record could not be updated');
-  // The role just stamped becomes the student's own.
+  // The role just stamped becomes the student's own
   if (student.internship_role !== role) {
     ok(await supabase.from('students').update({ internship_role: role }).eq('id', student.id), 'The document was stored but the student role could not be updated');
   }

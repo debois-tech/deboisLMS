@@ -1,5 +1,4 @@
 import { supabase } from '../client';
-import { getBatchById } from './batches';
 import { removeStoredDocuments } from './documents';
 import { invokeLoginFunction, maybeRow, ok, row, rows } from './result';
 import type { Batch, Student, BatchStudentMapping, StudentCredentials } from '@/lib/types';
@@ -283,17 +282,6 @@ export async function addStudentToBatch(
       ),
     'Student was added but the fee could not be set',
   );
-
-  // Best-effort: this must never block enrolling the student. Documents are not made here, an admin generates them.
-  void Promise.all([getStudentById(studentId), getBatchById(batchId)])
-    .then(async ([student, batch]) => {
-      if (!student || !batch) return;
-      // The internship's start date, if the student has none yet, comes from the batch. The role never does.
-      if (!student.internship_start_date && batch.start_date) {
-        await updateStudent(student.id, { internship_start_date: batch.start_date.slice(0, 10) });
-      }
-    })
-    .catch((err) => console.error('[addStudentToBatch] fill', err));
 
   return mapping;
 }

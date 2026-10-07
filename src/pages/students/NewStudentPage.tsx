@@ -35,9 +35,6 @@ export default function NewStudentPage() {
   const [discount, setDiscount] = useState('');
   const [discountType, setDiscountType] = useState<'percentage' | 'amount'>('percentage');
   const [feeText, setFeeText] = useState<string | null>(null);
-  // Start is the batch's start date unless changed; the end is left for the batch's end date to fill, or an admin.
-  const [pickedStart, setPickedStart] = useState<string | null>(null);
-  const [internshipEnd, setInternshipEnd] = useState('');
   // Mirrors STUDENT_IMPORT_FIELDS, so a student typed in here carries the same
   // profile as one that arrived on a CSV.
   const [form, setForm] = useState({
@@ -55,7 +52,6 @@ export default function NewStudentPage() {
   });
 
   const batch = batches.find((option) => option.id === batchId);
-  const internshipStart = pickedStart ?? batch?.start_date?.slice(0, 10) ?? '';
   const baseFee = batch?.base_fee ?? null;
   const typedFee = feeText ? Number(feeText) : null;
   const payable = baseFee === null ? null : typedFee ?? feeFromDiscountValue(baseFee, Number(discount) || 0, discountType);
@@ -88,10 +84,6 @@ export default function NewStudentPage() {
       showToast('Pick a date of birth', 'error');
       return;
     }
-    if (internshipEnd && internshipStart && internshipEnd < internshipStart) {
-      showToast('The internship cannot end before it starts', 'error');
-      return;
-    }
     if (payable === null) {
       showToast(`${batch?.name ?? 'This batch'} has no base fee. Set one on the batch first.`, 'error');
       return;
@@ -104,8 +96,6 @@ export default function NewStudentPage() {
       const student = await createOrReuseStudent({
         ...Object.fromEntries(Object.entries(text).filter(([, value]) => value !== '')),
         ...(graduation_year ? { graduation_year: Number(graduation_year) } : {}),
-        ...(internshipStart ? { internship_start_date: internshipStart } : {}),
-        ...(internshipEnd ? { internship_end_date: internshipEnd } : {}),
       } as Parameters<typeof createOrReuseStudent>[0]);
       setCreatedStudentId(student.id);
       // An existing student already on this batch is the goal, not an error — the login below should still run.
@@ -200,14 +190,6 @@ export default function NewStudentPage() {
               Set one on the batch, then add the student.
             </InlineAlert>
           )}
-          <div className="grid gap-4 md:grid-cols-2">
-            <FormField label="Internship Start">
-              <DatePicker value={internshipStart} onChange={setPickedStart} placeholder="Pick a date" ariaLabel="Internship start date" />
-            </FormField>
-            <FormField label="Internship End">
-              <DatePicker value={internshipEnd} onChange={setInternshipEnd} min={internshipStart || undefined} placeholder="Set when the batch ends" ariaLabel="Internship end date" />
-            </FormField>
-          </div>
           <div className="grid gap-4 md:grid-cols-2">
             <FormField label="Date of Birth" required>
               <DatePicker

@@ -30,7 +30,7 @@ import { DatePicker } from '@/components/ui/DatePicker';
 import { StudentLink } from '@/components/students/StudentLink';
 import { PaymentLogModal, type PaymentLogFormState } from '@/components/finance/PaymentLogModal';
 import { BatchSelect } from '@/components/ui/BatchSelect';
-import { getBatchById, getBatches, getBatchPrograms, endBatch, deleteBatch, getBatchDeletionCounts, getCurriculumProgress } from '@/lib/supabase';
+import { getBatchById, getBatches, getBatchPrograms, endBatch, deleteBatch, getBatchDeletionCounts, getBatchFeeSummary, getCurriculumProgress } from '@/lib/supabase';
 import type { BatchDeletionCounts } from '@/lib/supabase';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { getBatchStudents, addStudentToBatch, terminateEnrolment, transferStudents, getStudents, createStudentLoginsBulk, importStudentsIntoBatch, deleteFeePayment } from '@/lib/supabase';
@@ -115,12 +115,14 @@ export default function BatchDetailPage() {
     if (!batch || !endDate) return;
     // The date picker steps aside while the confirm is up
     setConfirmingEnd(true);
+    const owed = (await getBatchFeeSummary().catch(() => [])).find((fee) => fee.batch_id === batch.id)?.total_outstanding ?? 0;
     const accepted = await confirm({
       title: `End ${batch.name}?`,
       message: (
         <>
           <span className="block">Ends on {formatDate(endDate)}</span>
           <span className="block">Certificates use this date</span>
+          {owed > 0 && <span className="block">{formatCurrency(owed)} still unpaid</span>}
           <span className="block">Student logins deleted 30 days after</span>
           <span className="block">Cannot be reopened</span>
         </>

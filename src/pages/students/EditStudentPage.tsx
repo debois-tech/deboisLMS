@@ -15,13 +15,13 @@ import { useToast } from '@/lib/context/ToastContext';
 import type { Student } from '@/lib/types';
 import { errorMessage } from '@/lib/utils/errors';
 
-type EditableStudent = Pick<Student, 'name' | 'phone' | 'date_of_birth' | 'college' | 'course' | 'branch' | 'current_year' | 'graduation_year' | 'github_url' | 'linkedin_url' | 'internship_start_date' | 'internship_end_date'>;
+type EditableStudent = Pick<Student, 'name' | 'phone' | 'date_of_birth' | 'college' | 'course' | 'branch' | 'current_year' | 'graduation_year' | 'github_url' | 'linkedin_url'>;
 
 export default function EditStudentPage() {
   const { studentId } = useParams();
   const goBack = useGoBack(`/students/${studentId}`);
   const [student, setStudent] = useState<Student | null>(null);
-  const [form, setForm] = useState<EditableStudent>({ name: '', phone: '', date_of_birth: '', college: '', course: '', branch: '', current_year: '', graduation_year: undefined, github_url: '', linkedin_url: '', internship_start_date: '', internship_end_date: '' });
+  const [form, setForm] = useState<EditableStudent>({ name: '', phone: '', date_of_birth: '', college: '', course: '', branch: '', current_year: '', graduation_year: undefined, github_url: '', linkedin_url: '' });
   const [saving, setSaving] = useState(false);
   const { showToast } = useToast();
 
@@ -30,7 +30,7 @@ export default function EditStudentPage() {
     const record = await getStudentById(studentId);
     if (!record) return;
     setStudent(record);
-    setForm({ name: record.name, phone: record.phone, date_of_birth: record.date_of_birth ?? '', college: record.college ?? '', course: record.course ?? '', branch: record.branch ?? '', current_year: record.current_year ?? '', graduation_year: record.graduation_year, github_url: record.github_url ?? '', linkedin_url: record.linkedin_url ?? '', internship_start_date: record.internship_start_date ?? '', internship_end_date: record.internship_end_date ?? '' });
+    setForm({ name: record.name, phone: record.phone, date_of_birth: record.date_of_birth ?? '', college: record.college ?? '', course: record.course ?? '', branch: record.branch ?? '', current_year: record.current_year ?? '', graduation_year: record.graduation_year, github_url: record.github_url ?? '', linkedin_url: record.linkedin_url ?? '' });
   });
 
   const set = (field: keyof EditableStudent) => (event: React.ChangeEvent<HTMLInputElement>) =>
@@ -44,10 +44,6 @@ export default function EditStudentPage() {
       showToast('Pick a date of birth', 'error');
       return;
     }
-    if (form.internship_start_date && form.internship_end_date && form.internship_end_date < form.internship_start_date) {
-      showToast('The internship cannot end before it starts', 'error');
-      return;
-    }
     setSaving(true);
     try {
       await updateStudent(student.id, {
@@ -55,9 +51,6 @@ export default function EditStudentPage() {
         name: form.name.trim(),
         phone: form.phone.trim(),
         graduation_year: form.graduation_year || undefined,
-        // A cleared date is null in the database, not an empty string.
-        internship_start_date: form.internship_start_date || null,
-        internship_end_date: form.internship_end_date || null,
       });
       showToast('Student updated');
       goBack();
@@ -86,14 +79,6 @@ export default function EditStudentPage() {
           <div className="grid grid-cols-2 gap-4">
             <FormField label="Course / Degree"><input value={form.course ?? ''} onChange={set('course')} /></FormField>
             <FormField label="Branch / Specialization"><input value={form.branch ?? ''} onChange={set('branch')} /></FormField>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <FormField label="Internship Start">
-              <DatePicker value={form.internship_start_date ?? ''} onChange={(internship_start_date) => setForm({ ...form, internship_start_date })} placeholder="Pick a date" ariaLabel="Internship start date" />
-            </FormField>
-            <FormField label="Internship End">
-              <DatePicker value={form.internship_end_date ?? ''} onChange={(internship_end_date) => setForm({ ...form, internship_end_date })} min={form.internship_start_date || undefined} placeholder="Pick a date" ariaLabel="Internship end date" />
-            </FormField>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <FormField label="Current Year"><input value={form.current_year ?? ''} onChange={set('current_year')} /></FormField>

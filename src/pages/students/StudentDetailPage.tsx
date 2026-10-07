@@ -209,8 +209,6 @@ export default function StudentDetailPage() {
     { label: 'Current Year', value: student.current_year ?? '' },
     { label: 'Graduation Year', value: student.graduation_year ? String(student.graduation_year) : '' },
     { label: 'Internship Role', value: student.internship_role ?? '' },
-    { label: 'Internship Start', value: student.internship_start_date ? formatDate(student.internship_start_date) : '' },
-    { label: 'Internship End', value: student.internship_end_date ? formatDate(student.internship_end_date) : '' },
   ].filter((fact) => fact.value);
 
   return (

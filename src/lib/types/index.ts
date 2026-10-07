@@ -80,8 +80,6 @@ export interface Student {
   /** Stamped on the offer letter and the certificate. */
   internship_role?: InternshipRole | null;
   /** `YYYY-MM-DD`. Today for a new student; the end date is the batch's when it is ended. Both editable. */
-  internship_start_date?: string | null;
-  internship_end_date?: string | null;
   created_at: string;
   /** auth.users id once a portal login has been created for this student. */
   auth_user_id?: string;

@@ -14,8 +14,10 @@ import { DatePicker } from '@/components/ui/DatePicker';
 import { BatchRoleField, roleReady, saveRole, type RoleDraft } from '@/components/batches/BatchRoleField';
 import { getBatchById, getBatchPrograms, getInternshipRoles, updateBatch } from '@/lib/supabase';
 import type { Batch, BatchProgram, BatchProgramOption } from '@/lib/types';
+import { useConfirm } from '@/lib/context/ConfirmContext';
 import { useToast } from '@/lib/context/ToastContext';
 import { errorMessage } from '@/lib/utils/errors';
+import { formatDate } from '@/lib/utils/format';
 
 export default function EditBatchPage() {
   const { batchId } = useParams();
@@ -25,13 +27,16 @@ export default function EditBatchPage() {
   const [programs, setPrograms] = useState<BatchProgramOption[]>([]);
   const [roles, setRoles] = useState<string[]>([]);
   const [roleDraft, setRoleDraft] = useState<RoleDraft>({ pick: '', name: '' });
+  const [savedEnd, setSavedEnd] = useState<string | null>(null);
   const { showToast } = useToast();
+  const confirm = useConfirm();
 
   const { loading, error, retry } = useInitialLoad(async () => {
     if (!batchId) return;
     const [batch, programRows, roleRows] = await Promise.all([getBatchById(batchId), getBatchPrograms(), getInternshipRoles()]);
     if (batch) {
       setForm(batch);
+      setSavedEnd(batch.ended_at?.slice(0, 10) ?? null);
       setRoleDraft({ pick: batch.internship_role ?? '', name: '' });
     }
     setPrograms(programRows);
@@ -52,6 +57,27 @@ export default function EditBatchPage() {
     if (!roleReady(roleDraft)) {
       showToast('Pick an internship role', 'error');
       return;
+    }
+    const endChanged = Boolean(form.ended_at) && form.ended_at?.slice(0, 10) !== savedEnd;
+    if (endChanged && form.start_date && form.ended_at!.slice(0, 10) < form.start_date.slice(0, 10)) {
+      showToast('A batch cannot end before it starts', 'error');
+      return;
+    }
+    if (endChanged) {
+      const accepted = await confirm({
+        title: 'Change the end date?',
+        message: (
+          <>
+            <span className="block">{savedEnd ? formatDate(savedEnd) : 'None'} → {formatDate(form.ended_at!)}</span>
+            <span className="block">Certificates use the new date</span>
+            <span className="block">Student logins delete 30 days after it</span>
+          </>
+        ),
+        confirmLabel: 'Change date',
+        danger: true,
+        requireText: 'DATE',
+      });
+      if (!accepted) return;
     }
     setSaving(true);
     try {
@@ -110,6 +136,17 @@ export default function EditBatchPage() {
               ariaLabel="Start date"
             />
           </FormField>
+          {savedEnd && (
+            <FormField label="End Date">
+              <DatePicker
+                value={form.ended_at?.slice(0, 10) ?? ''}
+                onChange={(ended_at) => setForm({ ...form, ended_at })}
+                min={form.start_date?.slice(0, 10)}
+                placeholder="Pick an end date"
+                ariaLabel="End date"
+              />
+            </FormField>
+          )}
           <div className="flex gap-3 pt-2">
             <Button className='action-button-compact' type="submit" loading={saving}>Save Changes</Button>
             <Button variant="ghost" onClick={goBack}>Cancel</Button>

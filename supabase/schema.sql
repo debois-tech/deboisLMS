@@ -221,24 +221,27 @@ create table if not exists batch_student_mapping (
 create index if not exists idx_bsm_batch   on batch_student_mapping(batch_id);
 create index if not exists idx_bsm_student on batch_student_mapping(student_id);
 
--- The intake date for everyone on a batch is the batch's own start date, not the
--- day an admin got round to the paperwork. An explicit joined_at is left alone.
+-- Joining in the batch's first week counts from its start date, later from the day they join (India time).
+-- An explicit joined_at is left alone.
 create or replace function set_join_date_from_batch()
 returns trigger
 language plpgsql
 set search_path = public
-as $$
+as $
+declare
+  batch_start date;
+  today       date := (now() at time zone 'Asia/Kolkata')::date;
 begin
   if new.joined_at is not null then
     return new;
   end if;
 
-  select b.start_date into new.joined_at from batches b where b.id = new.batch_id;
-  new.joined_at := coalesce(new.joined_at, current_date);
+  select b.start_date into batch_start from batches b where b.id = new.batch_id;
+  new.joined_at := case when batch_start is not null and today < batch_start + 7 then batch_start else today end;
 
   return new;
 end;
-$$;
+$;
 
 drop trigger if exists bsm_join_date_from_batch on batch_student_mapping;
 create trigger bsm_join_date_from_batch
@@ -493,9 +496,7 @@ grant execute on function public.record_fee_payment(uuid, numeric, date, payment
 -- total_fee of 0, and a registration payment against 0 is not a fact. A fee
 -- under 1000 logs only what was charged, so the log never exceeds the total.
 --
--- Dated from the batch's start date, not the day the row was inserted: a batch
--- always exists before its students, and that date is when the intake began. An
--- import run three weeks late should not read as three weeks of late fees.
+-- Dated the day the student started (see set_join_date_from_batch), not the day the row was inserted.
 create or replace function log_registration_fee()
 returns trigger
 language plpgsql
@@ -511,8 +512,8 @@ begin
 
   amount := least(1000, new.total_fee);
 
-  -- A batch with no start date falls back to today; the column forbids null.
-  select b.start_date into paid_on from batches b where b.id = new.batch_id;
+  -- Dated the day they started, which the join rule already worked out
+  select m.joined_at into paid_on from batch_student_mapping m where m.batch_id = new.batch_id and m.student_id = new.student_id;
   paid_on := coalesce(paid_on, current_date);
 
   insert into fee_payment_logs (
@@ -1247,13 +1248,6 @@ begin
     raise exception 'Batch not found';
   end if;
 
-  -- Students active in the batch get its end date as their internship end date, unless one is already set.
-  update students
-  set internship_end_date = updated.ended_at
-  where internship_end_date is null
-    and (internship_start_date is null or internship_start_date <= updated.ended_at)
-    and id in (select student_id from batch_student_mapping where batch_id = p_batch_id and status = 'active');
-
   return updated;
 end $$;
 
@@ -1286,7 +1280,8 @@ begin
     raise exception 'Enrolment not found';
   end if;
 
-  select start_date into batch_start from batches where id = m.batch_id;
+  -- Instalments count from the day the student started, not the batch start
+  batch_start := m.joined_at;
   select * into fee_row from student_fees
   where student_id = m.student_id and batch_id = m.batch_id
   for update;

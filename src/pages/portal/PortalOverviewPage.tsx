@@ -135,11 +135,12 @@ export default function PortalOverviewPage() {
     ? fees.find((fee) => fee.batch_id === currentBatch.id)?.paid_through ?? 0
     : 0;
 
+  // Instalments count from the day the student started
   const installment = currentBatch
-    ? dueInstallment(currentBatch.start_date, paidThrough, outstanding, now)
+    ? dueInstallment(currentMapping?.joined_at, paidThrough, outstanding, now)
     : null;
   const behind = currentBatch
-    ? behindOnFees(currentBatch.start_date, paidThrough, outstanding, now)
+    ? behindOnFees(currentMapping?.joined_at, paidThrough, outstanding, now)
     : false;
   const currentBatchDue = currentBatch
     ? fees.find((fee) => fee.batch_id === currentBatch.id)?.amount_due ?? 0
