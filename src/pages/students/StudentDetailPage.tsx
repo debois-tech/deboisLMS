@@ -398,7 +398,7 @@ export default function StudentDetailPage() {
               <Link
                 key={m.id}
                 to={`/batches/${m.batch_id}`}
-                className="batch-list-item flex items-center justify-between gap-4 hover:bg-[var(--bg-elevated)] transition-colors"
+                className={`batch-list-item flex items-center justify-between gap-4 hover:bg-[var(--bg-elevated)] transition-colors${m.status === 'transferred' ? ' opacity-60' : ''}`}
               >
                 <div className="flex items-center gap-3">
                   <Layers size={18} className="shrink-0 text-[var(--primary)]" />

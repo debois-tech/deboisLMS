@@ -29,11 +29,10 @@ import { BatchDocuments } from '@/components/documents/BatchDocuments';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { StudentLink } from '@/components/students/StudentLink';
 import { PaymentLogModal, type PaymentLogFormState } from '@/components/finance/PaymentLogModal';
-import { BatchSelect } from '@/components/ui/BatchSelect';
 import { getBatchById, getBatches, getBatchPrograms, endBatch, deleteBatch, getBatchDeletionCounts, getBatchFeeSummary, getCurriculumProgress } from '@/lib/supabase';
 import type { BatchDeletionCounts } from '@/lib/supabase';
 import { ProgressBar } from '@/components/ui/ProgressBar';
-import { getBatchStudents, getAllBatchStudentMappings, addStudentToBatch, terminateEnrolment, transferStudents, getStudents, createStudentLoginsBulk, importStudentsIntoBatch, deleteFeePayment } from '@/lib/supabase';
+import { getBatchStudents, getAllBatchStudentMappings, addStudentToBatch, terminateEnrolment, getStudents, createStudentLoginsBulk, importStudentsIntoBatch, deleteFeePayment } from '@/lib/supabase';
 import type { BulkLoginResult } from '@/lib/supabase';
 import { BulkLoginsModal } from '@/components/students/BulkLoginsModal';
 import { getBatchTutors, assignTutorToBatch, removeTutorFromBatch, getTutors } from '@/lib/supabase';
@@ -45,6 +44,7 @@ import type { Batch, BatchProgramOption, Student, Tutor, Lecture, AttendanceReco
 import { formatDate, formatCurrency, feeFromDiscount } from '@/lib/utils/format';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { StudentImportModal } from '@/components/students/StudentImportModal';
+import { TransferWizard } from '@/components/batches/TransferWizard';
 import { useToast } from '@/lib/context/ToastContext';
 import { useConfirm } from '@/lib/context/ConfirmContext';
 import { errorMessage } from '@/lib/utils/errors';
@@ -336,7 +336,6 @@ function StudentsTab({ batch }: { batch: Batch }) {
   // Mapping ids, since that is what the transfer takes.
   const [picked, setPicked] = useState<string[]>([]);
   const [showTransfer, setShowTransfer] = useState(false);
-  const [targetBatch, setTargetBatch] = useState<string | null>(null);
   const { showToast } = useToast();
   const confirm = useConfirm();
 
@@ -407,50 +406,19 @@ function StudentsTab({ batch }: { batch: Batch }) {
     (s) => !students.some((e) => e.id === s.id) && Boolean(s.is_test) === Boolean(batch.is_test),
   );
 
-  // The database refuses anything else; this just keeps the picker honest.
+  // Running batches of the same kind; the database refuses anything else
   const transferTargets = allBatches.filter(
-    (b) => b.id !== batchId && !b.ended_at && b.status !== 'completed' && b.base_fee === batch.base_fee
-      && Boolean(b.is_test) === Boolean(batch.is_test),
+    (b) => b.id !== batchId && !b.ended_at && b.status !== 'completed' && Boolean(b.is_test) === Boolean(batch.is_test),
   );
 
   const exitSelecting = () => {
     setSelecting(false);
     setPicked([]);
-    setTargetBatch(null);
     setShowTransfer(false);
   };
 
   const togglePicked = (mappingId: string) =>
     setPicked((current) => (current.includes(mappingId) ? current.filter((id) => id !== mappingId) : [...current, mappingId]));
-
-  const handleTransfer = async () => {
-    const target = transferTargets.find((b) => b.id === targetBatch);
-    if (!target) return;
-
-    const names = students.filter((s) => picked.includes(s.mapping.id)).map((s) => s.name);
-    setShowTransfer(false);
-
-    const proceed = await confirm({
-      title: `Transfer ${names.length} ${names.length === 1 ? 'student' : 'students'} to ${target.name}?`,
-      message: `${names.join(', ')}. Their fees and payment logs move to the new batch. Their attendance, submissions, badges and material views in this batch are deleted and cannot be recovered.`,
-      confirmLabel: 'Proceed',
-      danger: true,
-    });
-    if (!proceed) {
-      setShowTransfer(true);
-      return;
-    }
-
-    try {
-      await transferStudents(picked, target.id);
-      exitSelecting();
-      void reloadStudents();
-      showToast(`${names.length} ${names.length === 1 ? 'student' : 'students'} moved to ${target.name}`);
-    } catch (error) {
-      setShowTransfer(true);
-      showToast(errorMessage(error, 'Failed to transfer students'), 'error');
-    }
-  };
 
   // Same routine as the students page, so a sheet imported from either place
   // lands identically. The batch is this one; the CSV's own column only validates.
@@ -490,7 +458,7 @@ function StudentsTab({ batch }: { batch: Batch }) {
             ) : (
               <>
                 <Button size="sm" className="action-button-import" variant="secondary" onClick={() => setShowImport(true)}><Upload size={14} />Import</Button>
-                <Button size="sm" className="action-button-import" variant="secondary" onClick={() => setSelecting(true)}><ArrowRightLeft size={14} />Transfer</Button>
+                {!batch.ended_at && <Button size="sm" className="action-button-import" variant="secondary" onClick={() => setSelecting(true)}><ArrowRightLeft size={14} />Transfer</Button>}
                 <Button size="sm" className="action-button-compact" onClick={() => setShowAdd(true)}><Plus size={14} /> Add Students</Button>
               </>
             )}
@@ -502,7 +470,7 @@ function StudentsTab({ batch }: { batch: Batch }) {
       ) : (
         <div className="batch-list">
           {students.map((s) => (
-            <div key={s.id} className="batch-list-item flex items-center justify-between gap-4 hover:bg-[var(--bg-elevated)]">
+            <div key={s.id} className={`batch-list-item flex items-center justify-between gap-4 hover:bg-[var(--bg-elevated)]${s.mapping.status === 'transferred' ? ' opacity-60' : ''}`}>
               <div className="flex items-center gap-3">
                 {selecting && (
                   s.mapping.status === 'active' ? (
@@ -581,19 +549,15 @@ function StudentsTab({ batch }: { batch: Batch }) {
         </div>
       </Modal>
 
-      <Modal open={showTransfer} onClose={() => setShowTransfer(false)} title="Transfer students">
-        <div className="popup-form-spaced">
-          <FormField label="Move to">
-            <BatchSelect batches={transferTargets} value={targetBatch} onChange={setTargetBatch} />
-          </FormField>
-          {transferTargets.length === 0 && (
-            <InlineAlert>No other running batch has the same base fee.</InlineAlert>
-          )}
-          <Button className="action-button-compact" onClick={handleTransfer} disabled={!targetBatch}>
-            Proceed
-          </Button>
-        </div>
-      </Modal>
+      <TransferWizard
+        key={showTransfer ? 'open' : 'closed'}
+        open={showTransfer}
+        onClose={() => setShowTransfer(false)}
+        source={batch}
+        students={students.filter((s) => picked.includes(s.mapping.id))}
+        targets={transferTargets}
+        onDone={() => { exitSelecting(); void reloadStudents(); }}
+      />
 
       <StudentImportModal
         open={showImport}
@@ -1113,9 +1077,13 @@ function FinanceTab({ batchId }: { batchId: string }) {
                       <StatusPill kind="fee" value={status} />
                     </TD>
                     <TD>
-                      <Button size="sm" className="action-button-compact" onClick={() => openPaymentLogs(fee)}>
-                        <Plus size={14} /> Log Payment
-                      </Button>
+                      {student?.mapping.status === 'transferred' ? (
+                        <StatusPill kind="enrollment" value="transferred" />
+                      ) : (
+                        <Button size="sm" className="action-button-compact" onClick={() => openPaymentLogs(fee)}>
+                          <Plus size={14} /> Log Payment
+                        </Button>
+                      )}
                     </TD>
                   </TR>
                 ))}

@@ -9,7 +9,7 @@ do $$ begin create type batch_status       as enum ('upcoming', 'ongoing', 'comp
 do $$ begin create type session_type       as enum ('online', 'offline');                     exception when duplicate_object then null; end $$;
 do $$ begin create type attendance_status  as enum ('present', 'partial', 'absent');          exception when duplicate_object then null; end $$;
 do $$ begin create type attendance_source  as enum ('manual', 'automated');                   exception when duplicate_object then null; end $$;
-do $$ begin create type mapping_status     as enum ('active', 'archived', 'terminated');       exception when duplicate_object then null; end $$;
+do $$ begin create type mapping_status     as enum ('active', 'archived', 'terminated', 'transferred');       exception when duplicate_object then null; end $$;
 do $$ begin create type fee_status         as enum ('due', 'paid', 'terminated');             exception when duplicate_object then null; end $$;
 do $$ begin create type payment_method     as enum ('cash', 'upi', 'bank_transfer', 'other'); exception when duplicate_object then null; end $$;
 do $$ begin create type claim_status       as enum ('pending', 'approved', 'dismissed');      exception when duplicate_object then null; end $$;
@@ -411,7 +411,7 @@ create table if not exists student_fees (
   expected_on_exit numeric,
   -- What they had paid that day. Anything above it since is recovered void.
   paid_at_exit     numeric,
-  -- Set once by transfer_students(); makes student_fee_dues judge instalments by payment logs.
+  -- Set once by transfer_student(); makes student_fee_dues judge instalments by payment logs.
   transferred      boolean not null default false,
   discount_type    discount_type not null default 'percentage',
   discount_value   numeric not null default 0 check (discount_value >= 0),
@@ -529,6 +529,11 @@ declare
   amount numeric;
   paid_on date;
 begin
+  -- A transfer that carries payments brings its own registration fee
+  if current_setting('app.skip_registration', true) = 'on' then
+    return new;
+  end if;
+
   if new.total_fee is null or new.total_fee <= 0 then
     return new;
   end if;
@@ -846,10 +851,10 @@ create or replace view batch_fee_summary as
 select
   b.id as batch_id,
   b.name as batch_name,
-  count(distinct bsm.student_id) filter (where bsm.status <> 'terminated') as total_students,
-  coalesce(sum(sf.total_fee) filter (where bsm.status <> 'terminated'), 0) as total_fees,
+  count(distinct bsm.student_id) filter (where bsm.status::text not in ('terminated', 'transferred')) as total_students,
+  coalesce(sum(sf.total_fee) filter (where bsm.status::text not in ('terminated', 'transferred')), 0) as total_fees,
   coalesce(sum(sf.paid_amount), 0) as total_collected,
-  coalesce(sum(greatest(sf.total_fee - sf.paid_amount, 0)) filter (where bsm.status <> 'terminated'), 0) as total_outstanding,
+  coalesce(sum(greatest(sf.total_fee - sf.paid_amount, 0)) filter (where bsm.status::text not in ('terminated', 'transferred')), 0) as total_outstanding,
   b.is_test
 from batches b
 left join batch_student_mapping bsm on bsm.batch_id = b.id
@@ -874,17 +879,17 @@ create or replace view earning_breakdown as
 select
   b.id   as batch_id,
   b.name as batch_name,
-  count(bsm.id) filter (where bsm.status <> 'terminated') as active_students,
+  count(bsm.id) filter (where bsm.status::text not in ('terminated', 'transferred')) as active_students,
   count(bsm.id) filter (where bsm.status =  'terminated') as terminated_students,
 
   -- Everything banked, whoever paid it.
   coalesce(sum(sf.paid_amount), 0) as collected,
-  coalesce(sum(sf.paid_amount) filter (where bsm.status <> 'terminated'), 0) as collected_active,
+  coalesce(sum(sf.paid_amount) filter (where bsm.status::text not in ('terminated', 'transferred')), 0) as collected_active,
   coalesce(sum(sf.paid_amount) filter (where bsm.status =  'terminated'), 0) as collected_terminated,
 
   -- Still expected from students who have not left.
   coalesce(sum(greatest(sf.total_fee - sf.paid_amount, 0))
-    filter (where bsm.status <> 'terminated'), 0) as pending,
+    filter (where bsm.status::text not in ('terminated', 'transferred')), 0) as pending,
 
   -- Owed on the day they left and never paid. Recorded, never expected.
   coalesce(sum(greatest(coalesce(sf.expected_on_exit, 0) - sf.paid_amount, 0))
@@ -940,7 +945,11 @@ select
     else 0
   end as paid_through
 from student_fees sf
-where sf.student_id = current_student_id();
+where sf.student_id = current_student_id()
+  and exists (
+    select 1 from batch_student_mapping m
+    where m.student_id = sf.student_id and m.batch_id = sf.batch_id and m.status::text <> 'transferred'
+  );
 
 grant select on student_fee_dues to authenticated;
 
@@ -996,18 +1005,18 @@ create policy student_read_own on students
 
 drop policy if exists student_read_own on batch_student_mapping;
 create policy student_read_own on batch_student_mapping
-  for select using (student_id = current_student_id());
+  for select using (student_id = current_student_id() and status::text <> 'transferred');
 
 drop policy if exists student_read_own on batches;
 create policy student_read_own on batches
   for select using (
-    id in (select batch_id from batch_student_mapping where student_id = current_student_id())
+    id in (select batch_id from batch_student_mapping where student_id = current_student_id() and status::text <> 'transferred')
   );
 
 drop policy if exists student_read_own on lectures;
 create policy student_read_own on lectures
   for select using (
-    batch_id in (select batch_id from batch_student_mapping where student_id = current_student_id())
+    batch_id in (select batch_id from batch_student_mapping where student_id = current_student_id() and status::text <> 'transferred')
   );
 
 -- Approved rows only: unapproved attendance is pending review, not fact.
@@ -1020,12 +1029,15 @@ create policy student_read_own on attendance
 
 drop policy if exists student_read_own on fee_payment_logs;
 create policy student_read_own on fee_payment_logs
-  for select using (student_id = current_student_id());
+  for select using (
+    student_id = current_student_id()
+    and batch_id in (select batch_id from batch_student_mapping where student_id = current_student_id() and status::text <> 'transferred')
+  );
 
 drop policy if exists student_read_own on assignments;
 create policy student_read_own on assignments
   for select using (
-    batch_id in (select batch_id from batch_student_mapping where student_id = current_student_id())
+    batch_id in (select batch_id from batch_student_mapping where student_id = current_student_id() and status::text <> 'transferred')
   );
 
 drop policy if exists student_read_own on assignment_completions;
@@ -1374,29 +1386,45 @@ end $$;
 revoke all on function terminate_enrolment(uuid, date) from public;
 grant execute on function terminate_enrolment(uuid, date) to authenticated;
 
--- Moves students to another batch of the same base fee. Fee row, payment logs and claims
--- follow them; everything else they had in the old batch is deleted. One transaction:
--- any failure rolls every student back.
-create or replace function transfer_students(p_mapping_ids uuid[], p_to_batch uuid)
+-- Moves one student to another running batch. The old enrolment stays as Transferred with its data, read-only;
+-- its documents are dropped. With p_carry the payments are copied to the new batch and stop counting in the old one.
+create or replace function transfer_student(
+  p_mapping_id uuid, p_to_batch uuid, p_fee numeric, p_carry boolean, p_joined_on date default null
+)
 returns jsonb
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare
-  mapping_id uuid;
-  m          batch_student_mapping%rowtype;
-  target     batches%rowtype;
-  source_fee numeric;
-  who        text;
-  moved      int := 0;
+  m       batch_student_mapping%rowtype;
+  source  batches%rowtype;
+  target  batches%rowtype;
+  old_fee student_fees%rowtype;
+  new_fee student_fees%rowtype;
+  who     text;
+  pending int;
+  new_map uuid;
+  carried numeric := 0;
+  today   date := (now() at time zone 'Asia/Kolkata')::date;
 begin
   if not is_admin() then
     raise exception 'Admin only';
   end if;
 
-  if p_mapping_ids is null or cardinality(p_mapping_ids) = 0 then
-    raise exception 'Select at least one student';
+  select * into m from batch_student_mapping where id = p_mapping_id for update;
+  if not found then
+    raise exception 'Enrolment not found';
+  end if;
+  select name into who from students where id = m.student_id;
+
+  if m.status <> 'active' then
+    raise exception '% is not active in this batch', who;
+  end if;
+
+  select * into source from batches where id = m.batch_id;
+  if source.ended_at is not null then
+    raise exception '% is in a finished batch: add them to the new batch instead of transferring', who;
   end if;
 
   select * into target from batches where id = p_to_batch;
@@ -1406,65 +1434,88 @@ begin
   if target.ended_at is not null or target.status = 'completed' then
     raise exception 'The target batch has ended';
   end if;
+  if exists (select 1 from batch_student_mapping where batch_id = p_to_batch and student_id = m.student_id) then
+    raise exception '% is already in the target batch', who;
+  end if;
 
-  foreach mapping_id in array p_mapping_ids loop
-    select * into m from batch_student_mapping where id = mapping_id for update;
+  select count(*) into pending from payment_claims
+  where student_id = m.student_id and batch_id = m.batch_id and status = 'pending';
+  if pending > 0 then
+    raise exception 'Clear % payment claims for % first', pending, who;
+  end if;
+
+  if p_fee is null or p_fee < 0 then
+    raise exception 'Fee must be 0 or more';
+  end if;
+  if target.base_fee is not null and p_fee > target.base_fee then
+    raise exception 'Fee is above the base fee of %', target.base_fee;
+  end if;
+
+  select * into old_fee from student_fees where student_id = m.student_id and batch_id = m.batch_id for update;
+  if p_carry then
     if not found then
-      raise exception 'Enrolment not found';
+      raise exception '% has no fee to carry over', who;
     end if;
-
-    select name into who from students where id = m.student_id;
-
-    if m.status <> 'active' then
-      raise exception '% is not active in this batch', who;
+    if p_fee < old_fee.paid_amount then
+      raise exception 'Fee is below the % already paid by %', old_fee.paid_amount, who;
     end if;
-    select base_fee into source_fee from batches where id = m.batch_id;
-    if source_fee <> target.base_fee then
-      raise exception 'Both batches must have the same base fee';
-    end if;
+  end if;
 
-    if exists (
-      select 1 from batch_student_mapping where batch_id = p_to_batch and student_id = m.student_id
-    ) or exists (
-      select 1 from student_fees where batch_id = p_to_batch and student_id = m.student_id
-    ) then
-      raise exception '% is already in the target batch', who;
-    end if;
+  -- The join date rule runs unless a date was given
+  insert into batch_student_mapping (batch_id, student_id, joined_at)
+  values (p_to_batch, m.student_id, p_joined_on)
+  returning id into new_map;
 
-    insert into batch_student_mapping (batch_id, student_id, joined_at)
-    values (p_to_batch, m.student_id, m.joined_at);
+  if p_carry then
+    -- The carried payments already include the registration fee
+    perform set_config('app.skip_registration', 'on', true);
+    insert into student_fees (student_id, batch_id, total_fee, paid_amount, transferred, discount_type, discount_value)
+    values (m.student_id, p_to_batch, p_fee, 0, true, 'amount', greatest(coalesce(target.base_fee, p_fee) - p_fee, 0))
+    returning * into new_fee;
+    perform set_config('app.skip_registration', 'off', true);
 
-    -- An update, so log_registration_fee() (insert-only) does not book another 1000.
+    insert into fee_payment_logs (student_fee_id, student_id, batch_id, amount, payment_date, payment_method, notes)
+    select new_fee.id, l.student_id, p_to_batch, l.amount, l.payment_date, l.payment_method,
+           concat_ws(' · ', l.notes, 'Transferred from ' || source.name || ', counted for this batch')
+    from fee_payment_logs l
+    where l.student_fee_id = old_fee.id;
+
+    carried := old_fee.paid_amount;
+    update student_fees set paid_amount = carried where id = new_fee.id;
+
+    update fee_payment_logs
+    set notes = concat_ws(' · ', notes, 'Transferred to ' || target.name || ', not counted here')
+    where student_fee_id = old_fee.id;
+
+    -- Nothing left to count or collect in the old batch
     update student_fees
-    set batch_id = p_to_batch, transferred = true, updated_at = now()
+    set paid_at_exit = old_fee.paid_amount, expected_on_exit = 0, paid_amount = 0, updated_at = now()
+    where id = old_fee.id;
+  else
+    -- The registration fee trigger books the Rs 1,000 on the new fee
+    insert into student_fees (student_id, batch_id, total_fee, paid_amount, discount_type, discount_value)
+    values (m.student_id, p_to_batch, p_fee, 0, 'amount', greatest(coalesce(target.base_fee, p_fee) - p_fee, 0));
+
+    -- The old fee stays as it is, frozen at what was paid: no more payments
+    update student_fees
+    set paid_at_exit = paid_amount, expected_on_exit = paid_amount, updated_at = now()
     where student_id = m.student_id and batch_id = m.batch_id;
+  end if;
 
-    update fee_payment_logs set batch_id = p_to_batch
-    where student_id = m.student_id and batch_id = m.batch_id;
+  insert into document_cleanup (path)
+  select p from unnest(array[m.offer_letter_path, m.cert_path]) as p where p is not null
+  on conflict do nothing;
 
-    update payment_claims set batch_id = p_to_batch
-    where student_id = m.student_id and batch_id = m.batch_id;
+  update batch_student_mapping
+  set status = 'transferred', left_on = today,
+      offer_letter_path = null, cert_path = null, offer_letter_shared = false, cert_shared = false
+  where id = p_mapping_id;
 
-    delete from attendance where student_id = m.student_id and batch_id = m.batch_id;
-    delete from assignment_completions
-    where student_id = m.student_id
-      and assignment_id in (select id from assignments where batch_id = m.batch_id);
-    delete from student_badges
-    where student_id = m.student_id
-      and badge_id in (select id from batch_badges where batch_id = m.batch_id);
-    delete from material_views
-    where student_id = m.student_id
-      and material_id in (select id from materials where batch_id = m.batch_id);
-
-    delete from batch_student_mapping where id = m.id;
-    moved := moved + 1;
-  end loop;
-
-  return jsonb_build_object('transferred', moved);
+  return jsonb_build_object('mapping_id', new_map, 'carried', carried);
 end $$;
 
-revoke all on function transfer_students(uuid[], uuid) from public;
-grant execute on function transfer_students(uuid[], uuid) to authenticated;
+revoke all on function transfer_student(uuid, uuid, numeric, boolean, date) from public;
+grant execute on function transfer_student(uuid, uuid, numeric, boolean, date) to authenticated;
 
 -- Deletes the login row first: students.auth_user_id -> auth.users is not on delete cascade,
 -- and the client has no rights on auth.users at all. Everything else cascades off students.id.
@@ -2031,7 +2082,7 @@ create policy tutor_read_own on curriculum_requests
 drop policy if exists student_read_own on curriculum_nodes;
 create policy student_read_own on curriculum_nodes
   for select using (
-    batch_id in (select batch_id from batch_student_mapping where student_id = (select current_student_id()))
+    batch_id in (select batch_id from batch_student_mapping where student_id = (select current_student_id()) and status::text <> 'transferred')
   );
 
 -- Makes the live tree equal p_nodes: upserts by id (a kept node keeps its status),
@@ -2335,7 +2386,7 @@ create policy tutor_manage_own on batch_badges
 drop policy if exists student_read_own on batch_badges;
 create policy student_read_own on batch_badges
   for select using (
-    batch_id in (select batch_id from batch_student_mapping where student_id = (select current_student_id()))
+    batch_id in (select batch_id from batch_student_mapping where student_id = (select current_student_id()) and status::text <> 'transferred')
   );
 
 drop policy if exists student_read_own on student_badges;

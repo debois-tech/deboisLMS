@@ -205,9 +205,13 @@ export default function FeesPage() {
                       </TD>
                       <TD><StatusPill kind="fee" value={left ? 'terminated' : isPaid ? 'paid' : 'due'} /></TD>
                       <TD>
-                        <Button size="sm" className="action-button-compact" onClick={() => openPaymentLogs(fee)}>
-                          <Plus size={14} /> Log Payment
-                        </Button>
+                        {student?.mapping.status === 'transferred' ? (
+                          <StatusPill kind="enrollment" value="transferred" />
+                        ) : (
+                          <Button size="sm" className="action-button-compact" onClick={() => openPaymentLogs(fee)}>
+                            <Plus size={14} /> Log Payment
+                          </Button>
+                        )}
                       </TD>
                     </TR>
                   );

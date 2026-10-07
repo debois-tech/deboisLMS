@@ -309,12 +309,19 @@ export async function addStudentToBatch(
   return mapping;
 }
 
-// Moves the fee, logs and claims to the target batch and deletes the rest of the old batch's data.
-export async function transferStudents(mappingIds: string[], toBatchId: string): Promise<{ transferred: number }> {
-  return row<{ transferred: number }>(
-    await supabase.rpc('transfer_students', { p_mapping_ids: mappingIds, p_to_batch: toBatchId }),
-    'Could not transfer the students',
+// One student to another running batch; the old enrolment stays as Transferred, its documents are dropped
+export async function transferStudent(mappingId: string, toBatchId: string, fee: number, carry: boolean, joinedOn?: string): Promise<void> {
+  ok(
+    await supabase.rpc('transfer_student', {
+      p_mapping_id: mappingId,
+      p_to_batch: toBatchId,
+      p_fee: fee,
+      p_carry: carry,
+      ...(joinedOn ? { p_joined_on: joinedOn } : {}),
+    }),
+    'Could not transfer this student',
   );
+  await processDocumentCleanup().catch((err) => console.error('[transfer] file clean-up', err));
 }
 
 /**
