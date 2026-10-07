@@ -238,6 +238,7 @@ export interface PaymentClaim {
 /** One GitHub repo per student — every assignment submission points at it. */
 export interface StudentRepo {
   student_id: string;
+  batch_id: string;
   repo_url: string;
   created_at?: string;
   updated_at?: string;

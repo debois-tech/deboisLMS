@@ -641,11 +641,14 @@ create trigger assignment_completions_guard
   before insert or update on assignment_completions
   for each row execute function guard_assignment_completion();
 
+-- One repo link per student per batch, so a second batch never shows the first one's
 create table if not exists student_repos (
-  student_id uuid primary key references students(id) on delete cascade,
+  student_id uuid references students(id) on delete cascade,
+  batch_id   uuid references batches(id) on delete cascade,
   repo_url   text not null,
   created_at timestamptz default now(),
-  updated_at timestamptz default now()
+  updated_at timestamptz default now(),
+  primary key (student_id, batch_id)
 );
 
 -- The submit dialog already refuses a non-GitHub link, but that check lives in
@@ -1077,12 +1080,18 @@ create policy student_read_own on materials
 -- ── Student — the two tables they may write ─────────────────────────────────
 drop policy if exists student_insert_own on student_repos;
 create policy student_insert_own on student_repos
-  for insert with check (student_id = current_student_id());
+  for insert with check (
+    student_id = current_student_id()
+    and batch_id in (select batch_id from batch_student_mapping where student_id = current_student_id())
+  );
 
 drop policy if exists student_update_own on student_repos;
 create policy student_update_own on student_repos
   for update using (student_id = current_student_id())
-  with check (student_id = current_student_id());
+  with check (
+    student_id = current_student_id()
+    and batch_id in (select batch_id from batch_student_mapping where student_id = current_student_id())
+  );
 
 -- Enrolment gate, and closed once the batch has ended. A late submission is still accepted, just flagged
 -- client-side by comparing submitted_at against the assignment's due_at.

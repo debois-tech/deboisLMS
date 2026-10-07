@@ -45,10 +45,10 @@ export default function PortalAssignmentsPage() {
 
   // The saved repo loads with the assignments, so the submit view can prefill the link immediately.
   const load = useCallback(async () => {
-    if (!studentId) return;
+    if (!studentId || !batchId) return;
     const [data, repo] = await Promise.all([
       getAssignmentsForStudent(studentId),
-      getStudentRepo(studentId),
+      getStudentRepo(studentId, batchId),
     ]);
     setAssignments(data.filter((item) => item.batch_id === batchId));
     setRepoUrl(repo?.repo_url);
@@ -58,7 +58,7 @@ export default function PortalAssignmentsPage() {
 
   const handleSubmit = async (url: string) => {
     if (!studentId || !open) return;
-    await submitAssignmentFromPortal(open.id, studentId, url);
+    await submitAssignmentFromPortal(open.id, studentId, open.batch_id, url);
     // Already saved, so a failed refresh must not surface as "Could not submit".
     try {
       await load();

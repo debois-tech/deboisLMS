@@ -791,3 +791,30 @@ $$;
 
 revoke all on function quiz_my_history() from public;
 grant execute on function quiz_my_history() to authenticated;
+
+-- 28. REPO LINK PER BATCH
+alter table student_repos add column if not exists batch_id uuid references batches(id) on delete cascade;
+
+-- A link saved before this belongs to the student's newest batch; one with no batch has nothing to attach to
+update student_repos r
+set batch_id = (select m.batch_id from batch_student_mapping m where m.student_id = r.student_id order by m.joined_at desc limit 1)
+where r.batch_id is null;
+delete from student_repos where batch_id is null;
+
+alter table student_repos drop constraint if exists student_repos_pkey;
+alter table student_repos add primary key (student_id, batch_id);
+
+drop policy if exists student_insert_own on student_repos;
+create policy student_insert_own on student_repos
+  for insert with check (
+    student_id = current_student_id()
+    and batch_id in (select batch_id from batch_student_mapping where student_id = current_student_id())
+  );
+
+drop policy if exists student_update_own on student_repos;
+create policy student_update_own on student_repos
+  for update using (student_id = current_student_id())
+  with check (
+    student_id = current_student_id()
+    and batch_id in (select batch_id from batch_student_mapping where student_id = current_student_id())
+  );
