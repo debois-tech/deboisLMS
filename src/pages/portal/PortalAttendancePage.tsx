@@ -15,16 +15,17 @@ import { ATTENDANCE_PARTIAL_PERCENT, getApprovedAttendanceByStudent } from '@/li
 import type { AttendanceRecord } from '@/lib/types';
 import { usePortalBatch } from '@/lib/context/PortalBatchContext';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
+import { countsFor } from '@/lib/utils/date';
 import { formatDayLabel } from '@/lib/utils/format';
 
 export default function PortalAttendancePage() {
   const studentId = usePortalStudentId();
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
-  const { batchId } = usePortalBatch();
+  const { batchId, current } = usePortalBatch();
 
   const { loading, error, retry } = useInitialLoad(async () => {
     if (!studentId) return;
-    setRecords((await getApprovedAttendanceByStudent(studentId)).filter((record) => record.batch_id === batchId));
+    setRecords((await getApprovedAttendanceByStudent(studentId)).filter((record) => record.batch_id === batchId && countsFor(record.lecture?.lecture_date, current?.joined_at ?? '', current?.count_earlier_work)));
   }, true);
 
   const attended = records.filter((record) => record.status !== 'absent').length;

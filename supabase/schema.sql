@@ -217,6 +217,8 @@ create table if not exists batch_student_mapping (
   -- Set by terminate_enrolment(). Null until the student leaves.
   left_on    date,
   status     mapping_status default 'active',
+  -- Off for a late joiner whose lectures and assignments from before they joined should not count against them
+  count_earlier_work boolean not null default true,
   unique (batch_id, student_id)
 );
 
@@ -1398,7 +1400,7 @@ grant execute on function terminate_enrolment(uuid, date) to authenticated;
 -- Moves one student to another running batch. The old enrolment stays as Transferred with its data, read-only;
 -- its documents are dropped. With p_carry the payments are copied to the new batch and stop counting in the old one.
 create or replace function transfer_student(
-  p_mapping_id uuid, p_to_batch uuid, p_fee numeric, p_carry boolean, p_joined_on date default null
+  p_mapping_id uuid, p_to_batch uuid, p_fee numeric, p_carry boolean, p_joined_on date default null, p_count_earlier boolean default true
 )
 returns jsonb
 language plpgsql
@@ -1471,8 +1473,8 @@ begin
   end if;
 
   -- The join date rule runs unless a date was given
-  insert into batch_student_mapping (batch_id, student_id, joined_at)
-  values (p_to_batch, m.student_id, p_joined_on)
+  insert into batch_student_mapping (batch_id, student_id, joined_at, count_earlier_work)
+  values (p_to_batch, m.student_id, p_joined_on, p_count_earlier)
   returning id into new_map;
 
   if p_carry then
@@ -1523,8 +1525,8 @@ begin
   return jsonb_build_object('mapping_id', new_map, 'carried', carried);
 end $$;
 
-revoke all on function transfer_student(uuid, uuid, numeric, boolean, date) from public;
-grant execute on function transfer_student(uuid, uuid, numeric, boolean, date) to authenticated;
+revoke all on function transfer_student(uuid, uuid, numeric, boolean, date, boolean) from public;
+grant execute on function transfer_student(uuid, uuid, numeric, boolean, date, boolean) to authenticated;
 
 -- Deletes the login row first: students.auth_user_id -> auth.users is not on delete cascade,
 -- and the client has no rights on auth.users at all. Everything else cascades off students.id.

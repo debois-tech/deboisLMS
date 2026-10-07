@@ -818,3 +818,139 @@ create policy student_update_own on student_repos
     student_id = current_student_id()
     and batch_id in (select batch_id from batch_student_mapping where student_id = current_student_id())
   );
+
+-- 29. LATE JOINERS: count the lectures and assignments from before they joined, or not
+alter table batch_student_mapping add column if not exists count_earlier_work boolean not null default true;
+
+drop function if exists transfer_student(uuid, uuid, numeric, boolean, date);
+
+-- Moves one student to another running batch. The old enrolment stays as Transferred with its data, read-only;
+-- its documents are dropped. With p_carry the payments are copied to the new batch and stop counting in the old one.
+create or replace function transfer_student(
+  p_mapping_id uuid, p_to_batch uuid, p_fee numeric, p_carry boolean, p_joined_on date default null, p_count_earlier boolean default true
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  m       batch_student_mapping%rowtype;
+  source  batches%rowtype;
+  target  batches%rowtype;
+  old_fee student_fees%rowtype;
+  new_fee student_fees%rowtype;
+  who     text;
+  pending int;
+  new_map uuid;
+  carried numeric := 0;
+  today   date := (now() at time zone 'Asia/Kolkata')::date;
+begin
+  if not is_admin() then
+    raise exception 'Admin only';
+  end if;
+
+  select * into m from batch_student_mapping where id = p_mapping_id for update;
+  if not found then
+    raise exception 'Enrolment not found';
+  end if;
+  select name into who from students where id = m.student_id;
+
+  if m.status <> 'active' then
+    raise exception '% is not active in this batch', who;
+  end if;
+
+  select * into source from batches where id = m.batch_id;
+  if source.ended_at is not null then
+    raise exception '% is in a finished batch: add them to the new batch instead of transferring', who;
+  end if;
+
+  select * into target from batches where id = p_to_batch;
+  if not found then
+    raise exception 'Target batch not found';
+  end if;
+  if target.ended_at is not null or target.status = 'completed' then
+    raise exception 'The target batch has ended';
+  end if;
+  if exists (select 1 from batch_student_mapping where batch_id = p_to_batch and student_id = m.student_id) then
+    raise exception '% is already in the target batch', who;
+  end if;
+
+  select count(*) into pending from payment_claims
+  where student_id = m.student_id and batch_id = m.batch_id and status = 'pending';
+  if pending > 0 then
+    raise exception 'Clear % payment claims for % first', pending, who;
+  end if;
+
+  if p_fee is null or p_fee < 0 then
+    raise exception 'Fee must be 0 or more';
+  end if;
+  if target.base_fee is not null and p_fee > target.base_fee then
+    raise exception 'Fee is above the base fee of %', target.base_fee;
+  end if;
+
+  select * into old_fee from student_fees where student_id = m.student_id and batch_id = m.batch_id for update;
+  if p_carry then
+    if not found then
+      raise exception '% has no fee to carry over', who;
+    end if;
+    if p_fee < old_fee.paid_amount then
+      raise exception 'Fee is below the % already paid by %', old_fee.paid_amount, who;
+    end if;
+  end if;
+
+  -- The join date rule runs unless a date was given
+  insert into batch_student_mapping (batch_id, student_id, joined_at, count_earlier_work)
+  values (p_to_batch, m.student_id, p_joined_on, p_count_earlier)
+  returning id into new_map;
+
+  if p_carry then
+    -- The carried payments already include the registration fee
+    perform set_config('app.skip_registration', 'on', true);
+    insert into student_fees (student_id, batch_id, total_fee, paid_amount, transferred, discount_type, discount_value)
+    values (m.student_id, p_to_batch, p_fee, 0, true, 'amount', greatest(coalesce(target.base_fee, p_fee) - p_fee, 0))
+    returning * into new_fee;
+    perform set_config('app.skip_registration', 'off', true);
+
+    insert into fee_payment_logs (student_fee_id, student_id, batch_id, amount, payment_date, payment_method, notes)
+    select new_fee.id, l.student_id, p_to_batch, l.amount, l.payment_date, l.payment_method,
+           concat_ws(' · ', l.notes, 'Transferred from ' || source.name || ', counted for this batch')
+    from fee_payment_logs l
+    where l.student_fee_id = old_fee.id;
+
+    carried := old_fee.paid_amount;
+    update student_fees set paid_amount = carried where id = new_fee.id;
+
+    update fee_payment_logs
+    set notes = concat_ws(' · ', notes, 'Transferred to ' || target.name || ', not counted here')
+    where student_fee_id = old_fee.id;
+
+    -- Nothing left to count or collect in the old batch
+    update student_fees
+    set paid_at_exit = old_fee.paid_amount, expected_on_exit = 0, paid_amount = 0, updated_at = now()
+    where id = old_fee.id;
+  else
+    -- The registration fee trigger books the Rs 1,000 on the new fee
+    insert into student_fees (student_id, batch_id, total_fee, paid_amount, discount_type, discount_value)
+    values (m.student_id, p_to_batch, p_fee, 0, 'amount', greatest(coalesce(target.base_fee, p_fee) - p_fee, 0));
+
+    -- The old fee stays as it is, frozen at what was paid: no more payments
+    update student_fees
+    set paid_at_exit = paid_amount, expected_on_exit = paid_amount, updated_at = now()
+    where student_id = m.student_id and batch_id = m.batch_id;
+  end if;
+
+  insert into document_cleanup (path)
+  select p from unnest(array[m.offer_letter_path, m.cert_path]) as p where p is not null
+  on conflict do nothing;
+
+  update batch_student_mapping
+  set status = 'transferred', left_on = today,
+      offer_letter_path = null, cert_path = null, offer_letter_shared = false, cert_shared = false
+  where id = p_mapping_id;
+
+  return jsonb_build_object('mapping_id', new_map, 'carried', carried);
+end $$;
+
+revoke all on function transfer_student(uuid, uuid, numeric, boolean, date, boolean) from public;
+grant execute on function transfer_student(uuid, uuid, numeric, boolean, date, boolean) to authenticated;

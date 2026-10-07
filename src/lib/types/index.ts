@@ -252,6 +252,8 @@ export interface BatchStudentMapping {
   /** Set only once terminated. */
   left_on?: string | null;
   status: MappingStatus;
+  // Off: lectures and assignments from before the join date do not count against the student
+  count_earlier_work?: boolean;
   /** Made only when an admin clicks Generate on the roster; both live in the private `documents` bucket. */
   offer_letter_path?: string | null;
   cert_path?: string | null;

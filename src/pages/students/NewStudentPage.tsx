@@ -13,6 +13,7 @@ import { GENDER_OPTIONS } from '@/lib/utils/studentImport';
 import { Spinner } from '@/components/ui/Spinner';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { EarlierWorkTick } from '@/components/batches/EarlierWorkTick';
 import { CredentialsModal } from '@/components/students/StudentLoginCard';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { createStudentInBatch, createStudentLogin, getBatches } from '@/lib/supabase';
@@ -35,6 +36,7 @@ export default function NewStudentPage() {
   const [discount, setDiscount] = useState('');
   const [discountType, setDiscountType] = useState<'percentage' | 'amount'>('percentage');
   const [feeText, setFeeText] = useState<string | null>(null);
+  const [countEarlier, setCountEarlier] = useState(true);
   // Mirrors STUDENT_IMPORT_FIELDS, so a student typed in here carries the same
   // profile as one that arrived on a CSV.
   const [form, setForm] = useState({
@@ -100,6 +102,7 @@ export default function NewStudentPage() {
         batchId,
         payable,
         { type: discountType, value: Number(discount) || 0 },
+        countEarlier,
       );
       setCreatedStudentId(student.id);
       showToast('Student added');
@@ -236,6 +239,7 @@ export default function NewStudentPage() {
           </div>
           <FormField label="GitHub URL"><input value={form.github_url} onChange={set('github_url')} /></FormField>
           <FormField label="LinkedIn URL"><input value={form.linkedin_url} onChange={set('linkedin_url')} /></FormField>
+          <EarlierWorkTick batch={batch} checked={countEarlier} onChange={setCountEarlier} />
           <div className="flex gap-3 pt-2">
             <Button
               className="action-button"

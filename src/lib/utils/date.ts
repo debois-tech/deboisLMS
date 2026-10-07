@@ -91,3 +91,8 @@ export function formatDateValue(value: string): string {
   if (!date) return '';
   return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 }
+
+// Whether something dated `day` counts for a student who joined on `joinedOn`; off means earlier work is left out
+export function countsFor(day: string | undefined, joinedOn: string, countEarlier = true): boolean {
+  return countEarlier || !day || day.slice(0, 10) >= joinedOn.slice(0, 10);
+}

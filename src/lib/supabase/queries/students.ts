@@ -94,10 +94,11 @@ export async function createStudentInBatch(
   batchId: string,
   fee: number,
   discount: { type: 'percentage' | 'amount'; value: number },
+  countEarlier = true,
 ): Promise<{ student: Student; earlier?: Student }> {
   const created = await createNewStudent(input);
   try {
-    await addStudentToBatch(created.student.id, batchId, fee, discount);
+    await addStudentToBatch(created.student.id, batchId, fee, discount, countEarlier);
   } catch (err) {
     await deleteStudent(created.student.id).catch((cleanup) => console.error('[createStudentInBatch] cleanup', cleanup));
     throw err;
@@ -277,11 +278,12 @@ export async function addStudentToBatch(
   batchId: string,
   totalFee: number,
   discount?: { type: 'percentage' | 'amount'; value: number },
+  countEarlier = true,
 ): Promise<BatchStudentMapping> {
   const mapping = row<BatchStudentMapping>(
     await supabase
       .from('batch_student_mapping')
-      .insert({ student_id: studentId, batch_id: batchId })
+      .insert({ student_id: studentId, batch_id: batchId, count_earlier_work: countEarlier })
       .select()
       .single(),
     'Could not add the student to the batch',
@@ -310,13 +312,14 @@ export async function addStudentToBatch(
 }
 
 // One student to another running batch; the old enrolment stays as Transferred, its documents are dropped
-export async function transferStudent(mappingId: string, toBatchId: string, fee: number, carry: boolean, joinedOn?: string): Promise<void> {
+export async function transferStudent(mappingId: string, toBatchId: string, fee: number, carry: boolean, joinedOn?: string, countEarlier = true): Promise<void> {
   ok(
     await supabase.rpc('transfer_student', {
       p_mapping_id: mappingId,
       p_to_batch: toBatchId,
       p_fee: fee,
       p_carry: carry,
+      p_count_earlier: countEarlier,
       ...(joinedOn ? { p_joined_on: joinedOn } : {}),
     }),
     'Could not transfer this student',

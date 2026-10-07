@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
+import { EarlierWorkTick } from '@/components/batches/EarlierWorkTick';
 import { BatchSelect } from '@/components/ui/BatchSelect';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { FormField } from '@/components/ui/FormField';
@@ -36,6 +37,7 @@ export function TransferWizard({ open, onClose, source, students, targets, onDon
   const [step, setStep] = useState(0);
   const [targetId, setTargetId] = useState<string | null>(null);
   const [joinedOn, setJoinedOn] = useState('');
+  const [countEarlier, setCountEarlier] = useState(true);
   const [carry, setCarry] = useState(false);
   const [mode, setMode] = useState<'same' | 'each'>('same');
   const [sameFee, setSameFee] = useState('');
@@ -106,7 +108,7 @@ export function TransferWizard({ open, onClose, source, students, targets, onDon
     const failures: string[] = [];
     for (const student of students) {
       try {
-        await transferStudent(student.mapping.id, target.id, Number(feeOf(student)), carry, joinedOn || undefined);
+        await transferStudent(student.mapping.id, target.id, Number(feeOf(student)), carry, joinedOn || undefined, countEarlier);
       } catch (err) {
         failures.push(`${student.name}: ${errorMessage(err, 'failed')}`);
       }
@@ -148,6 +150,7 @@ export function TransferWizard({ open, onClose, source, students, targets, onDon
             <FormField label="Join date">
               <DatePicker value={joinedOn} onChange={setJoinedOn} placeholder="By the first-week rule" ariaLabel="Join date" />
             </FormField>
+            <EarlierWorkTick batch={target} checked={countEarlier} onChange={setCountEarlier} />
           </>
         )}
 

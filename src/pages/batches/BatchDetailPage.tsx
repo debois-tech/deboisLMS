@@ -44,6 +44,7 @@ import type { Batch, BatchProgramOption, Student, Tutor, Lecture, AttendanceReco
 import { formatDate, formatCurrency, feeFromDiscount } from '@/lib/utils/format';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { StudentImportModal } from '@/components/students/StudentImportModal';
+import { EarlierWorkTick } from '@/components/batches/EarlierWorkTick';
 import { TransferWizard } from '@/components/batches/TransferWizard';
 import { useToast } from '@/lib/context/ToastContext';
 import { useConfirm } from '@/lib/context/ConfirmContext';
@@ -326,6 +327,7 @@ function StudentsTab({ batch }: { batch: Batch }) {
   const [students, setStudents] = useState<(Student & { mapping: BatchStudentMapping })[]>([]);
   const [allStudents, setAllStudents] = useState<Student[]>([]);
   const [showAdd, setShowAdd] = useState(false);
+  const [countEarlier, setCountEarlier] = useState(true);
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
   // A percentage, unlike the CSV's rupee amount. The fee comes off the batch.
   const [discount, setDiscount] = useState('');
@@ -383,7 +385,7 @@ function StudentsTab({ batch }: { batch: Batch }) {
   const handleAdd = async () => {
     if (!selectedStudents.length || payable === null) return;
     try {
-      const outcomes = await Promise.allSettled(selectedStudents.map((studentId) => addStudentToBatch(studentId, batchId, payable)));
+      const outcomes = await Promise.allSettled(selectedStudents.map((studentId) => addStudentToBatch(studentId, batchId, payable, undefined, countEarlier)));
       const failed = outcomes.flatMap((outcome) => (outcome.status === 'rejected' ? [errorMessage(outcome.reason, 'failed')] : []));
       void reloadStudents();
       if (failed.length > 0) {
@@ -531,6 +533,8 @@ function StudentsTab({ batch }: { batch: Batch }) {
               <input value={payable === null ? '—' : formatCurrency(payable)} readOnly disabled />
             </FormField>
           </div>
+
+          <EarlierWorkTick batch={batch} checked={countEarlier} onChange={setCountEarlier} />
 
           {baseFee === null && (
             <InlineAlert>

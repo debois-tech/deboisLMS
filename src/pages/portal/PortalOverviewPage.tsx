@@ -43,6 +43,7 @@ import { usePortalBatch } from '@/lib/context/PortalBatchContext';
 import { useToast } from '@/lib/context/ToastContext';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { useNow } from '@/lib/hooks/useNow';
+import { countsFor } from '@/lib/utils/date';
 import { assignmentState } from '@/lib/utils/deadline';
 import { deriveBatchStatus, formatCurrency, formatDate, formatDayLabel } from '@/lib/utils/format';
 import { behindOnFees, dueInstallment, installmentDetail, installmentLabel } from '@/lib/utils/installments';
@@ -98,8 +99,10 @@ export default function PortalOverviewPage() {
     setFees(feeRows);
     setNextLecture(upcoming);
     // Only the chosen batch: nothing from the others shows
-    setAttendance(records.filter((record) => record.batch_id === batchId));
-    setAssignments(work.filter((item) => item.batch_id === batchId));
+    const joined = currentMapping?.joined_at ?? '';
+    const early = currentMapping?.count_earlier_work;
+    setAttendance(records.filter((record) => record.batch_id === batchId && countsFor(record.lecture?.lecture_date, joined, early)));
+    setAssignments(work.filter((item) => item.batch_id === batchId && countsFor(item.assigned_date ?? item.created_at, joined, early)));
     setMyBadges(badgeSet && { ...badgeSet, badges: badgeSet.badges.filter((badge) => badge.batch_id === batchId) });
     setOpenQuizzes(quizzes.filter((quiz) => !quiz.batch_id || quiz.batch_id === batchId));
   }, true);
