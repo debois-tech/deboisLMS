@@ -15,6 +15,7 @@ import { BatchRoleField, roleReady, saveRole, type RoleDraft } from '@/component
 import { getBatchById, getBatchPrograms, getInternshipRoles, updateBatch } from '@/lib/supabase';
 import type { Batch, BatchProgram, BatchProgramOption } from '@/lib/types';
 import { useConfirm } from '@/lib/context/ConfirmContext';
+import { useNow } from '@/lib/hooks/useNow';
 import { useToast } from '@/lib/context/ToastContext';
 import { errorMessage } from '@/lib/utils/errors';
 import { formatDate } from '@/lib/utils/format';
@@ -30,6 +31,9 @@ export default function EditBatchPage() {
   const [savedEnd, setSavedEnd] = useState<string | null>(null);
   const { showToast } = useToast();
   const confirm = useConfirm();
+  const now = useNow();
+  // 90 days after it ended the logins and documents are gone, so the date can no longer move
+  const cleanedUp = savedEnd !== null && now - new Date(savedEnd).getTime() > 90 * 86_400_000;
 
   const { loading, error, retry } = useInitialLoad(async () => {
     if (!batchId) return;
@@ -136,7 +140,12 @@ export default function EditBatchPage() {
               ariaLabel="Start date"
             />
           </FormField>
-          {savedEnd && (
+          {savedEnd && cleanedUp && (
+            <FormField label="End Date">
+              <input value={formatDate(savedEnd)} readOnly disabled />
+            </FormField>
+          )}
+          {savedEnd && !cleanedUp && (
             <FormField label="End Date">
               <DatePicker
                 value={form.ended_at?.slice(0, 10) ?? ''}

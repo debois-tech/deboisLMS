@@ -311,6 +311,11 @@ export async function addStudentToBatch(
   return mapping;
 }
 
+// The day a student started in a batch: documents and instalments count from it
+export async function updateJoinDate(mappingId: string, joinedOn: string): Promise<void> {
+  ok(await supabase.from('batch_student_mapping').update({ joined_at: joinedOn }).eq('id', mappingId), 'Could not change the join date');
+}
+
 // One student to another running batch; the old enrolment stays as Transferred, its documents are dropped
 export async function transferStudent(mappingId: string, toBatchId: string, fee: number, carry: boolean, joinedOn?: string, countEarlier = true): Promise<void> {
   ok(

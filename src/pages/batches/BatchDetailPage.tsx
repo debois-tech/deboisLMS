@@ -1078,11 +1078,13 @@ function FinanceTab({ batchId }: { batchId: string }) {
                       </span>
                     </TD>
                     <TD>
-                      <StatusPill kind="fee" value={status} />
+                      {student?.mapping.status === 'transferred'
+                        ? <StatusPill kind="enrollment" value="transferred" />
+                        : <StatusPill kind="fee" value={status} />}
                     </TD>
                     <TD>
                       {student?.mapping.status === 'transferred' ? (
-                        <StatusPill kind="enrollment" value="transferred" />
+                        <span className="cell-muted">—</span>
                       ) : (
                         <Button size="sm" className="action-button-compact" onClick={() => openPaymentLogs(fee)}>
                           <Plus size={14} /> Log Payment

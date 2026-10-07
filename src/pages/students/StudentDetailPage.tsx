@@ -6,6 +6,7 @@ import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { StatusPill } from '@/components/ui/StatusPill';
 import { EnrolmentSelect } from '@/components/ui/BatchSelect';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { Spinner } from '@/components/ui/Spinner';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -16,7 +17,7 @@ import { StudentLoginCard } from '@/components/students/StudentLoginCard';
 import { StudentIdChip } from '@/components/students/StudentLink';
 import { Badge } from '@/components/ui/Badge';
 import { ClaimActions } from '@/components/finance/ClaimActions';
-import { getStudentById, getStudentBatches, getFeesByStudent, getLecturesByBatch, getFeePaymentLogsByStudent, getPendingClaims, terminateEnrolment, setStudentFee, getStudentDeletionCounts, deleteStudent } from '@/lib/supabase';
+import { getStudentById, getStudentBatches, getFeesByStudent, getLecturesByBatch, getFeePaymentLogsByStudent, getPendingClaims, terminateEnrolment, updateJoinDate, setStudentFee, getStudentDeletionCounts, deleteStudent } from '@/lib/supabase';
 import type { StudentDeletionCounts } from '@/lib/supabase';
 import type { Student, BatchStudentMapping, Batch, StudentFee, Lecture, FeePaymentLog, PaymentClaim } from '@/lib/types';
 import { formatDate, formatCurrency } from '@/lib/utils/format';
@@ -48,6 +49,8 @@ export default function StudentDetailPage() {
   const [terminating, setTerminating] = useState(false);
   // The fee being typed, or null when the fee is not being edited.
   const [feeDraft, setFeeDraft] = useState<string | null>(null);
+  // The join date being typed, or null when it is not being edited
+  const [joinDraft, setJoinDraft] = useState<string | null>(null);
   const [savingFee, setSavingFee] = useState(false);
   const { showToast } = useToast();
   const confirm = useConfirm();
@@ -154,6 +157,32 @@ export default function StudentDetailPage() {
       showToast(errorMessage(err, 'Could not delete this student'), 'error');
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleJoinDateSave = async () => {
+    if (!currentMapping || !joinDraft || joinDraft === currentMapping.joined_at.slice(0, 10)) return;
+    const accepted = await confirm({
+      title: 'Change the join date?',
+      message: (
+        <>
+          <span className="block">{formatDate(currentMapping.joined_at)} → {formatDate(joinDraft)}</span>
+          <span className="block">Offer letter and certificate start dates follow it</span>
+          <span className="block">Instalments count from it</span>
+        </>
+      ),
+      confirmLabel: 'Change date',
+      danger: true,
+      requireText: 'DATE',
+    });
+    if (!accepted) return;
+    try {
+      await updateJoinDate(currentMapping.id, joinDraft);
+      showToast('Join date changed');
+      setJoinDraft(null);
+      retry();
+    } catch (err) {
+      showToast(errorMessage(err, 'Could not change the join date'), 'error');
     }
   };
 
@@ -283,7 +312,7 @@ export default function StudentDetailPage() {
             {currentMapping && <StatusPill kind="enrollment" value={currentMapping.status} />}
           </div>
           {currentMapping && batchMappings.length > 1 ? (
-            <EnrolmentSelect mappings={newestFirst} value={currentMapping.batch_id} onChange={(id) => { setSelectedBatchId(id); setFeeDraft(null); }} />
+            <EnrolmentSelect mappings={newestFirst} value={currentMapping.batch_id} onChange={(id) => { setSelectedBatchId(id); setFeeDraft(null); setJoinDraft(null); }} />
           ) : currentBatch ? (
             <Link to={`/batches/${currentBatch.id}`} className="student-summary-value student-summary-link">
               {currentBatch.name}
@@ -291,6 +320,27 @@ export default function StudentDetailPage() {
           ) : (
             <p className="student-summary-empty">No current batch</p>
           )}
+          {currentMapping && (joinDraft === null ? (
+            <p className="student-summary-meta flex items-center gap-2">
+              Joined {formatDate(currentMapping.joined_at)}
+              {isActive && (
+                <button
+                  type="button"
+                  onClick={() => setJoinDraft(currentMapping.joined_at.slice(0, 10))}
+                  aria-label="Change join date"
+                  className="flex h-6 w-6 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-overlay)] hover:text-[var(--text-primary)]"
+                >
+                  <Pencil size={12} />
+                </button>
+              )}
+            </p>
+          ) : (
+            <div className="flex items-center gap-2">
+              <DatePicker value={joinDraft} onChange={setJoinDraft} placeholder="Pick a date" ariaLabel="Join date" />
+              <Button size="sm" className="action-button-compact" onClick={() => void handleJoinDateSave()}>Save</Button>
+              <Button size="sm" variant="ghost" className="action-button-compact" onClick={() => setJoinDraft(null)}>Cancel</Button>
+            </div>
+          ))}
         </Card>
         <Card padding="sm" className="student-summary-card">
           <div className="flex items-center justify-between gap-2">
