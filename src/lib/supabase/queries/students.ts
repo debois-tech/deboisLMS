@@ -1,5 +1,6 @@
 import { supabase } from '../client';
 import { processDocumentCleanup, removeStoredDocuments } from './documents';
+import { logFailures } from './notices';
 import { invokeLoginFunction, maybeRow, ok, row, rows } from './result';
 import type { Batch, Student, BatchStudentMapping, StudentCredentials } from '@/lib/types';
 import { errorMessage } from '@/lib/utils/errors';
@@ -126,6 +127,7 @@ export async function importStudentsIntoBatch(
       failed.push({ row, name, reason: errorMessage(err, 'Could not import this row') });
     }
   }
+  await logFailures('csv_import', failed.map((entry) => `${entry.name}: ${entry.reason}`));
   return { imported, failed };
 }
 
@@ -226,6 +228,7 @@ export async function createStudentLoginsBulk(
     }));
   }
 
+  await logFailures('login_create', result.failed.map((entry) => `${entry.name}: ${entry.reason}`));
   return result;
 }
 

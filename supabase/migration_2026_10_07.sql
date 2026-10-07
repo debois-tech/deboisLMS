@@ -227,6 +227,69 @@ create policy admin_full_access on document_cleanup
 
 drop function if exists revoke_expired_student_logins();
 
+-- 24. NOTICES: failed actions and expiring accounts
+-- Things that went wrong in the background or in bulk, shown in the admin notices until cleared
+do $ begin create type failure_kind as enum ('cleanup', 'document_email', 'csv_import', 'login_create'); exception when duplicate_object then null; end $;
+
+create table if not exists action_failures (
+  id         uuid primary key default gen_random_uuid(),
+  kind       failure_kind not null,
+  detail     text not null,
+  created_at timestamptz not null default now()
+);
+
+alter table action_failures enable row level security;
+drop policy if exists admin_full_access on action_failures;
+create policy admin_full_access on action_failures
+  for all using (is_admin()) with check (is_admin());
+
+-- Students whose login and documents go within p_days, with what the admin may want to settle first
+create or replace function expiring_students(p_days int default 14)
+returns table (
+  student_id uuid, student_name text, student_code text, batch_name text,
+  ended_on date, delete_on date, owed numeric, docs_made int, docs_shared int
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $
+begin
+  if not is_admin() then
+    raise exception 'Admin only';
+  end if;
+
+  return query
+  select s.id, s.name, s.student_code, b.name,
+         b.ended_at, coalesce(b.ended_at, s.no_batch_since) + 90,
+         greatest(coalesce(sf.total_fee, 0) - coalesce(sf.paid_amount, 0), 0),
+         (m.offer_letter_path is not null)::int + (m.cert_path is not null)::int,
+         m.offer_letter_shared::int + m.cert_shared::int
+  from students s
+  left join lateral (
+    select m2.* from batch_student_mapping m2
+    join batches b2 on b2.id = m2.batch_id
+    where m2.student_id = s.id
+    order by b2.ended_at desc nulls last
+    limit 1
+  ) m on true
+  left join batches b on b.id = m.batch_id
+  left join student_fees sf on sf.student_id = s.id and sf.batch_id = m.batch_id
+  where s.auth_user_id is not null
+    and not s.is_test
+    and not exists (
+      select 1 from batch_student_mapping m3
+      join batches b3 on b3.id = m3.batch_id
+      where m3.student_id = s.id and m3.status = 'active' and b3.ended_at is null
+    )
+    and coalesce(b.ended_at, s.no_batch_since) is not null
+    and coalesce(b.ended_at, s.no_batch_since) + 90 <= current_date + p_days
+  order by 6;
+end $;
+
+revoke all on function expiring_students(int) from public;
+grant execute on function expiring_students(int) to authenticated;
+
 -- 90 days after a batch ends, with nothing running, the login and documents go; every other record stays
 create or replace function expire_students()
 returns int
@@ -268,20 +331,26 @@ begin
         )
       )
   loop
-    insert into document_cleanup (path)
-    select p from batch_student_mapping m, unnest(array[m.offer_letter_path, m.cert_path]) as p
-    where m.student_id = expired.student_id and p is not null
-    on conflict do nothing;
+    -- One student failing must not stop the rest; it is reported in the admin notices
+    begin
+      insert into document_cleanup (path)
+      select p from batch_student_mapping m, unnest(array[m.offer_letter_path, m.cert_path]) as p
+      where m.student_id = expired.student_id and p is not null
+      on conflict do nothing;
 
-    update batch_student_mapping
-    set status = case when status = 'active' then 'archived'::mapping_status else status end,
-        offer_letter_path = null, cert_path = null, offer_letter_shared = false, cert_shared = false
-    where student_id = expired.student_id;
+      update batch_student_mapping
+      set status = case when status = 'active' then 'archived'::mapping_status else status end,
+          offer_letter_path = null, cert_path = null, offer_letter_shared = false, cert_shared = false
+      where student_id = expired.student_id;
 
-    -- Unlinked first, so this works whatever the foreign key does on delete
-    update students set auth_user_id = null, password_rotated = false, no_batch_since = null where id = expired.student_id;
-    delete from auth.users where id = expired.auth_user_id;
-    removed := removed + 1;
+      -- Unlinked first, so this works whatever the foreign key does on delete
+      update students set auth_user_id = null, password_rotated = false, no_batch_since = null where id = expired.student_id;
+      delete from auth.users where id = expired.auth_user_id;
+      removed := removed + 1;
+    exception when others then
+      insert into action_failures (kind, detail)
+      values ('cleanup', 'Clean-up failed for ' || (select name from students where id = expired.student_id) || ': ' || sqlerrm);
+    end;
   end loop;
 
   return removed;

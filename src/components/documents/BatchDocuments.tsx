@@ -12,7 +12,7 @@ import { StudentLink } from '@/components/students/StudentLink';
 import { useConfirm } from '@/lib/context/ConfirmContext';
 import { useToast } from '@/lib/context/ToastContext';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
-import { generateAndStoreDocument, getBatchStudents, sendDocumentEmail, setDocumentShared, viewStoredDocument } from '@/lib/supabase';
+import { generateAndStoreDocument, getBatchStudents, logFailures, sendDocumentEmail, setDocumentShared, viewStoredDocument } from '@/lib/supabase';
 import type { Batch, DocumentKind, Student, BatchStudentMapping } from '@/lib/types';
 import { errorMessage } from '@/lib/utils/errors';
 
@@ -213,6 +213,7 @@ export function BatchDocuments({ batch }: { batch: Batch }) {
         failures.push(`${tag(row, kind)}: ${errorMessage(err, 'failed')}`);
       }
     }
+    if (verb === 'Emailed') void logFailures('document_email', failures);
     const ok = work.length - failures.length;
     showToast(
       failures.length === 0
