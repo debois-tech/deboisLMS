@@ -79,3 +79,23 @@ export async function getTutorByAuthUserId(authUserId: string): Promise<Tutor | 
 export async function createTutorLogin(tutorId: string, rotate = false): Promise<StudentCredentials> {
   return invokeLoginFunction('create-tutor-login', { tutor_id: tutorId, rotate });
 }
+
+export interface TutorAction {
+  id: string;
+  tutor_id: string | null;
+  tutor_name: string;
+  op: 'created' | 'updated' | 'deleted';
+  item: string;
+  detail: string | null;
+  batch_id: string | null;
+  times: number;
+  created_at: string;
+}
+
+// Newest first; written by database triggers on everything a tutor changes
+export async function getTutorActions(): Promise<TutorAction[]> {
+  return rows<TutorAction>(
+    await supabase.from('tutor_actions').select('*').order('created_at', { ascending: false }).limit(500),
+    'Could not load the tutor log',
+  );
+}

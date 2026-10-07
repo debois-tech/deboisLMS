@@ -3266,3 +3266,96 @@ end $$;
 
 revoke all on function set_student_fee(uuid, uuid, numeric) from public;
 grant execute on function set_student_fee(uuid, uuid, numeric) to authenticated;
+
+
+-- 21. TUTOR LOG
+-- Everything a tutor does, for the admin Tutor Log. Written by triggers, so no screen can skip it.
+do $$ begin create type tutor_action_op as enum ('created', 'updated', 'deleted'); exception when duplicate_object then null; end $$;
+
+create table if not exists tutor_actions (
+  id         uuid primary key default gen_random_uuid(),
+  tutor_id   uuid references tutors(id) on delete set null,
+  tutor_name text not null,
+  op         tutor_action_op not null,
+  item       text not null,
+  detail     text,
+  batch_id   uuid,
+  times      int not null default 1,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_tutor_actions_created on tutor_actions(created_at desc);
+
+alter table tutor_actions enable row level security;
+drop policy if exists admin_full_access on tutor_actions;
+create policy admin_full_access on tutor_actions
+  for all using (is_admin()) with check (is_admin());
+
+create or replace function log_tutor_action()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  tutor     tutors%rowtype;
+  doc       jsonb := case when tg_op = 'DELETE' then to_jsonb(old) else to_jsonb(new) end;
+  action_op tutor_action_op := case tg_op when 'INSERT' then 'created' when 'UPDATE' then 'updated' else 'deleted' end;
+  label     text := case tg_table_name
+    when 'lectures' then 'Lecture'
+    when 'attendance' then 'Attendance'
+    when 'uploads' then 'Attendance upload'
+    when 'assignments' then 'Assignment'
+    when 'assignment_completions' then 'Assignment mark'
+    when 'materials' then 'Study material'
+    when 'batch_badges' then 'Badge'
+    when 'student_badges' then 'Badge given'
+    when 'quizzes' then 'Quiz'
+    when 'curriculum_nodes' then 'Curriculum'
+    else 'Curriculum submission'
+  end;
+  about     text := coalesce(doc->>'title', doc->>'name');
+  batch     uuid;
+begin
+  if not is_tutor() then
+    return null;
+  end if;
+
+  select * into tutor from tutors where auth_user_id = auth.uid();
+  if not found then
+    return null;
+  end if;
+
+  batch := coalesce(
+    nullif(doc->>'batch_id', '')::uuid,
+    (select a.batch_id from assignments a where a.id = nullif(doc->>'assignment_id', '')::uuid),
+    (select bb.batch_id from batch_badges bb where bb.id = nullif(doc->>'badge_id', '')::uuid)
+  );
+
+  -- A burst of the same action (marking a whole class) folds into one row
+  update tutor_actions
+  set times = times + 1
+  where tutor_id = tutor.id and op = action_op and item = label
+    and batch_id is not distinct from batch
+    and detail is not distinct from about
+    and created_at > now() - interval '1 minute';
+
+  if not found then
+    insert into tutor_actions (tutor_id, tutor_name, op, item, detail, batch_id)
+    values (tutor.id, tutor.name, action_op, label, about, batch);
+  end if;
+
+  return null;
+end $$;
+
+do $$
+declare t text;
+begin
+  foreach t in array array[
+    'lectures', 'attendance', 'uploads', 'assignments', 'assignment_completions', 'materials',
+    'batch_badges', 'student_badges', 'quizzes', 'curriculum_nodes', 'curriculum_requests'
+  ] loop
+    execute format('drop trigger if exists log_tutor_action on %I', t);
+    execute format('create trigger log_tutor_action after insert or update or delete on %I for each row execute function log_tutor_action()', t);
+  end loop;
+end $$;

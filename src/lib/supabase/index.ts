@@ -2,7 +2,8 @@ export { getBatches, getBatchById, createBatch, updateBatch, deleteBatch, conver
 export type { BatchDeletionCounts } from './queries/batches';
 export { getStudents, getStudentById, createStudent, createNewStudent, updateStudent, getStudentBatches, getAllBatchStudentMappings, getBatchStudents, addStudentToBatch, createStudentInBatch, terminateEnrolment, transferStudents, getStudentDeletionCounts, getConversionPreview, deleteStudent, getStudentByAuthUserId, createStudentLogin, createStudentLoginsBulk, sendCredentialsEmail, importStudentsIntoBatch, getInternshipRoles, addInternshipRole } from './queries/students';
 export type { BulkLoginResult, CredentialEmailResult, TerminationResult, StudentDeletionCounts } from './queries/students';
-export { getTutors, getTutorById, createTutor, getTutorBatches, getBatchTutors, assignTutorToBatch, removeTutorFromBatch, deleteTutor, getTutorByAuthUserId, createTutorLogin } from './queries/tutors';
+export { getTutors, getTutorById, getTutorActions, createTutor, getTutorBatches, getBatchTutors, assignTutorToBatch, removeTutorFromBatch, deleteTutor, getTutorByAuthUserId, createTutorLogin } from './queries/tutors';
+export type { TutorAction } from './queries/tutors';
 export { getLecturesByBatch, getLectureById, createLecture, updateLecture, deleteLecture } from './queries/lectures';
 export { getUploadsByLecture, getAttendanceByLecture, getAttendanceByBatch, getApprovedAttendanceByStudent, insertUploadRows, markAttendance, deleteAttendance, approveAttendance, setAttendanceApproved, bulkApproveAttendance, getUnapprovedCount } from './queries/attendance';
 export { processAttendance, computeStatus, ATTENDANCE_PRESENT_PERCENT, ATTENDANCE_PARTIAL_PERCENT } from '@/lib/attendance/process';
