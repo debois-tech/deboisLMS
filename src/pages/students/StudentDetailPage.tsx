@@ -16,13 +16,23 @@ import { StudentLoginCard } from '@/components/students/StudentLoginCard';
 import { StudentIdChip } from '@/components/students/StudentLink';
 import { Badge } from '@/components/ui/Badge';
 import { ClaimActions } from '@/components/finance/ClaimActions';
-import { DeleteStudentModal } from '@/components/students/DeleteStudentModal';
-import { getStudentById, getStudentBatches, getFeesByStudent, getLecturesByBatch, getFeePaymentLogsByStudent, getPendingClaims, terminateEnrolment, setStudentFee } from '@/lib/supabase';
+import { getStudentById, getStudentBatches, getFeesByStudent, getLecturesByBatch, getFeePaymentLogsByStudent, getPendingClaims, terminateEnrolment, setStudentFee, getStudentDeletionCounts, deleteStudent } from '@/lib/supabase';
+import type { StudentDeletionCounts } from '@/lib/supabase';
 import type { Student, BatchStudentMapping, Batch, StudentFee, Lecture, FeePaymentLog, PaymentClaim } from '@/lib/types';
 import { formatDate, formatCurrency } from '@/lib/utils/format';
 import { useToast } from '@/lib/context/ToastContext';
 import { useConfirm } from '@/lib/context/ConfirmContext';
 import { errorMessage } from '@/lib/utils/errors';
+
+const DELETION_LABELS: [keyof StudentDeletionCounts, string][] = [
+  ['batches', 'Enrolments'],
+  ['fees', 'Fee records'],
+  ['payments', 'Payment logs'],
+  ['attendance', 'Attendance records'],
+  ['submissions', 'Assignment submissions'],
+  ['badges', 'Badges earned'],
+  ['claims', 'Payment claims'],
+];
 
 export default function StudentDetailPage() {
   const { studentId } = useParams();
@@ -99,6 +109,8 @@ export default function StudentDetailPage() {
       message: `Leaving ${currentBatch?.name ?? 'this batch'}. Any instalment already due is settled and their login is deleted. Records stay.`,
       confirmLabel: 'Terminate',
       danger: true,
+      requireCheck: 'Yes, this student has left',
+      requireText: 'TERMINATE',
     });
     if (!ok) return;
 
@@ -115,6 +127,33 @@ export default function StudentDetailPage() {
       showToast(errorMessage(err, 'Could not terminate this student'), 'error');
     } finally {
       setTerminating(false);
+    }
+  };
+
+  // For a student entered by mistake. Someone who left is terminated, so that is offered first.
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      const counts = await getStudentDeletionCounts(student.id);
+      const impact = DELETION_LABELS.map(([key, label]) => ({ label, count: counts[key] })).filter((row) => row.count > 0);
+      const accepted = await confirm({
+        title: `Delete ${student.name}?`,
+        message: 'Delete only if the details were wrong. Otherwise terminate.',
+        impact,
+        alt: isActive ? { label: 'Terminate instead', onSelect: () => void handleTerminate() } : undefined,
+        confirmLabel: 'Delete forever',
+        danger: true,
+        requireCheck: 'Yes, delete this student and everything attached, including their login',
+        requireText: student.student_code ?? student.name,
+      });
+      if (!accepted) return;
+      await deleteStudent(student.id);
+      showToast(`${student.name} deleted`);
+      navigate('/students', { replace: true });
+    } catch (err) {
+      showToast(errorMessage(err, 'Could not delete this student'), 'error');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -140,6 +179,7 @@ export default function StudentDetailPage() {
       ),
       confirmLabel: 'Change fee',
       danger: true,
+      requireCheck: 'Yes, change this fee',
       requireText: 'Confirm',
     });
     if (!accepted) return;
@@ -194,7 +234,8 @@ export default function StudentDetailPage() {
           <Button
             variant="outline"
             className="action-button-compact action-button-danger"
-            onClick={() => setDeleting(true)}
+            onClick={() => void handleDelete()}
+            loading={deleting}
           >
             <Trash2 size={14} /> Delete
           </Button>
@@ -421,16 +462,6 @@ export default function StudentDetailPage() {
           </Table>
         )}
       </Card>
-
-      <DeleteStudentModal
-        key={deleting ? 'open' : 'closed'}
-        open={deleting}
-        studentId={student.id}
-        studentName={student.name}
-        confirmWord={student.student_code ?? student.name}
-        onClose={() => setDeleting(false)}
-        onDeleted={() => navigate('/students', { replace: true })}
-      />
     </div>
   );
 }

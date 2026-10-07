@@ -30,12 +30,12 @@ import { DatePicker } from '@/components/ui/DatePicker';
 import { StudentLink } from '@/components/students/StudentLink';
 import { PaymentLogModal, type PaymentLogFormState } from '@/components/finance/PaymentLogModal';
 import { BatchSelect } from '@/components/ui/BatchSelect';
-import { getBatchById, getBatches, getBatchPrograms, endBatch, getCurriculumProgress } from '@/lib/supabase';
+import { getBatchById, getBatches, getBatchPrograms, endBatch, deleteBatch, getBatchDeletionCounts, getCurriculumProgress } from '@/lib/supabase';
+import type { BatchDeletionCounts } from '@/lib/supabase';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { getBatchStudents, addStudentToBatch, terminateEnrolment, transferStudents, getStudents, createStudentLoginsBulk, importStudentsIntoBatch, deleteFeePayment } from '@/lib/supabase';
 import type { BulkLoginResult } from '@/lib/supabase';
 import { BulkLoginsModal } from '@/components/students/BulkLoginsModal';
-import { DeleteBatchModal } from '@/components/batches/DeleteBatchModal';
 import { getBatchTutors, assignTutorToBatch, removeTutorFromBatch, getTutors } from '@/lib/supabase';
 import { getLecturesByBatch, createLecture, deleteLecture } from '@/lib/supabase';
 import { getAttendanceByLecture, setAttendanceApproved, bulkApproveAttendance } from '@/lib/supabase';
@@ -51,6 +51,17 @@ import { errorMessage } from '@/lib/utils/errors';
 import { toDateValue } from '@/lib/utils/date';
 import { useInitialLoad, useReloadableSection } from '@/lib/hooks/useInitialLoad';
 
+const BATCH_DELETION_LABELS: [keyof BatchDeletionCounts, string][] = [
+  ['students', 'Enrolments'],
+  ['fees', 'Fee records'],
+  ['payments', 'Payment logs'],
+  ['lectures', 'Lectures'],
+  ['attendance', 'Attendance records'],
+  ['assignments', 'Assignments'],
+  ['materials', 'Files'],
+  ['tutors', 'Tutor assignments'],
+];
+
 // React Flow is ~65 kB gzipped: fetched when the tab opens, not with every batch page.
 const CurriculumCanvas = lazy(() => import('@/components/curriculum/CurriculumCanvas').then((m) => ({ default: m.CurriculumCanvas })));
 
@@ -62,8 +73,10 @@ export default function BatchDetailPage() {
   const [endOpen, setEndOpen] = useState(false);
   const [endDate, setEndDate] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [confirmingEnd, setConfirmingEnd] = useState(false);
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const confirm = useConfirm();
 
   const { loading, error, retry } = useInitialLoad(async () => {
     if (!batchId) return;
@@ -72,8 +85,53 @@ export default function BatchDetailPage() {
     setPrograms(programRows);
   });
 
+  const handleDelete = async () => {
+    if (!batch) return;
+    setDeleting(true);
+    try {
+      const counts = await getBatchDeletionCounts(batch.id);
+      const impact = BATCH_DELETION_LABELS.map(([key, label]) => ({ label, count: counts[key] })).filter((row) => row.count > 0);
+      const accepted = await confirm({
+        title: `Delete ${batch.name}?`,
+        message: 'Removed from the database and file storage',
+        impact,
+        confirmLabel: 'Delete forever',
+        danger: true,
+        requireCheck: 'Yes, delete this batch and everything in it, payments included',
+        requireText: batch.batch_code ?? batch.name,
+      });
+      if (!accepted) return;
+      await deleteBatch(batch.id);
+      showToast(`${batch.name} deleted`);
+      navigate('/batches', { replace: true });
+    } catch (err) {
+      showToast(errorMessage(err, 'Could not delete this batch'), 'error');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const handleEnd = async () => {
     if (!batch || !endDate) return;
+    // The date picker steps aside while the confirm is up
+    setConfirmingEnd(true);
+    const accepted = await confirm({
+      title: `End ${batch.name}?`,
+      message: (
+        <>
+          <span className="block">Ends on {formatDate(endDate)}</span>
+          <span className="block">Certificates use this date</span>
+          <span className="block">Student logins deleted 30 days after</span>
+          <span className="block">Cannot be reopened</span>
+        </>
+      ),
+      confirmLabel: 'End batch',
+      danger: true,
+      requireCheck: 'Yes, end this batch',
+      requireText: 'END',
+    });
+    setConfirmingEnd(false);
+    if (!accepted) return;
     setEnding(true);
     try {
       setBatch(await endBatch(batch.id, endDate));
@@ -122,7 +180,8 @@ export default function BatchDetailPage() {
           <Button
             variant="outline"
             className="action-button-compact action-button-danger"
-            onClick={() => setDeleting(true)}
+            onClick={() => void handleDelete()}
+            loading={deleting}
           >
             <Trash2 size={14} /> Delete
           </Button>
@@ -167,7 +226,7 @@ export default function BatchDetailPage() {
       </Tabs>
 
       <Modal
-        open={endOpen}
+        open={endOpen && !confirmingEnd}
         onClose={() => !ending && setEndOpen(false)}
         title={`End ${batch.name}?`}
         size="sm"
@@ -196,16 +255,6 @@ export default function BatchDetailPage() {
           </div>
         </div>
       </Modal>
-
-      <DeleteBatchModal
-        key={deleting ? 'open' : 'closed'}
-        open={deleting}
-        batchId={batch.id}
-        batchName={batch.name}
-        confirmWord={batch.batch_code ?? batch.name}
-        onClose={() => setDeleting(false)}
-        onDeleted={() => navigate('/batches', { replace: true })}
-      />
     </div>
   );
 }
@@ -307,6 +356,8 @@ function StudentsTab({ batch }: { batch: Batch }) {
       message: 'Their login is deleted immediately and any instalment already due is settled. Records stay.',
       confirmLabel: 'Terminate',
       danger: true,
+      requireCheck: 'Yes, this student has left',
+      requireText: 'TERMINATE',
     });
     if (!ok) return;
 

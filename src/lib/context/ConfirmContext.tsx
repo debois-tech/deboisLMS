@@ -2,16 +2,20 @@ import { createContext, useCallback, useContext, useRef, useState, ReactNode } f
 
 export interface ConfirmOptions {
   title: string;
-  /** What actually happens, and what cannot be undone. One or two lines. */
+  // What actually happens, and what cannot be undone. One or two lines.
   message?: ReactNode;
-  /** Names the action, never "OK" — the button should read as the thing it does. */
+  // Names the action, never "OK" — the button should read as the thing it does.
   confirmLabel?: string;
   cancelLabel?: string;
-  /** Red confirm button. Use for anything that destroys or detaches data. */
+  // Red confirm button. Use for anything that destroys or detaches data.
   danger?: boolean;
-  /** A box to tick first; the typed word, if any, only appears once it is ticked. */
+  // What will be lost, one row per kind with its count. Makes the dialog a step-by-step flow.
+  impact?: { label: string; count: number }[];
+  // A second way out, shown on the first step: closes the dialog, then runs. E.g. "Terminate instead".
+  alt?: { label: string; onSelect: () => void };
+  // A box to tick first, as its own step.
   requireCheck?: string;
-  /** The word to type back before the confirm button unlocks. */
+  // The word to type back before the confirm button unlocks, as the last step.
   requireText?: string;
 }
 
@@ -21,7 +25,7 @@ interface ConfirmState extends ConfirmOptions {
 
 interface ConfirmContextValue {
   state: ConfirmState;
-  /** Resolves true if the user confirmed, false on cancel, Escape or backdrop click. */
+  // Resolves true if the user confirmed, false on cancel, Escape or backdrop click.
   confirm: (options: ConfirmOptions) => Promise<boolean>;
   resolve: (accepted: boolean) => void;
 }
@@ -34,7 +38,7 @@ const ConfirmContext = createContext<ConfirmContextValue>({
   resolve: () => {},
 });
 
-/** One confirmation dialog for the whole app, so destructive actions never use `window.confirm`. */
+// One confirmation dialog for the whole app, so destructive actions never use `window.confirm`.
 export function ConfirmProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<ConfirmState>({ open: false, title: '' });
   // Held across renders so the promise can be settled by whichever button is pressed later.
@@ -62,12 +66,12 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
   );
 }
 
-/** Returns the `confirm(options)` function. See `ConfirmProvider` for the shape. */
+// Returns the `confirm(options)` function. See `ConfirmProvider` for the shape.
 export function useConfirm() {
   return useContext(ConfirmContext).confirm;
 }
 
-/** Internal — only `ConfirmDialog` needs this. */
+// Internal — only `ConfirmDialog` needs this.
 export function useConfirmState() {
   const { state, resolve } = useContext(ConfirmContext);
   return { state, resolve };
