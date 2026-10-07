@@ -2,7 +2,7 @@ import { supabase } from '../client';
 import { ok, rows } from './result';
 import type { Batch, BatchStudentMapping, DocumentKind, Student } from '@/lib/types';
 import { fromDateValue } from '@/lib/utils/date';
-import { buildDocumentPdf, type DocumentAssets } from '@/lib/utils/documents';
+import { buildDocumentPdf, type DocumentAssets, type DocumentDates } from '@/lib/utils/documents';
 import regularFont from '@/assets/fonts/manrope-400.woff?url';
 import mediumFont from '@/assets/fonts/manrope-500.woff?url';
 import boldFont from '@/assets/fonts/manrope-700.woff?url';
@@ -44,31 +44,26 @@ function loadAssets(): Promise<DocumentAssets> {
   return assets;
 }
 
-// One document on an admin's click, stored under the enrolment; start date is the join date, end date the batch's
+// One document on an admin's click, stored under the enrolment; the dates are the ones the admin typed
 export async function generateAndStoreDocument(
   kind: DocumentKind,
   mapping: BatchStudentMapping,
   student: Student,
   batch: Batch,
+  dates: DocumentDates,
 ): Promise<Pick<BatchStudentMapping, 'offer_letter_path' | 'cert_path'>> {
   // A batch with no role yet falls back to the student's
   const role = batch.internship_role ?? student.internship_role;
   if (!role) throw new Error(`Set ${batch.name}'s internship role first (Edit batch).`);
-  const day = (value?: string | null) => (value ? fromDateValue(value.slice(0, 10)) : null);
-  const startOn = day(mapping.joined_at) ?? new Date();
-  const endOn = day(batch.ended_at);
-  if (kind === 'cert' && !endOn) throw new Error(`${batch.name} has not ended: end the batch before making certificates.`);
-  if (endOn && endOn < startOn) throw new Error(`${student.name} joined after ${batch.name} ended.`);
+  const startOn = fromDateValue(dates.start);
+  const endOn = fromDateValue(dates.end);
+  const letterOn = fromDateValue(dates.letter);
+  if (!startOn || !endOn || !letterOn) throw new Error('Pick the start, end and letter dates first.');
+  if (endOn < startOn) throw new Error('The end date is before the start date.');
 
   const bytes = await buildDocumentPdf(
     kind,
-    {
-      name: student.name.trim(),
-      code: student.student_code ?? '',
-      role,
-      startOn,
-      endOn: endOn ?? undefined,
-    },
+    { name: student.name.trim(), code: student.student_code ?? '', role, startOn, endOn, letterOn },
     await loadAssets(),
   );
   const file = new File([bytes as BlobPart], `${NAMES[kind]}-${student.student_code ?? student.id}.pdf`, { type: 'application/pdf' });
@@ -114,6 +109,15 @@ export async function downloadStoredDocument(path: string, filename: string): Pr
   } finally {
     URL.revokeObjectURL(url);
   }
+}
+
+// Drops one generated document: the file, the path and the shared flag
+export async function deleteStoredDocument(mappingId: string, kind: DocumentKind): Promise<Partial<BatchStudentMapping>> {
+  const { error } = await supabase.storage.from(BUCKET).remove([`${mappingId}/${kind}.pdf`]);
+  if (error) throw new Error(`Could not remove the file: ${error.message}`);
+  const patch = { [PATH_COLUMN[kind]]: null, [SHARE_COLUMN[kind]]: false };
+  ok(await supabase.from('batch_student_mapping').update(patch).eq('id', mappingId), 'The file was removed but the record could not be updated');
+  return patch;
 }
 
 /** The files of enrolments that were just deleted: their rows cascade away, their storage does not. */

@@ -10,10 +10,18 @@ export interface DocumentData {
   code: string;
   // Already a display label, e.g. "DevOps Engineering Intern".
   role: string;
-  // The internship's first day: the offer's date and joining date, the certificate's start date.
+  // The internship's first and last day, typed by the admin.
   startOn: Date;
-  // Its last day: the certificate's date and end date. Not used by the offer letter.
-  endOn?: Date;
+  endOn: Date;
+  // The date printed at the top of the document.
+  letterOn: Date;
+}
+
+// The three dates an admin types, as date values (YYYY-MM-DD).
+export interface DocumentDates {
+  start: string;
+  end: string;
+  letter: string;
 }
 
 export interface DocumentAssets {
@@ -35,6 +43,12 @@ const BODY = 10.2;
 const LINE = 1.48;
 
 export const longDate = (date: Date) => date.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+
+// Both days count, rounded to the nearest week and never below one.
+const duration = (start: Date, end: Date) => {
+  const weeks = Math.max(1, Math.round((Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1) / 7));
+  return `${weeks} ${weeks === 1 ? 'week' : 'weeks'}`;
+};
 
 interface Run { text: string; bold?: boolean }
 
@@ -74,11 +88,11 @@ const SPECS: Record<DocumentKind, Spec> = {
     footBrInside: 11,
     footBrOutside: 0,
     footMargin: 24,
-    date: (d) => d.startOn,
+    date: (d) => d.letterOn,
     paragraphs: (d) => [
       `We are pleased to offer you the position of **${d.role}** at **${COMPANY}**. We are delighted to welcome you to our team and look forward to supporting your professional growth.`,
-      `Your engagement will commence from **${longDate(d.startOn)}** and will be based at **${PLACE}**. Your employment will be subject to the applicable company policies, terms of employment, confidentiality obligations, and other conditions communicated by the Company.`,
-      'You will be responsible for performing the duties associated with your role and any other reasonable responsibilities assigned by the Company based on business requirements.',
+      `Your internship will commence on **${longDate(d.startOn)}** and will continue until **${longDate(d.endOn)}**, for a total duration of **${duration(d.startOn, d.endOn)}**. The internship will be based at **${PLACE}**. Your internship will be subject to the applicable company policies, terms of engagement, confidentiality obligations, and other conditions communicated by the Company.`,
+      "During the internship, you will be responsible for performing the duties associated with your role and any other reasonable responsibilities assigned by the Company based on business requirements. You are expected to carry out your responsibilities professionally and in accordance with the Company's policies and guidelines.",
       'Please ensure that all information and documents provided by you are accurate and complete. This offer is subject to satisfactory verification of the same.',
       'We are confident that your association with deboistech will be a valuable and rewarding experience. We look forward to having you as a part of our team.',
     ],
@@ -96,10 +110,10 @@ const SPECS: Record<DocumentKind, Spec> = {
     footBrInside: 0,
     footBrOutside: 4,
     footMargin: 55,
-    date: (d) => d.endOn ?? d.startOn,
+    date: (d) => d.letterOn,
     paragraphs: (d) => [
       `This is to formally certify that **${d.name}** has successfully completed an internship with **${COMPANY}** in the position of **${d.role}**.`,
-      `The internship was undertaken from **${longDate(d.startOn)}** to **${longDate(d.endOn ?? d.startOn)}** and was based at **${PLACE}**. During this period, the candidate was associated with the Company and participated in assigned projects, tasks, and professional activities related to their role.`,
+      `The internship was undertaken from **${longDate(d.startOn)}** to **${longDate(d.endOn)}** and was based at **${PLACE}**. During this period, the candidate was associated with the Company and participated in assigned projects, tasks, and professional activities related to their role.`,
       'Throughout the internship, the candidate demonstrated commitment towards the assigned responsibilities and gained practical exposure to industry-oriented practices, technical processes, and project-based work. The candidate completed the internship period in accordance with the requirements communicated by the Company.',
       `This certificate is being issued in recognition of the successful completion of the internship and may be used as official documentation of the candidate's internship association with **${COMPANY}**.`,
       "We appreciate the candidate's contribution during the internship and wish them continued success in their academic and professional endeavors.",

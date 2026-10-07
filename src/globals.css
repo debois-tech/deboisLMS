@@ -1763,6 +1763,35 @@ html.light .glass {
   margin-left: auto;
 }
 
+/* Bulk generate: the documents block stays lit, the rest of the app greys out. */
+#root :has(.docs-bulk-active) > :not(:has(.docs-bulk-active)):not(.docs-bulk-active):not(.toast-stack) {
+  opacity: 0.35;
+  filter: grayscale(1);
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+.docs-bulk-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+}
+
+.docs-dates {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 1rem;
+}
+
+.docs-bulk-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .submission-toggle {
   display: inline-flex;
   padding: 0.25rem;
