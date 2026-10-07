@@ -43,7 +43,7 @@ export function TransferWizard({ open, onClose, source, students, targets, onDon
   const [sameFee, setSameFee] = useState('');
   const [fees, setFees] = useState<Record<string, string>>({});
   const [feeRows, setFeeRows] = useState<Map<string, StudentFee> | null>(null);
-  const [blocked, setBlocked] = useState<string[]>([]);
+  const [claimed, setClaimed] = useState<Set<string>>(new Set());
   const [confirming, setConfirming] = useState(false);
   const [running, setRunning] = useState(false);
   const confirm = useConfirm();
@@ -56,13 +56,13 @@ export function TransferWizard({ open, onClose, source, students, targets, onDon
       .then(([feeList, claims]) => {
         if (!live) return;
         setFeeRows(new Map(feeList.map((fee) => [fee.student_id, fee])));
-        const ids = new Set(claims.filter((claim) => claim.batch_id === source.id).map((claim) => claim.student_id));
-        setBlocked(students.filter((s) => ids.has(s.id)).map((s) => s.name));
+        setClaimed(new Set(claims.filter((claim) => claim.batch_id === source.id).map((claim) => claim.student_id)));
       })
       .catch((err) => showToast(errorMessage(err, 'Could not load the fees'), 'error'));
     return () => { live = false; };
-  }, [open, source.id, students, showToast]);
+  }, [open, source.id, showToast]);
 
+  const blocked = students.filter((student) => claimed.has(student.id)).map((student) => student.name);
   const target = targets.find((batch) => batch.id === targetId);
   const feeOf = (student: Row) => (mode === 'same' ? sameFee : fees[student.id] ?? '');
   const paidOf = (student: Row) => feeRows?.get(student.id)?.paid_amount ?? 0;

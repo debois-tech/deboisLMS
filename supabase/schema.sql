@@ -193,7 +193,7 @@ create table if not exists students (
   -- Debois@<last4> rule no longer applies and the password is shown only at reset.
   password_rotated boolean not null default false,
   -- Set once a portal login exists for this student.
-  auth_user_id    uuid references auth.users(id) unique,
+  auth_user_id    uuid references auth.users(id) on delete set null unique,
   -- The day they lost their last batch, for the 90-day clean-up. Null while they have one.
   no_batch_since  date,
   -- In a test batch (see batches.is_test). Set by the enrolment trigger; a student is never both kinds.
@@ -231,7 +231,7 @@ create or replace function set_join_date_from_batch()
 returns trigger
 language plpgsql
 set search_path = public
-as $
+as $$
 declare
   batch_start date;
   today       date := (now() at time zone 'Asia/Kolkata')::date;
@@ -245,7 +245,7 @@ begin
 
   return new;
 end;
-$;
+$$;
 
 drop trigger if exists bsm_join_date_from_batch on batch_student_mapping;
 create trigger bsm_join_date_from_batch
@@ -261,7 +261,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = public
-as $
+as $$
 begin
   if tg_op = 'INSERT' then
     update students set no_batch_since = null where id = new.student_id and no_batch_since is not null;
@@ -269,7 +269,7 @@ begin
     update students set no_batch_since = (now() at time zone 'Asia/Kolkata')::date where id = old.student_id;
   end if;
   return null;
-end $;
+end $$;
 
 drop trigger if exists bsm_track_no_batch on batch_student_mapping;
 create trigger bsm_track_no_batch
@@ -1382,8 +1382,9 @@ begin
   select auth_user_id into auth_id from students where id = m.student_id;
 
   if auth_id is not null and not still_active then
+    -- Unlinked first, so this works whatever the foreign key does on delete
+    update students set auth_user_id = null, password_rotated = false where id = m.student_id;
     delete from auth.users where id = auth_id;
-    update students set password_rotated = false where id = m.student_id;
   end if;
 
   return jsonb_build_object(
@@ -1528,8 +1529,7 @@ end $$;
 revoke all on function transfer_student(uuid, uuid, numeric, boolean, date, boolean) from public;
 grant execute on function transfer_student(uuid, uuid, numeric, boolean, date, boolean) to authenticated;
 
--- Deletes the login row first: students.auth_user_id -> auth.users is not on delete cascade,
--- and the client has no rights on auth.users at all. Everything else cascades off students.id.
+-- The client has no rights on auth.users, so the login goes here, unlinked first. Everything else cascades off students.id.
 create or replace function delete_student(p_student_id uuid)
 returns void
 language plpgsql
@@ -1548,6 +1548,7 @@ begin
   end if;
 
   if auth_id is not null then
+    update students set auth_user_id = null where id = p_student_id;
     delete from auth.users where id = auth_id;
   end if;
 
@@ -1650,7 +1651,7 @@ create policy admin_full_access on document_cleanup
   for all using (is_admin()) with check (is_admin());
 
 -- Things that went wrong in the background or in bulk, shown in the admin notices until cleared
-do $ begin create type failure_kind as enum ('cleanup', 'document_email', 'csv_import', 'login_create'); exception when duplicate_object then null; end $;
+do $$ begin create type failure_kind as enum ('cleanup', 'document_email', 'csv_import', 'login_create'); exception when duplicate_object then null; end $$;
 
 create table if not exists action_failures (
   id         uuid primary key default gen_random_uuid(),
@@ -1674,7 +1675,7 @@ language plpgsql
 stable
 security definer
 set search_path = public
-as $
+as $$
 begin
   if not is_admin() then
     raise exception 'Admin only';
@@ -1706,7 +1707,7 @@ begin
     and coalesce(b.ended_at, s.no_batch_since) is not null
     and coalesce(b.ended_at, s.no_batch_since) + 90 <= current_date + p_days
   order by 6;
-end $;
+end $$;
 
 revoke all on function expiring_students(int) from public;
 grant execute on function expiring_students(int) to authenticated;
@@ -1730,8 +1731,15 @@ begin
   for expired in
     select s.id as student_id, s.auth_user_id
     from students s
-    where s.auth_user_id is not null
-      and not s.is_test
+    where not s.is_test
+      -- a login to remove, or documents and an open enrolment still to close
+      and (
+        s.auth_user_id is not null
+        or exists (
+          select 1 from batch_student_mapping x
+          where x.student_id = s.id and (x.status = 'active' or x.offer_letter_path is not null or x.cert_path is not null)
+        )
+      )
       and (
         -- has had a batch, and none is running or inside its 90 days
         (
@@ -1766,7 +1774,9 @@ begin
 
       -- Unlinked first, so this works whatever the foreign key does on delete
       update students set auth_user_id = null, password_rotated = false, no_batch_since = null where id = expired.student_id;
-      delete from auth.users where id = expired.auth_user_id;
+      if expired.auth_user_id is not null then
+        delete from auth.users where id = expired.auth_user_id;
+      end if;
       removed := removed + 1;
     exception when others then
       insert into action_failures (kind, detail)
@@ -3419,5 +3429,42 @@ begin
   ] loop
     execute format('drop trigger if exists log_tutor_action on %I', t);
     execute format('create trigger log_tutor_action after insert or update or delete on %I for each row execute function log_tutor_action()', t);
+  end loop;
+end $$;
+
+-- A finished batch can be read by its tutors but not changed
+create or replace function guard_tutor_ended_batch()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  doc   jsonb := case when tg_op = 'DELETE' then to_jsonb(old) else to_jsonb(new) end;
+  batch uuid;
+begin
+  if is_tutor() then
+    batch := coalesce(
+      nullif(doc->>'batch_id', '')::uuid,
+      (select a.batch_id from assignments a where a.id = nullif(doc->>'assignment_id', '')::uuid),
+      (select bb.batch_id from batch_badges bb where bb.id = nullif(doc->>'badge_id', '')::uuid)
+    );
+    if exists (select 1 from batches where id = batch and ended_at is not null) then
+      raise exception 'This batch has ended';
+    end if;
+  end if;
+
+  return case when tg_op = 'DELETE' then old else new end;
+end $$;
+
+do $$
+declare t text;
+begin
+  foreach t in array array[
+    'lectures', 'attendance', 'uploads', 'assignments', 'assignment_completions', 'materials',
+    'batch_badges', 'student_badges', 'quizzes', 'curriculum_nodes', 'curriculum_requests'
+  ] loop
+    execute format('drop trigger if exists guard_tutor_ended_batch on %I', t);
+    execute format('create trigger guard_tutor_ended_batch before insert or update or delete on %I for each row execute function guard_tutor_ended_batch()', t);
   end loop;
 end $$;
