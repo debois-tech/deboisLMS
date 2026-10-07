@@ -1,5 +1,5 @@
 import { supabase } from '../client';
-import { ok } from './result';
+import { ok, rows } from './result';
 import type { Batch, BatchStudentMapping, DocumentKind, Student } from '@/lib/types';
 import { fromDateValue } from '@/lib/utils/date';
 import { buildDocumentPdf, type DocumentAssets } from '@/lib/utils/documents';
@@ -123,6 +123,15 @@ export async function removeStoredDocuments(mappingIds: string[]): Promise<void>
   const { error } = await supabase.storage.from(BUCKET).remove(paths);
   // ponytail: an orphaned file is a harmless storage-cleanup gap, not worth a retry queue for now.
   if (error) console.error('[removeStoredDocuments] files left behind:', error);
+}
+
+// Removes the files the database queued when documents were dropped (terminate, 90-day clean-up)
+export async function processDocumentCleanup(): Promise<void> {
+  const paths = rows<{ path: string }>(await supabase.from('document_cleanup').select('path'), 'Could not read the file clean-up list').map((r) => r.path);
+  if (paths.length === 0) return;
+  const { error } = await supabase.storage.from(BUCKET).remove(paths);
+  if (error) throw new Error(`Could not remove old documents: ${error.message}`);
+  ok(await supabase.from('document_cleanup').delete().in('path', paths), 'Could not clear the file clean-up list');
 }
 
 /** Opens the stored copy in a new tab, shared or not. */

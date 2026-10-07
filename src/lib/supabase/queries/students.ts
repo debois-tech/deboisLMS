@@ -1,5 +1,5 @@
 import { supabase } from '../client';
-import { removeStoredDocuments } from './documents';
+import { processDocumentCleanup, removeStoredDocuments } from './documents';
 import { invokeLoginFunction, maybeRow, ok, row, rows } from './result';
 import type { Batch, Student, BatchStudentMapping, StudentCredentials } from '@/lib/types';
 import { errorMessage } from '@/lib/utils/errors';
@@ -35,18 +35,18 @@ export async function createStudent(input: Omit<Student, 'id' | 'created_at'>): 
 
 const normalizePhone = (phone: string | undefined | null) => (phone ?? '').replace(/\D/g, '');
 
-/** Phone or email only. Name is not an identity key — same-name students used to collapse. */
-export async function findExistingStudent(input: { name?: string; phone?: string; email?: string }): Promise<Student | undefined> {
+// Phone or email only; a name is not an identity key
+async function findMatchingStudents(input: { name?: string; phone?: string; email?: string }): Promise<Student[]> {
   const phone = normalizePhone(input.phone);
   const email = input.email?.trim().toLowerCase();
-  if (!phone && !email) return undefined;
+  if (!phone && !email) return [];
 
   const students = rows<Student>(
     await supabase.from('students').select('*'),
     'Could not check for an existing student',
   );
 
-  return students.find((s) => {
+  return students.filter((s) => {
     if (phone && s.phone && normalizePhone(s.phone) === phone) return true;
     if (email && s.email && s.email.trim().toLowerCase() === email) return true;
     return false;
@@ -68,10 +68,40 @@ export async function findNameCollisions(names: string[]): Promise<string[]> {
     .map((s) => s.name);
 }
 
-export async function createOrReuseStudent(input: Omit<Student, 'id' | 'created_at'>): Promise<Student> {
-  const existing = await findExistingStudent(input);
-  if (existing) return existing;
-  return createStudent(input);
+// A live account (a login, or a batch still running) blocks a new one; closed ones stay as they are and the new student gets a new ref
+export async function createNewStudent(input: Omit<Student, 'id' | 'created_at'>): Promise<{ student: Student; earlier?: Student }> {
+  const matches = await findMatchingStudents(input);
+  if (matches.length > 0) {
+    const running = rows<{ student_id: string }>(
+      await supabase
+        .from('batch_student_mapping')
+        .select('student_id, batches!inner(ended_at)')
+        .in('student_id', matches.map((s) => s.id))
+        .eq('status', 'active')
+        .is('batches.ended_at', null),
+      'Could not check the existing student',
+    );
+    const live = matches.find((s) => s.auth_user_id || running.some((r) => r.student_id === s.id));
+    if (live) throw new Error(`${live.name} (${live.student_code}) already has an account. Add them to a batch with Add existing.`);
+  }
+  return { student: await createStudent(input), earlier: matches[0] };
+}
+
+// A new student and their enrolment together; if the enrolment fails the student is taken back out
+export async function createStudentInBatch(
+  input: Omit<Student, 'id' | 'created_at'>,
+  batchId: string,
+  fee: number,
+  discount: { type: 'percentage' | 'amount'; value: number },
+): Promise<{ student: Student; earlier?: Student }> {
+  const created = await createNewStudent(input);
+  try {
+    await addStudentToBatch(created.student.id, batchId, fee, discount);
+  } catch (err) {
+    await deleteStudent(created.student.id).catch((cleanup) => console.error('[createStudentInBatch] cleanup', cleanup));
+    throw err;
+  }
+  return created;
 }
 
 /**
@@ -86,21 +116,11 @@ export async function importStudentsIntoBatch(
 ): Promise<{ imported: Student[]; failed: ImportFailure[] }> {
   const imported: Student[] = [];
   const failed: ImportFailure[] = [];
-  // One row at a time: a row that repeats an earlier phone or email then finds that student instead of making a twin,
-  // and each row's reason is its own.
+  // One row at a time, so a row that repeats an earlier phone or email is caught by the account check
   for (const { row, name, fee, discount } of planImportRows(rows, baseFee).ready) {
     try {
-      const input = toStudentInput(row);
-      const existing = await findExistingStudent(input);
-      const student = existing ?? (await createStudent(input));
-      try {
-        // The discount is stored alongside the fee it produced, not just baked into it.
-        await enrolIfNew(student.id, batchId, fee, { type: 'amount', value: discount });
-      } catch (err) {
-        // A student made for this row and never enrolled would sit under "No batch": take them back out.
-        if (!existing) await deleteStudent(student.id).catch((cleanup) => console.error('[import] cleanup', cleanup));
-        throw err;
-      }
+      // The discount is stored alongside the fee it produced, not just baked into it
+      const { student } = await createStudentInBatch(toStudentInput(row), batchId, fee, { type: 'amount', value: discount });
       imported.push(student);
     } catch (err) {
       failed.push({ row, name, reason: errorMessage(err, 'Could not import this row') });
@@ -286,14 +306,6 @@ export async function addStudentToBatch(
   return mapping;
 }
 
-// For the add and import screens, where a student already on the batch is the goal, not an error. Anything else
-// (a test student into a live batch, a fee that will not save) still throws.
-export async function enrolIfNew(...args: Parameters<typeof addStudentToBatch>): Promise<void> {
-  await addStudentToBatch(...args).catch((err) => {
-    if (!/duplicate key/i.test(errorMessage(err, ''))) throw err;
-  });
-}
-
 // Moves the fee, logs and claims to the target batch and deletes the rest of the old batch's data.
 export async function transferStudents(mappingIds: string[], toBatchId: string): Promise<{ transferred: number }> {
   return row<{ transferred: number }>(
@@ -372,11 +384,14 @@ export interface TerminationResult {
 
 /** Freezes what they owed, voids the rest and deletes the login. One transaction. */
 export async function terminateEnrolment(mappingId: string, leftOn?: string): Promise<TerminationResult> {
-  return row<TerminationResult>(
+  const result = row<TerminationResult>(
     await supabase.rpc('terminate_enrolment', {
       p_mapping_id: mappingId,
       ...(leftOn ? { p_left_on: leftOn } : {}),
     }),
     'Could not terminate this student',
   );
+  // Their documents were queued for removal by the database
+  await processDocumentCleanup().catch((err) => console.error('[terminate] file clean-up', err));
+  return result;
 }

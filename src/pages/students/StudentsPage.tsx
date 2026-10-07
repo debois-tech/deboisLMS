@@ -34,7 +34,7 @@ const DEFAULT_SORT: SortKey = 'idasc';
 
 const ENROLMENT_TABS: { value: MappingStatus; label: string }[] = [
   { value: 'active', label: 'Active' },
-  { value: 'dropped', label: 'Dropped' },
+  { value: 'archived', label: 'Archived' },
   { value: 'terminated', label: 'Terminated' },
 ];
 
@@ -90,12 +90,11 @@ export default function StudentsPage() {
     studentBatchIds.set(mapping.student_id, ids);
   }
 
-  // A student is whatever their best enrolment is: still active anywhere beats
-  // dropped, which beats terminated. Nobody with a live batch sits under Terminated.
+  // Best enrolment wins: active, then archived, then terminated
   const enrolmentOf = (studentId: string): MappingStatus => {
     const mine = mappings.filter((m) => m.student_id === studentId);
     if (mine.some((m) => m.status === 'active')) return 'active';
-    if (mine.some((m) => m.status === 'dropped')) return 'dropped';
+    if (mine.some((m) => m.status === 'archived')) return 'archived';
     return mine.length ? 'terminated' : 'active';
   };
 

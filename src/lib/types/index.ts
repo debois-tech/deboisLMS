@@ -4,8 +4,8 @@ export type BatchStatus = 'upcoming' | 'ongoing' | 'completed';
 export type SessionType = 'online' | 'offline';
 export type AttendanceStatus = 'present' | 'partial' | 'absent';
 export type AttendanceSource = 'manual' | 'automated';
-/** 'dropped' = batch finished and grace window passed. 'terminated' = left mid-batch. */
-export type MappingStatus = 'active' | 'dropped' | 'terminated';
+// archived = 90 days after the batch ended, account closed; terminated = left mid-batch
+export type MappingStatus = 'active' | 'archived' | 'terminated';
 /** Students only hand work in through the portal now. */
 export type SubmissionChannel = 'portal';
 /** Open, not a union: admins mint new codes and the valid set lives in `batch_programs`. */

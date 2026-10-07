@@ -141,8 +141,14 @@ begin
     where id = fee_row.id;
   end if;
 
+  -- Their documents go with them
+  insert into document_cleanup (path)
+  select p from unnest(array[m.offer_letter_path, m.cert_path]) as p where p is not null
+  on conflict do nothing;
+
   update batch_student_mapping
-  set status = 'terminated', left_on = p_left_on
+  set status = 'terminated', left_on = p_left_on,
+      offer_letter_path = null, cert_path = null, offer_letter_shared = false, cert_shared = false
   where id = p_mapping_id;
 
   -- Checked after the update, so this enrolment is already out of the running.
@@ -171,3 +177,167 @@ end $$;
 
 revoke all on function terminate_enrolment(uuid, date) from public;
 grant execute on function terminate_enrolment(uuid, date) to authenticated;
+
+-- 23. LIFECYCLE: 90 days, Archived, documents, finished batches closed
+-- The enrolment status "dropped" is now "archived": set by the 90-day clean-up. Idempotent.
+do $$ begin
+  if exists (select 1 from pg_enum e join pg_type t on t.oid = e.enumtypid where t.typname = 'mapping_status' and e.enumlabel = 'dropped') then
+    alter type mapping_status rename value 'dropped' to 'archived';
+  end if;
+end $$;
+
+alter table students add column if not exists no_batch_since date;
+
+update students s
+set no_batch_since = (now() at time zone 'Asia/Kolkata')::date
+where s.no_batch_since is null
+  and s.auth_user_id is not null
+  and not exists (select 1 from batch_student_mapping m where m.student_id = s.id);
+
+-- Remembers when a student lost their last batch, for the 90-day clean-up
+create or replace function track_no_batch()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if tg_op = 'INSERT' then
+    update students set no_batch_since = null where id = new.student_id and no_batch_since is not null;
+  elsif not exists (select 1 from batch_student_mapping where student_id = old.student_id) then
+    update students set no_batch_since = (now() at time zone 'Asia/Kolkata')::date where id = old.student_id;
+  end if;
+  return null;
+end $$;
+
+drop trigger if exists bsm_track_no_batch on batch_student_mapping;
+create trigger bsm_track_no_batch
+  after insert or delete on batch_student_mapping
+  for each row execute function track_no_batch();
+
+-- Files cannot be removed from SQL, so their paths wait here until an admin opens the dashboard
+create table if not exists document_cleanup (
+  path text primary key
+);
+
+alter table document_cleanup enable row level security;
+drop policy if exists admin_full_access on document_cleanup;
+create policy admin_full_access on document_cleanup
+  for all using (is_admin()) with check (is_admin());
+
+drop function if exists revoke_expired_student_logins();
+
+-- 90 days after a batch ends, with nothing running, the login and documents go; every other record stays
+create or replace function expire_students()
+returns int
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  expired record;
+  removed int := 0;
+begin
+  -- cron runs this with no JWT; a signed-in caller must be an admin
+  if auth.uid() is not null and not is_admin() then
+    raise exception 'Admin only';
+  end if;
+
+  for expired in
+    select s.id as student_id, s.auth_user_id
+    from students s
+    where s.auth_user_id is not null
+      and not s.is_test
+      and (
+        -- has had a batch, and none is running or inside its 90 days
+        (
+          exists (select 1 from batch_student_mapping m where m.student_id = s.id)
+          and not exists (
+            select 1 from batch_student_mapping m2
+            join batches b2 on b2.id = m2.batch_id
+            where m2.student_id = s.id
+              and m2.status = 'active'
+              and (b2.ended_at is null or b2.ended_at + 90 > current_date)
+          )
+        )
+        -- or has had no batch for 90 days
+        or (
+          not exists (select 1 from batch_student_mapping m3 where m3.student_id = s.id)
+          and s.no_batch_since is not null
+          and s.no_batch_since + 90 <= current_date
+        )
+      )
+  loop
+    insert into document_cleanup (path)
+    select p from batch_student_mapping m, unnest(array[m.offer_letter_path, m.cert_path]) as p
+    where m.student_id = expired.student_id and p is not null
+    on conflict do nothing;
+
+    update batch_student_mapping
+    set status = case when status = 'active' then 'archived'::mapping_status else status end,
+        offer_letter_path = null, cert_path = null, offer_letter_shared = false, cert_shared = false
+    where student_id = expired.student_id;
+
+    -- Unlinked first, so this works whatever the foreign key does on delete
+    update students set auth_user_id = null, password_rotated = false, no_batch_since = null where id = expired.student_id;
+    delete from auth.users where id = expired.auth_user_id;
+    removed := removed + 1;
+  end loop;
+
+  return removed;
+end $$;
+
+revoke all on function expire_students() from public;
+grant execute on function expire_students() to authenticated;
+
+-- Daily at 02:00 India time. Needs pg_cron; if it is not enabled, run expire_students() by hand
+do $$ begin
+  create extension if not exists pg_cron;
+  perform cron.schedule('expire-students', '30 20 * * *', 'select public.expire_students()');
+exception when others then
+  raise notice 'pg_cron not available (%), schedule expire_students() by hand', sqlerrm;
+end $$;
+
+-- A finished batch is read-only for students: no submissions
+drop policy if exists student_insert_own on assignment_completions;
+create policy student_insert_own on assignment_completions
+  for insert with check (
+    student_id = current_student_id()
+    and assignment_id in (
+      select a.id
+      from assignments a
+      join batch_student_mapping m on m.batch_id = a.batch_id
+      join batches b on b.id = a.batch_id
+      where m.student_id = current_student_id()
+        and m.status = 'active'
+        and b.ended_at is null
+    )
+  );
+
+drop policy if exists student_update_own on assignment_completions;
+create policy student_update_own on assignment_completions
+  for update using (
+    student_id = current_student_id()
+    and submitted = false
+    and assignment_id in (
+      select a.id
+      from assignments a
+      join batch_student_mapping m on m.batch_id = a.batch_id
+      join batches b on b.id = a.batch_id
+      where m.student_id = current_student_id()
+        and m.status = 'active'
+        and b.ended_at is null
+    )
+  )
+  with check (
+    student_id = current_student_id()
+    and assignment_id in (
+      select a.id
+      from assignments a
+      join batch_student_mapping m on m.batch_id = a.batch_id
+      join batches b on b.id = a.batch_id
+      where m.student_id = current_student_id()
+        and m.status = 'active'
+        and b.ended_at is null
+    )
+  );

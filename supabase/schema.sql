@@ -9,7 +9,7 @@ do $$ begin create type batch_status       as enum ('upcoming', 'ongoing', 'comp
 do $$ begin create type session_type       as enum ('online', 'offline');                     exception when duplicate_object then null; end $$;
 do $$ begin create type attendance_status  as enum ('present', 'partial', 'absent');          exception when duplicate_object then null; end $$;
 do $$ begin create type attendance_source  as enum ('manual', 'automated');                   exception when duplicate_object then null; end $$;
-do $$ begin create type mapping_status     as enum ('active', 'dropped', 'terminated');       exception when duplicate_object then null; end $$;
+do $$ begin create type mapping_status     as enum ('active', 'archived', 'terminated');       exception when duplicate_object then null; end $$;
 do $$ begin create type fee_status         as enum ('due', 'paid', 'terminated');             exception when duplicate_object then null; end $$;
 do $$ begin create type payment_method     as enum ('cash', 'upi', 'bank_transfer', 'other'); exception when duplicate_object then null; end $$;
 do $$ begin create type claim_status       as enum ('pending', 'approved', 'dismissed');      exception when duplicate_object then null; end $$;
@@ -194,6 +194,8 @@ create table if not exists students (
   password_rotated boolean not null default false,
   -- Set once a portal login exists for this student.
   auth_user_id    uuid references auth.users(id) unique,
+  -- The day they lost their last batch, for the 90-day clean-up. Null while they have one.
+  no_batch_since  date,
   -- In a test batch (see batches.is_test). Set by the enrolment trigger; a student is never both kinds.
   is_test         boolean not null default false,
   created_at      timestamptz default now()
@@ -250,6 +252,27 @@ create trigger bsm_join_date_from_batch
 
 -- Re-running this file on a database created before the trigger existed.
 alter table batch_student_mapping alter column joined_at drop default;
+
+-- Remembers when a student lost their last batch, for the 90-day clean-up
+create or replace function track_no_batch()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $
+begin
+  if tg_op = 'INSERT' then
+    update students set no_batch_since = null where id = new.student_id and no_batch_since is not null;
+  elsif not exists (select 1 from batch_student_mapping where student_id = old.student_id) then
+    update students set no_batch_since = (now() at time zone 'Asia/Kolkata')::date where id = old.student_id;
+  end if;
+  return null;
+end $;
+
+drop trigger if exists bsm_track_no_batch on batch_student_mapping;
+create trigger bsm_track_no_batch
+  after insert or delete on batch_student_mapping
+  for each row execute function track_no_batch();
 
 -- A student is test or live, never both: the first batch decides which ref series they draw from, every
 -- later one has to match. The live ref taken when the student row was created goes back to the counter.
@@ -490,7 +513,7 @@ grant execute on function public.record_fee_payment(uuid, numeric, date, payment
 
 -- Every student pays 1000 on joining a batch. Booked as a payment against the fee,
 -- not subtracted from the total, so the log and the balance agree.
--- Fires on insert only: re-adding a dropped student reuses its fee row.
+-- Fires on insert only: re-adding a student reuses its fee row.
 --
 -- Nothing is logged for a student charged nothing — a 100% discount produces a
 -- total_fee of 0, and a registration payment against 0 is not a fact. A fee
@@ -1049,7 +1072,7 @@ create policy student_update_own on student_repos
   for update using (student_id = current_student_id())
   with check (student_id = current_student_id());
 
--- Enrolment gate only — a late submission is still accepted, just flagged
+-- Enrolment gate, and closed once the batch has ended. A late submission is still accepted, just flagged
 -- client-side by comparing submitted_at against the assignment's due_at.
 drop policy if exists student_insert_own on assignment_completions;
 create policy student_insert_own on assignment_completions
@@ -1059,8 +1082,10 @@ create policy student_insert_own on assignment_completions
       select a.id
       from assignments a
       join batch_student_mapping m on m.batch_id = a.batch_id
+      join batches b on b.id = a.batch_id
       where m.student_id = current_student_id()
         and m.status = 'active'
+        and b.ended_at is null
     )
   );
 
@@ -1076,8 +1101,10 @@ create policy student_update_own on assignment_completions
       select a.id
       from assignments a
       join batch_student_mapping m on m.batch_id = a.batch_id
+      join batches b on b.id = a.batch_id
       where m.student_id = current_student_id()
         and m.status = 'active'
+        and b.ended_at is null
     )
   )
   with check (
@@ -1086,8 +1113,10 @@ create policy student_update_own on assignment_completions
       select a.id
       from assignments a
       join batch_student_mapping m on m.batch_id = a.batch_id
+      join batches b on b.id = a.batch_id
       where m.student_id = current_student_id()
         and m.status = 'active'
+        and b.ended_at is null
     )
   );
 
@@ -1308,8 +1337,14 @@ begin
     where id = fee_row.id;
   end if;
 
+  -- Their documents go with them
+  insert into document_cleanup (path)
+  select p from unnest(array[m.offer_letter_path, m.cert_path]) as p where p is not null
+  on conflict do nothing;
+
   update batch_student_mapping
-  set status = 'terminated', left_on = p_left_on
+  set status = 'terminated', left_on = p_left_on,
+      offer_letter_path = null, cert_path = null, offer_letter_shared = false, cert_shared = false
   where id = p_mapping_id;
 
   -- Checked after the update, so this enrolment is already out of the running.
@@ -1542,7 +1577,18 @@ end $$;
 revoke all on function delete_tutor(uuid) from public;
 grant execute on function delete_tutor(uuid) to authenticated;
 
-create or replace function revoke_expired_student_logins()
+-- Files cannot be removed from SQL, so their paths wait here until an admin opens the dashboard
+create table if not exists document_cleanup (
+  path text primary key
+);
+
+alter table document_cleanup enable row level security;
+drop policy if exists admin_full_access on document_cleanup;
+create policy admin_full_access on document_cleanup
+  for all using (is_admin()) with check (is_admin());
+
+-- 90 days after a batch ends, with nothing running, the login and documents go; every other record stays
+create or replace function expire_students()
 returns int
 language plpgsql
 security definer
@@ -1552,47 +1598,65 @@ declare
   expired record;
   removed int := 0;
 begin
-  -- cron runs this with no JWT, so "no caller" is allowed. A signed-in caller
-  -- must be an admin: without this a student could invoke it themselves.
+  -- cron runs this with no JWT; a signed-in caller must be an admin
   if auth.uid() is not null and not is_admin() then
     raise exception 'Admin only';
   end if;
 
   for expired in
-    select distinct s.id as student_id, s.auth_user_id
-    from batch_student_mapping m
-    join batches b on b.id = m.batch_id
-    join students s on s.id = m.student_id
-    where b.ended_at is not null
-      and b.ended_at + 30 <= current_date
-      and s.auth_user_id is not null
-      -- Still enrolled somewhere that has not ended keeps its login.
-      and not exists (
-        select 1 from batch_student_mapping m2
-        join batches b2 on b2.id = m2.batch_id
-        where m2.student_id = s.id
-          and m2.status = 'active'
-          and (b2.ended_at is null or b2.ended_at + 30 > current_date)
+    select s.id as student_id, s.auth_user_id
+    from students s
+    where s.auth_user_id is not null
+      and not s.is_test
+      and (
+        -- has had a batch, and none is running or inside its 90 days
+        (
+          exists (select 1 from batch_student_mapping m where m.student_id = s.id)
+          and not exists (
+            select 1 from batch_student_mapping m2
+            join batches b2 on b2.id = m2.batch_id
+            where m2.student_id = s.id
+              and m2.status = 'active'
+              and (b2.ended_at is null or b2.ended_at + 90 > current_date)
+          )
+        )
+        -- or has had no batch for 90 days
+        or (
+          not exists (select 1 from batch_student_mapping m3 where m3.student_id = s.id)
+          and s.no_batch_since is not null
+          and s.no_batch_since + 90 <= current_date
+        )
       )
   loop
+    insert into document_cleanup (path)
+    select p from batch_student_mapping m, unnest(array[m.offer_letter_path, m.cert_path]) as p
+    where m.student_id = expired.student_id and p is not null
+    on conflict do nothing;
+
+    update batch_student_mapping
+    set status = case when status = 'active' then 'archived'::mapping_status else status end,
+        offer_letter_path = null, cert_path = null, offer_letter_shared = false, cert_shared = false
+    where student_id = expired.student_id;
+
+    -- Unlinked first, so this works whatever the foreign key does on delete
+    update students set auth_user_id = null, password_rotated = false, no_batch_since = null where id = expired.student_id;
     delete from auth.users where id = expired.auth_user_id;
-    update students set password_rotated = false where id = expired.student_id;
     removed := removed + 1;
   end loop;
-
-  update batch_student_mapping m
-  set status = 'dropped'
-  from batches b
-  where b.id = m.batch_id
-    and b.ended_at is not null
-    and b.ended_at + 30 <= current_date
-    and m.status = 'active';
 
   return removed;
 end $$;
 
-revoke all on function revoke_expired_student_logins() from public;
-grant execute on function revoke_expired_student_logins() to authenticated;
+revoke all on function expire_students() from public;
+grant execute on function expire_students() to authenticated;
+
+-- Daily at 02:00 India time. Needs pg_cron; if it is not enabled, run expire_students() by hand
+do $$ begin
+  create extension if not exists pg_cron;
+  perform cron.schedule('expire-students', '30 20 * * *', 'select public.expire_students()');
+exception when others then
+  raise notice 'pg_cron not available (%), schedule expire_students() by hand', sqlerrm;
+end $$;
 
 create or replace function delete_fee_payment(p_log_id uuid)
 returns jsonb

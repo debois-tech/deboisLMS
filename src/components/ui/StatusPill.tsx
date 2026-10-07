@@ -12,7 +12,7 @@ const batch: Record<BatchStatus, [string, Tone]> = {
 
 const enrollment: Record<MappingStatus, [string, Tone]> = {
   active: ['Active', 'success'],
-  dropped: ['Dropped', 'default'],
+  archived: ['Archived', 'default'],
   terminated: ['Terminated', 'danger'],
 };
 

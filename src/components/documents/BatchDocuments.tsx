@@ -164,7 +164,7 @@ export function BatchDocuments({ batch }: { batch: Batch }) {
 
   const { loading, error, retry } = useInitialLoad(async () => {
     const roster = await getBatchStudents(batch.id);
-    setRows(roster.filter((r) => r.mapping.status !== 'terminated') as Row[]);
+    setRows(roster.filter((r) => r.mapping.status === 'active') as Row[]);
   });
 
   const changeDocType = (value: string) => {
@@ -247,7 +247,7 @@ export function BatchDocuments({ batch }: { batch: Batch }) {
 
   if (loading) return <Spinner centered />;
   if (error) return <ErrorState centered message={error} onRetry={retry} />;
-  if (rows.length === 0) return <EmptyState icon={<ScrollText size={20} />} title="No students in this batch" />;
+  if (rows.length === 0) return <EmptyState icon={<ScrollText size={20} />} title="No active students in this batch" />;
 
   return (
     <div className="table-block">

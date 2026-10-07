@@ -43,7 +43,7 @@ export async function updateBatch(id: string, input: Partial<Batch>): Promise<Ba
   );
 }
 
-// Marks the batch finished on `endedOn` (YYYY-MM-DD). Logins survive 30 more days.
+// Marks the batch finished on `endedOn` (YYYY-MM-DD). Logins and documents go 90 days after.
 export async function endBatch(id: string, endedOn: string): Promise<Batch> {
   return row<Batch>(
     await supabase.rpc('end_batch', { p_batch_id: id, p_ended_on: endedOn }),

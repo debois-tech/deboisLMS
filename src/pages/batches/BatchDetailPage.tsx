@@ -33,7 +33,7 @@ import { BatchSelect } from '@/components/ui/BatchSelect';
 import { getBatchById, getBatches, getBatchPrograms, endBatch, deleteBatch, getBatchDeletionCounts, getBatchFeeSummary, getCurriculumProgress } from '@/lib/supabase';
 import type { BatchDeletionCounts } from '@/lib/supabase';
 import { ProgressBar } from '@/components/ui/ProgressBar';
-import { getBatchStudents, addStudentToBatch, terminateEnrolment, transferStudents, getStudents, createStudentLoginsBulk, importStudentsIntoBatch, deleteFeePayment } from '@/lib/supabase';
+import { getBatchStudents, getAllBatchStudentMappings, addStudentToBatch, terminateEnrolment, transferStudents, getStudents, createStudentLoginsBulk, importStudentsIntoBatch, deleteFeePayment } from '@/lib/supabase';
 import type { BulkLoginResult } from '@/lib/supabase';
 import { BulkLoginsModal } from '@/components/students/BulkLoginsModal';
 import { getBatchTutors, assignTutorToBatch, removeTutorFromBatch, getTutors } from '@/lib/supabase';
@@ -123,7 +123,7 @@ export default function BatchDetailPage() {
           <span className="block">Ends on {formatDate(endDate)}</span>
           <span className="block">Certificates use this date</span>
           {owed > 0 && <span className="block">{formatCurrency(owed)} still unpaid</span>}
-          <span className="block">Student logins deleted 30 days after</span>
+          <span className="block">Student logins and documents deleted 90 days after</span>
           <span className="block">Cannot be reopened</span>
         </>
       ),
@@ -253,7 +253,7 @@ export default function BatchDetailPage() {
           </FormField>
           <div className="flex flex-col gap-1">
             <p className="field-hint">Internship end dates set to this date</p>
-            <p className="field-hint">Student logins deleted 30 days after</p>
+            <p className="field-hint">Student logins and documents deleted 90 days after</p>
           </div>
         </div>
       </Modal>
@@ -341,9 +341,14 @@ function StudentsTab({ batch }: { batch: Batch }) {
   const confirm = useConfirm();
 
   const fetchStudents = useCallback(async () => {
-    const [batchRows, allRows, batchList] = await Promise.all([getBatchStudents(batchId), getStudents(), getBatches()]);
+    const [batchRows, allRows, batchList, allMappings] = await Promise.all([getBatchStudents(batchId), getStudents(), getBatches(), getAllBatchStudentMappings()]);
+    // Students whose every enrolment is terminated or archived come back as a new account, not through this list
+    const closed = new Set(allRows.filter((s) => {
+      const mine = allMappings.filter((m) => m.student_id === s.id);
+      return mine.length > 0 && mine.every((m) => m.status !== 'active');
+    }).map((s) => s.id));
     setStudents(batchRows);
-    setAllStudents(allRows);
+    setAllStudents(allRows.filter((s) => !closed.has(s.id)));
     setAllBatches(batchList);
   }, [batchId]);
 

@@ -15,7 +15,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { CredentialsModal } from '@/components/students/StudentLoginCard';
 import { InlineAlert } from '@/components/ui/InlineAlert';
-import { enrolIfNew, createOrReuseStudent, createStudentLogin, getBatches } from '@/lib/supabase';
+import { createStudentInBatch, createStudentLogin, getBatches } from '@/lib/supabase';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { useToast } from '@/lib/context/ToastContext';
 import type { Batch, StudentCredentials } from '@/lib/types';
@@ -90,23 +90,20 @@ export default function NewStudentPage() {
     }
     setLoading(true);
     try {
-      // Blank strings would overwrite a reused student's real values with empties,
-      // and graduation_year is an int column that cannot take ''.
+      // Blank strings are left out, and graduation_year is an int column that cannot take ''
       const { graduation_year, ...text } = form;
-      const student = await createOrReuseStudent({
-        ...Object.fromEntries(Object.entries(text).filter(([, value]) => value !== '')),
-        ...(graduation_year ? { graduation_year: Number(graduation_year) } : {}),
-      } as Parameters<typeof createOrReuseStudent>[0]);
+      const { student, earlier } = await createStudentInBatch(
+        {
+          ...Object.fromEntries(Object.entries(text).filter(([, value]) => value !== '')),
+          ...(graduation_year ? { graduation_year: Number(graduation_year) } : {}),
+        } as Parameters<typeof createStudentInBatch>[0],
+        batchId,
+        payable,
+        { type: discountType, value: Number(discount) || 0 },
+      );
       setCreatedStudentId(student.id);
-      // An existing student already on this batch is the goal, not an error — the login below should still run.
-      await enrolIfNew(student.id, batchId, payable, { type: discountType, value: Number(discount) || 0 });
       showToast('Student added');
-
-      // Reusing an existing student would rotate a password they already have — skip those.
-      if (student.auth_user_id) {
-        navigate(`/students/${student.id}`, { replace: true });
-        return;
-      }
+      if (earlier) showToast(`An earlier account (${earlier.student_code}) was left as it was`, 'warning');
 
       try {
         setCredentials(await createStudentLogin(student.id));
