@@ -73,7 +73,6 @@ export default function EditBatchPage() {
         message: (
           <>
             <span className="block">{savedEnd ? formatDate(savedEnd) : 'None'} → {formatDate(form.ended_at!)}</span>
-            <span className="block">Certificates use the new date</span>
             <span className="block">Student logins and documents delete 90 days after it</span>
           </>
         ),

@@ -47,6 +47,7 @@ Anything needing a secret runs server-side. Deploy each with
 | `create-tutor-login` | Creates/resets a tutor's dashboard login | `SECRET_SERVICE_ROLE_KEY` |
 | `match-name` | Gemini fuzzy name matching for attendance | `GEMINI_API_KEY` |
 | `send-credentials` | Emails a student their portal login, one or a whole import | `RESEND_API_KEY` |
+| `send-document` | Emails a shared offer letter or certificate | `RESEND_API_KEY`, `CREDENTIALS_FROM_EMAIL` |
 
 ```bash
 supabase secrets set SECRET_SERVICE_ROLE_KEY=... --project-ref <ref>

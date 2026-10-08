@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -8,22 +8,22 @@ import { useToast } from '@/lib/context/ToastContext';
 import { useNotices, type Notice } from '@/lib/hooks/useNotices';
 import { errorMessage } from '@/lib/utils/errors';
 
-// What was on the notice when it was collapsed: it stays collapsed until something new appears
+// What was on the notice when it was collapsed or dismissed: it stays that way until something new appears
 const signature = (notice: Notice) => `${notice.count}:${notice.rows.map((row) => row.key).join(',')}`;
-const storageKey = (notice: Notice) => `notice:${notice.id}`;
+type Mark = 'notice' | 'notice-hidden';
 
-function isCollapsed(notice: Notice) {
+function isMarked(notice: Notice, mark: Mark) {
   try {
-    return localStorage.getItem(storageKey(notice)) === signature(notice);
+    return localStorage.getItem(`${mark}:${notice.id}`) === signature(notice);
   } catch {
     return false;
   }
 }
 
-function setCollapsed(notice: Notice, collapsed: boolean) {
+function setMark(notice: Notice, mark: Mark, on: boolean) {
   try {
-    if (collapsed) localStorage.setItem(storageKey(notice), signature(notice));
-    else localStorage.removeItem(storageKey(notice));
+    if (on) localStorage.setItem(`${mark}:${notice.id}`, signature(notice));
+    else localStorage.removeItem(`${mark}:${notice.id}`);
   } catch {
     // Storage blocked: the notice just stays open
   }
@@ -38,8 +38,19 @@ export function NotificationStack() {
   const { showToast } = useToast();
 
   const toggle = (notice: Notice, collapsed: boolean) => {
-    setCollapsed(notice, collapsed);
+    setMark(notice, 'notice', collapsed);
     refresh((count) => count + 1);
+  };
+
+  // Only the major (warning) notices stay: a clearable one is cleared, any other is hidden until it changes
+  const dismiss = async (notice: Notice) => {
+    try {
+      if (notice.clear) await notice.clear();
+      else setMark(notice, 'notice-hidden', true);
+      refresh((count) => count + 1);
+    } catch (err) {
+      showToast(errorMessage(err, 'Could not clear this'), 'error');
+    }
   };
 
   const clear = async () => {
@@ -57,7 +68,7 @@ export function NotificationStack() {
 
   return (
     <>
-      {notices.map((notice) => {
+      {notices.filter((notice) => !isMarked(notice, 'notice-hidden')).map((notice) => {
         const Icon = notice.icon;
         const icon = (
           <span className={clsx('toast-icon', `is-${notice.tone}`)}>
@@ -65,7 +76,7 @@ export function NotificationStack() {
           </span>
         );
 
-        if (isCollapsed(notice)) {
+        if (isMarked(notice, 'notice')) {
           return (
             <button key={notice.id} type="button" className="notice-chip" onClick={() => toggle(notice, false)} aria-label={`Show ${notice.title}`}>
               {icon}
@@ -90,6 +101,11 @@ export function NotificationStack() {
             <button type="button" className="toast-close" onClick={() => toggle(notice, true)} aria-label={`Collapse ${notice.title}`}>
               <ChevronDown size={15} />
             </button>
+            {notice.tone !== 'warning' && (
+              <button type="button" className="toast-close" onClick={() => void dismiss(notice)} aria-label={`Clear ${notice.title}`}>
+                <X size={15} />
+              </button>
+            )}
           </div>
         );
       })}

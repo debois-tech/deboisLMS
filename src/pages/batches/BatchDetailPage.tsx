@@ -122,7 +122,6 @@ export default function BatchDetailPage() {
       message: (
         <>
           <span className="block">Ends on {formatDate(endDate)}</span>
-          <span className="block">Certificates use this date</span>
           {owed > 0 && <span className="block">{formatCurrency(owed)} still unpaid</span>}
           <span className="block">Student logins and documents deleted 90 days after</span>
           <span className="block">Cannot be reopened</span>
