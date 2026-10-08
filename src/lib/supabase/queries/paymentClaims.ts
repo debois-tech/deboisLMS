@@ -46,18 +46,18 @@ export async function getPendingClaims(studentId: string): Promise<PaymentClaim[
 /** Fired on window once a claim is approved or dismissed, so the bottom-right notice recounts. */
 export const CLAIMS_CHANGED = 'claims-changed';
 
-export type PendingClaimRow = PaymentClaim & { student?: { name: string } | null };
+export type PendingClaimRow = PaymentClaim & { student?: { name: string; is_test: boolean } | null };
 
-/** Every pending claim across all students, oldest first, with the student's name for the notice. */
+/** Every live student's pending claim, oldest first, with their name for the notice. Test students' stay on their own page. */
 export async function getAllPendingClaims(): Promise<PendingClaimRow[]> {
   return rows<PendingClaimRow>(
     await supabase
       .from('payment_claims')
-      .select('*, student:students(name)')
+      .select('*, student:students(name, is_test)')
       .eq('status', 'pending')
       .order('created_at'),
     'Could not load payment claims',
-  );
+  ).filter((claim) => !claim.student?.is_test);
 }
 
 /** Logs the claim as a payment and marks it approved, in one transaction. */
@@ -85,9 +85,9 @@ export async function exportPaymentClaimsCsv(): Promise<void> {
     getStudents(),
     getBatches(),
   ]);
-  const claims = rows<PaymentClaim>(claimsResult, 'Could not load payment claims');
-
   const studentById = new Map(students.map((s) => [s.id, s]));
+  const claims = rows<PaymentClaim>(claimsResult, 'Could not load payment claims')
+    .filter((claim) => !studentById.get(claim.student_id)?.is_test);
   const batchNameById = new Map(batches.map((b) => [b.id, b.name]));
 
   const csv = toCsv(

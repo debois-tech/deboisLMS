@@ -1,8 +1,8 @@
 import { supabase } from '../client';
-import { ok } from './result';
+import { ok, rows } from './result';
 import type { Batch, BatchStudentMapping, DocumentKind, Student } from '@/lib/types';
 import { fromDateValue } from '@/lib/utils/date';
-import { buildDocumentPdf, type DocumentAssets } from '@/lib/utils/documents';
+import { buildDocumentPdf, type DocumentAssets, type DocumentDates } from '@/lib/utils/documents';
 import regularFont from '@/assets/fonts/manrope-400.woff?url';
 import mediumFont from '@/assets/fonts/manrope-500.woff?url';
 import boldFont from '@/assets/fonts/manrope-700.woff?url';
@@ -44,34 +44,26 @@ function loadAssets(): Promise<DocumentAssets> {
   return assets;
 }
 
-/**
- * One document, drawn from the student's own data and stored under the enrolment. Always on an admin's click: nothing
- * is generated when a student is enrolled, and each new student needs their own click. Dates come from this batch,
- * not the student row: that row holds one start and end date for every batch the student is in, so a second batch
- * would inherit the first one's. The student's own dates only fill in what the batch lacks. Every later view,
- * download or email reads the stored copy back.
- */
+// One document on an admin's click, stored under the enrolment; the dates are the ones the admin typed
 export async function generateAndStoreDocument(
   kind: DocumentKind,
   mapping: BatchStudentMapping,
   student: Student,
   batch: Batch,
+  dates: DocumentDates,
 ): Promise<Pick<BatchStudentMapping, 'offer_letter_path' | 'cert_path'>> {
-  if (!student.internship_role) throw new Error(`Set ${student.name}'s internship role first (Edit student).`);
-  const day = (value?: string | null) => (value ? fromDateValue(value.slice(0, 10)) : null);
-  const startOn = day(batch.start_date) ?? day(student.internship_start_date) ?? day(mapping.joined_at) ?? new Date();
-  const endOn = day(batch.ended_at) ?? day(student.internship_end_date);
-  if (kind === 'cert' && !endOn) throw new Error(`${student.name} has no internship end date: end the batch, or set it on Edit student.`);
+  // A batch with no role yet falls back to the student's
+  const role = batch.internship_role ?? student.internship_role;
+  if (!role) throw new Error(`Set ${batch.name}'s internship role first (Edit batch).`);
+  const startOn = fromDateValue(dates.start);
+  const endOn = fromDateValue(dates.end);
+  const letterOn = fromDateValue(dates.letter);
+  if (!startOn || !endOn || !letterOn) throw new Error('Pick the start, end and letter dates first.');
+  if (endOn < startOn) throw new Error('The end date is before the start date.');
 
   const bytes = await buildDocumentPdf(
     kind,
-    {
-      name: student.name.trim(),
-      code: student.student_code ?? '',
-      role: student.internship_role,
-      startOn,
-      endOn: endOn ?? undefined,
-    },
+    { name: student.name.trim(), code: student.student_code ?? '', role, startOn, endOn, letterOn },
     await loadAssets(),
   );
   const file = new File([bytes as BlobPart], `${NAMES[kind]}-${student.student_code ?? student.id}.pdf`, { type: 'application/pdf' });
@@ -82,6 +74,10 @@ export async function generateAndStoreDocument(
 
   const patch = { [PATH_COLUMN[kind]]: path };
   ok(await supabase.from('batch_student_mapping').update(patch).eq('id', mapping.id), 'The document was stored but the record could not be updated');
+  // The role just stamped becomes the student's own
+  if (student.internship_role !== role) {
+    ok(await supabase.from('students').update({ internship_role: role }).eq('id', student.id), 'The document was stored but the student role could not be updated');
+  }
   return patch;
 }
 
@@ -113,6 +109,40 @@ export async function downloadStoredDocument(path: string, filename: string): Pr
   } finally {
     URL.revokeObjectURL(url);
   }
+}
+
+// Drops one generated document: the file, the path and the shared flag
+export async function deleteStoredDocument(mappingId: string, kind: DocumentKind): Promise<Partial<BatchStudentMapping>> {
+  const { error } = await supabase.storage.from(BUCKET).remove([`${mappingId}/${kind}.pdf`]);
+  if (error) throw new Error(`Could not remove the file: ${error.message}`);
+  const patch = { [PATH_COLUMN[kind]]: null, [SHARE_COLUMN[kind]]: false };
+  ok(await supabase.from('batch_student_mapping').update(patch).eq('id', mappingId), 'The file was removed but the record could not be updated');
+  return patch;
+}
+
+/** The files of enrolments that were just deleted: their rows cascade away, their storage does not. */
+export async function removeStoredDocuments(mappingIds: string[]): Promise<void> {
+  if (mappingIds.length === 0) return;
+  const paths = mappingIds.flatMap((id) => (Object.keys(PATH_COLUMN) as DocumentKind[]).map((kind) => `${id}/${kind}.pdf`));
+  const { error } = await supabase.storage.from(BUCKET).remove(paths);
+  // ponytail: an orphaned file is a harmless storage-cleanup gap, not worth a retry queue for now.
+  if (error) console.error('[removeStoredDocuments] files left behind:', error);
+}
+
+// Removes the files the database queued when documents were dropped (terminate, 90-day clean-up)
+export async function processDocumentCleanup(): Promise<void> {
+  const paths = rows<{ path: string }>(await supabase.from('document_cleanup').select('path'), 'Could not read the file clean-up list').map((r) => r.path);
+  if (paths.length === 0) return;
+  const { error } = await supabase.storage.from(BUCKET).remove(paths);
+  if (error) throw new Error(`Could not remove old documents: ${error.message}`);
+  ok(await supabase.from('document_cleanup').delete().in('path', paths), 'Could not clear the file clean-up list');
+}
+
+/** Opens the stored copy in a new tab, shared or not. */
+export async function viewStoredDocument(path: string): Promise<void> {
+  const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, 60);
+  if (error || !data) throw new Error('The file is missing from storage.');
+  window.open(data.signedUrl, '_blank', 'noopener');
 }
 
 /** The edge function re-reads the stored file and the shared flag itself — nothing to pass but ids. */

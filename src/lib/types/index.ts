@@ -4,8 +4,8 @@ export type BatchStatus = 'upcoming' | 'ongoing' | 'completed';
 export type SessionType = 'online' | 'offline';
 export type AttendanceStatus = 'present' | 'partial' | 'absent';
 export type AttendanceSource = 'manual' | 'automated';
-/** 'dropped' = batch finished and grace window passed. 'terminated' = left mid-batch. */
-export type MappingStatus = 'active' | 'dropped' | 'terminated';
+// archived = 90 days after the batch ended, account closed; terminated = left mid-batch; transferred = moved to another batch
+export type MappingStatus = 'active' | 'archived' | 'terminated' | 'transferred';
 /** Students only hand work in through the portal now. */
 export type SubmissionChannel = 'portal';
 /** Open, not a union: admins mint new codes and the valid set lives in `batch_programs`. */
@@ -49,6 +49,10 @@ export interface Batch {
   ended_at?: string | null;
   /** The batch's full fee. Each imported student's fee is this less their discount. */
   base_fee?: number | null;
+  /** The title stamped on this batch's offer letters and certificates. */
+  internship_role?: InternshipRole | null;
+  /** Kept out of every total, one way. Set by convert_batch_to_test(). */
+  is_test?: boolean;
   created_at: string;
   student_count?: number;
 }
@@ -57,6 +61,8 @@ export interface Student {
   id: string;
   /** Permanent institution-wide ID, e.g. DBT0001. Issued by the database — never sent on insert. */
   student_code?: string;
+  /** In a test batch: a DBT-TEST ref, and out of every total. Set by the database. */
+  is_test?: boolean;
   name: string;
   /** Phone/mobile number. Also the source of the portal password suffix. */
   phone: string;
@@ -74,8 +80,6 @@ export interface Student {
   /** Stamped on the offer letter and the certificate. */
   internship_role?: InternshipRole | null;
   /** `YYYY-MM-DD`. Today for a new student; the end date is the batch's when it is ended. Both editable. */
-  internship_start_date?: string | null;
-  internship_end_date?: string | null;
   created_at: string;
   /** auth.users id once a portal login has been created for this student. */
   auth_user_id?: string;
@@ -234,6 +238,7 @@ export interface PaymentClaim {
 /** One GitHub repo per student — every assignment submission points at it. */
 export interface StudentRepo {
   student_id: string;
+  batch_id: string;
   repo_url: string;
   created_at?: string;
   updated_at?: string;
@@ -247,6 +252,8 @@ export interface BatchStudentMapping {
   /** Set only once terminated. */
   left_on?: string | null;
   status: MappingStatus;
+  // Off: lectures and assignments from before the join date do not count against the student
+  count_earlier_work?: boolean;
   /** Made only when an admin clicks Generate on the roster; both live in the private `documents` bucket. */
   offer_letter_path?: string | null;
   cert_path?: string | null;
@@ -311,6 +318,7 @@ export interface BatchFeeSummary {
   total_fees: number;
   total_collected: number;
   total_outstanding: number;
+  is_test: boolean;
 }
 
 /** Per batch. `pending` is what active students owe; `void_amount` is what leavers never paid. */
@@ -326,6 +334,7 @@ export interface EarningBreakdown {
   void_amount: number;
   never_due: number;
   recovered: number;
+  is_test: boolean;
 }
 
 export interface BatchAttendanceSummary {
@@ -544,6 +553,7 @@ export interface QuizResult {
 
 export interface QuizHistoryRow {
   quiz_id: string;
+  batch_id: string | null;
   title: string;
   ended_at: string;
   rank: number;

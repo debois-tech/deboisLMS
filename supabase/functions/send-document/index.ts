@@ -1,5 +1,4 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { encodeBase64 } from 'jsr:@std/encoding@1/base64';
 
 /**
  * Mails a certificate or offer letter that an admin already generated and stored (see
@@ -23,6 +22,13 @@ function corsFor(req: Request): Record<string, string> {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
     ...(ALLOWED_ORIGINS.length === 0 ? {} : { Vary: 'Origin' }),
   };
+}
+
+// In chunks: spreading a whole PDF into one call overflows the stack
+function toBase64(bytes: Uint8Array): string {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(binary);
 }
 
 function escapeHtml(value: string): string {
@@ -103,7 +109,7 @@ Deno.serve(async (req) => {
 
     const { data: file, error: downloadError } = await adminClient.storage.from('documents').download(path);
     if (downloadError || !file) return json({ error: 'The document is missing from storage.' }, 404);
-    const pdfBase64 = encodeBase64(await file.arrayBuffer());
+    const pdfBase64 = toBase64(new Uint8Array(await file.arrayBuffer()));
 
     const label = LABELS[doc_type];
     const name = escapeHtml(student.name ?? '');

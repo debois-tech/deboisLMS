@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Plus, Users, Upload, Search } from 'lucide-react';
 import { SearchFilterBar } from '@/components/ui/SearchFilterBar';
 import { FilterTabs } from '@/components/ui/FilterTabs';
+import { SearchSelect } from '@/components/ui/SearchSelect';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -20,13 +21,20 @@ import { useToast } from '@/lib/context/ToastContext';
 
 const NO_BATCH = 'none';
 
+type StudentView = 'live' | 'test';
+
+const VIEW_OPTIONS = [
+  { value: 'live', label: 'Original' },
+  { value: 'test', label: 'Test' },
+];
+
 type SortKey = 'newest' | 'az' | 'za' | 'idasc' | 'iddesc';
 
 const DEFAULT_SORT: SortKey = 'idasc';
 
 const ENROLMENT_TABS: { value: MappingStatus; label: string }[] = [
   { value: 'active', label: 'Active' },
-  { value: 'dropped', label: 'Dropped' },
+  { value: 'archived', label: 'Archived' },
   { value: 'terminated', label: 'Terminated' },
 ];
 
@@ -57,6 +65,7 @@ export default function StudentsPage() {
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [sort, setSort] = useState<SortKey>(DEFAULT_SORT);
   const [enrolment, setEnrolment] = useState<MappingStatus>('active');
+  const [view, setView] = useState<StudentView>('live');
   const [showImport, setShowImport] = useState(false);
   const [bulkLogins, setBulkLogins] = useState<BulkLoginResult | null>(null);
   const { showToast } = useToast();
@@ -81,12 +90,11 @@ export default function StudentsPage() {
     studentBatchIds.set(mapping.student_id, ids);
   }
 
-  // A student is whatever their best enrolment is: still active anywhere beats
-  // dropped, which beats terminated. Nobody with a live batch sits under Terminated.
+  // Best enrolment wins: active, then archived, then terminated
   const enrolmentOf = (studentId: string): MappingStatus => {
     const mine = mappings.filter((m) => m.student_id === studentId);
     if (mine.some((m) => m.status === 'active')) return 'active';
-    if (mine.some((m) => m.status === 'dropped')) return 'dropped';
+    if (mine.some((m) => m.status === 'archived')) return 'archived';
     return mine.length ? 'terminated' : 'active';
   };
 
@@ -105,7 +113,11 @@ export default function StudentsPage() {
     );
   };
 
-  const searched = students.filter(matches);
+  // Test students live in their own view, with their own batches to filter by.
+  const isTest = view === 'test';
+  const searched = students.filter((s) => Boolean(s.is_test) === isTest).filter(matches);
+  const batchNames = (studentId: string) =>
+    mappings.filter((m) => m.student_id === studentId).map((m) => batches.find((b) => b.id === m.batch_id)?.name).filter(Boolean).join(', ');
   const tabs = ENROLMENT_TABS.map((tab) => ({
     ...tab,
     count: searched.filter((s) => enrolmentOf(s.id) === tab.value).length,
@@ -130,6 +142,11 @@ export default function StudentsPage() {
     setSelectedBatchId(batchId);
   };
 
+  const selectView = (value: string) => {
+    setView(value as StudentView);
+    setSelectedBatchId(null);
+  };
+
   // The batch is chosen in the dialog, so there is nothing to resolve and no way
   // for two live batches under one programme to be ambiguous.
   const handleImport = async (
@@ -141,28 +158,23 @@ export default function StudentsPage() {
       throw new Error(`${batch.name} has no base fee. Set one on the batch, then import.`);
     }
 
-    const imported = await importStudentsIntoBatch(rows, batch.id, batch.base_fee);
+    const { imported, failed } = await importStudentsIntoBatch(rows, batch.id, batch.base_fee);
 
     const [studentData, mappingData] = await Promise.all([getStudents(), getAllBatchStudentMappings()]);
     setStudents(studentData);
     setMappings(mappingData);
 
-    if (!createLogins) {
-      showToast('Students imported');
-      return;
-    }
-
     // Students already holding a login are skipped — re-running the edge function
     // would reset a password that may already be in someone's hands.
-    const needLogins = imported.filter((student) => !student.auth_user_id);
-    if (needLogins.length === 0) {
-      showToast('Students imported — logins already existed');
-      return;
+    const needLogins = createLogins ? imported.filter((student) => !student.auth_user_id) : [];
+    if (needLogins.length > 0) {
+      const result = await createStudentLoginsBulk(needLogins.map((s) => ({ id: s.id, name: s.name })));
+      setStudents(await getStudents());
+      setBulkLogins(result);
+    } else if (failed.length === 0) {
+      showToast(createLogins ? 'Students imported — logins already existed' : 'Students imported');
     }
-
-    const result = await createStudentLoginsBulk(needLogins.map((s) => ({ id: s.id, name: s.name })));
-    setStudents(await getStudents());
-    setBulkLogins(result);
+    return failed;
   };
 
   if (loading) return <Spinner centered />;
@@ -193,7 +205,7 @@ export default function StudentsPage() {
               allLabel="All batches"
               filterValue={selectedBatchId}
               filterOptions={[
-                ...batches.map((batch) => ({ value: batch.id, label: batch.name })),
+                ...batches.filter((batch) => Boolean(batch.is_test) === isTest).map((batch) => ({ value: batch.id, label: batch.name })),
                 { value: NO_BATCH, label: 'No batch' },
               ]}
               onFilterChange={selectBatch}
@@ -205,8 +217,18 @@ export default function StudentsPage() {
             />
           </div>
 
-          <div className="mb-4">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <FilterTabs tabs={tabs} value={enrolment} onChange={setEnrolment} label="Enrolment" />
+            <SearchSelect
+              options={VIEW_OPTIONS}
+              value={view}
+              onChange={selectView}
+              placeholder="Original"
+              searchPlaceholder=""
+              emptyText=""
+              showSearch={false}
+              className="!w-auto !max-w-none"
+            />
           </div>
 
           {filteredStudents.length === 0 ? (
@@ -217,6 +239,7 @@ export default function StudentsPage() {
                 <TR>
                   <TH>Student</TH>
                   <TH>ID</TH>
+                  {isTest && <TH>Batch</TH>}
                   <TH>Phone</TH>
                   <TH>Email</TH>
                 </TR>
@@ -231,6 +254,7 @@ export default function StudentsPage() {
                       </Link>
                     </TD>
                     <TD className="cell-secondary font-mono">{s.student_code || '—'}</TD>
+                    {isTest && <TD className="cell-secondary">{batchNames(s.id) || '—'}</TD>}
                     <TD className="cell-secondary">{s.phone || '—'}</TD>
                     <TD className="cell-muted">{s.email || '—'}</TD>
                   </TR>

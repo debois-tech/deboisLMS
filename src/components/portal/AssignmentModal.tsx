@@ -16,6 +16,8 @@ interface AssignmentModalProps {
   assignment: StudentAssignment | null;
   repoUrl?: string;
   now: number;
+  // The batch has ended: read only
+  closed?: boolean;
   onClose: () => void;
   onSubmit: (repoUrl: string) => Promise<void>;
 }
@@ -52,7 +54,7 @@ export function AssignmentModal(props: AssignmentModalProps) {
   return <AssignmentModalBody key={props.assignment?.id ?? 'closed'} {...props} />;
 }
 
-function AssignmentModalBody({ assignment, repoUrl, now, onClose, onSubmit }: AssignmentModalProps) {
+function AssignmentModalBody({ assignment, repoUrl, now, closed, onClose, onSubmit }: AssignmentModalProps) {
   const [view, setView] = useState<'info' | 'submit'>('info');
   const [draftRepo, setDraftRepo] = useState(repoUrl ?? '');
   const [confirmed, setConfirmed] = useState(false);
@@ -92,7 +94,7 @@ function AssignmentModalBody({ assignment, repoUrl, now, onClose, onSubmit }: As
         view === 'info' ? (
           <>
             <Button variant="ghost" onClick={onClose}>Close</Button>
-            {!submitted && (
+            {!submitted && !closed && (
               <Button className="action-button-compact" onClick={() => setView('submit')}>
                 Submit
               </Button>

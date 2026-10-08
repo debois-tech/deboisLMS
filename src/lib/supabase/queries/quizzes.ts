@@ -26,6 +26,7 @@ export interface QuizParticipant {
 
 export interface OpenQuiz {
   id: string;
+  batch_id: string | null;
   title: string;
   status: 'lobby' | 'live';
   batches: { name: string } | null;
@@ -164,7 +165,7 @@ export async function getOpenQuizzes(): Promise<OpenQuiz[]> {
     typed<OpenQuiz[]>(
       await supabase
         .from('quizzes')
-        .select('id, title, status, batches(name)')
+        .select('id, batch_id, title, status, batches(name)')
         .in('status', ['lobby', 'live'])
         .order('created_at', { ascending: false }),
     ),

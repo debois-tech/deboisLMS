@@ -7,7 +7,9 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { FormField } from '@/components/ui/FormField';
 import { SearchSelect } from '@/components/ui/SearchSelect';
 import { DatePicker } from '@/components/ui/DatePicker';
-import { createBatch, getBatchPrograms, saveBatchProgram, PROGRAM_CODE_PATTERN } from '@/lib/supabase';
+import { BatchRoleField, roleReady, saveRole, type RoleDraft } from '@/components/batches/BatchRoleField';
+import { createBatch, getBatchPrograms, getInternshipRoles, saveBatchProgram, PROGRAM_CODE_PATTERN } from '@/lib/supabase';
+import { roleForBatch } from '@/lib/utils/studentImport';
 import { useToast } from '@/lib/context/ToastContext';
 import { errorMessage } from '@/lib/utils/errors';
 import type { BatchProgramOption } from '@/lib/types';
@@ -24,6 +26,8 @@ export default function NewBatchPage() {
   const [newCode, setNewCode] = useState('');
   const [newName, setNewName] = useState('');
   const [baseFee, setBaseFee] = useState('');
+  const [roles, setRoles] = useState<string[]>([]);
+  const [roleDraft, setRoleDraft] = useState<RoleDraft>({ pick: '', name: '' });
   const [form, setForm] = useState({
     name: '',
     // Status is not picked by hand — it follows the start date.
@@ -35,13 +39,16 @@ export default function NewBatchPage() {
 
   useEffect(() => {
     void getBatchPrograms().then(setPrograms).catch(() => setPrograms([]));
+    void getInternshipRoles().then(setRoles).catch(() => setRoles([]));
   }, []);
 
   const addingProgram = program === NEW_PROGRAM;
   const codeReady = PROGRAM_CODE_PATTERN.test(newCode.trim().toUpperCase());
   const feeReady = baseFee.trim() !== '' && Number(baseFee) >= 0;
+  // Until one is picked, the programme's usual role is suggested.
+  const role = roleDraft.pick ? roleDraft : { ...roleDraft, pick: roleForBatch({ program: program ?? undefined, batch_code: form.batch_code }) ?? '' };
   const incomplete =
-    !form.name.trim() || !program || !feeReady || (addingProgram && (!codeReady || !newName.trim()));
+    !form.name.trim() || !program || !feeReady || !roleReady(role) || (addingProgram && (!codeReady || !newName.trim()));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,7 +64,7 @@ export default function NewBatchPage() {
         setPrograms([...programs, saved]);
       }
 
-      const batch = await createBatch({ ...form, program: code, base_fee: Number(baseFee) });
+      const batch = await createBatch({ ...form, program: code, base_fee: Number(baseFee), internship_role: await saveRole(role, roles) });
       showToast('Batch created');
       navigate(`/batches/${batch.id}`, { replace: true });
     } catch (error) {
@@ -120,6 +127,8 @@ export default function NewBatchPage() {
               )}
             </div>
           )}
+
+          <BatchRoleField roles={roles} draft={role} onChange={setRoleDraft} />
 
           <FormField label="Base Fee" required>
             <input

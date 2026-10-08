@@ -6,6 +6,7 @@ import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { StatusPill } from '@/components/ui/StatusPill';
 import { EnrolmentSelect } from '@/components/ui/BatchSelect';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { Spinner } from '@/components/ui/Spinner';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -16,13 +17,23 @@ import { StudentLoginCard } from '@/components/students/StudentLoginCard';
 import { StudentIdChip } from '@/components/students/StudentLink';
 import { Badge } from '@/components/ui/Badge';
 import { ClaimActions } from '@/components/finance/ClaimActions';
-import { DeleteStudentModal } from '@/components/students/DeleteStudentModal';
-import { getStudentById, getStudentBatches, getFeesByStudent, getLecturesByBatch, getFeePaymentLogsByStudent, getPendingClaims, terminateEnrolment, setStudentFee } from '@/lib/supabase';
+import { getStudentById, getStudentBatches, getFeesByStudent, getLecturesByBatch, getFeePaymentLogsByStudent, getPendingClaims, terminateEnrolment, updateJoinDate, setStudentFee, getStudentDeletionCounts, deleteStudent } from '@/lib/supabase';
+import type { StudentDeletionCounts } from '@/lib/supabase';
 import type { Student, BatchStudentMapping, Batch, StudentFee, Lecture, FeePaymentLog, PaymentClaim } from '@/lib/types';
 import { formatDate, formatCurrency } from '@/lib/utils/format';
 import { useToast } from '@/lib/context/ToastContext';
 import { useConfirm } from '@/lib/context/ConfirmContext';
 import { errorMessage } from '@/lib/utils/errors';
+
+const DELETION_LABELS: [keyof StudentDeletionCounts, string][] = [
+  ['batches', 'Enrolments'],
+  ['fees', 'Fee records'],
+  ['payments', 'Payment logs'],
+  ['attendance', 'Attendance records'],
+  ['submissions', 'Assignment submissions'],
+  ['badges', 'Badges earned'],
+  ['claims', 'Payment claims'],
+];
 
 export default function StudentDetailPage() {
   const { studentId } = useParams();
@@ -38,6 +49,8 @@ export default function StudentDetailPage() {
   const [terminating, setTerminating] = useState(false);
   // The fee being typed, or null when the fee is not being edited.
   const [feeDraft, setFeeDraft] = useState<string | null>(null);
+  // The join date being typed, or null when it is not being edited
+  const [joinDraft, setJoinDraft] = useState<string | null>(null);
   const [savingFee, setSavingFee] = useState(false);
   const { showToast } = useToast();
   const confirm = useConfirm();
@@ -99,6 +112,8 @@ export default function StudentDetailPage() {
       message: `Leaving ${currentBatch?.name ?? 'this batch'}. Any instalment already due is settled and their login is deleted. Records stay.`,
       confirmLabel: 'Terminate',
       danger: true,
+      requireCheck: 'Yes, this student has left',
+      requireText: 'TERMINATE',
     });
     if (!ok) return;
 
@@ -115,6 +130,59 @@ export default function StudentDetailPage() {
       showToast(errorMessage(err, 'Could not terminate this student'), 'error');
     } finally {
       setTerminating(false);
+    }
+  };
+
+  // For a student entered by mistake. Someone who left is terminated, so that is offered first.
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      const counts = await getStudentDeletionCounts(student.id);
+      const impact = DELETION_LABELS.map(([key, label]) => ({ label, count: counts[key] })).filter((row) => row.count > 0);
+      const accepted = await confirm({
+        title: `Delete ${student.name}?`,
+        message: 'Delete only if the details were wrong. Otherwise terminate.',
+        impact,
+        alt: isActive ? { label: 'Terminate instead', onSelect: () => void handleTerminate() } : undefined,
+        confirmLabel: 'Delete forever',
+        danger: true,
+        requireCheck: 'Yes, delete this student and everything attached, including their login',
+        requireText: student.student_code ?? student.name,
+      });
+      if (!accepted) return;
+      await deleteStudent(student.id);
+      showToast(`${student.name} deleted`);
+      navigate('/students', { replace: true });
+    } catch (err) {
+      showToast(errorMessage(err, 'Could not delete this student'), 'error');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleJoinDateSave = async () => {
+    if (!currentMapping || !joinDraft || joinDraft === currentMapping.joined_at.slice(0, 10)) return;
+    const accepted = await confirm({
+      title: 'Change the join date?',
+      message: (
+        <>
+          <span className="block">{formatDate(currentMapping.joined_at)} → {formatDate(joinDraft)}</span>
+          <span className="block">Offer letter and certificate start dates follow it</span>
+          <span className="block">Instalments count from it</span>
+        </>
+      ),
+      confirmLabel: 'Change date',
+      danger: true,
+      requireText: 'DATE',
+    });
+    if (!accepted) return;
+    try {
+      await updateJoinDate(currentMapping.id, joinDraft);
+      showToast('Join date changed');
+      setJoinDraft(null);
+      retry();
+    } catch (err) {
+      showToast(errorMessage(err, 'Could not change the join date'), 'error');
     }
   };
 
@@ -140,6 +208,7 @@ export default function StudentDetailPage() {
       ),
       confirmLabel: 'Change fee',
       danger: true,
+      requireCheck: 'Yes, change this fee',
       requireText: 'Confirm',
     });
     if (!accepted) return;
@@ -169,8 +238,6 @@ export default function StudentDetailPage() {
     { label: 'Current Year', value: student.current_year ?? '' },
     { label: 'Graduation Year', value: student.graduation_year ? String(student.graduation_year) : '' },
     { label: 'Internship Role', value: student.internship_role ?? '' },
-    { label: 'Internship Start', value: student.internship_start_date ? formatDate(student.internship_start_date) : '' },
-    { label: 'Internship End', value: student.internship_end_date ? formatDate(student.internship_end_date) : '' },
   ].filter((fact) => fact.value);
 
   return (
@@ -194,7 +261,8 @@ export default function StudentDetailPage() {
           <Button
             variant="outline"
             className="action-button-compact action-button-danger"
-            onClick={() => setDeleting(true)}
+            onClick={() => void handleDelete()}
+            loading={deleting}
           >
             <Trash2 size={14} /> Delete
           </Button>
@@ -244,7 +312,7 @@ export default function StudentDetailPage() {
             {currentMapping && <StatusPill kind="enrollment" value={currentMapping.status} />}
           </div>
           {currentMapping && batchMappings.length > 1 ? (
-            <EnrolmentSelect mappings={newestFirst} value={currentMapping.batch_id} onChange={(id) => { setSelectedBatchId(id); setFeeDraft(null); }} />
+            <EnrolmentSelect mappings={newestFirst} value={currentMapping.batch_id} onChange={(id) => { setSelectedBatchId(id); setFeeDraft(null); setJoinDraft(null); }} />
           ) : currentBatch ? (
             <Link to={`/batches/${currentBatch.id}`} className="student-summary-value student-summary-link">
               {currentBatch.name}
@@ -252,6 +320,27 @@ export default function StudentDetailPage() {
           ) : (
             <p className="student-summary-empty">No current batch</p>
           )}
+          {currentMapping && (joinDraft === null ? (
+            <p className="student-summary-meta flex items-center gap-2">
+              Joined {formatDate(currentMapping.joined_at)}
+              {isActive && (
+                <button
+                  type="button"
+                  onClick={() => setJoinDraft(currentMapping.joined_at.slice(0, 10))}
+                  aria-label="Change join date"
+                  className="flex h-6 w-6 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-overlay)] hover:text-[var(--text-primary)]"
+                >
+                  <Pencil size={12} />
+                </button>
+              )}
+            </p>
+          ) : (
+            <div className="flex items-center gap-2">
+              <DatePicker value={joinDraft} onChange={setJoinDraft} placeholder="Pick a date" ariaLabel="Join date" />
+              <Button size="sm" className="action-button-compact" onClick={() => void handleJoinDateSave()}>Save</Button>
+              <Button size="sm" variant="ghost" className="action-button-compact" onClick={() => setJoinDraft(null)}>Cancel</Button>
+            </div>
+          ))}
         </Card>
         <Card padding="sm" className="student-summary-card">
           <div className="flex items-center justify-between gap-2">
@@ -359,7 +448,7 @@ export default function StudentDetailPage() {
               <Link
                 key={m.id}
                 to={`/batches/${m.batch_id}`}
-                className="batch-list-item flex items-center justify-between gap-4 hover:bg-[var(--bg-elevated)] transition-colors"
+                className={`batch-list-item flex items-center justify-between gap-4 hover:bg-[var(--bg-elevated)] transition-colors${m.status === 'transferred' ? ' opacity-60' : ''}`}
               >
                 <div className="flex items-center gap-3">
                   <Layers size={18} className="shrink-0 text-[var(--primary)]" />
@@ -421,16 +510,6 @@ export default function StudentDetailPage() {
           </Table>
         )}
       </Card>
-
-      <DeleteStudentModal
-        key={deleting ? 'open' : 'closed'}
-        open={deleting}
-        studentId={student.id}
-        studentName={student.name}
-        confirmWord={student.student_code ?? student.name}
-        onClose={() => setDeleting(false)}
-        onDeleted={() => navigate('/students', { replace: true })}
-      />
     </div>
   );
 }

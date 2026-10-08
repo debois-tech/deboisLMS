@@ -1,25 +1,36 @@
 import { useMemo, useState } from 'react';
-import { FilePlus2, Search, ScrollText, Send, Share2 } from 'lucide-react';
+import { Eye, FilePlus2, Mail, RotateCw, Search, ScrollText, Send, Share2, Trash2, X } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { InlineAlert } from '@/components/ui/InlineAlert';
+import { Modal } from '@/components/ui/Modal';
 import { SearchFilterBar } from '@/components/ui/SearchFilterBar';
 import { SearchSelect } from '@/components/ui/SearchSelect';
 import { Spinner } from '@/components/ui/Spinner';
+import { Switch } from '@/components/ui/Switch';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/Table';
 import { StudentLink } from '@/components/students/StudentLink';
+import { DocumentDatesFields, EMPTY_DATES, datesReady } from '@/components/documents/DocumentDatesFields';
+import { useConfirm } from '@/lib/context/ConfirmContext';
 import { useToast } from '@/lib/context/ToastContext';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
-import { generateAndStoreDocument, getBatchStudents, sendDocumentEmail, setDocumentShared } from '@/lib/supabase';
+import {
+  deleteStoredDocument,
+  generateAndStoreDocument,
+  getBatchStudents,
+  logFailures,
+  sendDocumentEmail,
+  setDocumentShared,
+  viewStoredDocument,
+} from '@/lib/supabase';
 import type { Batch, DocumentKind, Student, BatchStudentMapping } from '@/lib/types';
+import type { DocumentDates } from '@/lib/utils/documents';
 import { errorMessage } from '@/lib/utils/errors';
 
 type Row = Student & { mapping: BatchStudentMapping };
-type Patch = Partial<Pick<
-  BatchStudentMapping,
-  'offer_letter_path' | 'cert_path' | 'offer_letter_shared' | 'cert_shared' | 'offer_letter_shared_at' | 'cert_shared_at'
->>;
+type Patch = Partial<BatchStudentMapping>;
 type RowStatus = 'missing' | 'pending' | 'shared';
 
 const LABELS: Record<DocumentKind, string> = { offer_letter: 'Offer Letter', cert: 'Certificate' };
@@ -45,55 +56,123 @@ function statusOf(mapping: BatchStudentMapping, kind: DocumentKind): RowStatus {
   if (!pathOf(mapping, kind)) return 'missing';
   return sharedOf(mapping, kind) ? 'shared' : 'pending';
 }
+// Locked once the batch has ended and both documents are generated and shared
+function isLocked(row: Row, batch: Batch) {
+  return Boolean(batch.ended_at) && statusOf(row.mapping, 'offer_letter') === 'shared' && statusOf(row.mapping, 'cert') === 'shared';
+}
 
-/** One doc's cell, for whichever kind the dropdown currently has selected. */
-function DocCell({ row, batch, kind, onPatch }: { row: Row; batch: Batch; kind: DocumentKind; onPatch: (patch: Patch) => void }) {
+const iconButton =
+  'flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-overlay)] hover:text-[var(--text-primary)] disabled:opacity-50';
+
+// A row's status, release switch and buttons, for whichever kind the dropdown has selected
+function DocCells({ row, batch, kind, onPatch }: { row: Row; batch: Batch; kind: DocumentKind; onPatch: (patch: Patch) => void }) {
   const { showToast } = useToast();
+  const confirm = useConfirm();
   const [busy, setBusy] = useState(false);
+  const [redoing, setRedoing] = useState(false);
+  const [dates, setDates] = useState<DocumentDates>(EMPTY_DATES);
   const path = pathOf(row.mapping, kind);
-  const shared = sharedOf(row.mapping, kind);
+  const shared = Boolean(sharedOf(row.mapping, kind));
+  const label = LABELS[kind].toLowerCase();
+  const locked = isLocked(row, batch);
 
-  const generate = async () => {
+  const run = async (work: () => Promise<void>, fallback: string) => {
     setBusy(true);
     try {
-      onPatch(await generateAndStoreDocument(kind, row.mapping, row, batch));
+      await work();
     } catch (err) {
-      showToast(errorMessage(err, `Could not generate the ${LABELS[kind].toLowerCase()}`), 'error');
+      showToast(errorMessage(err, fallback), 'error');
     } finally {
       setBusy(false);
     }
   };
 
-  // Nothing is generated automatically, not even for a student who has just joined: every document is made
-  // by this button, from the student's role and the batch's dates.
-  if (!path) {
-    return (
-      <Button size="sm" variant="secondary" className="action-button-compact" loading={busy} onClick={() => void generate()}>
-        Generate
-      </Button>
-    );
-  }
+  const view = () => run(() => viewStoredDocument(path!), `Could not open the ${label}`);
+  const toggle = () => run(async () => onPatch(await setDocumentShared(row.mapping.id, kind, !shared)), 'Could not update the release');
 
-  const toggle = async () => {
-    setBusy(true);
-    try {
-      onPatch(await setDocumentShared(row.mapping.id, kind, !shared));
-    } catch (err) {
-      showToast(errorMessage(err, 'Could not update the release'), 'error');
-    } finally {
-      setBusy(false);
-    }
+  const email = () =>
+    run(async () => {
+      try {
+        await sendDocumentEmail(row.id, batch.id, kind);
+      } catch (err) {
+        void logFailures('document_email', [`${row.name}: ${errorMessage(err, 'failed')}`]);
+        throw err;
+      }
+      showToast(`Emailed ${row.name}`);
+    }, 'Could not send the email');
+
+  const regenerate = () =>
+    run(async () => {
+      onPatch(await generateAndStoreDocument(kind, row.mapping, row, batch, dates));
+      setRedoing(false);
+    }, `Could not generate the ${label}`);
+
+  const remove = async () => {
+    const accepted = await confirm({
+      title: `Delete the ${label}?`,
+      message: 'Removes the file and its record. A copy already emailed stays as it was.',
+      confirmLabel: 'Delete',
+      danger: true,
+    });
+    if (accepted) await run(async () => onPatch(await deleteStoredDocument(row.mapping.id, kind)), `Could not delete the ${label}`);
+  };
+
+  const openRegenerate = () => {
+    setDates(EMPTY_DATES);
+    setRedoing(true);
   };
 
   return (
-    <button type="button" onClick={() => void toggle()} disabled={busy} className="disabled:opacity-50">
-      <Badge variant={shared ? 'success' : 'default'} dot>{shared ? 'Shared' : 'Not shared'}</Badge>
-    </button>
+    <>
+      <TD>
+        <div className="flex items-center gap-2">
+          <Badge variant={path ? 'success' : 'warning'} dot>{path ? 'Generated' : 'Not generated'}</Badge>
+          {path && (
+            <button type="button" onClick={() => void view()} disabled={busy} aria-label={`View ${label}`} className={iconButton}>
+              <Eye size={15} />
+            </button>
+          )}
+        </div>
+      </TD>
+      <TD>
+        <Switch checked={shared} onChange={() => void toggle()} disabled={!path || busy} label={`Share ${label}`} />
+      </TD>
+      <TD>
+        <div className="flex items-center gap-1">
+          {path && !locked && (
+            <button type="button" onClick={openRegenerate} disabled={busy} aria-label={`Regenerate ${label}`} className={iconButton}>
+              <RotateCw size={15} />
+            </button>
+          )}
+          <button type="button" onClick={() => void email()} disabled={!shared || busy} aria-label={`Email ${label}`} className={iconButton}>
+            <Mail size={15} />
+          </button>
+          {path && !locked && (
+            <button type="button" onClick={() => void remove()} disabled={busy} aria-label={`Delete ${label}`} className={iconButton}>
+              <Trash2 size={15} />
+            </button>
+          )}
+        </div>
+      </TD>
+      <Modal
+        open={redoing}
+        onClose={() => setRedoing(false)}
+        title={`Regenerate ${label}`}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setRedoing(false)}>Cancel</Button>
+            <Button className="action-button-compact" loading={busy} disabled={!datesReady(dates)} onClick={() => void regenerate()}>Regenerate</Button>
+          </>
+        }
+      >
+        <DocumentDatesFields value={dates} onChange={setDates} />
+      </Modal>
+    </>
   );
 }
 
 /**
- * A batch's document roster: search/filter, a doc-type switch, and per-row or bulk share/email.
+ * A batch's document roster: search/filter, a doc-type switch, bulk generate, and per-row or bulk share/email.
  * Shared by the standalone `/documents` page and the Batch Detail "Documents" tab — admin only,
  * the tutor batch-detail page never renders this.
  */
@@ -101,9 +180,11 @@ export function BatchDocuments({ batch }: { batch: Batch }) {
   const [rows, setRows] = useState<Row[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<RowStatus | null>(null);
-  const [docType, setDocType] = useState<DocumentKind>('offer_letter');
+  const [kind, setKind] = useState<DocumentKind>('offer_letter');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkMode, setBulkMode] = useState(false);
+  const [dates, setDates] = useState<DocumentDates>(EMPTY_DATES);
   const { showToast } = useToast();
 
   const { loading, error, retry } = useInitialLoad(async () => {
@@ -111,8 +192,14 @@ export function BatchDocuments({ batch }: { batch: Batch }) {
     setRows(roster.filter((r) => r.mapping.status === 'active') as Row[]);
   });
 
-  const changeDocType = (value: string) => {
-    setDocType(value as DocumentKind);
+  const changeKind = (value: string) => {
+    setKind(value as DocumentKind);
+    setSelected(new Set());
+  };
+
+  const toggleBulk = () => {
+    setBulkMode((on) => !on);
+    setDates(EMPTY_DATES);
     setSelected(new Set());
   };
 
@@ -125,42 +212,49 @@ export function BatchDocuments({ batch }: { batch: Batch }) {
     const q = search.trim().toLowerCase();
     return rows.filter((row) => {
       const matchesSearch = !q || row.name.toLowerCase().includes(q) || (row.student_code ?? '').toLowerCase().includes(q);
-      const matchesStatus = !statusFilter || statusOf(row.mapping, docType) === statusFilter;
+      const matchesStatus = !statusFilter || statusOf(row.mapping, kind) === statusFilter;
       return matchesSearch && matchesStatus;
     });
-  }, [rows, search, statusFilter, docType]);
+  }, [rows, search, statusFilter, kind]);
 
-  const allSelected = filteredRows.length > 0 && filteredRows.every((row) => selected.has(row.id));
+  // In bulk mode a locked row cannot be replaced, so it cannot be ticked
+  const tickable = filteredRows.filter((row) => !(bulkMode && isLocked(row, batch)));
+  const allSelected = tickable.length > 0 && tickable.every((row) => selected.has(row.id));
 
-  const toggleAll = () =>
-    setSelected(allSelected ? new Set() : new Set(filteredRows.map((row) => row.id)));
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(tickable.map((row) => row.id)));
 
-  // Generating, sharing and emailing each act on the selected students they apply to: share and email need a
-  // generated document, generate needs one that does not exist yet.
   const picked = rows.filter((row) => selected.has(row.id));
-  const toGenerate = picked.filter((row) => !pathOf(row.mapping, docType));
-  const toSend = picked.filter((row) => pathOf(row.mapping, docType));
+  const toSend = picked.filter((row) => pathOf(row.mapping, kind));
 
-  // One at a time: each is a PDF built in the browser and an upload, and the first failure is worth reading.
-  const bulkGenerate = async () => {
+  // One at a time, and the first failure is read out: a rate limit or a missing release says so, not just a count.
+  const runOneByOne = async (verb: string, work: Row[], act: (row: Row) => Promise<void>) => {
     setBulkBusy(true);
     const failures: string[] = [];
-    for (const row of toGenerate) {
+    for (const row of work) {
       try {
-        patchRow(row.id, await generateAndStoreDocument(docType, row.mapping, row, batch));
+        await act(row);
       } catch (err) {
         failures.push(`${row.name}: ${errorMessage(err, 'failed')}`);
       }
     }
-    const ok = toGenerate.length - failures.length;
+    if (verb === 'Emailed') void logFailures('document_email', failures);
+    const ok = work.length - failures.length;
     showToast(
       failures.length === 0
-        ? `Generated ${ok}`
-        : `Generated ${ok} of ${toGenerate.length}. ${failures[0]}${failures.length > 1 ? ` (+${failures.length - 1} more)` : ''}`,
+        ? `${verb} ${ok}`
+        : `${verb} ${ok} of ${work.length}. ${failures[0]}${failures.length > 1 ? ` (+${failures.length - 1} more)` : ''}`,
       failures.length === 0 ? 'success' : 'error',
     );
     setSelected(new Set());
     setBulkBusy(false);
+  };
+
+  // Each is a PDF built in the browser and an upload.
+  const bulkGenerate = async () => {
+    await runOneByOne('Generated', picked, async (row) => {
+      patchRow(row.id, await generateAndStoreDocument(kind, row.mapping, row, batch, dates));
+    });
+    toggleBulk();
   };
 
   const toggleOne = (id: string) =>
@@ -170,34 +264,28 @@ export function BatchDocuments({ batch }: { batch: Batch }) {
       return next;
     });
 
-  const bulkShare = async () => {
-    setBulkBusy(true);
-    const ids = toSend.map((row) => row.id);
-    const outcomes = await Promise.allSettled(
-      toSend.map(async (row) => patchRow(row.id, await setDocumentShared(row.mapping.id, docType, true))),
-    );
-    const ok = outcomes.filter((o) => o.status === 'fulfilled').length;
-    showToast(ok === ids.length ? `Shared with ${ok}` : `Shared with ${ok} of ${ids.length}`, ok === ids.length ? 'success' : 'error');
-    setSelected(new Set());
-    setBulkBusy(false);
-  };
+  const bulkShare = () =>
+    runOneByOne('Shared', toSend, async (row) => {
+      patchRow(row.id, await setDocumentShared(row.mapping.id, kind, true));
+    });
 
-  const bulkEmail = async () => {
-    setBulkBusy(true);
-    const ids = toSend.map((row) => row.id);
-    const outcomes = await Promise.allSettled(ids.map((id) => sendDocumentEmail(id, batch.id, docType)));
-    const ok = outcomes.filter((o) => o.status === 'fulfilled').length;
-    showToast(ok === ids.length ? `Emailed ${ok}` : `Emailed ${ok} of ${ids.length}`, ok === ids.length ? 'success' : 'error');
-    setSelected(new Set());
-    setBulkBusy(false);
-  };
+  // Every generated document in view takes the opposite of "all shared"; ungenerated ones are skipped
+  const generated = filteredRows.filter((row) => pathOf(row.mapping, kind));
+  const allShared = generated.length > 0 && generated.every((row) => sharedOf(row.mapping, kind));
+  const shareAll = () =>
+    runOneByOne(allShared ? 'Unshared' : 'Shared', generated, async (row) => {
+      patchRow(row.id, await setDocumentShared(row.mapping.id, kind, !allShared));
+    });
+
+  // Mail goes out one by one: the email service rate-limits a burst. A document still unshared is refused with its reason.
+  const bulkEmail = () => runOneByOne('Emailed', toSend, (row) => sendDocumentEmail(row.id, batch.id, kind));
 
   if (loading) return <Spinner centered />;
   if (error) return <ErrorState centered message={error} onRetry={retry} />;
   if (rows.length === 0) return <EmptyState icon={<ScrollText size={20} />} title="No active students in this batch" />;
 
   return (
-    <div className="table-block">
+    <div className={bulkMode ? 'table-block docs-bulk-active' : 'table-block'}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <SearchFilterBar
           className="max-w-md"
@@ -211,39 +299,45 @@ export function BatchDocuments({ batch }: { batch: Batch }) {
           onFilterChange={(value) => setStatusFilter(value as RowStatus | null)}
         />
 
-        {selected.size === 0 ? (
+        <div className="table-toolbar">
+          {!bulkMode && toSend.length > 0 && (
+            <>
+              <Button size="sm" variant="secondary" className="action-button-compact" loading={bulkBusy} disabled={bulkBusy} onClick={() => void bulkShare()}>
+                <Share2 size={14} /> Share {toSend.length}
+              </Button>
+              <Button size="sm" variant="secondary" className="action-button-compact" loading={bulkBusy} disabled={bulkBusy} onClick={() => void bulkEmail()}>
+                <Send size={14} /> Email {toSend.length}
+              </Button>
+            </>
+          )}
           <SearchSelect
             options={DOC_TYPE_OPTIONS}
-            value={docType}
-            onChange={changeDocType}
+            value={kind}
+            onChange={changeKind}
             placeholder="Offer Letter"
-            triggerLabel={LABELS[docType]}
+            triggerLabel={LABELS[kind]}
             searchPlaceholder=""
             emptyText=""
             showSearch={false}
             className="!w-auto !max-w-none"
           />
-        ) : (
-          <div className="table-toolbar">
-            <span className="text-xs text-[var(--text-muted)]">{selected.size} selected</span>
-            {toGenerate.length > 0 && (
-              <Button size="sm" className="action-button-compact" loading={bulkBusy} disabled={bulkBusy} onClick={() => void bulkGenerate()}>
-                <FilePlus2 size={14} /> Generate {toGenerate.length}
-              </Button>
-            )}
-            {toSend.length > 0 && (
-              <>
-                <Button size="sm" variant="secondary" className="action-button-compact" loading={bulkBusy} disabled={bulkBusy} onClick={() => void bulkShare()}>
-                  <Share2 size={14} /> Share {toSend.length}
-                </Button>
-                <Button size="sm" variant="secondary" className="action-button-compact" loading={bulkBusy} disabled={bulkBusy} onClick={() => void bulkEmail()}>
-                  <Send size={14} /> Email {toSend.length}
-                </Button>
-              </>
-            )}
-          </div>
-        )}
+          <Button size="sm" variant={bulkMode ? 'ghost' : 'secondary'} className="action-button-compact" disabled={bulkBusy} onClick={toggleBulk}>
+            {bulkMode ? <><X size={14} /> Cancel</> : <><FilePlus2 size={14} /> Bulk generate</>}
+          </Button>
+        </div>
       </div>
+
+      {bulkMode && (
+        <div className="docs-bulk-panel">
+          <DocumentDatesFields value={dates} onChange={setDates} />
+          {toSend.length > 0 && <InlineAlert>{toSend.length} existing {toSend.length === 1 ? 'document' : 'documents'} replaced</InlineAlert>}
+          <div className="docs-bulk-actions">
+            <Button className="action-button-compact" loading={bulkBusy} disabled={bulkBusy || picked.length === 0 || !datesReady(dates)} onClick={() => void bulkGenerate()}>
+              Generate {picked.length}
+            </Button>
+          </div>
+                  </div>
+      )}
 
       {filteredRows.length === 0 ? (
         <EmptyState icon={<Search size={20} />} title="No students match" />
@@ -256,33 +350,40 @@ export function BatchDocuments({ batch }: { batch: Batch }) {
                   type="checkbox"
                   className="data-table-checkbox"
                   checked={allSelected}
+                  disabled={tickable.length === 0}
                   onChange={toggleAll}
                 />
               </TH>
               <TH>Student</TH>
               <TH>ID</TH>
-              <TH>{LABELS[docType]}</TH>
+              <TH>{LABELS[kind]}</TH>
+              <TH>
+                <div className="flex items-center gap-2">
+                  Shared
+                  <Switch checked={allShared} onChange={() => void shareAll()} disabled={generated.length === 0 || bulkBusy} label={allShared ? 'Unshare all' : 'Share all'} />
+                </div>
+              </TH>
+              <TH>Actions</TH>
             </TR>
           </THead>
           <TBody>
             {filteredRows.map((row) => (
-                <TR key={row.id}>
-                  <TD align="center">
-                    <input
-                      type="checkbox"
-                      className="data-table-checkbox"
-                      checked={selected.has(row.id)}
-                      onChange={() => toggleOne(row.id)}
-                    />
-                  </TD>
-                  <TD>
-                    <StudentLink studentId={row.id} name={row.name} className="font-medium text-[var(--text-primary)] hover:underline" />
-                  </TD>
-                  <TD className="cell-secondary font-mono">{row.student_code || '—'}</TD>
-                  <TD>
-                    <DocCell row={row} batch={batch} kind={docType} onPatch={(p) => patchRow(row.id, p)} />
-                  </TD>
-                </TR>
+              <TR key={row.id}>
+                <TD align="center">
+                  <input
+                    type="checkbox"
+                    className="data-table-checkbox"
+                    checked={selected.has(row.id)}
+                    disabled={bulkMode && isLocked(row, batch)}
+                    onChange={() => toggleOne(row.id)}
+                  />
+                </TD>
+                <TD>
+                  <StudentLink studentId={row.id} name={row.name} className="font-medium text-[var(--text-primary)] hover:underline" />
+                </TD>
+                <TD className="cell-secondary font-mono">{row.student_code || '—'}</TD>
+                <DocCells row={row} batch={batch} kind={kind} onPatch={(p) => patchRow(row.id, p)} />
+              </TR>
             ))}
           </TBody>
         </Table>

@@ -6,7 +6,7 @@ import { AuthProvider } from '@/lib/context/AuthContext'
 import { ToastProvider } from '@/lib/context/ToastContext'
 import { ConfirmProvider } from '@/lib/context/ConfirmContext'
 import { ToastContainer } from '@/components/ui/Toast'
-import { ClaimsNotice } from '@/components/finance/ClaimsNotice'
+import { NotificationStack } from '@/components/notifications/NotificationStack'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import App from './App'
 import './globals.css'
@@ -20,7 +20,7 @@ createRoot(document.getElementById('root')!).render(
             <ConfirmProvider>
               <App />
               <ToastContainer>
-                <ClaimsNotice />
+                <NotificationStack />
               </ToastContainer>
               <ConfirmDialog />
             </ConfirmProvider>

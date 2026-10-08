@@ -24,8 +24,9 @@ import {
   getStudentById,
 } from '@/lib/supabase';
 import type { MyBadges } from '@/lib/supabase';
-import type { Batch, BatchStudentMapping, DocumentKind, FeePaymentLog, Student, StudentFeeDue } from '@/lib/types';
+import type { DocumentKind, FeePaymentLog, Student, StudentFeeDue } from '@/lib/types';
 import { useAuth } from '@/lib/context/AuthContext';
+import { usePortalBatch } from '@/lib/context/PortalBatchContext';
 import { useToast } from '@/lib/context/ToastContext';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { errorMessage } from '@/lib/utils/errors';
@@ -49,9 +50,9 @@ export default function PortalProfilePage() {
   const [student, setStudent] = useState<Student | null>(null);
   const [fees, setFees] = useState<StudentFeeDue[]>([]);
   const [payments, setPayments] = useState<FeePaymentLog[]>([]);
-  const [enrollments, setEnrollments] = useState<(BatchStudentMapping & { batch?: Batch })[]>([]);
   const [batchNames, setBatchNames] = useState<Map<string, string>>(new Map());
   const [myBadges, setMyBadges] = useState<MyBadges | null>(null);
+  const { current } = usePortalBatch();
 
   const { loading, error, retry } = useInitialLoad(async () => {
     if (!studentId) return;
@@ -77,7 +78,6 @@ export default function PortalProfilePage() {
     unknownIds.forEach((id, index) => names.set(id, fetched[index]?.name ?? 'Batch'));
 
     setStudent(record ?? null);
-    setEnrollments(mappings);
     setFees(feeRows);
     setPayments(paymentRows);
     setBatchNames(names);
@@ -92,11 +92,6 @@ export default function PortalProfilePage() {
     { label: 'GitHub', href: student?.github_url },
     { label: 'LinkedIn', href: student?.linkedin_url },
   ].filter((link): link is { label: string; href: string } => Boolean(link.href));
-
-  // Multiple active batches are possible; the most recently joined one is "current".
-  const current = enrollments
-    .filter((enrollment) => enrollment.status === 'active')
-    .sort((a, b) => new Date(b.joined_at).getTime() - new Date(a.joined_at).getTime())[0];
 
   const downloadDoc = async (kind: DocumentKind) => {
     const path = kind === 'offer_letter' ? current?.offer_letter_path : current?.cert_path;

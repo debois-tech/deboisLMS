@@ -32,15 +32,15 @@ export async function submitFeedback(input: {
   );
 }
 
-/** Admin-side: every report with its student joined in. */
+/** Admin-side: every live student's report with the student joined in. Test students' stay out of the inbox. */
 export async function getAllFeedback(): Promise<Feedback[]> {
   return rows<Feedback>(
     await supabase
       .from('feedback')
-      .select('*, student:students(id, name, student_code, email)')
+      .select('*, student:students(id, name, student_code, email, is_test)')
       .order('created_at', { ascending: false }),
     'Could not load feedback',
-  );
+  ).filter((report) => !report.student?.is_test);
 }
 
 export async function setFeedbackStatus(id: string, status: FeedbackStatus): Promise<void> {

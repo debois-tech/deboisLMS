@@ -5,15 +5,41 @@ import { FormField } from '@/components/ui/FormField';
 import { Modal } from '@/components/ui/Modal';
 import { useConfirmState } from '@/lib/context/ConfirmContext';
 
-/** Renders whatever `useConfirm()` last asked for. Mounted once, next to `ToastContainer`. */
+type Step = 'review' | 'check' | 'type';
+
+// Renders what useConfirm() last asked for; impact or requireCheck makes it a stepped flow
 export function ConfirmDialog() {
   const { state, resolve } = useConfirmState();
+  const [step, setStep] = useState(0);
   const [typed, setTyped] = useState('');
+  const [checked, setChecked] = useState(false);
 
-  const settle = (accepted: boolean) => {
+  const tick = state.requireCheck ?? (state.danger && !state.quick ? 'Yes, I understand this cannot be undone' : undefined);
+  const staged = Boolean(state.impact || tick);
+  const steps: Step[] = staged
+    ? ['review', ...(tick ? ['check' as const] : []), ...(state.requireText ? ['type' as const] : [])]
+    : ['review'];
+  const current = steps[Math.min(step, steps.length - 1)];
+  const last = step >= steps.length - 1;
+
+  const reset = () => {
+    setStep(0);
     setTyped('');
+    setChecked(false);
+  };
+  const settle = (accepted: boolean) => {
+    reset();
     resolve(accepted);
   };
+  const back = () => {
+    if (current === 'type') setTyped('');
+    if (current === 'check') setChecked(false);
+    setStep(step - 1);
+  };
+
+  // Each step unlocks only when its own ask is done
+  const asksText = Boolean(state.requireText) && (current === 'type' || !staged);
+  const locked = (current === 'check' && !checked) || (asksText && typed.trim() !== state.requireText);
 
   return (
     <Modal
@@ -22,30 +48,75 @@ export function ConfirmDialog() {
       title={state.title}
       footer={
         <>
-          <Button variant="ghost" onClick={() => settle(false)}>
-            {state.cancelLabel ?? 'Cancel'}
+          <Button variant="ghost" onClick={() => (step === 0 ? settle(false) : back())}>
+            {step === 0 ? state.cancelLabel ?? 'Cancel' : 'Back'}
           </Button>
-          <Button
-            className="action-button-compact"
-            variant={state.danger ? 'danger' : 'primary'}
-            onClick={() => settle(true)}
-            disabled={Boolean(state.requireText) && typed.trim() !== state.requireText}
-          >
-            {state.confirmLabel ?? 'Confirm'}
-          </Button>
+          {last ? (
+            <Button
+              className="action-button-compact"
+              variant={state.danger ? 'danger' : 'primary'}
+              onClick={() => settle(true)}
+              disabled={locked}
+            >
+              {state.confirmLabel ?? 'Confirm'}
+            </Button>
+          ) : (
+            <Button className="action-button-compact" variant={state.danger ? 'danger' : 'primary'} onClick={() => setStep(step + 1)} disabled={locked}>
+              Continue
+            </Button>
+          )}
         </>
       }
     >
       <div className="popup-form-spaced">
-        <div className="confirm-body">
-          {state.danger && (
-            <span className="confirm-icon">
-              <AlertTriangle size={18} aria-hidden="true" />
-            </span>
-          )}
-          {state.message && <p className="confirm-message">{state.message}</p>}
-        </div>
-        {state.requireText && (
+        {steps.length > 1 && <p className="text-xs text-[var(--text-muted)]">Step {step + 1} of {steps.length}</p>}
+
+        {current === 'review' && (
+          <>
+            <div className="confirm-body">
+              {state.danger && (
+                <span className="confirm-icon">
+                  <AlertTriangle size={18} aria-hidden="true" />
+                </span>
+              )}
+              {state.message && <p className="confirm-message">{state.message}</p>}
+            </div>
+            {state.impact && state.impact.length > 0 && (
+              <div className="flex flex-col gap-2">
+                {state.impact.map(({ label, count }) => (
+                  <div key={label} className="flex items-baseline justify-between gap-6 text-sm">
+                    <span className="text-[var(--text-muted)]">{label}</span>
+                    <span className="font-semibold tabular-nums text-[var(--text-primary)]">{count}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {state.alt && (
+              <div>
+                <Button
+                  className="action-button-compact"
+                  variant="secondary"
+                  onClick={() => {
+                    const { onSelect } = state.alt!;
+                    settle(false);
+                    onSelect();
+                  }}
+                >
+                  {state.alt.label}
+                </Button>
+              </div>
+            )}
+          </>
+        )}
+
+        {current === 'check' && tick && (
+          <label className={`repo-confirm ${checked ? 'is-checked' : ''}`}>
+            <input type="checkbox" checked={checked} onChange={(event) => setChecked(event.target.checked)} />
+            {tick}
+          </label>
+        )}
+
+        {asksText && (
           <FormField label={`Type ${state.requireText} to confirm`} required>
             <input
               value={typed}

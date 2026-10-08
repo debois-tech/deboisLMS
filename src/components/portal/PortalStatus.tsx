@@ -18,7 +18,8 @@ const fee: Record<FeeStatus, [string, Tone]> = {
 
 const enrollment: Record<MappingStatus, [string, Tone]> = {
   active: ['Ongoing', 'success'],
-  dropped: ['Finished', 'default'],
+  archived: ['Finished', 'default'],
+  transferred: ['Moved', 'default'],
   terminated: ['Ended', 'default'],
 };
 

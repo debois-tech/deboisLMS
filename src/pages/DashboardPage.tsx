@@ -11,7 +11,7 @@ import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatCard } from '@/components/ui/StatCard';
 import { getDashboardStats, getRecentActivity, type DashboardStats, type RecentActivity } from '@/lib/supabase';
-import { getBatches, getCurriculumProgress, getEarningBreakdown } from '@/lib/supabase';
+import { getBatches, getCurriculumProgress, getEarningBreakdown, processDocumentCleanup } from '@/lib/supabase';
 import { CurriculumAverage } from '@/components/curriculum/CurriculumAverage';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { averageProgress } from '@/lib/utils/curriculum';
@@ -29,6 +29,8 @@ export default function DashboardPage() {
   const [progress, setProgress] = useState<Map<string, { done: number; total: number }>>(new Map());
 
   const { loading, error, retry } = useInitialLoad(async () => {
+    // Files queued for removal by terminate and the 90-day clean-up
+    void processDocumentCleanup().catch(console.error);
     const [s, a, b, e, p] = await Promise.all([
       getDashboardStats(),
       getRecentActivity(),
@@ -46,7 +48,7 @@ export default function DashboardPage() {
   if (loading) return <Spinner centered />;
   if (error) return <ErrorState centered message={error} onRetry={retry} />;
 
-  const ongoingBatches = batches.filter((b) => b.status === 'ongoing');
+  const ongoingBatches = batches.filter((b) => b.status === 'ongoing' && !b.is_test);
   const average = averageProgress(progress, ongoingBatches.map((batch) => batch.id));
 
   return (

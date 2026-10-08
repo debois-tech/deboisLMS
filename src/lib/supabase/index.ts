@@ -1,8 +1,9 @@
-export { getBatches, getBatchById, createBatch, updateBatch, deleteBatch, getBatchDeletionCounts, getBatchPrograms, endBatch, saveBatchProgram, PROGRAM_CODE_PATTERN } from './queries/batches';
+export { getBatches, getBatchById, createBatch, updateBatch, deleteBatch, convertBatchToTest, getBatchDeletionCounts, getBatchPrograms, endBatch, saveBatchProgram, PROGRAM_CODE_PATTERN } from './queries/batches';
 export type { BatchDeletionCounts } from './queries/batches';
-export { getStudents, getStudentById, createStudent, createOrReuseStudent, findExistingStudent, updateStudent, getStudentBatches, getAllBatchStudentMappings, getBatchStudents, addStudentToBatch, terminateEnrolment, transferStudents, getStudentDeletionCounts, deleteStudent, getStudentByAuthUserId, createStudentLogin, createStudentLoginsBulk, sendCredentialsEmail, importStudentsIntoBatch, getInternshipRoles, addInternshipRole } from './queries/students';
+export { getStudents, getStudentById, createStudent, createNewStudent, updateStudent, getStudentBatches, getAllBatchStudentMappings, getBatchStudents, addStudentToBatch, createStudentInBatch, updateJoinDate, terminateEnrolment, transferStudent, getStudentDeletionCounts, getConversionPreview, deleteStudent, getStudentByAuthUserId, createStudentLogin, createStudentLoginsBulk, sendCredentialsEmail, importStudentsIntoBatch, getInternshipRoles, addInternshipRole } from './queries/students';
 export type { BulkLoginResult, CredentialEmailResult, TerminationResult, StudentDeletionCounts } from './queries/students';
-export { getTutors, getTutorById, createTutor, getTutorBatches, getBatchTutors, assignTutorToBatch, removeTutorFromBatch, deleteTutor, getTutorByAuthUserId, createTutorLogin } from './queries/tutors';
+export { getTutors, getTutorById, getTutorActions, createTutor, getTutorBatches, getBatchTutors, assignTutorToBatch, removeTutorFromBatch, deleteTutor, getTutorByAuthUserId, createTutorLogin } from './queries/tutors';
+export type { TutorAction } from './queries/tutors';
 export { getLecturesByBatch, getLectureById, createLecture, updateLecture, deleteLecture } from './queries/lectures';
 export { getUploadsByLecture, getAttendanceByLecture, getAttendanceByBatch, getApprovedAttendanceByStudent, insertUploadRows, markAttendance, deleteAttendance, approveAttendance, setAttendanceApproved, bulkApproveAttendance, getUnapprovedCount } from './queries/attendance';
 export { processAttendance, computeStatus, ATTENDANCE_PRESENT_PERCENT, ATTENDANCE_PARTIAL_PERCENT } from '@/lib/attendance/process';
@@ -15,12 +16,14 @@ export type { UploadMaterialInput, BulkUploadResult } from './queries/materials'
 export { getDashboardStats, getRecentActivity, getTutorDashboardStats } from './queries/dashboard';
 export type { DashboardStats, RecentActivity, TutorDashboardStats } from './queries/dashboard';
 export { getMyFeedback, submitFeedback, getAllFeedback, setFeedbackStatus } from './queries/feedback';
+export { getExpiringStudents, getFailures, logFailures, clearFailures, getPendingCurriculum, NOTICES_CHANGED } from './queries/notices';
+export type { FailureKind, ActionFailure, ExpiringStudent } from './queries/notices';
 export { getMaintenanceMode, setMaintenanceMode, getStudentCodeYear, rollStudentCodeYear } from './queries/settings';
 export { submitPaymentClaim, getPendingClaims, approvePaymentClaim, dismissPaymentClaim, exportPaymentClaimsCsv, getPaymentQrUrl } from './queries/paymentClaims';
 export { getCurriculumNodes, getCurriculumProgress, getLatestCurriculumRequest, saveCurriculum, proposeCurriculum, reviewCurriculum, setCurriculumStatus, getCurriculumOverview } from './queries/curriculum';
 export type { CurriculumOverview } from './queries/curriculum';
 export { getBatchBadges, createBatchBadge, deleteBatchBadge, getBadgeHolders, giveBadge, takeBadge, getMyBadges, badgeImageUrl, linkedInAddToProfileUrl, getBadgeCopy, downloadBadgeImage, canShareBadgeImage, shareBadgeImage, BADGE_EXTENSIONS, BADGE_MAX_BYTES, BADGE_ACCEPT } from './queries/badges';
 export type { BadgeWithHolders, BadgeHolder, MyBadges, NewBadgeInput } from './queries/badges';
-export { generateAndStoreDocument, setDocumentShared, downloadStoredDocument, sendDocumentEmail } from './queries/documents';
+export { generateAndStoreDocument, deleteStoredDocument, setDocumentShared, downloadStoredDocument, viewStoredDocument, processDocumentCleanup, sendDocumentEmail } from './queries/documents';
 export { getQuizzes, getQuiz, saveQuiz, deleteQuiz, openQuizLobby, quizGo, closeQuizQuestion, extendQuizQuestion, endQuiz, getClockOffset, getQuizParticipants, getQuizAnswers, getQuizScoreboard, getOpenQuizzes, joinQuiz, answerQuiz, getQuizState, getQuizResult, getQuizHistory, uploadQuizImage, quizImageUrl, QUIZ_IMAGE_ACCEPT, QUIZ_IMAGE_EXTENSIONS, QUIZ_IMAGE_MAX_BYTES } from './queries/quizzes';
 export type { QuizListItem, QuizParticipant, OpenQuiz } from './queries/quizzes';

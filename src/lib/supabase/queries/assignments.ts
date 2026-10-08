@@ -96,7 +96,7 @@ export async function getAssignmentSubmissions(
   const studentIds = roster.map((s) => s.id);
   const [{ data: completions }, { data: repos }] = await Promise.all([
     supabase.from('assignment_completions').select('*').eq('assignment_id', assignmentId),
-    supabase.from('student_repos').select('*').in('student_id', studentIds),
+    supabase.from('student_repos').select('*').eq('batch_id', batchId).in('student_id', studentIds),
   ]);
 
   const completionByStudent = new Map(
@@ -121,19 +121,20 @@ export async function getAssignmentSubmissions(
     .sort((a, b) => a.student_name.localeCompare(b.student_name));
 }
 
-export async function getStudentRepo(studentId: string): Promise<StudentRepo | undefined> {
+export async function getStudentRepo(studentId: string, batchId: string): Promise<StudentRepo | undefined> {
   const { data } = await supabase
     .from('student_repos')
     .select('*')
     .eq('student_id', studentId)
+    .eq('batch_id', batchId)
     .maybeSingle();
   return (data ?? undefined) as StudentRepo | undefined;
 }
 
-export async function saveStudentRepo(studentId: string, repoUrl: string): Promise<StudentRepo> {
+export async function saveStudentRepo(studentId: string, batchId: string, repoUrl: string): Promise<StudentRepo> {
   const { data, error } = await supabase
     .from('student_repos')
-    .upsert({ student_id: studentId, repo_url: repoUrl }, { onConflict: 'student_id' })
+    .upsert({ student_id: studentId, batch_id: batchId, repo_url: repoUrl }, { onConflict: 'student_id,batch_id' })
     .select()
     .single();
   if (error) throw error;
@@ -144,9 +145,10 @@ export async function saveStudentRepo(studentId: string, repoUrl: string): Promi
 export async function submitAssignmentFromPortal(
   assignmentId: string,
   studentId: string,
+  batchId: string,
   repoUrl: string,
 ): Promise<AssignmentCompletion> {
-  await saveStudentRepo(studentId, repoUrl);
+  await saveStudentRepo(studentId, batchId, repoUrl);
 
   const existing = await supabase
     .from('assignment_completions')

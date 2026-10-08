@@ -17,6 +17,7 @@ const NewStudentPage = lazy(() => import('@/pages/students/NewStudentPage'));
 const StudentDetailPage = lazy(() => import('@/pages/students/StudentDetailPage'));
 const EditStudentPage = lazy(() => import('@/pages/students/EditStudentPage'));
 const TutorsPage = lazy(() => import('@/pages/tutors/TutorsPage'));
+const TutorLogPage = lazy(() => import('@/pages/tutors/TutorLogPage'));
 const NewTutorPage = lazy(() => import('@/pages/tutors/NewTutorPage'));
 const TutorDetailPage = lazy(() => import('@/pages/tutors/TutorDetailPage'));
 const AttendancePage = lazy(() => import('@/pages/attendance/AttendancePage'));
@@ -82,6 +83,7 @@ export default function App() {
               <Route path="students/:studentId" element={<StudentDetailPage />} />
               <Route path="students/:studentId/edit" element={<EditStudentPage />} />
               <Route path="tutors" element={<TutorsPage />} />
+              <Route path="tutor-log" element={<TutorLogPage />} />
               <Route path="tutors/new" element={<NewTutorPage />} />
               <Route path="tutors/:tutorId" element={<TutorDetailPage />} />
               <Route path="attendance" element={<AttendancePage />} />

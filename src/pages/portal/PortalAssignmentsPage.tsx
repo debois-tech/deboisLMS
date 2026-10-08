@@ -17,6 +17,7 @@ import { getAssignmentsForStudent, getStudentRepo, submitAssignmentFromPortal } 
 import { assignmentState, formatDueLabel, isDueSoon, isOverdue, type AssignmentState } from '@/lib/utils/deadline';
 import { formatDate } from '@/lib/utils/format';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
+import { usePortalBatch } from '@/lib/context/PortalBatchContext';
 import { useNow } from '@/lib/hooks/useNow';
 import { useToast } from '@/lib/context/ToastContext';
 
@@ -40,23 +41,24 @@ export default function PortalAssignmentsPage() {
 
   // One clock for the page, so a passing deadline moves the row without a refresh.
   const now = useNow();
+  const { current, batchId } = usePortalBatch();
 
   // The saved repo loads with the assignments, so the submit view can prefill the link immediately.
   const load = useCallback(async () => {
-    if (!studentId) return;
+    if (!studentId || !batchId) return;
     const [data, repo] = await Promise.all([
       getAssignmentsForStudent(studentId),
-      getStudentRepo(studentId),
+      getStudentRepo(studentId, batchId),
     ]);
-    setAssignments(data);
+    setAssignments(data.filter((item) => item.batch_id === batchId));
     setRepoUrl(repo?.repo_url);
-  }, [studentId]);
+  }, [studentId, batchId]);
 
   const { loading, error, retry } = useInitialLoad(load, true);
 
   const handleSubmit = async (url: string) => {
     if (!studentId || !open) return;
-    await submitAssignmentFromPortal(open.id, studentId, url);
+    await submitAssignmentFromPortal(open.id, studentId, open.batch_id, url);
     // Already saved, so a failed refresh must not surface as "Could not submit".
     try {
       await load();
@@ -187,6 +189,7 @@ export default function PortalAssignmentsPage() {
         assignment={open}
         repoUrl={repoUrl}
         now={now}
+        closed={Boolean(current?.batch?.ended_at)}
         onClose={() => setOpen(null)}
         onSubmit={handleSubmit}
       />

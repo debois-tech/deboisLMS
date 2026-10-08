@@ -11,10 +11,14 @@ import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { FormField } from '@/components/ui/FormField';
 import { SearchSelect } from '@/components/ui/SearchSelect';
 import { DatePicker } from '@/components/ui/DatePicker';
-import { getBatchById, getBatchPrograms, updateBatch } from '@/lib/supabase';
+import { BatchRoleField, roleReady, saveRole, type RoleDraft } from '@/components/batches/BatchRoleField';
+import { getBatchById, getBatchPrograms, getInternshipRoles, updateBatch } from '@/lib/supabase';
 import type { Batch, BatchProgram, BatchProgramOption } from '@/lib/types';
+import { useConfirm } from '@/lib/context/ConfirmContext';
+import { useNow } from '@/lib/hooks/useNow';
 import { useToast } from '@/lib/context/ToastContext';
 import { errorMessage } from '@/lib/utils/errors';
+import { formatDate } from '@/lib/utils/format';
 
 export default function EditBatchPage() {
   const { batchId } = useParams();
@@ -22,13 +26,25 @@ export default function EditBatchPage() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<Batch | null>(null);
   const [programs, setPrograms] = useState<BatchProgramOption[]>([]);
+  const [roles, setRoles] = useState<string[]>([]);
+  const [roleDraft, setRoleDraft] = useState<RoleDraft>({ pick: '', name: '' });
+  const [savedEnd, setSavedEnd] = useState<string | null>(null);
   const { showToast } = useToast();
+  const confirm = useConfirm();
+  const now = useNow();
+  // 90 days after it ended the logins and documents are gone, so the date can no longer move
+  const cleanedUp = savedEnd !== null && now - new Date(savedEnd).getTime() > 90 * 86_400_000;
 
   const { loading, error, retry } = useInitialLoad(async () => {
     if (!batchId) return;
-    const [batch, programRows] = await Promise.all([getBatchById(batchId), getBatchPrograms()]);
-    if (batch) setForm(batch);
+    const [batch, programRows, roleRows] = await Promise.all([getBatchById(batchId), getBatchPrograms(), getInternshipRoles()]);
+    if (batch) {
+      setForm(batch);
+      setSavedEnd(batch.ended_at?.slice(0, 10) ?? null);
+      setRoleDraft({ pick: batch.internship_role ?? '', name: '' });
+    }
     setPrograms(programRows);
+    setRoles(roleRows);
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -42,9 +58,33 @@ export default function EditBatchPage() {
       showToast('Set a base fee for this batch', 'error');
       return;
     }
+    if (!roleReady(roleDraft)) {
+      showToast('Pick an internship role', 'error');
+      return;
+    }
+    const endChanged = Boolean(form.ended_at) && form.ended_at?.slice(0, 10) !== savedEnd;
+    if (endChanged && form.start_date && form.ended_at!.slice(0, 10) < form.start_date.slice(0, 10)) {
+      showToast('A batch cannot end before it starts', 'error');
+      return;
+    }
+    if (endChanged) {
+      const accepted = await confirm({
+        title: 'Change the end date?',
+        message: (
+          <>
+            <span className="block">{savedEnd ? formatDate(savedEnd) : 'None'} → {formatDate(form.ended_at!)}</span>
+            <span className="block">Student logins and documents delete 90 days after it</span>
+          </>
+        ),
+        confirmLabel: 'Change date',
+        danger: true,
+        requireText: 'DATE',
+      });
+      if (!accepted) return;
+    }
     setSaving(true);
     try {
-      await updateBatch(form.id, form);
+      await updateBatch(form.id, { ...form, internship_role: await saveRole(roleDraft, roles) });
       showToast('Batch updated');
       goBack();
     } catch (error) {
@@ -81,6 +121,7 @@ export default function EditBatchPage() {
               emptyText="No programmes found"
             />
           </FormField>
+          <BatchRoleField roles={roles} draft={roleDraft} onChange={setRoleDraft} />
           <FormField label="Base Fee" required>
             <input
               type="number"
@@ -98,6 +139,22 @@ export default function EditBatchPage() {
               ariaLabel="Start date"
             />
           </FormField>
+          {savedEnd && cleanedUp && (
+            <FormField label="End Date">
+              <input value={formatDate(savedEnd)} readOnly disabled />
+            </FormField>
+          )}
+          {savedEnd && !cleanedUp && (
+            <FormField label="End Date">
+              <DatePicker
+                value={form.ended_at?.slice(0, 10) ?? ''}
+                onChange={(ended_at) => setForm({ ...form, ended_at })}
+                min={form.start_date?.slice(0, 10)}
+                placeholder="Pick an end date"
+                ariaLabel="End date"
+              />
+            </FormField>
+          )}
           <div className="flex gap-3 pt-2">
             <Button className='action-button-compact' type="submit" loading={saving}>Save Changes</Button>
             <Button variant="ghost" onClick={goBack}>Cancel</Button>
