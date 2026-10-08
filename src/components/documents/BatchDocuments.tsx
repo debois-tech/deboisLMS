@@ -269,6 +269,14 @@ export function BatchDocuments({ batch }: { batch: Batch }) {
       patchRow(row.id, await setDocumentShared(row.mapping.id, kind, true));
     });
 
+  // Every generated document in view takes the opposite of "all shared"; ungenerated ones are skipped
+  const generated = filteredRows.filter((row) => pathOf(row.mapping, kind));
+  const allShared = generated.length > 0 && generated.every((row) => sharedOf(row.mapping, kind));
+  const shareAll = () =>
+    runOneByOne(allShared ? 'Unshared' : 'Shared', generated, async (row) => {
+      patchRow(row.id, await setDocumentShared(row.mapping.id, kind, !allShared));
+    });
+
   // Mail goes out one by one: the email service rate-limits a burst. A document still unshared is refused with its reason.
   const bulkEmail = () => runOneByOne('Emailed', toSend, (row) => sendDocumentEmail(row.id, batch.id, kind));
 
@@ -349,7 +357,12 @@ export function BatchDocuments({ batch }: { batch: Batch }) {
               <TH>Student</TH>
               <TH>ID</TH>
               <TH>{LABELS[kind]}</TH>
-              <TH>Shared</TH>
+              <TH>
+                <div className="flex items-center gap-2">
+                  Shared
+                  <Switch checked={allShared} onChange={() => void shareAll()} disabled={generated.length === 0 || bulkBusy} label={allShared ? 'Unshare all' : 'Share all'} />
+                </div>
+              </TH>
               <TH>Actions</TH>
             </TR>
           </THead>
