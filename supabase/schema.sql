@@ -1728,6 +1728,9 @@ begin
     raise exception 'Admin only';
   end if;
 
+  -- Read notifications are kept 30 days
+  delete from notifications where read_at < now() - interval '30 days';
+
   for expired in
     select s.id as student_id, s.auth_user_id
     from students s
@@ -3468,3 +3471,439 @@ begin
     execute format('create trigger guard_tutor_ended_batch before insert or update or delete on %I for each row execute function guard_tutor_ended_batch()', t);
   end loop;
 end $$;
+
+
+-- 22. NOTIFICATIONS
+-- One row per event per person, written by triggers so no screen can skip it. Counts that are live data
+-- (claims to verify, work to grade, accounts expiring) are not stored here: the app computes those.
+do $$ begin create type notification_kind as enum (
+  'assignment_new', 'assignment_graded', 'material_new', 'quiz_new', 'quiz_result',
+  'document_shared', 'payment_verified', 'feedback_resolved',
+  'feedback_new', 'student_transferred', 'batch_ended',
+  'curriculum_decided', 'student_joined', 'quiz_finished'
+); exception when duplicate_object then null; end $$;
+
+create table if not exists notifications (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references auth.users(id) on delete cascade,
+  kind       notification_kind not null,
+  batch_id   uuid references batches(id) on delete cascade,
+  -- What it is about: the assignment, the student, the batch
+  title      text not null,
+  link       text not null,
+  read_at    timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_notifications_user on notifications(user_id, created_at desc);
+
+alter table notifications enable row level security;
+drop policy if exists read_own on notifications;
+create policy read_own on notifications for select using (user_id = auth.uid());
+drop policy if exists mark_own on notifications;
+create policy mark_own on notifications for update using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+-- Read state is the only thing a person changes; rows are written by the triggers below
+revoke all on notifications from anon, authenticated;
+grant select on notifications to authenticated;
+grant update (read_at) on notifications to authenticated;
+
+-- Live: a new row shows in the bell and cards at once
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    begin
+      alter publication supabase_realtime add table notifications;
+    exception when duplicate_object then null;
+    end;
+  end if;
+end $$;
+
+-- Helpers, called only by the triggers: test batches never notify, finished ones only when told to
+create or replace function notification_quiet(p_batch uuid, p_allow_ended boolean default false)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select p_batch is not null and exists (
+    select 1 from batches b
+    where b.id = p_batch and (b.is_test or (b.ended_at is not null and not p_allow_ended))
+  );
+$$;
+
+-- The same event for the same person inside ten minutes is one row, so a folder upload is not fifty
+create or replace function notify_users(p_users uuid[], p_kind notification_kind, p_batch uuid, p_title text, p_link text)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  insert into notifications (user_id, kind, batch_id, title, link)
+  select distinct t.u, p_kind, p_batch, p_title, p_link
+  from unnest(p_users) as t(u)
+  where t.u is not null
+    and not exists (
+      select 1 from notifications n
+      where n.user_id = t.u and n.kind = p_kind and n.batch_id is not distinct from p_batch
+        and n.title = p_title and n.created_at > now() - interval '10 minutes'
+    );
+$$;
+
+create or replace function batch_student_users(p_batch uuid)
+returns uuid[]
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(array_agg(s.auth_user_id), '{}')
+  from batch_student_mapping m
+  join students s on s.id = m.student_id
+  where m.batch_id = p_batch and m.status = 'active' and s.auth_user_id is not null;
+$$;
+
+create or replace function batch_tutor_users(p_batch uuid)
+returns uuid[]
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(array_agg(t.auth_user_id), '{}')
+  from tutor_batch_mapping m
+  join tutors t on t.id = m.tutor_id
+  where m.batch_id = p_batch and t.auth_user_id is not null;
+$$;
+
+create or replace function admin_users()
+returns uuid[]
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(array_agg(u.id), '{}') from auth.users u where u.raw_app_meta_data ->> 'role' = 'admin';
+$$;
+
+-- A for-everyone item reaches every student with a login in a batch that is running and real
+create or replace function everyone_student_users()
+returns uuid[]
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(array_agg(distinct s.auth_user_id), '{}')
+  from students s
+  join batch_student_mapping m on m.student_id = s.id and m.status = 'active'
+  join batches b on b.id = m.batch_id and not b.is_test and b.ended_at is null
+  where s.auth_user_id is not null;
+$$;
+
+revoke all on function notification_quiet(uuid, boolean), notify_users(uuid[], notification_kind, uuid, text, text),
+  batch_student_users(uuid), batch_tutor_users(uuid), admin_users(), everyone_student_users() from public, anon, authenticated;
+
+create or replace function notify_assignment_new()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not notification_quiet(new.batch_id) then
+    perform notify_users(batch_student_users(new.batch_id), 'assignment_new', new.batch_id, new.title, '/portal/assignments');
+  end if;
+  return null;
+end $$;
+
+drop trigger if exists notify_assignment_new on assignments;
+create trigger notify_assignment_new after insert on assignments for each row execute function notify_assignment_new();
+
+create or replace function notify_assignment_graded()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  work assignments%rowtype;
+begin
+  if new.mark and (tg_op = 'INSERT' or not coalesce(old.mark, false)) then
+    select * into work from assignments where id = new.assignment_id;
+    if found and not notification_quiet(work.batch_id) then
+      perform notify_users(
+        array(select auth_user_id from students where id = new.student_id),
+        'assignment_graded', work.batch_id, work.title, '/portal/assignments'
+      );
+    end if;
+  end if;
+  return null;
+end $$;
+
+drop trigger if exists notify_assignment_graded on assignment_completions;
+create trigger notify_assignment_graded after insert or update of mark on assignment_completions for each row execute function notify_assignment_graded();
+
+create or replace function notify_material_new()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  -- A handout belongs to its assignment, which already notified
+  if new.assignment_id is null and not notification_quiet(new.batch_id) then
+    perform notify_users(
+      case when new.batch_id is null then everyone_student_users() else batch_student_users(new.batch_id) end,
+      'material_new', new.batch_id, coalesce(new.folder, new.title), '/portal/materials'
+    );
+  end if;
+  return null;
+end $$;
+
+drop trigger if exists notify_material_new on materials;
+create trigger notify_material_new after insert on materials for each row execute function notify_material_new();
+
+create or replace function notify_quiz_status()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.status is not distinct from old.status or notification_quiet(new.batch_id) then
+    return null;
+  end if;
+
+  if new.status = 'lobby' and old.status = 'draft' then
+    perform notify_users(
+      case when new.batch_id is null then everyone_student_users() else batch_student_users(new.batch_id) end,
+      'quiz_new', new.batch_id, new.title, '/portal/quizzes'
+    );
+  elsif new.status = 'ended' then
+    perform notify_users(
+      array(select s.auth_user_id from quiz_participants p join students s on s.id = p.student_id where p.quiz_id = new.id),
+      'quiz_result', new.batch_id, new.title, '/portal/quizzes'
+    );
+    if new.batch_id is not null then
+      perform notify_users(batch_tutor_users(new.batch_id), 'quiz_finished', new.batch_id, new.title, '/tutor/exams/' || new.id);
+    end if;
+  end if;
+  return null;
+end $$;
+
+drop trigger if exists notify_quiz_status on quizzes;
+create trigger notify_quiz_status after update of status on quizzes for each row execute function notify_quiz_status();
+
+-- A student joining or leaving a batch, and a document released to them
+create or replace function notify_enrolment()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  person students%rowtype;
+begin
+  select * into person from students where id = new.student_id;
+
+  if tg_op = 'INSERT' then
+    if new.status = 'active' and not notification_quiet(new.batch_id) then
+      perform notify_users(batch_tutor_users(new.batch_id), 'student_joined', new.batch_id, person.name, '/tutor/batches/' || new.batch_id);
+    end if;
+    return null;
+  end if;
+
+  if new.status = 'transferred' and old.status is distinct from new.status and not notification_quiet(new.batch_id) then
+    perform notify_users(batch_tutor_users(new.batch_id), 'student_transferred', new.batch_id, person.name, '/tutor/batches/' || new.batch_id);
+    perform notify_users(admin_users(), 'student_transferred', new.batch_id, person.name, '/students/' || new.student_id);
+  end if;
+
+  -- Released documents are what a finished batch is for, so only a test batch stays silent
+  if not notification_quiet(new.batch_id, true) and person.auth_user_id is not null then
+    if new.offer_letter_shared and not old.offer_letter_shared then
+      perform notify_users(array[person.auth_user_id], 'document_shared', new.batch_id, 'Offer letter', '/portal/profile');
+    end if;
+    if new.cert_shared and not old.cert_shared then
+      perform notify_users(array[person.auth_user_id], 'document_shared', new.batch_id, 'Certificate', '/portal/profile');
+    end if;
+  end if;
+  return null;
+end $$;
+
+drop trigger if exists notify_enrolment on batch_student_mapping;
+create trigger notify_enrolment after insert or update of status, offer_letter_shared, cert_shared on batch_student_mapping for each row execute function notify_enrolment();
+
+create or replace function notify_batch_ended()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if old.ended_at is null and new.ended_at is not null and not new.is_test then
+    perform notify_users(admin_users(), 'batch_ended', new.id, new.name, '/batches/' || new.id);
+    perform notify_users(batch_tutor_users(new.id), 'batch_ended', new.id, new.name, '/tutor/batches/' || new.id);
+  end if;
+  return null;
+end $$;
+
+drop trigger if exists notify_batch_ended on batches;
+create trigger notify_batch_ended after update of ended_at on batches for each row execute function notify_batch_ended();
+
+create or replace function notify_claim_verified()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.status = 'approved' and old.status is distinct from new.status and not notification_quiet(new.batch_id, true) then
+    perform notify_users(
+      array(select auth_user_id from students where id = new.student_id),
+      'payment_verified', new.batch_id, '₹' || trim_scale(new.amount)::text, '/portal/profile'
+    );
+  end if;
+  return null;
+end $$;
+
+drop trigger if exists notify_claim_verified on payment_claims;
+create trigger notify_claim_verified after update of status on payment_claims for each row execute function notify_claim_verified();
+
+create or replace function notify_feedback()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  person students%rowtype;
+begin
+  select * into person from students where id = new.student_id;
+
+  if tg_op = 'INSERT' then
+    if not person.is_test then
+      perform notify_users(admin_users(), 'feedback_new', null, person.name, '/feedback');
+    end if;
+  elsif new.status = 'resolved' and old.status is distinct from new.status then
+    perform notify_users(array[person.auth_user_id], 'feedback_resolved', null, left(new.message, 60), '/portal/feedback');
+  end if;
+  return null;
+end $$;
+
+drop trigger if exists notify_feedback on feedback;
+create trigger notify_feedback after insert or update of status on feedback for each row execute function notify_feedback();
+
+create or replace function notify_curriculum_decided()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.status in ('approved', 'denied') and old.status = 'pending' and not notification_quiet(new.batch_id) then
+    perform notify_users(
+      case when new.proposed_by is null then batch_tutor_users(new.batch_id)
+           else array(select auth_user_id from tutors where id = new.proposed_by) end,
+      'curriculum_decided', new.batch_id,
+      case new.status when 'approved' then 'Approved' else 'Denied' end,
+      '/tutor/curriculum/' || new.batch_id
+    );
+  end if;
+  return null;
+end $$;
+
+drop trigger if exists notify_curriculum_decided on curriculum_requests;
+create trigger notify_curriculum_decided after update of status on curriculum_requests for each row execute function notify_curriculum_decided();
+
+
+-- 23. CURRICULUM BADGES
+-- A card can carry badges. Once the card is done and everything under it is done or skipped, the batch's
+-- tutors get a live "award badge" task until that badge is given to at least one student.
+create table if not exists curriculum_node_badges (
+  node_id  uuid references curriculum_nodes(id) on delete cascade not null,
+  badge_id uuid references batch_badges(id) on delete cascade not null,
+  primary key (node_id, badge_id)
+);
+
+create index if not exists idx_node_badges_badge on curriculum_node_badges(badge_id);
+
+alter table curriculum_node_badges enable row level security;
+
+-- Seen by whoever sees the card: admin, the batch's tutors, the batch's students
+drop policy if exists read_with_node on curriculum_node_badges;
+create policy read_with_node on curriculum_node_badges
+  for select using (node_id in (select id from curriculum_nodes));
+
+-- Every write goes through set_node_badges
+revoke all on curriculum_node_badges from anon, authenticated;
+grant select on curriculum_node_badges to authenticated;
+
+-- Makes the card's badges equal p_badges; only badges of the card's own batch
+create or replace function set_node_badges(p_node uuid, p_badges uuid[])
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  b     uuid;
+  ended date;
+begin
+  select n.batch_id, bt.ended_at into b, ended
+  from curriculum_nodes n join batches bt on bt.id = n.batch_id
+  where n.id = p_node;
+  if b is null then
+    raise exception 'Not found';
+  end if;
+  if not (is_admin() or exists (select 1 from tutor_batch_mapping where tutor_id = current_tutor_id() and batch_id = b)) then
+    raise exception 'Not your batch';
+  end if;
+  if ended is not null and not is_admin() then
+    raise exception 'This batch has ended';
+  end if;
+  if exists (
+    select 1 from unnest(coalesce(p_badges, '{}')) as x(id)
+    where not exists (select 1 from batch_badges where id = x.id and batch_id = b)
+  ) then
+    raise exception 'Invalid badge';
+  end if;
+
+  delete from curriculum_node_badges where node_id = p_node and badge_id <> all (coalesce(p_badges, '{}'));
+  insert into curriculum_node_badges (node_id, badge_id)
+  select p_node, x from unnest(coalesce(p_badges, '{}')) as t(x)
+  on conflict do nothing;
+end $$;
+
+revoke all on function set_node_badges(uuid, uuid[]) from public, anon;
+grant execute on function set_node_badges(uuid, uuid[]) to authenticated;
+
+-- The signed-in tutor's open tasks: a done card whose whole subtree is done or skipped, with a badge nobody holds yet
+create or replace function badges_to_award()
+returns table (batch_id uuid, batch_name text, badge_id uuid, badge_name text, node_title text)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select b.id, b.name, bb.id, bb.name, n.title
+  from curriculum_nodes n
+  join curriculum_node_badges nb on nb.node_id = n.id
+  join batch_badges bb on bb.id = nb.badge_id
+  join batches b on b.id = n.batch_id
+  where n.batch_id in (select m.batch_id from tutor_batch_mapping m where m.tutor_id = current_tutor_id())
+    and not b.is_test
+    and b.ended_at is null
+    and n.status = 'done'
+    and not exists (select 1 from curriculum_nodes c where c.parent_id = n.id and c.status = 'todo')
+    and not exists (
+      select 1 from curriculum_nodes c join curriculum_nodes g on g.parent_id = c.id
+      where c.parent_id = n.id and g.status = 'todo'
+    )
+    and not exists (select 1 from student_badges s where s.badge_id = bb.id)
+  order by b.name, n.title;
+$$;
+
+revoke all on function badges_to_award() from public, anon;
+grant execute on function badges_to_award() to authenticated;

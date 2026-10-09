@@ -15,6 +15,24 @@ export type PaymentMethod = 'cash' | 'upi' | 'bank_transfer' | 'other';
 export type FeedbackKind = 'bug' | 'request';
 export type FeedbackStatus = 'open' | 'resolved';
 export type ClaimStatus = 'pending' | 'approved' | 'dismissed';
+export type NotificationKind =
+  | 'assignment_new' | 'assignment_graded' | 'material_new' | 'quiz_new' | 'quiz_result'
+  | 'document_shared' | 'payment_verified' | 'feedback_resolved'
+  | 'feedback_new' | 'student_transferred' | 'batch_ended'
+  | 'curriculum_decided' | 'student_joined' | 'quiz_finished';
+
+/** One stored event for one person; the triggers in schema.sql write them. */
+export interface NotificationRow {
+  id: string;
+  kind: NotificationKind;
+  batch_id: string | null;
+  /** What it is about: the assignment, the student, the batch. */
+  title: string;
+  link: string;
+  read_at: string | null;
+  created_at: string;
+  batch?: { name: string } | null;
+}
 
 export interface Profile {
   id: string;

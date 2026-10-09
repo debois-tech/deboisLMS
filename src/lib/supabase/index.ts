@@ -16,10 +16,13 @@ export type { UploadMaterialInput, BulkUploadResult } from './queries/materials'
 export { getDashboardStats, getRecentActivity, getTutorDashboardStats } from './queries/dashboard';
 export type { DashboardStats, RecentActivity, TutorDashboardStats } from './queries/dashboard';
 export { getMyFeedback, submitFeedback, getAllFeedback, setFeedbackStatus } from './queries/feedback';
+export { getMyNotifications, markNotificationsRead, markAllNotificationsRead, subscribeToNotifications } from './queries/notifications';
 export { getExpiringStudents, getFailures, logFailures, clearFailures, getPendingCurriculum, NOTICES_CHANGED } from './queries/notices';
 export type { FailureKind, ActionFailure, ExpiringStudent } from './queries/notices';
 export { getMaintenanceMode, setMaintenanceMode, getStudentCodeYear, rollStudentCodeYear } from './queries/settings';
 export { submitPaymentClaim, getPendingClaims, approvePaymentClaim, dismissPaymentClaim, exportPaymentClaimsCsv, getPaymentQrUrl } from './queries/paymentClaims';
+export { getNodeBadges, setNodeBadges, getBadgeTasks } from './queries/curriculum';
+export type { BadgeTask } from './queries/curriculum';
 export { getCurriculumNodes, getCurriculumProgress, getLatestCurriculumRequest, saveCurriculum, proposeCurriculum, reviewCurriculum, setCurriculumStatus, getCurriculumOverview } from './queries/curriculum';
 export type { CurriculumOverview } from './queries/curriculum';
 export { getBatchBadges, createBatchBadge, deleteBatchBadge, getBadgeHolders, giveBadge, takeBadge, getMyBadges, badgeImageUrl, linkedInAddToProfileUrl, getBadgeCopy, downloadBadgeImage, canShareBadgeImage, shareBadgeImage, BADGE_EXTENSIONS, BADGE_MAX_BYTES, BADGE_ACCEPT } from './queries/badges';

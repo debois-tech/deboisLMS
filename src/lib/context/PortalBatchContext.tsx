@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { useAuth } from '@/lib/context/AuthContext';
 import { getStudentBatches } from '@/lib/supabase';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
@@ -20,6 +20,11 @@ interface PortalBatchValue {
 const PortalBatchContext = createContext<PortalBatchValue>({ mappings: [], batchId: null, setBatchId: () => {}, expiresOn: null });
 
 const keyFor = (studentId: string) => `portal-batch:${studentId}`;
+
+const PICK_BATCH = 'portal-pick-batch';
+
+// Lets a notification switch the portal to its batch from outside the portal's tree
+export const pickPortalBatch = (id: string) => window.dispatchEvent(new CustomEvent(PICK_BATCH, { detail: id }));
 
 const readStored = (studentId: string) => {
   try {
@@ -50,6 +55,12 @@ export function PortalBatchProvider({ children }: { children: ReactNode }) {
       // Storage blocked: the choice lasts until the page reloads
     }
   }, [studentId]);
+
+  useEffect(() => {
+    const pick = (event: Event) => setBatchId((event as CustomEvent<string>).detail);
+    window.addEventListener(PICK_BATCH, pick);
+    return () => window.removeEventListener(PICK_BATCH, pick);
+  }, [setBatchId]);
 
   const live = mappings.filter((m) => m.status === 'active');
   const newest = (list: PortalEnrolment[]) => [...list].sort((a, b) => new Date(b.joined_at).getTime() - new Date(a.joined_at).getTime())[0];

@@ -29,19 +29,25 @@ import { DatePicker } from '@/components/ui/DatePicker';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { Spinner } from '@/components/ui/Spinner';
+import { CurriculumBadgePicker } from '@/components/curriculum/CurriculumBadgePicker';
 import { CurriculumCalendar } from '@/components/curriculum/CurriculumCalendar';
 import { useToast } from '@/lib/context/ToastContext';
 import { useConfirm } from '@/lib/context/ConfirmContext';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import {
+  badgeImageUrl,
+  getBatchBadges,
   getCurriculumNodes,
   getLatestCurriculumRequest,
+  getMyBadges,
+  getNodeBadges,
   proposeCurriculum,
   reviewCurriculum,
   saveCurriculum,
   setCurriculumStatus,
+  setNodeBadges,
 } from '@/lib/supabase';
-import type { CurriculumKind, CurriculumNode, CurriculumRequest, CurriculumStatus } from '@/lib/types';
+import type { BatchBadge, CurriculumKind, CurriculumNode, CurriculumRequest, CurriculumStatus } from '@/lib/types';
 import {
   childMap,
   countBelow,
@@ -67,6 +73,11 @@ interface CardData extends Record<string, unknown> {
   total: number;
   view: View;
   canTick: boolean;
+  // Badges on the card; `held` is a student's own, so the ones they lack show dimmed
+  badges: BatchBadge[];
+  held: ReadonlySet<string> | null;
+  canBadge: boolean;
+  onBadges: (node: CurriculumNode) => void;
   isNew: boolean;
   autoFocus: boolean;
   // Cards with something under them get a fold handle; `hidden` is how many a folded one is holding back.
@@ -107,6 +118,26 @@ function TriBox({ status, disabled, label, onClick }: { status: CurriculumStatus
       {status === 'done' && <Check size={14} strokeWidth={3} />}
       {status === 'skipped' && <Minus size={14} strokeWidth={3} />}
     </button>
+  );
+}
+
+// The card's badges, and for a tutor or admin the dotted square that opens the picker
+function CardBadges({ node, badges, held, canBadge, onBadges }: Pick<CardData, 'badges' | 'held' | 'canBadge' | 'onBadges'> & { node: CurriculumNode }) {
+  const shown = badges.slice(0, 2);
+  const rest = badges.length - shown.length;
+  if (shown.length === 0 && !canBadge) return null;
+  return (
+    <span className="cv-badges nodrag">
+      {shown.map((badge) => (
+        <img key={badge.id} src={badgeImageUrl(badge.image_path)} alt={badge.name} title={badge.name} className={clsx('cv-badge-thumb', held && !held.has(badge.id) && 'is-locked')} />
+      ))}
+      {rest > 0 && <span className="cv-badge-more">+{rest}</span>}
+      {canBadge && (
+        <button type="button" className="cv-badge-add" aria-label={`Badges for ${node.title || node.kind}`} title="Badges" onClick={() => onBadges(node)}>
+          <Plus size={13} />
+        </button>
+      )}
+    </span>
   );
 }
 
@@ -182,6 +213,7 @@ function CurriculumCard({ data }: NodeProps<CardNode>) {
           <span className="cv-muted">{node.status === 'skipped' ? 'Skipped' : 'Not started'}</span>
         )}
         {isNew && <span className="cv-new">New</span>}
+        <CardBadges node={node} badges={data.badges} held={data.held} canBadge={data.canBadge} onBadges={data.onBadges} />
       </div>
       {foldable && (
         <button
@@ -403,6 +435,11 @@ export function CurriculumCanvas({ batchId, batchName, role, height = 'calc(100v
   const [draft, setDraft] = useState<CurriculumNode[]>([]);
   const [focusId, setFocusId] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  // Badges: on each card, the batch's library (tutor and admin), the ones a student holds, and the card being edited
+  const [attached, setAttached] = useState<Map<string, BatchBadge[]>>(new Map());
+  const [library, setLibrary] = useState<BatchBadge[]>([]);
+  const [held, setHeld] = useState<ReadonlySet<string> | null>(null);
+  const [picking, setPicking] = useState<CurriculumNode | null>(null);
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [filter, setFilter] = useState<CurriculumFilter>('all');
@@ -457,12 +494,19 @@ export function CurriculumCanvas({ batchId, batchName, role, height = 'calc(100v
   const pending = request?.status === 'pending' ? request : undefined;
 
   const refresh = useCallback(async () => {
-    const [nodes, latest] = await Promise.all([
+    // Badges are a garnish: a failure there must not take the outline down
+    const [nodes, latest, onCards, shelf, mine] = await Promise.all([
       getCurriculumNodes(batchId),
       canEdit ? getLatestCurriculumRequest(batchId) : Promise.resolve(undefined),
+      getNodeBadges(batchId).catch(() => new Map<string, BatchBadge[]>()),
+      canEdit ? getBatchBadges(batchId).catch(() => []) : Promise.resolve([]),
+      canEdit ? Promise.resolve(null) : getMyBadges().then((badges) => new Set(badges.earned.keys())).catch(() => null),
     ]);
     setLive(nodes);
     setRequest(latest);
+    setAttached(onCards);
+    setLibrary(shelf);
+    setHeld(mine);
   }, [batchId, canEdit]);
 
   const { loading, error, retry } = useInitialLoad(refresh, role === 'student');
@@ -505,6 +549,13 @@ export function CurriculumCanvas({ batchId, batchName, role, height = 'calc(100v
       showToast(errorMessage(err, 'Could not update the topic'), 'error');
     }
   }, [showToast]);
+
+  const saveBadges = async (ids: string[]) => {
+    if (!picking) return;
+    await setNodeBadges(picking.id, ids);
+    setAttached((prev) => new Map(prev).set(picking.id, library.filter((badge) => ids.includes(badge.id))));
+    setPicking(null);
+  };
 
   const cycle = useCallback((node: CurriculumNode) => {
     const status = nextStatus(node.status);
@@ -701,6 +752,10 @@ export function CurriculumCanvas({ batchId, batchName, role, height = 'calc(100v
             onFold: toggleFold,
             view,
             canTick: canEdit && view === 'view',
+            badges: attached.get(node.id) ?? [],
+            held,
+            canBadge: canEdit && view === 'view',
+            onBadges: setPicking,
             isNew: newIds.has(node.id),
             autoFocus: node.id === focusId,
             onCycle: (target) => void cycle(target),
@@ -716,7 +771,7 @@ export function CurriculumCanvas({ batchId, batchName, role, height = 'calc(100v
       }
     }
     return { flowNodes, flowEdges };
-  }, [layout, slots, view, folded, batchName, canEdit, focusId, reviewDiff, addNode, cycle, mark, rename, remove, toggleFold]);
+  }, [layout, slots, view, folded, batchName, canEdit, focusId, reviewDiff, attached, held, addNode, cycle, mark, rename, remove, toggleFold]);
 
   if (loading) return <Spinner centered />;
   if (error) return <ErrorState centered message={error} onRetry={retry} />;
@@ -838,6 +893,14 @@ export function CurriculumCanvas({ batchId, batchName, role, height = 'calc(100v
           </button>
         </Panel>
       </ReactFlow>
+      <CurriculumBadgePicker
+        key={picking?.id ?? 'none'}
+        node={picking}
+        library={library}
+        chosen={picking ? (attached.get(picking.id) ?? []).map((badge) => badge.id) : []}
+        onClose={() => setPicking(null)}
+        onSave={saveBadges}
+      />
     </div>
   );
 

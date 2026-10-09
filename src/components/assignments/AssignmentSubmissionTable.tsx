@@ -8,7 +8,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { ExpandableSearch } from '@/components/ui/ExpandableSearch';
 import { Spinner } from '@/components/ui/Spinner';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
-import { getAssignmentSubmissions, setAssignmentMark } from '@/lib/supabase';
+import { NOTICES_CHANGED, getAssignmentSubmissions, setAssignmentMark } from '@/lib/supabase';
 import type { AssignmentSubmissionRow } from '@/lib/supabase';
 import { formatDateTime } from '@/lib/utils/format';
 import { downloadCsv, toCsv, toFileStem } from '@/lib/utils/csvExport';
@@ -57,6 +57,7 @@ export function AssignmentSubmissionTable({
     setBusyStudentId(row.student_id);
     try {
       await setAssignmentMark(assignmentId, row.student_id, !row.mark);
+      window.dispatchEvent(new Event(NOTICES_CHANGED));
       const data = await getAssignmentSubmissions(assignmentId, batchId);
       setRows(data);
     } catch (err) {

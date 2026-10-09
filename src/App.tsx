@@ -25,6 +25,7 @@ const FeesPage = lazy(() => import('@/pages/fees/FeesPage'));
 const AssignmentsPage = lazy(() => import('@/pages/assignments/AssignmentsPage'));
 const MaterialsPage = lazy(() => import('@/pages/materials/MaterialsPage'));
 const FeedbackPage = lazy(() => import('@/pages/feedback/FeedbackPage'));
+const NotificationsPage = lazy(() => import('@/pages/notifications/NotificationsPage'));
 const LoginPage = lazy(() => import('@/pages/auth/LoginPage'));
 const LoginChoicePage = lazy(() => import('@/pages/auth/LoginChoicePage'));
 const UserLoginPage = lazy(() => import('@/pages/auth/UserLoginPage'));
@@ -98,6 +99,7 @@ export default function App() {
               <Route path="exams/:quizId" element={<ExamRunPage />} />
               <Route path="exams/:quizId/edit" element={<ExamBuilderPage />} />
               <Route path="feedback" element={<FeedbackPage />} />
+              <Route path="notifications" element={<NotificationsPage />} />
               <Route path="*" element={<NotFoundPage />} />
             </Route>
           </Route>
@@ -117,6 +119,7 @@ export default function App() {
               <Route path="exams/new" element={<ExamBuilderPage />} />
               <Route path="exams/:quizId" element={<ExamRunPage />} />
               <Route path="exams/:quizId/edit" element={<ExamBuilderPage />} />
+              <Route path="notifications" element={<NotificationsPage />} />
               <Route path="*" element={<NotFoundPage />} />
             </Route>
           </Route>
@@ -132,6 +135,7 @@ export default function App() {
               <Route path="quizzes/:quizId" element={<PortalQuizPage />} />
               <Route path="profile" element={<PortalProfilePage />} />
               <Route path="feedback" element={<PortalFeedbackPage />} />
+              <Route path="notifications" element={<NotificationsPage />} />
               {/* Fees moved inside the profile. Kept so a bookmark still lands somewhere. */}
               <Route path="fees" element={<Navigate to="/portal/profile" replace />} />
               <Route path="*" element={<NotFoundPage />} />
