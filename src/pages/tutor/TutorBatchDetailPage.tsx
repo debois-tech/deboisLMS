@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useSearchParams, Link } from 'react-router-dom';
 import { Users } from 'lucide-react';
 import { BackLink } from '@/components/ui/BackLink';
 import { Card, CardHeader } from '@/components/ui/Card';
@@ -26,6 +26,9 @@ const CurriculumCanvas = lazy(() => import('@/components/curriculum/CurriculumCa
 // or Finance tab, no edit/end/delete actions, and Students is read-only.
 export default function TutorBatchDetailPage() {
   const { batchId } = useParams();
+  // An "award badge" task links here with the tab and the badge
+  const [searchParams] = useSearchParams();
+  const award = searchParams.get('award');
   const [batch, setBatch] = useState<Batch | null>(null);
   const [programs, setPrograms] = useState<BatchProgramOption[]>([]);
 
@@ -68,7 +71,7 @@ export default function TutorBatchDetailPage() {
           { label: 'Badges', value: 'badges' },
           { label: 'Material', value: 'material' },
         ]}
-        defaultValue="overview"
+        defaultValue={searchParams.get('tab') ?? 'overview'}
       >
         {(active) => (
           <>
@@ -82,7 +85,7 @@ export default function TutorBatchDetailPage() {
                 <CurriculumCanvas batchId={batch.id} batchName={batch.name} role="tutor" height="calc(100vh - 17rem)" />
               </Suspense>
             )}
-            {active === 'badges' && <BatchBadges batchId={batch.id} />}
+            {active === 'badges' && <BatchBadges batchId={batch.id} awardId={award} />}
             {active === 'material' && <BatchMaterials batchId={batch.id} batchCode={batch.batch_code} />}
           </>
         )}

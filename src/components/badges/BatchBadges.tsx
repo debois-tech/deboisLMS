@@ -33,7 +33,7 @@ import { extensionOf, filesFromDataTransfer } from '@/lib/utils/files';
 import { formatDate, formatFileSize } from '@/lib/utils/format';
 
 /** A batch's badges: upload the art, give it to students, take it back. Shared by admin and tutor. */
-export function BatchBadges({ batchId }: { batchId: string }) {
+export function BatchBadges({ batchId, awardId }: { batchId: string; awardId?: string | null }) {
   const confirm = useConfirm();
   const { showToast } = useToast();
   const [badges, setBadges] = useState<BadgeWithHolders[]>([]);
@@ -42,7 +42,10 @@ export function BatchBadges({ batchId }: { batchId: string }) {
   const [holding, setHolding] = useState<BadgeWithHolders | null>(null);
 
   const { loading, error, retry } = useInitialLoad(async () => {
-    setBadges(await getBatchBadges(batchId));
+    const list = await getBatchBadges(batchId);
+    setBadges(list);
+    // Arriving from an "award badge" task opens that badge's dialog
+    setGiving(list.find((badge) => badge.id === awardId) ?? null);
   });
 
   const reload = async () => setBadges(await getBatchBadges(batchId));

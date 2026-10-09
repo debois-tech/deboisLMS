@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  AlertTriangle, ArrowRightLeft, BookOpen, CalendarClock, CheckCircle2, ClipboardCheck, ClipboardList, FileText, Flag,
+  AlertTriangle, ArrowRightLeft, Award, BookOpen, CalendarClock, CheckCircle2, ClipboardCheck, ClipboardList, FileText, Flag,
   LibraryBig, MessageSquare, Trophy, UserPlus, Wallet, type LucideIcon,
 } from 'lucide-react';
 import { CLAIMS_CHANGED, getAllPendingClaims } from '@/lib/supabase/queries/paymentClaims';
@@ -8,6 +8,7 @@ import {
   NOTICES_CHANGED,
   clearFailures,
   getAssignmentsForStudent,
+  getBadgeTasks,
   getExpiringStudents,
   getFailures,
   getMyFeeDues,
@@ -17,6 +18,7 @@ import {
   type FailureKind,
 } from '@/lib/supabase';
 import { useAuth } from '@/lib/context/AuthContext';
+import type { BadgeTask } from '@/lib/supabase';
 import type { NotificationKind, NotificationRow } from '@/lib/types';
 import { assignmentState } from '@/lib/utils/deadline';
 import { addDays, countsFor, fromDateValue, toDateValue } from '@/lib/utils/date';
@@ -123,17 +125,31 @@ async function adminNotices(): Promise<Notice[]> {
 }
 
 async function tutorNotices(): Promise<Notice[]> {
-  const [stats, curriculum] = await Promise.all([
+  const [stats, curriculum, tasks] = await Promise.all([
     getTutorDashboardStats().catch(() => null),
     safely(getPendingCurriculum()),
+    safely(getBadgeTasks()),
   ]);
   const grading = stats?.pending_grading ?? 0;
+  // One task per badge, naming the cards that earned it
+  const byBadge = new Map<string, BadgeTask[]>();
+  for (const task of tasks) byBadge.set(task.badge_id, [...(byBadge.get(task.badge_id) ?? []), task]);
 
   const all: Notice[] = [
     {
       id: 'grading', icon: ClipboardCheck, tone: 'info', action: true, count: grading,
       title: `${plural(grading, 'submission', 'submissions')} to grade`,
       rows: [], to: '/tutor/assignments',
+    },
+    {
+      id: 'badges', icon: Award, tone: 'info', action: true, count: byBadge.size,
+      title: `${plural(byBadge.size, 'badge', 'badges')} to award`,
+      rows: [...byBadge.values()].map(([first, ...more]) => ({
+        key: first.badge_id,
+        primary: first.badge_name,
+        meta: [first.batch_name, [first, ...more].map((task) => task.node_title).join(' · ')],
+        to: `/tutor/batches/${first.batch_id}?tab=badges&award=${first.badge_id}`,
+      })),
     },
     {
       id: 'curriculum', icon: LibraryBig, tone: 'info', count: curriculum.length,

@@ -4394,6 +4394,112 @@ html.light .cv-canvas {
 
 .cv-row { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
 .cv-row-foot { min-height: 1.75rem; }
+
+/* Badges on a card: small art, and the dotted square that opens the picker */
+.cv-badges {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: auto;
+}
+
+.cv-badge-thumb {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  transition: opacity 0.2s, filter 0.2s;
+}
+
+/* A student has not earned it yet */
+.cv-badge-thumb.is-locked {
+  opacity: 0.4;
+  filter: grayscale(1);
+}
+
+.cv-badge-more {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.cv-badge-add {
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  transition: color 0.18s, border-color 0.18s, background-color 0.18s, transform 0.15s;
+}
+
+.cv-badge-add:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+  background: var(--bg-overlay);
+}
+
+.cv-badge-add:active {
+  transform: scale(0.92);
+}
+
+.cv-badge-add:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.cv-badge-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+  gap: 0.75rem;
+}
+
+.cv-badge-option {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.75rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  transition: border-color 0.18s, background-color 0.18s, transform 0.15s;
+}
+
+.cv-badge-option img {
+  width: 4rem;
+  height: 4rem;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+}
+
+.cv-badge-option:hover {
+  border-color: var(--border-strong);
+}
+
+.cv-badge-option:active {
+  transform: scale(0.97);
+}
+
+.cv-badge-option.is-on {
+  border-color: var(--primary);
+  background: var(--primary-glow-soft);
+}
+
+.cv-badge-tick {
+  position: absolute;
+  top: 0.375rem;
+  right: 0.375rem;
+  color: var(--primary);
+}
 .cv-title {
   flex: 1;
   min-width: 0;

@@ -3816,3 +3816,94 @@ end $$;
 
 drop trigger if exists notify_curriculum_decided on curriculum_requests;
 create trigger notify_curriculum_decided after update of status on curriculum_requests for each row execute function notify_curriculum_decided();
+
+
+-- 23. CURRICULUM BADGES
+-- A card can carry badges. Once the card is done and everything under it is done or skipped, the batch's
+-- tutors get a live "award badge" task until that badge is given to at least one student.
+create table if not exists curriculum_node_badges (
+  node_id  uuid references curriculum_nodes(id) on delete cascade not null,
+  badge_id uuid references batch_badges(id) on delete cascade not null,
+  primary key (node_id, badge_id)
+);
+
+create index if not exists idx_node_badges_badge on curriculum_node_badges(badge_id);
+
+alter table curriculum_node_badges enable row level security;
+
+-- Seen by whoever sees the card: admin, the batch's tutors, the batch's students
+drop policy if exists read_with_node on curriculum_node_badges;
+create policy read_with_node on curriculum_node_badges
+  for select using (node_id in (select id from curriculum_nodes));
+
+-- Every write goes through set_node_badges
+revoke all on curriculum_node_badges from anon, authenticated;
+grant select on curriculum_node_badges to authenticated;
+
+-- Makes the card's badges equal p_badges; only badges of the card's own batch
+create or replace function set_node_badges(p_node uuid, p_badges uuid[])
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  b     uuid;
+  ended date;
+begin
+  select n.batch_id, bt.ended_at into b, ended
+  from curriculum_nodes n join batches bt on bt.id = n.batch_id
+  where n.id = p_node;
+  if b is null then
+    raise exception 'Not found';
+  end if;
+  if not (is_admin() or exists (select 1 from tutor_batch_mapping where tutor_id = current_tutor_id() and batch_id = b)) then
+    raise exception 'Not your batch';
+  end if;
+  if ended is not null and not is_admin() then
+    raise exception 'This batch has ended';
+  end if;
+  if exists (
+    select 1 from unnest(coalesce(p_badges, '{}')) as x(id)
+    where not exists (select 1 from batch_badges where id = x.id and batch_id = b)
+  ) then
+    raise exception 'Invalid badge';
+  end if;
+
+  delete from curriculum_node_badges where node_id = p_node and badge_id <> all (coalesce(p_badges, '{}'));
+  insert into curriculum_node_badges (node_id, badge_id)
+  select p_node, x from unnest(coalesce(p_badges, '{}')) as t(x)
+  on conflict do nothing;
+end $$;
+
+revoke all on function set_node_badges(uuid, uuid[]) from public, anon;
+grant execute on function set_node_badges(uuid, uuid[]) to authenticated;
+
+-- The signed-in tutor's open tasks: a done card whose whole subtree is done or skipped, with a badge nobody holds yet
+create or replace function badges_to_award()
+returns table (batch_id uuid, batch_name text, badge_id uuid, badge_name text, node_title text)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select b.id, b.name, bb.id, bb.name, n.title
+  from curriculum_nodes n
+  join curriculum_node_badges nb on nb.node_id = n.id
+  join batch_badges bb on bb.id = nb.badge_id
+  join batches b on b.id = n.batch_id
+  where n.batch_id in (select m.batch_id from tutor_batch_mapping m where m.tutor_id = current_tutor_id())
+    and not b.is_test
+    and b.ended_at is null
+    and n.status = 'done'
+    and not exists (select 1 from curriculum_nodes c where c.parent_id = n.id and c.status = 'todo')
+    and not exists (
+      select 1 from curriculum_nodes c join curriculum_nodes g on g.parent_id = c.id
+      where c.parent_id = n.id and g.status = 'todo'
+    )
+    and not exists (select 1 from student_badges s where s.badge_id = bb.id)
+  order by b.name, n.title;
+$$;
+
+revoke all on function badges_to_award() from public, anon;
+grant execute on function badges_to_award() to authenticated;

@@ -1,6 +1,7 @@
 import { supabase } from '../client';
 import { maybeRow, ok, rows } from './result';
-import type { CurriculumDraftNode, CurriculumNode, CurriculumRequest, CurriculumStatus } from '@/lib/types';
+import { NOTICES_CHANGED } from './notices';
+import type { BatchBadge, CurriculumDraftNode, CurriculumNode, CurriculumRequest, CurriculumStatus } from '@/lib/types';
 
 export async function getCurriculumNodes(batchId: string): Promise<CurriculumNode[]> {
   return rows<CurriculumNode>(
@@ -47,6 +48,7 @@ export async function setCurriculumStatus(nodeId: string, status: CurriculumStat
     await supabase.rpc('set_curriculum_status', { p_node: nodeId, p_status: status, p_done_on: doneOn ?? null }),
     'Could not update the topic',
   );
+  window.dispatchEvent(new Event(NOTICES_CHANGED));
 }
 
 // Topics done over topics, per batch (just one when given). A batch without topics is absent.
@@ -96,4 +98,34 @@ export async function getCurriculumOverview(): Promise<CurriculumOverview> {
     progress,
     pending: new Set(rows<{ batch_id: string }>(pending, 'Could not load curriculum submissions').map((row) => row.batch_id)),
   };
+}
+
+// Each card's attached badges, for one batch
+export async function getNodeBadges(batchId: string): Promise<Map<string, BatchBadge[]>> {
+  const list = rows<{ node_id: string; badge: BatchBadge }>(
+    await supabase.from('curriculum_node_badges').select('node_id, badge:batch_badges!inner(*)').eq('badge.batch_id', batchId).returns<{ node_id: string; badge: BatchBadge }[]>(),
+    'Could not load the badges',
+  );
+  const byNode = new Map<string, BatchBadge[]>();
+  for (const { node_id, badge } of list) byNode.set(node_id, [...(byNode.get(node_id) ?? []), badge]);
+  return byNode;
+}
+
+// Replaces the card's badges with these; only the card's own batch's badges are accepted
+export async function setNodeBadges(nodeId: string, badgeIds: string[]): Promise<void> {
+  ok(await supabase.rpc('set_node_badges', { p_node: nodeId, p_badges: badgeIds }), 'Could not save the badges');
+  window.dispatchEvent(new Event(NOTICES_CHANGED));
+}
+
+export interface BadgeTask {
+  batch_id: string;
+  batch_name: string;
+  badge_id: string;
+  badge_name: string;
+  node_title: string;
+}
+
+// The signed-in tutor's badges waiting to be awarded: the card is done and nobody holds the badge yet
+export async function getBadgeTasks(): Promise<BadgeTask[]> {
+  return rows<BadgeTask>(await supabase.rpc('badges_to_award'), 'Could not load the badges to award');
 }

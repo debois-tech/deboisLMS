@@ -1,5 +1,6 @@
 import { supabase } from '../client';
 import { ok, row, rows } from './result';
+import { NOTICES_CHANGED } from './notices';
 import type { BatchBadge, Student, StudentBadge } from '@/lib/types';
 import { extensionOf } from '@/lib/utils/files';
 import { stampBadgeImage } from '@/lib/utils/watermark';
@@ -141,10 +142,12 @@ export async function giveBadge(badgeId: string, studentIds: string[]): Promise<
       }),
     'Could not give the badge',
   );
+  window.dispatchEvent(new Event(NOTICES_CHANGED));
 }
 
 export async function takeBadge(studentBadgeId: string): Promise<void> {
   ok(await supabase.from('student_badges').delete().eq('id', studentBadgeId), 'Could not take the badge back');
+  window.dispatchEvent(new Event(NOTICES_CHANGED));
 }
 
 export interface MyBadges {
