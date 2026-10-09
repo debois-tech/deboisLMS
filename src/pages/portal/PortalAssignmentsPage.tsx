@@ -13,7 +13,7 @@ import {
   type StudentAssignment,
   usePortalStudentId,
 } from '@/components/portal';
-import { getAssignmentsForStudent, getStudentRepo, submitAssignmentFromPortal } from '@/lib/supabase';
+import { NOTICES_CHANGED, getAssignmentsForStudent, getStudentRepo, submitAssignmentFromPortal } from '@/lib/supabase';
 import { assignmentState, formatDueLabel, isDueSoon, isOverdue, type AssignmentState } from '@/lib/utils/deadline';
 import { formatDate } from '@/lib/utils/format';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
@@ -59,6 +59,7 @@ export default function PortalAssignmentsPage() {
   const handleSubmit = async (url: string) => {
     if (!studentId || !open) return;
     await submitAssignmentFromPortal(open.id, studentId, open.batch_id, url);
+    window.dispatchEvent(new Event(NOTICES_CHANGED));
     // Already saved, so a failed refresh must not surface as "Could not submit".
     try {
       await load();

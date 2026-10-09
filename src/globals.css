@@ -2690,11 +2690,294 @@ html.light .glass {
   color: var(--text-primary);
 }
 
-.notice-actions {
+/* The card is one button to where it leads; the collapse or close control sits beside it */
+.notice-main {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: flex-start;
+  gap: 0.75rem;
+  min-width: 0;
+  text-align: left;
+  border-radius: var(--radius-sm);
+}
+
+.notice-main:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.notice-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.notice-meta {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  min-width: 0;
+}
+
+.notice-detail {
+  overflow: hidden;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toast.is-leaving {
+  animation: toastOut 0.18s ease-in forwards;
+  pointer-events: none;
+}
+
+.notice-more {
+  padding-left: 0.75rem;
+}
+
+/* ── Notification bell and list ──────────────────────────────── */
+.notif-bell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: 0 0 auto;
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  transition: color 0.2s, background-color 0.2s, transform 0.15s;
+}
+
+.notif-bell:hover {
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+}
+
+.notif-bell:active {
+  transform: scale(0.94);
+}
+
+.notif-bell:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.notif-badge {
+  position: absolute;
+  top: 0.125rem;
+  right: 0.0625rem;
+  min-width: 1rem;
+  height: 1rem;
+  padding: 0 0.25rem;
+  border-radius: 999px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 0.625rem;
+  font-weight: 700;
+  line-height: 1rem;
+  text-align: center;
+  animation: notifPop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes notifPop {
+  from { transform: scale(0.5); }
+  60%  { transform: scale(1.2); }
+  to   { transform: scale(1); }
+}
+
+.notif-panel {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  width: min(24rem, calc(100vw - 1.5rem));
   margin-top: 0.5rem;
+  overflow: hidden;
+  transform-origin: top right;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-lg);
+}
+
+/* A phone has no room to hang it off the bell */
+@media (max-width: 640px) {
+  .notif-panel {
+    position: fixed;
+    top: calc(var(--navbar-h, 3.5rem) + 0.5rem);
+    right: 0.75rem;
+    left: 0.75rem;
+    width: auto;
+  }
+}
+
+.notif-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.notif-panel-title {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.notif-link {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--primary);
+  transition: opacity 0.2s;
+}
+
+.notif-link:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.notif-link:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.notif-panel-list {
+  max-height: min(26rem, 60vh);
+  overflow-y: auto;
+}
+
+.notif-empty {
+  padding: 2rem 1rem;
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.notif-panel-foot {
+  display: block;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--border);
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--primary);
+  transition: background-color 0.2s;
+}
+
+.notif-panel-foot:hover {
+  background: var(--bg-overlay);
+}
+
+.notif-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem 0.25rem 0;
+  transition: background-color 0.2s;
+}
+
+.notif-row + .notif-row {
+  border-top: 1px solid var(--border);
+}
+
+.notif-row:hover {
+  background: var(--bg-overlay);
+}
+
+.notif-row-main {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: flex-start;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0.625rem 0 0.625rem 1rem;
+  text-align: left;
+  transition: opacity 0.25s;
+}
+
+.notif-row-main:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+/* Read: still there, just quiet */
+.notif-row.is-read .notif-row-main {
+  opacity: 0.5;
+}
+
+.notif-row-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.notif-row-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+.notif-row-detail {
+  overflow: hidden;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notif-row-time {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+}
+
+.notif-row-dot {
+  flex: 0 0 auto;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-top: 0.625rem;
+  border-radius: 999px;
+  background: var(--primary);
+}
+
+.notif-row-read {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin-top: 0.625rem;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  transition: color 0.18s, background-color 0.18s;
+}
+
+.notif-row-read:hover {
+  color: var(--primary);
+  background: var(--bg-overlay);
+}
+
+.notif-row-read:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.notif-page-list {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
 }
 
 .notice-chip {

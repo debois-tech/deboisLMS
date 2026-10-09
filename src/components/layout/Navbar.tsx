@@ -4,6 +4,7 @@ import { useTheme } from '@/lib/context/ThemeContext';
 import { useAuth } from '@/lib/context/AuthContext';
 import { supabase } from '@/lib/supabase/client';
 import { useState, useEffect, useRef } from 'react';
+import { NotificationBell } from '@/components/notifications/NotificationBell';
 
 interface NavbarProps {
   onMenuClick?: () => void;
@@ -55,6 +56,8 @@ export function Navbar({ onMenuClick, homePath = '/', themeToggle = false }: Nav
         <img src={theme === 'dark' ? '/logo-dark.png' : '/logo.png'} alt="deboistech" className="h-9 w-auto" />
       </Link>
 
+      <div className="flex items-center gap-1">
+      <NotificationBell />
       <div className="relative" ref={dropdownRef}>
         <button
           onClick={() => setDropdownOpen((o) => !o)}
@@ -109,6 +112,7 @@ export function Navbar({ onMenuClick, homePath = '/', themeToggle = false }: Nav
             </div>
           </div>
         )}
+      </div>
       </div>
     </header>
   );

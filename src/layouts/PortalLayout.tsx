@@ -3,6 +3,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronDown, LogOut, Menu, Moon, Sun } from 'lucide-react';
 import { PortalNav } from '@/components/layout/PortalNav';
 import { MaintenancePage } from '@/components/portal';
+import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { useAuth } from '@/lib/context/AuthContext';
 import { useTheme } from '@/lib/context/ThemeContext';
 import { supabase } from '@/lib/supabase/client';
@@ -85,6 +86,8 @@ export default function PortalLayout() {
           />
         </div>
 
+        <div className="flex items-center gap-1">
+        <NotificationBell />
         <div className="relative" ref={menuRef}>
           <button
             onClick={() => setMenuOpen((open) => !open)}
@@ -137,6 +140,7 @@ export default function PortalLayout() {
               </div>
             </div>
           )}
+        </div>
         </div>
       </header>
 

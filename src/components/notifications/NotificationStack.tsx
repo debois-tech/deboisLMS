@@ -1,15 +1,16 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
 import { ChevronDown, X } from 'lucide-react';
 import { clsx } from 'clsx';
-import { Button } from '@/components/ui/Button';
-import { Modal } from '@/components/ui/Modal';
-import { useToast } from '@/lib/context/ToastContext';
-import { useNotices, type Notice } from '@/lib/hooks/useNotices';
-import { errorMessage } from '@/lib/utils/errors';
+import { Badge } from '@/components/ui/Badge';
+import { OPEN_BELL, useNotifications } from '@/components/notifications/NotificationsProvider';
+import type { Notice } from '@/lib/hooks/useNotices';
 
-// What was on the notice when it was collapsed or dismissed: it stays that way until something new appears
-const signature = (notice: Notice) => `${notice.count}:${notice.rows.map((row) => row.key).join(',')}`;
+// Never more than this many cards at once; the rest wait behind a "+N more" chip
+const MAX_CARDS = 3;
+const EXIT_MS = 180;
+
+// What was on the notice when it was collapsed or closed: it stays that way until something new appears
+const signature = (notice: Notice) => `${notice.count}:${notice.ids?.join(',') ?? notice.rows.map((row) => row.key).join(',')}`;
 type Mark = 'notice' | 'notice-hidden';
 
 function isMarked(notice: Notice, mark: Mark) {
@@ -29,112 +30,77 @@ function setMark(notice: Notice, mark: Mark, on: boolean) {
   }
 }
 
-// Stacked, collapsible notices for the signed-in admin or tutor; View opens the full list
+// Bottom-right cards: work waiting collapses, everything else closes; click a card to go where it leads
 export function NotificationStack() {
-  const notices = useNotices();
-  const [open, setOpen] = useState<Notice | null>(null);
-  const [clearing, setClearing] = useState(false);
+  const { notices, open } = useNotifications();
+  const [leaving, setLeaving] = useState<string[]>([]);
   const [, refresh] = useState(0);
-  const { showToast } = useToast();
 
-  const toggle = (notice: Notice, collapsed: boolean) => {
-    setMark(notice, 'notice', collapsed);
-    refresh((count) => count + 1);
-  };
-
-  // Only the major (warning) notices stay: a clearable one is cleared, any other is hidden until it changes
-  const dismiss = async (notice: Notice) => {
-    try {
-      if (notice.clear) await notice.clear();
-      else setMark(notice, 'notice-hidden', true);
+  // Plays the exit, then does the thing
+  const withExit = (notice: Notice, act: () => void) => {
+    setLeaving((ids) => [...ids, notice.id]);
+    window.setTimeout(() => {
+      act();
+      setLeaving((ids) => ids.filter((id) => id !== notice.id));
       refresh((count) => count + 1);
-    } catch (err) {
-      showToast(errorMessage(err, 'Could not clear this'), 'error');
-    }
+    }, EXIT_MS);
   };
 
-  const clear = async () => {
-    if (!open?.clear) return;
-    setClearing(true);
-    try {
-      await open.clear();
-      setOpen(null);
-    } catch (err) {
-      showToast(errorMessage(err, 'Could not clear these'), 'error');
-    } finally {
-      setClearing(false);
-    }
-  };
+  // Read ones and closed ones have no card; a collapsed one is a chip
+  const waiting = notices.filter((notice) => !notice.read && !(!notice.action && isMarked(notice, 'notice-hidden')));
+  const chips = waiting.filter((notice) => notice.action && isMarked(notice, 'notice'));
+  const cards = waiting.filter((notice) => !chips.includes(notice));
+  const extra = cards.length - MAX_CARDS;
 
   return (
     <>
-      {notices.filter((notice) => !isMarked(notice, 'notice-hidden')).map((notice) => {
+      {cards.slice(0, MAX_CARDS).map((notice) => {
         const Icon = notice.icon;
-        const icon = (
-          <span className={clsx('toast-icon', `is-${notice.tone}`)}>
-            <Icon size={16} aria-hidden="true" />
-          </span>
-        );
-
-        if (isMarked(notice, 'notice')) {
-          return (
-            <button key={notice.id} type="button" className="notice-chip" onClick={() => toggle(notice, false)} aria-label={`Show ${notice.title}`}>
-              {icon}
-              {notice.count}
-            </button>
-          );
-        }
-
         return (
-          <div key={notice.id} className="toast notice" role="status">
-            {icon}
-            <div className="notice-body">
-              <p className="notice-title">{notice.title}</p>
-              <div className="notice-actions">
-                {notice.rows.length > 0 ? (
-                  <Button size="sm" variant="secondary" className="action-button-compact" onClick={() => setOpen(notice)}>View</Button>
-                ) : notice.to ? (
-                  <Link to={notice.to}><Button size="sm" variant="secondary" className="action-button-compact">View</Button></Link>
-                ) : null}
-              </div>
-            </div>
-            <button type="button" className="toast-close" onClick={() => toggle(notice, true)} aria-label={`Collapse ${notice.title}`}>
-              <ChevronDown size={15} />
+          <div key={notice.id} className={clsx('toast notice', leaving.includes(notice.id) && 'is-leaving')} role="status">
+            <button type="button" className="notice-main" onClick={() => open(notice)}>
+              <span className={clsx('toast-icon', `is-${notice.tone}`)}>
+                <Icon size={16} aria-hidden="true" />
+              </span>
+              <span className="notice-body">
+                <span className="notice-title">{notice.title}</span>
+                {(notice.batch || notice.detail) && (
+                  <span className="notice-meta">
+                    {notice.batch && <Badge size="sm">{notice.batch}</Badge>}
+                    {notice.detail && <span className="notice-detail">{notice.detail}</span>}
+                  </span>
+                )}
+              </span>
             </button>
-            {notice.tone !== 'warning' && (
-              <button type="button" className="toast-close" onClick={() => void dismiss(notice)} aria-label={`Clear ${notice.title}`}>
-                <X size={15} />
-              </button>
-            )}
+            <button
+              type="button"
+              className="toast-close"
+              onClick={() => withExit(notice, () => setMark(notice, notice.action ? 'notice' : 'notice-hidden', true))}
+              aria-label={`${notice.action ? 'Collapse' : 'Close'} ${notice.title}`}
+            >
+              {notice.action ? <ChevronDown size={15} /> : <X size={15} />}
+            </button>
           </div>
         );
       })}
 
-      <Modal
-        open={open !== null}
-        onClose={() => setOpen(null)}
-        title={open?.title ?? ''}
-        size="lg"
-        footer={
-          open?.clear && (
-            <Button variant="secondary" className="action-button-compact" onClick={() => void clear()} loading={clearing}>Clear all</Button>
-          )
-        }
-      >
-        <div className="flex flex-col gap-3">
-          {open?.rows.map((row) => (
-            <div key={row.key} className="flex items-start justify-between gap-4">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-[var(--text-primary)] break-words">{row.primary}</p>
-                {row.meta?.map((line) => <p key={line} className="text-xs text-[var(--text-muted)]">{line}</p>)}
-              </div>
-              {row.to && (
-                <Link to={row.to} onClick={() => setOpen(null)} className="shrink-0 text-xs font-semibold text-[var(--primary)] hover:underline">Open</Link>
-              )}
-            </div>
-          ))}
-        </div>
-      </Modal>
+      {extra > 0 && (
+        <button type="button" className="notice-chip notice-more" onClick={() => window.dispatchEvent(new Event(OPEN_BELL))}>
+          +{extra} more
+        </button>
+      )}
+
+      {chips.map((notice) => {
+        const Icon = notice.icon;
+        return (
+          <button key={notice.id} type="button" className="notice-chip" onClick={() => { setMark(notice, 'notice', false); refresh((count) => count + 1); }} aria-label={`Show ${notice.title}`}>
+            <span className={clsx('toast-icon', `is-${notice.tone}`)}>
+              <Icon size={16} aria-hidden="true" />
+            </span>
+            {notice.count}
+          </button>
+        );
+      })}
     </>
   );
 }

@@ -16,6 +16,7 @@ export type { UploadMaterialInput, BulkUploadResult } from './queries/materials'
 export { getDashboardStats, getRecentActivity, getTutorDashboardStats } from './queries/dashboard';
 export type { DashboardStats, RecentActivity, TutorDashboardStats } from './queries/dashboard';
 export { getMyFeedback, submitFeedback, getAllFeedback, setFeedbackStatus } from './queries/feedback';
+export { getMyNotifications, markNotificationsRead, markAllNotificationsRead, subscribeToNotifications } from './queries/notifications';
 export { getExpiringStudents, getFailures, logFailures, clearFailures, getPendingCurriculum, NOTICES_CHANGED } from './queries/notices';
 export type { FailureKind, ActionFailure, ExpiringStudent } from './queries/notices';
 export { getMaintenanceMode, setMaintenanceMode, getStudentCodeYear, rollStudentCodeYear } from './queries/settings';
