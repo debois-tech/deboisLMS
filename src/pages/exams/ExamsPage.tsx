@@ -91,19 +91,21 @@ function LiveQuizzes({ base }: { base: string }) {
             { value: 'ended', label: 'Ended', count: count((quiz) => quiz.status === 'ended') },
           ]}
         />
-        <SearchSelect
-          options={VIEW_OPTIONS}
-          value={view}
-          onChange={setView}
-          placeholder="Original"
-          searchPlaceholder=""
-          emptyText=""
-          showSearch={false}
-          className="!w-auto !max-w-none"
-        />
-        <Button className="action-button-compact" onClick={() => navigate(`${base}/new`)}>
-          <Plus size={16} /> New quiz
-        </Button>
+        <div className="flex items-center gap-3">
+          <SearchSelect
+            options={VIEW_OPTIONS}
+            value={view}
+            onChange={setView}
+            placeholder="Original"
+            searchPlaceholder=""
+            emptyText=""
+            showSearch={false}
+            className="!w-auto !max-w-none"
+          />
+          <Button className="action-button-compact" onClick={() => navigate(`${base}/new`)}>
+            <Plus size={16} /> New quiz
+          </Button>
+        </div>
       </div>
 
       {shown.length === 0 ? (
