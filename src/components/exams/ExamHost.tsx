@@ -12,7 +12,7 @@ import { useToast } from '@/lib/context/ToastContext';
 import { useDeleteQuiz } from '@/lib/hooks/useDeleteQuiz';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { useNow } from '@/lib/hooks/useNow';
-import { secondsLeft, useQuizLive } from '@/lib/hooks/useQuizLive';
+import { secondsLeft, useQuizLive, useStamp } from '@/lib/hooks/useQuizLive';
 import {
   closeQuizQuestion, endQuiz, extendQuizQuestion, getClockOffset, getQuiz, getQuizAnswers, getQuizParticipants,
   getQuizScoreboard, quizGo, quizImageUrl,
@@ -42,16 +42,20 @@ export function ExamHost({ quizId, onLeave, onEnded, onEdit }: ExamHostProps) {
   const [offset, setOffset] = useState(0);
   const [busy, setBusy] = useState(false);
 
+  const stamp = useStamp();
+
   const load = useCallback(async () => {
+    const fresh = stamp();
     const [next, joined, given, ranking] = await Promise.all([
       getQuiz(quizId), getQuizParticipants(quizId), getQuizAnswers(quizId), getQuizScoreboard(quizId),
     ]);
+    if (!fresh()) return;
     if (!next) throw new Error('This quiz no longer exists.');
     setQuiz(next);
     setPeople(joined);
     setAnswers(given);
     setBoard(ranking);
-  }, [quizId]);
+  }, [quizId, stamp]);
 
   const { loading, error, retry } = useInitialLoad(load);
   useQuizLive(quizId, () => void load().catch(console.error), { host: true, pollMs: 4000 });
@@ -74,9 +78,9 @@ export function ExamHost({ quizId, onLeave, onEnded, onEdit }: ExamHostProps) {
   const isLast = position === questions.length - 1;
 
   // The countdown reaching zero closes the question for everyone; the database already refuses late answers.
-  const expired = quiz?.status === 'live' && quiz.phase === 'answering' && closesAt > 0 && now >= closesAt ? current?.id : null;
+  const expired = quiz?.status === 'live' && quiz.phase === 'answering' && closesAt > 0 && now >= closesAt ? position : null;
   useEffect(() => {
-    if (expired) void closeQuizQuestion(quizId).then(load).catch(console.error);
+    if (expired !== null) void closeQuizQuestion(quizId, expired).then(load).catch(console.error);
   }, [expired, quizId, load]);
 
   useEffect(() => {
@@ -96,13 +100,14 @@ export function ExamHost({ quizId, onLeave, onEnded, onEdit }: ExamHostProps) {
   }, [load, showToast]);
 
   const finish = () => run(() => endQuiz(quizId));
+  const go = (to: number) => run(() => quizGo(quizId, to, position));
 
   const start = async () => {
     if (people.length === 0) {
       const accepted = await confirm({ title: 'Nobody has joined yet', message: 'Students who join later can still answer the questions that follow.', confirmLabel: 'Start anyway' });
       if (!accepted) return;
     }
-    await run(() => quizGo(quizId, 0));
+    await go(0);
   };
 
   const endNow = async () => {
@@ -119,10 +124,10 @@ export function ExamHost({ quizId, onLeave, onEnded, onEdit }: ExamHostProps) {
   const primary = lobby
     ? { label: 'Start quiz', icon: <Play size={16} />, go: start }
     : answering
-      ? { label: 'Close question', icon: null, go: () => run(() => closeQuizQuestion(quizId)) }
+      ? { label: 'Close question', icon: null, go: () => run(() => closeQuizQuestion(quizId, position)) }
       : isLast && position === (quiz?.furthest ?? -1)
         ? { label: 'Finish quiz', icon: <Flag size={16} />, go: finish }
-        : { label: 'Next question', icon: <ChevronRight size={16} />, go: () => run(() => quizGo(quizId, position + 1)) };
+        : { label: 'Next question', icon: <ChevronRight size={16} />, go: () => go(position + 1) };
   const canBack = quiz?.status === 'live' && !answering && position > 0;
 
   useEffect(() => {
@@ -131,7 +136,7 @@ export function ExamHost({ quizId, onLeave, onEnded, onEdit }: ExamHostProps) {
       if (busy || el.closest('input, textarea, [role="dialog"]')) return;
       // Only moves between questions already closed; starting, closing and finishing take a click.
       if (event.key === 'ArrowRight' && !lobby && !answering && !(isLast && position === quiz?.furthest)) void primary.go();
-      if (event.key === 'ArrowLeft' && canBack) void run(() => quizGo(quizId, position - 1));
+      if (event.key === 'ArrowLeft' && canBack) void go(position - 1);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -273,7 +278,7 @@ export function ExamHost({ quizId, onLeave, onEnded, onEdit }: ExamHostProps) {
                   disabled={!reachable || busy}
                   aria-current={index === position}
                   aria-label={`Question ${index + 1}`}
-                  onClick={() => void run(() => quizGo(quizId, index))}
+                  onClick={() => void go(index)}
                 >
                   {index + 1}
                 </button>
@@ -283,7 +288,7 @@ export function ExamHost({ quizId, onLeave, onEnded, onEdit }: ExamHostProps) {
         )}
         <div className="qz-stage-actions">
           {canBack && (
-            <Button className="action-button-compact" variant="secondary" onClick={() => void run(() => quizGo(quizId, position - 1))} disabled={busy}>
+            <Button className="action-button-compact" variant="secondary" onClick={() => void go(position - 1)} disabled={busy}>
               <ChevronLeft size={16} /> Previous
             </Button>
           )}

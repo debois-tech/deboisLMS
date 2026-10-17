@@ -6,6 +6,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { FilterTabs } from '@/components/ui/FilterTabs';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { SearchSelect } from '@/components/ui/SearchSelect';
 import { Spinner } from '@/components/ui/Spinner';
 import { StatusPill } from '@/components/ui/StatusPill';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/Table';
@@ -21,6 +22,11 @@ import { formatDate } from '@/lib/utils/format';
 type Filter = 'all' | 'draft' | 'running' | 'ended';
 
 const RUNNING: QuizStatus[] = ['lobby', 'live'];
+
+const VIEW_OPTIONS = [
+  { value: 'live', label: 'Original' },
+  { value: 'test', label: 'Test' },
+];
 
 // Admin `/exams` and tutor `/tutor/exams`: every quiz, newest first. RLS narrows a tutor to their batches.
 export default function ExamsPage() {
@@ -48,6 +54,7 @@ function LiveQuizzes({ base }: { base: string }) {
   const deleteWithConfirm = useDeleteQuiz();
   const [quizzes, setQuizzes] = useState<QuizListItem[]>([]);
   const [filter, setFilter] = useState<Filter>('all');
+  const [view, setView] = useState('live');
 
   const { loading, error, retry } = useInitialLoad(async () => {
     setQuizzes(await getQuizzes());
@@ -60,8 +67,10 @@ function LiveQuizzes({ base }: { base: string }) {
   if (loading) return <Spinner centered />;
   if (error) return <ErrorState centered message={error} onRetry={retry} />;
 
-  const count = (test: (quiz: QuizListItem) => boolean) => quizzes.filter(test).length;
-  const shown = quizzes.filter((quiz) => {
+  // Quizzes of a test batch live in their own view, like test students.
+  const inView = quizzes.filter((quiz) => Boolean(quiz.batches?.is_test) === (view === 'test'));
+  const count = (test: (quiz: QuizListItem) => boolean) => inView.filter(test).length;
+  const shown = inView.filter((quiz) => {
     if (filter === 'draft') return quiz.status === 'draft';
     if (filter === 'running') return RUNNING.includes(quiz.status);
     if (filter === 'ended') return quiz.status === 'ended';
@@ -76,11 +85,21 @@ function LiveQuizzes({ base }: { base: string }) {
           value={filter}
           onChange={setFilter}
           tabs={[
-            { value: 'all', label: 'All', count: quizzes.length },
+            { value: 'all', label: 'All', count: inView.length },
             { value: 'draft', label: 'Drafts', count: count((quiz) => quiz.status === 'draft') },
             { value: 'running', label: 'Live', count: count((quiz) => RUNNING.includes(quiz.status)) },
             { value: 'ended', label: 'Ended', count: count((quiz) => quiz.status === 'ended') },
           ]}
+        />
+        <SearchSelect
+          options={VIEW_OPTIONS}
+          value={view}
+          onChange={setView}
+          placeholder="Original"
+          searchPlaceholder=""
+          emptyText=""
+          showSearch={false}
+          className="!w-auto !max-w-none"
         />
         <Button className="action-button-compact" onClick={() => navigate(`${base}/new`)}>
           <Plus size={16} /> New quiz
@@ -90,7 +109,7 @@ function LiveQuizzes({ base }: { base: string }) {
       {shown.length === 0 ? (
         <EmptyState
           icon={<Radio size={22} />}
-          title={quizzes.length === 0 ? 'No quizzes yet. Create New One!' : 'Nothing here'}
+          title={inView.length === 0 ? 'No quizzes yet. Create New One!' : 'Nothing here'}
         />
       ) : (
         <Table maxHeight="none">

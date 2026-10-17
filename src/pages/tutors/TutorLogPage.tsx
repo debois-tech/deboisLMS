@@ -5,6 +5,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Pager, usePager } from '@/components/ui/Pager';
 import { SearchFilterBar } from '@/components/ui/SearchFilterBar';
+import { SearchSelect } from '@/components/ui/SearchSelect';
 import { Spinner } from '@/components/ui/Spinner';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/Table';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
@@ -13,27 +14,41 @@ import { formatDateTime } from '@/lib/utils/format';
 
 const PER_PAGE = 20;
 
+const VIEW_OPTIONS = [
+  { value: 'live', label: 'Original' },
+  { value: 'test', label: 'Test' },
+];
+
 export default function TutorLogPage() {
   const [actions, setActions] = useState<TutorAction[]>([]);
   const [batchNames, setBatchNames] = useState<Map<string, string>>(new Map());
+  const [testBatches, setTestBatches] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
   const [tutor, setTutor] = useState<string | null>(null);
+  const [view, setView] = useState('live');
 
   const { loading, error, retry } = useInitialLoad(async () => {
     const [rows, batches] = await Promise.all([getTutorActions(), getBatches()]);
     setActions(rows);
     setBatchNames(new Map(batches.map((batch) => [batch.id, batch.name])));
+    setTestBatches(new Set(batches.filter((batch) => batch.is_test).map((batch) => batch.id)));
   });
 
-  const tutors = useMemo(() => [...new Set(actions.map((action) => action.tutor_name))].sort(), [actions]);
+  // Actions in a test batch live in their own view, like test students.
+  const inView = useMemo(
+    () => actions.filter((action) => testBatches.has(action.batch_id ?? '') === (view === 'test')),
+    [actions, testBatches, view],
+  );
+
+  const tutors = useMemo(() => [...new Set(inView.map((action) => action.tutor_name))].sort(), [inView]);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
-    return actions.filter((action) =>
+    return inView.filter((action) =>
       (!tutor || action.tutor_name === tutor) &&
       (!term || `${action.item} ${action.detail ?? ''} ${batchNames.get(action.batch_id ?? '') ?? ''}`.toLowerCase().includes(term)),
     );
-  }, [actions, tutor, search, batchNames]);
+  }, [inView, tutor, search, batchNames]);
 
   const pager = usePager(filtered, PER_PAGE);
 
@@ -48,16 +63,28 @@ export default function TutorLogPage() {
         <EmptyState icon={<History size={32} />} title="No tutor activity yet" />
       ) : (
         <>
-          <div className="mb-4 max-w-md">
-            <SearchFilterBar
-              value={search}
-              onChange={(value) => { setSearch(value); pager.reset(); }}
-              placeholder="Search by item, detail or batch"
-              filterLabel="Tutor"
-              allLabel="All tutors"
-              filterValue={tutor}
-              filterOptions={tutors.map((name) => ({ value: name, label: name }))}
-              onFilterChange={(value) => { setTutor(value); pager.reset(); }}
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0 max-w-md flex-1">
+              <SearchFilterBar
+                value={search}
+                onChange={(value) => { setSearch(value); pager.reset(); }}
+                placeholder="Search by item, detail or batch"
+                filterLabel="Tutor"
+                allLabel="All tutors"
+                filterValue={tutor}
+                filterOptions={tutors.map((name) => ({ value: name, label: name }))}
+                onFilterChange={(value) => { setTutor(value); pager.reset(); }}
+              />
+            </div>
+            <SearchSelect
+              options={VIEW_OPTIONS}
+              value={view}
+              onChange={(value) => { setView(value); setTutor(null); pager.reset(); }}
+              placeholder="Original"
+              searchPlaceholder=""
+              emptyText=""
+              showSearch={false}
+              className="!w-auto !max-w-none"
             />
           </div>
 

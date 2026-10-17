@@ -48,6 +48,21 @@ export function useQuizLive(quizId: string, reload: () => void, { host = false, 
   }, [quizId, host, pollMs]);
 }
 
+// Reloads overlap and can finish out of order. Call `stamp()` when a fetch starts and its result as soon as it
+// lands: it is false when a newer fetch has already been applied, so a stale answer is dropped.
+export function useStamp() {
+  const issued = useRef(0);
+  const applied = useRef(0);
+  return useCallback(() => {
+    const mine = ++issued.current;
+    return () => {
+      if (mine < applied.current) return false;
+      applied.current = mine;
+      return true;
+    };
+  }, []);
+}
+
 // Remaining whole and fractional seconds to a deadline; 0 once it has passed.
 export function secondsLeft(closesAt: string | null | undefined, now: number): number {
   return closesAt ? Math.max(0, (Date.parse(closesAt) - now) / 1000) : 0;

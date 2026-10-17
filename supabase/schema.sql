@@ -1640,6 +1640,47 @@ end $$;
 revoke all on function delete_tutor(uuid) from public;
 grant execute on function delete_tutor(uuid) to authenticated;
 
+-- Test batches only: unassigns a tutor and deletes what carries their id there. Returns the file paths for the client to remove.
+create or replace function unassign_tutor_from_test_batch(p_mapping uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  m    tutor_batch_mapping;
+  mats text[];
+  imgs text[];
+begin
+  if not is_admin() then raise exception 'Admin only'; end if;
+
+  select * into m from tutor_batch_mapping where id = p_mapping;
+  if not found then raise exception 'That assignment no longer exists'; end if;
+  if not exists (select 1 from batches where id = m.batch_id and is_test) then
+    raise exception 'Only a test batch can be cleared this way';
+  end if;
+
+  select coalesce(array_agg(storage_path), '{}') into mats from materials where tutor_id = m.tutor_id and batch_id = m.batch_id;
+  select coalesce(array_agg(distinct qq.image_path), '{}') into imgs
+  from quiz_questions qq join quizzes z on z.id = qq.quiz_id
+  where z.created_by = m.tutor_id and z.batch_id = m.batch_id and qq.image_path is not null;
+
+  delete from materials where tutor_id = m.tutor_id and batch_id = m.batch_id;
+  delete from quizzes where created_by = m.tutor_id and batch_id = m.batch_id;
+  delete from student_badges where issued_by = m.tutor_id and badge_id in (select id from batch_badges where batch_id = m.batch_id);
+  delete from curriculum_requests where proposed_by = m.tutor_id and batch_id = m.batch_id;
+  delete from tutor_actions where tutor_id = m.tutor_id and batch_id = m.batch_id;
+  delete from notifications n using tutors t where t.id = m.tutor_id and n.user_id = t.auth_user_id and n.batch_id = m.batch_id;
+  delete from tutor_batch_mapping where id = m.id;
+
+  -- A copied quiz shares its pictures: keep any that another quiz still shows.
+  select coalesce(array_agg(p), '{}') into imgs from unnest(imgs) p where not exists (select 1 from quiz_questions where image_path = p);
+  return jsonb_build_object('materials', to_jsonb(mats), 'images', to_jsonb(imgs));
+end $$;
+
+revoke all on function unassign_tutor_from_test_batch(uuid) from public;
+grant execute on function unassign_tutor_from_test_batch(uuid) to authenticated;
+
 -- Files cannot be removed from SQL, so their paths wait here until an admin opens the dashboard
 create table if not exists document_cleanup (
   path text primary key
@@ -2876,7 +2917,9 @@ end;
 $$;
 
 -- Host navigation. The next unopened question starts its timer; anything earlier replays, closed.
-create or replace function quiz_go(p_quiz uuid, p_position int)
+-- p_from is the question the host's screen shows: a screen that is behind the quiz changes nothing.
+drop function if exists quiz_go(uuid, int);
+create or replace function quiz_go(p_quiz uuid, p_position int, p_from int)
 returns void
 language plpgsql
 security definer
@@ -2889,6 +2932,7 @@ begin
   if not quiz_host_ok(p_quiz) then raise exception 'Not allowed'; end if;
   select * into z from quizzes where id = p_quiz for update;
   if z.status not in ('lobby', 'live') then raise exception 'The quiz is not running'; end if;
+  if z.current_position <> p_from then return; end if;
 
   select count(*) into n from quiz_questions where quiz_id = p_quiz;
   if p_position < 0 or p_position >= n then raise exception 'No such question'; end if;
@@ -2915,7 +2959,9 @@ begin
 end;
 $$;
 
-create or replace function quiz_close(p_quiz uuid)
+-- p_from is the question being closed: a late close for a question the quiz has left must not close the next one.
+drop function if exists quiz_close(uuid);
+create or replace function quiz_close(p_quiz uuid, p_from int)
 returns void
 language plpgsql
 security definer
@@ -2926,7 +2972,7 @@ declare
 begin
   if not quiz_host_ok(p_quiz) then raise exception 'Not allowed'; end if;
   select * into z from quizzes where id = p_quiz for update;
-  if z.status <> 'live' or z.phase <> 'answering' then return; end if;
+  if z.status <> 'live' or z.phase <> 'answering' or z.current_position <> p_from then return; end if;
   update quiz_questions set closes_at = least(closes_at, now()) where quiz_id = p_quiz and position = z.current_position;
   update quizzes set phase = 'closed' where id = p_quiz;
 end;
@@ -3221,10 +3267,10 @@ stable
 as $$ select now(); $$;
 
 revoke all on function quiz_host_ok(uuid), quiz_student_ok(uuid), quiz_scores(uuid), quiz_validate(uuid) from public;
-revoke all on function quiz_save(jsonb), quiz_open_lobby(uuid), quiz_go(uuid, int), quiz_close(uuid), quiz_extend(uuid, int),
+revoke all on function quiz_save(jsonb), quiz_open_lobby(uuid), quiz_go(uuid, int, int), quiz_close(uuid, int), quiz_extend(uuid, int),
   quiz_end(uuid), quiz_join(uuid), quiz_answer(uuid, uuid[]), quiz_state(uuid), quiz_scoreboard(uuid),
   quiz_my_result(uuid), quiz_my_history(), quiz_clock() from public;
-grant execute on function quiz_save(jsonb), quiz_open_lobby(uuid), quiz_go(uuid, int), quiz_close(uuid), quiz_extend(uuid, int),
+grant execute on function quiz_save(jsonb), quiz_open_lobby(uuid), quiz_go(uuid, int, int), quiz_close(uuid, int), quiz_extend(uuid, int),
   quiz_end(uuid), quiz_join(uuid), quiz_answer(uuid, uuid[]), quiz_state(uuid), quiz_scoreboard(uuid),
   quiz_my_result(uuid), quiz_my_history(), quiz_clock() to authenticated;
 

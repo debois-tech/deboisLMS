@@ -1,7 +1,7 @@
 import { lazy, Suspense, useState, useCallback, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { BackLink } from '@/components/ui/BackLink';
-import { Archive, ArrowRightLeft, Edit3, UserMinus, Users, GraduationCap, Layers, ClipboardCheck, FileText, Plus, Trash2, ChevronRight, CalendarDays, Upload, Download } from 'lucide-react';
+import { Archive, ArrowRightLeft, Edit3, Eraser, UserMinus, Users, GraduationCap, Layers, ClipboardCheck, FileText, Plus, Trash2, ChevronRight, CalendarDays, Upload, Download } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { StatusPill } from '@/components/ui/StatusPill';
@@ -35,7 +35,7 @@ import { ProgressBar } from '@/components/ui/ProgressBar';
 import { getBatchStudents, getAllBatchStudentMappings, addStudentToBatch, terminateEnrolment, getStudents, createStudentLoginsBulk, importStudentsIntoBatch, deleteFeePayment } from '@/lib/supabase';
 import type { BulkLoginResult } from '@/lib/supabase';
 import { BulkLoginsModal } from '@/components/students/BulkLoginsModal';
-import { getBatchTutors, assignTutorToBatch, removeTutorFromBatch, getTutors } from '@/lib/supabase';
+import { getBatchTutors, assignTutorToBatch, removeTutorFromBatch, clearTutorFromTestBatch, getTutors } from '@/lib/supabase';
 import { getLecturesByBatch, createLecture, deleteLecture } from '@/lib/supabase';
 import { getAttendanceByLecture, setAttendanceApproved, bulkApproveAttendance } from '@/lib/supabase';
 import { getFeesByBatch, getFeePaymentLogs, addFeePaymentLog } from '@/lib/supabase';
@@ -210,7 +210,7 @@ export default function BatchDetailPage() {
           <>
             {active === 'overview' && <OverviewTab batch={batch} programLabel={programLabel} />}
             {active === 'students' && <StudentsTab batch={batch} />}
-            {active === 'tutors' && <TutorsTab batchId={batch.id} />}
+            {active === 'tutors' && <TutorsTab batchId={batch.id} isTest={Boolean(batch.is_test)} />}
             {active === 'lectures' && <LecturesTab batchId={batch.id} />}
             {active === 'attendance' && <AttendanceTab batchId={batch.id} batchName={batch.name} />}
             {active === 'finance' && <FinanceTab batchId={batch.id} />}
@@ -574,7 +574,7 @@ function StudentsTab({ batch }: { batch: Batch }) {
   );
 }
 
-function TutorsTab({ batchId }: { batchId: string }) {
+function TutorsTab({ batchId, isTest }: { batchId: string; isTest: boolean }) {
   const [tutors, setTutors] = useState<(Tutor & { mapping: TutorBatchMapping })[]>([]);
   const [allTutors, setAllTutors] = useState<Tutor[]>([]);
   const [showAdd, setShowAdd] = useState(false);
@@ -622,6 +622,31 @@ function TutorsTab({ batchId }: { batchId: string }) {
     }
   };
 
+  const handleClear = async (mappingId: string, name: string) => {
+    const ok = await confirm({
+      title: `Unassign ${name} and delete their data?`,
+      message: (
+        <>
+          <span className="block">Only in this test batch</span>
+          <span className="block">Their materials, quizzes, badges given and log entries go, files too</span>
+          <span className="block">Cannot be undone</span>
+        </>
+      ),
+      confirmLabel: 'Unassign and delete',
+      danger: true,
+      requireText: 'Confirm',
+    });
+    if (!ok) return;
+
+    try {
+      await clearTutorFromTestBatch(mappingId);
+      showToast('Tutor cleared from batch');
+    } catch (error) {
+      showToast(errorMessage(error, 'Failed to clear tutor'), 'error');
+    }
+    void reloadTutors();
+  };
+
   const available = allTutors.filter((t) => !tutors.some((e) => e.id === t.id));
 
   if (loadError) return <Card><ErrorState message={loadError} onRetry={reloadTutors} /></Card>;
@@ -645,9 +670,16 @@ function TutorsTab({ batchId }: { batchId: string }) {
                 <p className="text-sm font-medium text-[var(--text-primary)]">{t.name}</p>
                 <p className="text-xs text-[var(--text-muted)]">{t.email ?? t.phone ?? '—'}</p>
               </div>
-              <button onClick={() => handleRemove(t.mapping.id, t.name)} aria-label={`Unassign ${t.name} from batch`} className="text-[var(--text-muted)] hover:text-[var(--danger-text)] p-1">
-                <Trash2 size={14} />
-              </button>
+              <div className="flex items-center gap-1">
+                {isTest && (
+                  <button onClick={() => handleClear(t.mapping.id, t.name)} aria-label={`Unassign ${t.name} and delete their data`} className="text-[var(--text-muted)] hover:text-[var(--danger-text)] p-1">
+                    <Eraser size={14} />
+                  </button>
+                )}
+                <button onClick={() => handleRemove(t.mapping.id, t.name)} aria-label={`Unassign ${t.name} from batch`} className="text-[var(--text-muted)] hover:text-[var(--danger-text)] p-1">
+                  <Trash2 size={14} />
+                </button>
+              </div>
             </div>
           ))}
         </div>

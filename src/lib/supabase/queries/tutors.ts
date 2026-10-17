@@ -63,6 +63,18 @@ export async function removeTutorFromBatch(mappingId: string): Promise<void> {
   );
 }
 
+// Test batch only (the database refuses any other): drops the link and what the tutor made there, then its files.
+export async function clearTutorFromTestBatch(mappingId: string): Promise<void> {
+  const { data, error } = await supabase.rpc('unassign_tutor_from_test_batch', { p_mapping: mappingId });
+  ok({ error }, 'Could not clear the tutor from this batch');
+  const { materials, images } = data as { materials: string[]; images: string[] };
+  const results = await Promise.all([
+    materials.length > 0 ? supabase.storage.from('materials').remove(materials) : null,
+    images.length > 0 ? supabase.storage.from('assets').remove(images) : null,
+  ]);
+  if (results.some((result) => result?.error)) throw new Error('The data is deleted but some files could not be removed');
+}
+
 // Removes the tutor, their batch links and their login — see delete_tutor() in schema.sql.
 export async function deleteTutor(id: string): Promise<void> {
   ok(await supabase.rpc('delete_tutor', { p_tutor_id: id }), 'Could not delete this tutor');

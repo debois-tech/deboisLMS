@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/Badge';
 import { useAuth } from '@/lib/context/AuthContext';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { useNow } from '@/lib/hooks/useNow';
-import { secondsLeft, useClockOffset, useQuizLive } from '@/lib/hooks/useQuizLive';
+import { secondsLeft, useClockOffset, useQuizLive, useStamp } from '@/lib/hooks/useQuizLive';
 import { answerQuiz, getQuizResult, getQuizScoreboard, getQuizState, joinQuiz, quizImageUrl } from '@/lib/supabase';
 import type { QuizResult, QuizScoreRow, QuizState } from '@/lib/types';
 import { errorMessage } from '@/lib/utils/errors';
@@ -29,12 +29,16 @@ export default function PortalQuizPage() {
   const chain = useRef<Promise<void>>(Promise.resolve());
   const fetchedResult = useRef(false);
 
+  const stamp = useStamp();
+
   const load = useCallback(async () => {
+    const fresh = stamp();
     let next = await getQuizState(quizId);
     if (!next.joined && (next.status === 'lobby' || next.status === 'live')) {
       await joinQuiz(quizId);
       next = await getQuizState(quizId);
     }
+    if (!fresh()) return;
     syncOffset(next.server_now);
     setState(next);
 
@@ -52,7 +56,7 @@ export default function PortalQuizPage() {
         setAbsent(true);
       }
     }
-  }, [quizId, syncOffset]);
+  }, [quizId, syncOffset, stamp]);
 
   const { loading, error, retry } = useInitialLoad(load, true);
   // A deleted quiz is gone for everyone: back to the list, not a frozen question.

@@ -13,7 +13,7 @@ export {
 } from './badges';
 
 export interface QuizListItem extends Quiz {
-  batches: { name: string } | null;
+  batches: { name: string; is_test: boolean } | null;
   quiz_questions: { count: number }[];
   quiz_participants: { count: number }[];
 }
@@ -47,7 +47,7 @@ export async function getQuizzes(): Promise<QuizListItem[]> {
   return rows<QuizListItem>(
     await supabase
       .from('quizzes')
-      .select('*, batches(name), quiz_questions(count), quiz_participants(count)')
+      .select('*, batches(name, is_test), quiz_questions(count), quiz_participants(count)')
       .order('created_at', { ascending: false }),
     'Could not load the quizzes',
   );
@@ -97,12 +97,13 @@ export async function openQuizLobby(id: string): Promise<void> {
   ok(await supabase.rpc('quiz_open_lobby', { p_quiz: id }), 'Could not open the lobby');
 }
 
-export async function quizGo(id: string, position: number): Promise<void> {
-  ok(await supabase.rpc('quiz_go', { p_quiz: id, p_position: position }), 'Could not move the quiz');
+// `from` is the question the host's screen shows; the database ignores the move if the quiz is no longer there.
+export async function quizGo(id: string, position: number, from: number): Promise<void> {
+  ok(await supabase.rpc('quiz_go', { p_quiz: id, p_position: position, p_from: from }), 'Could not move the quiz');
 }
 
-export async function closeQuizQuestion(id: string): Promise<void> {
-  ok(await supabase.rpc('quiz_close', { p_quiz: id }), 'Could not close the question');
+export async function closeQuizQuestion(id: string, from: number): Promise<void> {
+  ok(await supabase.rpc('quiz_close', { p_quiz: id, p_from: from }), 'Could not close the question');
 }
 
 export async function extendQuizQuestion(id: string, seconds: number): Promise<void> {
