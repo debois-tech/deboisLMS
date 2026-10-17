@@ -82,7 +82,7 @@ export function LoginPanel({ title, emailPlaceholder, expectedRole, hint }: Logi
         </Link>
 
         <div className="auth-brand-mark">
-          <img src={theme === 'dark' ? '/logo-dark.png' : '/logo.png'} alt="Deboistech" />
+          <img src={theme === 'dark' ? '/logo-dark.png' : '/logo.png'} alt="deboistech" />
         </div>
         <h1 className="auth-title">{title}</h1>
 

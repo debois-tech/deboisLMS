@@ -113,7 +113,7 @@ Deno.serve(async (req) => {
 
     const label = LABELS[doc_type];
     const name = escapeHtml(student.name ?? '');
-    const subject = `Your ${label} from Deboistech`;
+    const subject = `Your ${label} from deboistech`;
     const html = `<p>Hi ${name},</p><p>Please find your ${label.toLowerCase()} attached.</p>`;
     const text = `Hi ${name},\n\nPlease find your ${label.toLowerCase()} attached.`;
 

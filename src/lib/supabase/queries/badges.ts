@@ -15,7 +15,7 @@ export function badgeImageUrl(path: string): string {
   return supabase.storage.from('assets').getPublicUrl(path).data.publicUrl;
 }
 
-/** Deboistech's LinkedIn company page id, so "Add to profile" links the real page instead of matching bare text. */
+/** deboistech's LinkedIn company page id, so "Add to profile" links the real page instead of matching bare text. */
 const LINKEDIN_ORG_ID = '134393964';
 
 /**
@@ -68,7 +68,7 @@ export function canShareBadgeImage(): boolean {
  */
 export async function shareBadgeImage(badge: BatchBadge, code?: string): Promise<void> {
   const file = await getBadgeCopy(badge, code);
-  const share = { files: [file], title: badge.name, text: `I just earned my ${badge.name} badge from Deboistech!` };
+  const share = { files: [file], title: badge.name, text: `I just earned my ${badge.name} badge from deboistech!` };
   if (!navigator.canShare(share)) throw new Error('Sharing isn’t supported on this device.');
   await navigator.share(share);
 }

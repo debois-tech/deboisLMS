@@ -11,7 +11,7 @@ export default function LoginChoicePage() {
     <AuthSurface>
       <div className="auth-panel auth-choice-panel">
         <div className="auth-brand-mark">
-          <img src={theme === 'dark' ? '/logo-dark.png' : '/logo.png'} alt="Deboistech" />
+          <img src={theme === 'dark' ? '/logo-dark.png' : '/logo.png'} alt="deboistech" />
         </div>
         <h1 className="auth-title">Log in</h1>
 

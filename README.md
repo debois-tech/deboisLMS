@@ -57,7 +57,7 @@ supabase secrets set GEMINI_API_KEY=...          --project-ref <ref>   # optiona
 # send-credentials. Refuses to send until all three are set, and names the missing one.
 supabase secrets set \
   RESEND_API_KEY=re_xxx \
-  CREDENTIALS_FROM_EMAIL="Deboistech <no-reply@deboistech.in>" \
+  CREDENTIALS_FROM_EMAIL="deboistech <no-reply@deboistech.in>" \
   PORTAL_URL=https://lms.deboistech.in/auth/login/user \
   CREDENTIALS_REPLY_TO=connect@deboistech.in \
   --project-ref <ref>

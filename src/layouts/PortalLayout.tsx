@@ -81,7 +81,7 @@ export default function PortalLayout() {
           </button>
           <img
             src={theme === 'dark' ? '/logo-dark.png' : '/logo.png'}
-            alt="Deboistech"
+            alt="deboistech"
             className="h-8 w-auto select-none"
           />
         </div>

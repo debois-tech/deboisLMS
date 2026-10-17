@@ -175,7 +175,7 @@ function MaterialViewerBody({ material, onClose }: MaterialViewerProps) {
       <header className="material-viewer-bar">
         <img
           src={theme === 'dark' ? '/logo-dark.png' : '/logo.png'}
-          alt="Deboistech"
+          alt="deboistech"
           className="material-viewer-logo"
         />
         <p className="material-viewer-title">{material.title}</p>
