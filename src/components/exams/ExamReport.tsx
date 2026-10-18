@@ -227,7 +227,7 @@ function StudentAnswers({ row, asked, answers }: { row: QuizScoreRow; asked: Qui
                 ) : answer.is_correct ? (
                   <Badge variant="success" size="sm">+{answer.points.toLocaleString('en-IN')}</Badge>
                 ) : (
-                  <Badge variant="danger" size="sm">Wrong</Badge>
+                  <Badge variant="danger" size="sm">0</Badge>
                 )}
                 {answer && <Badge size="sm">{seconds(answer.elapsed_ms)}</Badge>}
               </div>

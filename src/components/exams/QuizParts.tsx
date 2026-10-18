@@ -32,6 +32,7 @@ export function QuizOption({ index, label, state = 'idle', fill, pct, count, onC
       {fill !== undefined && <span className="qz-opt-bar" style={{ '--p': fill } as CSSProperties} aria-hidden="true" />}
       {!inlineLetter && <span className="qz-opt-letter" aria-hidden="true">{OPTION_LETTERS[index]}</span>}
       <span className="qz-opt-label">{inlineLetter && `${OPTION_LETTERS[index]}. `}{label}</span>
+      {action && <span className="qz-opt-action">{action}</span>}
       {(pct !== undefined || flag) && (
         <span className="qz-opt-stat">
           {flag === 'correct' && <Check size={16} aria-hidden="true" className="text-[var(--success-text)]" />}
@@ -41,7 +42,6 @@ export function QuizOption({ index, label, state = 'idle', fill, pct, count, onC
           {flag && <span className="sr-only">{flag === 'correct' ? '(correct answer)' : '(wrong answer)'}</span>}
         </span>
       )}
-      {action && <span className="qz-opt-action">{action}</span>}
     </>
   );
 
