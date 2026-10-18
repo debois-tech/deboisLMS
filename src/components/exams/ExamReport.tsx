@@ -79,14 +79,14 @@ export function ExamReport({ quiz, studentBase }: { quiz: QuizFull; studentBase:
   if (board.length === 0) {
     return <EmptyState icon={<Users size={22} />} title="Nobody took part in this quiz" />;
   }
-
+ 
   return (
     <div className="flex flex-col gap-8">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Took part" value={board.length} />
-        <StatCard label="Average score" value={avgPoints === null ? '-' : Math.round(avgPoints).toLocaleString('en-IN')} />
+        <StatCard label="Test Takers" value={board.length} />
+        <StatCard label="Avg score" value={avgPoints === null ? '-' : Math.round(avgPoints).toLocaleString('en-IN')} />
         <StatCard label="Accuracy" value={`${percent(correctAnswers, answers.length)}%`} />
-        <StatCard label="Average answer" value={seconds(mean(answers.map((answer) => answer.elapsed_ms)))} />
+        <StatCard label="Avg Time" value={seconds(mean(answers.map((answer) => answer.elapsed_ms)))} />
       </div>
 
       <section className="flex flex-col gap-4" aria-labelledby="rep-students">
@@ -224,20 +224,21 @@ function StudentAnswers({ row, asked, answers }: { row: QuizScoreRow; asked: Qui
               </div>
             </div>
             {question.image_path && <img className="qz-image" src={quizImageUrl(question.image_path)} alt="" />}
-            <div className="qz-opts is-grid">
-              {question.quiz_options.map((option, optionIndex) => {
-                const picked = answer?.option_ids.includes(option.id) ?? false;
-                return (
-                  <QuizOption
-                    key={option.id}
-                    index={optionIndex}
-                    label={option.label}
-                    state={option.is_correct ? 'correct' : picked ? 'wrong' : 'idle'}
-                    flag={option.is_correct ? 'correct' : picked ? 'wrong' : undefined}
-                  />
-                );
-              })}
-            </div>
+            {answer && (
+              <div className="qz-opts is-grid">
+                {question.quiz_options.map((option, optionIndex) => (
+                  answer.option_ids.includes(option.id) && (
+                    <QuizOption
+                      key={option.id}
+                      index={optionIndex}
+                      label={option.label}
+                      state={option.is_correct ? 'correct' : 'wrong'}
+                      flag={option.is_correct ? 'correct' : 'wrong'}
+                    />
+                  )
+                ))}
+              </div>
+            )}
           </div>
         );
       })}
