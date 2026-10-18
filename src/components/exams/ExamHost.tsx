@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, ChevronLeft, ChevronRight, Flag, Pencil, Play, Plus, Trash2, Users } from 'lucide-react';
-import { QuizBoard, QuizOption, QuizTimer } from '@/components/exams/QuizParts';
+import { ArrowLeft, ChevronLeft, ChevronRight, Flag, Pencil, Play, Plus, Timer, Trash2, Users } from 'lucide-react';
+import { QuizBoard, QuizOption, QuizSegment, QuizTimer } from '@/components/exams/QuizParts';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { Modal } from '@/components/ui/Modal';
 import { Spinner } from '@/components/ui/Spinner';
 import { StatusPill } from '@/components/ui/StatusPill';
 import { useConfirm } from '@/lib/context/ConfirmContext';
@@ -30,6 +31,8 @@ interface ExamHostProps {
   onEdit: () => void;
 }
 
+const AUTO_PAUSES = ['5', '10', '15', '30', '45', '60'].map((value) => ({ value, label: `${value}s` }));
+
 // The tutor's full-screen console: lobby, then one question at a time. Everything students see follows from here.
 export function ExamHost({ quizId, onLeave, onEnded, onEdit }: ExamHostProps) {
   const confirm = useConfirm();
@@ -41,6 +44,10 @@ export function ExamHost({ quizId, onLeave, onEnded, onEdit }: ExamHostProps) {
   const [board, setBoard] = useState<QuizScoreRow[]>([]);
   const [offset, setOffset] = useState(0);
   const [busy, setBusy] = useState(false);
+  // Auto mode: seconds to wait after a question closes before the next one opens; null is off.
+  const [auto, setAuto] = useState<number | null>(null);
+  const [autoOpen, setAutoOpen] = useState(false);
+  const [autoPick, setAutoPick] = useState('15');
 
   const stamp = useStamp();
 
@@ -76,6 +83,11 @@ export function ExamHost({ quizId, onLeave, onEnded, onEdit }: ExamHostProps) {
   const closesAt = current?.closes_at ? Date.parse(current.closes_at) : 0;
   const answering = quiz?.status === 'live' && quiz.phase === 'answering' && now < closesAt;
   const isLast = position === questions.length - 1;
+  // The close time is the deadline, or the moment the tutor closed it early; the last question waits for Finish.
+  const autoDue = auto !== null && quiz?.status === 'live' && quiz.phase === 'closed' && position === quiz.furthest && !isLast
+    ? closesAt + auto * 1000
+    : null;
+  const autoLeft = autoDue === null ? null : Math.max(0, Math.ceil((autoDue - now) / 1000));
 
   // The countdown reaching zero closes the question for everyone; the database already refuses late answers.
   const expired = quiz?.status === 'live' && quiz.phase === 'answering' && closesAt > 0 && now >= closesAt ? position : null;
@@ -92,15 +104,21 @@ export function ExamHost({ quizId, onLeave, onEnded, onEdit }: ExamHostProps) {
     try {
       await action();
       await load();
+      return true;
     } catch (err) {
       showToast(errorMessage(err, 'That did not work'), 'error');
+      return false;
     } finally {
       setBusy(false);
     }
   }, [load, showToast]);
 
   const finish = () => run(() => endQuiz(quizId));
-  const go = (to: number) => run(() => quizGo(quizId, to, position));
+  // Going back to look at an earlier question ends auto mode.
+  const go = (to: number) => {
+    if (to < position) setAuto(null);
+    return run(() => quizGo(quizId, to, position));
+  };
 
   const start = async () => {
     if (people.length === 0) {
@@ -141,6 +159,16 @@ export function ExamHost({ quizId, onLeave, onEnded, onEdit }: ExamHostProps) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   });
+
+  // The tutor's own Next click wins the race: the database ignores a move from a question it has left.
+  useEffect(() => {
+    if (autoDue === null || busy) return;
+    const id = window.setTimeout(
+      () => void run(() => quizGo(quizId, position + 1, position)).then((ok) => { if (!ok) setAuto(null); }),
+      Math.max(0, autoDue - (Date.now() + offset)),
+    );
+    return () => window.clearTimeout(id);
+  }, [autoDue, busy, offset, position, quizId, run]);
 
   if (loading) return createPortal(<div className="qz-stage"><Spinner centered /></div>, document.body);
   if (error || !quiz) return createPortal(<div className="qz-stage"><ErrorState centered message={error ?? 'Could not load the quiz.'} onRetry={retry} /></div>, document.body);
@@ -297,11 +325,40 @@ export function ExamHost({ quizId, onLeave, onEnded, onEdit }: ExamHostProps) {
               <Plus size={16} /> 15s
             </Button>
           )}
+          {!lobby && (
+            <Button
+              className="action-button-compact"
+              variant={auto === null ? 'secondary' : 'primary'}
+              aria-pressed={auto !== null}
+              disabled={auto === null && position !== quiz.furthest}
+              onClick={() => (auto === null ? setAutoOpen(true) : setAuto(null))}
+            >
+              <Timer size={16} /> {auto === null ? 'Auto' : autoLeft === null ? 'Auto on' : `Auto ${autoLeft}s`}
+            </Button>
+          )}
           <Button className="action-button-compact" onClick={() => void primary.go()} loading={busy}>
             {primary.label} {primary.icon}
           </Button>
         </div>
       </footer>
+
+      <Modal
+        open={autoOpen}
+        onClose={() => setAutoOpen(false)}
+        title="Auto mode"
+        size="sm"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setAutoOpen(false)}>Cancel</Button>
+            <Button onClick={() => { setAuto(Number(autoPick)); setAutoOpen(false); }}>Start auto</Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          <p className="qz-muted">Pause before the next question</p>
+          <QuizSegment label="Pause in seconds" value={autoPick} options={AUTO_PAUSES} onChange={setAutoPick} />
+        </div>
+      </Modal>
     </div>,
     document.body,
   );

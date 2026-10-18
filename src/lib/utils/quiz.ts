@@ -117,6 +117,14 @@ export function percent(count: number, total: number): number {
   return total > 0 ? Math.round((count / total) * 100) : 0;
 }
 
+// A right answer earns 1000 at once, down to 500 at the deadline (quiz_answer in schema.sql).
+export const MAX_POINTS = 1000;
+
+// Share of the best possible score over the questions asked: both right answers and speed count.
+export function accuracy(points: number, questions: number): number {
+  return percent(points, questions * MAX_POINTS);
+}
+
 export function seconds(ms: number | null | undefined): string {
   return ms == null ? '-' : `${(ms / 1000).toFixed(1)}s`;
 }
