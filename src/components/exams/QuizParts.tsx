@@ -18,10 +18,12 @@ interface QuizOptionProps {
   large?: boolean;
   // Reads "(correct)" to a screen reader; the colour alone says it to everyone else.
   flag?: 'correct' | 'wrong';
+  // A control on the row itself; only for rows that are not buttons.
+  action?: ReactNode;
 }
 
 // One option: a button while it is being answered, a plain row once it only reports.
-export function QuizOption({ index, label, state = 'idle', fill, pct, count, onClick, disabled, large, flag }: QuizOptionProps) {
+export function QuizOption({ index, label, state = 'idle', fill, pct, count, onClick, disabled, large, flag, action }: QuizOptionProps) {
   const className = clsx('qz-opt', large && 'is-large', state !== 'idle' && `is-${state}`);
   const body = (
     <>
@@ -37,6 +39,7 @@ export function QuizOption({ index, label, state = 'idle', fill, pct, count, onC
           {flag && <span className="sr-only">{flag === 'correct' ? '(correct answer)' : '(wrong answer)'}</span>}
         </span>
       )}
+      {action && <span className="qz-opt-action">{action}</span>}
     </>
   );
 

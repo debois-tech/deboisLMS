@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronDown, Download, Eye, Users } from 'lucide-react';
+import { ChevronDown, Download, Eye, EyeOff, Users } from 'lucide-react';
 import { clsx } from 'clsx';
 import { QuizOption } from '@/components/exams/QuizParts';
 import { Badge } from '@/components/ui/Badge';
@@ -185,6 +185,7 @@ export function ExamReport({ quiz, studentBase }: { quiz: QuizFull; studentBase:
       <Modal open={viewOpen} onClose={() => setViewOpen(false)} title={viewing?.name ?? ''} size="xl">
         {viewing && (
           <StudentAnswers
+            key={viewing.student_id}
             row={viewing}
             asked={asked}
             answers={answers.filter((answer) => answer.student_id === viewing.student_id)}
@@ -197,6 +198,14 @@ export function ExamReport({ quiz, studentBase }: { quiz: QuizFull; studentBase:
 
 // One student's run: the summary on top, then every question with their pick set against the right answer.
 function StudentAnswers({ row, asked, answers }: { row: QuizScoreRow; asked: QuizFull['quiz_questions']; answers: QuizAnswer[] }) {
+  // Questions currently showing the right answer instead of the student's pick; a look only, nothing is saved.
+  const [flipped, setFlipped] = useState<Set<string>>(new Set());
+  const flip = (id: string) => setFlipped((current) => {
+    const next = new Set(current);
+    if (!next.delete(id)) next.add(id);
+    return next;
+  });
+
   return (
     <div className="flex flex-col gap-5">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -225,19 +234,30 @@ function StudentAnswers({ row, asked, answers }: { row: QuizScoreRow; asked: Qui
             </div>
             {question.image_path && <img className="qz-image" src={quizImageUrl(question.image_path)} alt="" />}
             {answer && (
-              <div className="qz-opts is-grid">
-                {question.quiz_options.map((option, optionIndex) => (
-                  answer.option_ids.includes(option.id) && (
-                    <QuizOption
-                      key={option.id}
-                      index={optionIndex}
-                      label={option.label}
-                      state={option.is_correct ? 'correct' : 'wrong'}
-                      flag={option.is_correct ? 'correct' : 'wrong'}
-                    />
-                  )
-                ))}
-              </div>
+              <>
+                <div className="qz-rule" />
+                <div className="qz-opts">
+                  {question.quiz_options.map((option, optionIndex) => {
+                    const showingRight = flipped.has(question.id);
+                    if (!(showingRight ? option.is_correct : answer.option_ids.includes(option.id))) return null;
+                    const label = showingRight ? 'Show their answer' : 'Show the right answer';
+                    return (
+                      <QuizOption
+                        key={option.id}
+                        index={optionIndex}
+                        label={option.label}
+                        state={option.is_correct ? 'correct' : 'wrong'}
+                        flag={option.is_correct ? 'correct' : 'wrong'}
+                        action={!answer.is_correct && (showingRight || !option.is_correct) && (
+                          <button type="button" className="qz-icon-btn" title={label} aria-label={label} aria-pressed={showingRight} onClick={() => flip(question.id)}>
+                            {showingRight ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
+                        )}
+                      />
+                    );
+                  })}
+                </div>
+              </>
             )}
           </div>
         );
