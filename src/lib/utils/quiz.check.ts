@@ -1,5 +1,5 @@
 // Run: node src/lib/utils/quiz.check.ts
-import { blankQuestion, draftIssues, newDraft, ordinal, parseQuestions, percent, questionIssue } from './quiz.ts';
+import { accuracy, blankQuestion, draftIssues, newDraft, ordinal, parseQuestions, percent, questionIssue } from './quiz.ts';
 
 const must = (cond: boolean, msg: string) => {
   if (!cond) throw new Error(msg);
@@ -28,5 +28,6 @@ must(questionIssue(q) === null, 'valid');
 const d = newDraft();
 must(draftIssues(d).count === 2, 'blank draft: title + question');
 must(percent(1, 3) === 33 && percent(0, 0) === 0, 'percent');
+must(accuracy(2500, 5) === 50 && accuracy(0, 5) === 0 && accuracy(0, 0) === 0, 'accuracy is points over the best possible');
 must(ordinal(1) === '1st' && ordinal(2) === '2nd' && ordinal(11) === '11th' && ordinal(23) === '23rd', 'ordinals');
 console.log('quiz checks passed');
