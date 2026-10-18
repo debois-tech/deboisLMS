@@ -236,7 +236,7 @@ function StudentAnswers({ row, asked, answers }: { row: QuizScoreRow; asked: Qui
             {answer && (
               <>
                 <div className="qz-rule" />
-                <div className="qz-opts">
+                <div className="qz-opts is-review">
                   {question.quiz_options.map((option, optionIndex) => {
                     const showingRight = flipped.has(question.id);
                     if (!(showingRight ? option.is_correct : answer.option_ids.includes(option.id))) return null;
@@ -246,6 +246,7 @@ function StudentAnswers({ row, asked, answers }: { row: QuizScoreRow; asked: Qui
                         key={option.id}
                         index={optionIndex}
                         label={option.label}
+                        inlineLetter
                         state={option.is_correct ? 'correct' : 'wrong'}
                         flag={option.is_correct ? 'correct' : 'wrong'}
                         action={!answer.is_correct && (showingRight || !option.is_correct) && (

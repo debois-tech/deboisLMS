@@ -18,18 +18,20 @@ interface QuizOptionProps {
   large?: boolean;
   // Reads "(correct)" to a screen reader; the colour alone says it to everyone else.
   flag?: 'correct' | 'wrong';
+  // "D. text" in the row instead of the lettered square.
+  inlineLetter?: boolean;
   // A control on the row itself; only for rows that are not buttons.
   action?: ReactNode;
 }
 
 // One option: a button while it is being answered, a plain row once it only reports.
-export function QuizOption({ index, label, state = 'idle', fill, pct, count, onClick, disabled, large, flag, action }: QuizOptionProps) {
+export function QuizOption({ index, label, state = 'idle', fill, pct, count, onClick, disabled, large, flag, inlineLetter, action }: QuizOptionProps) {
   const className = clsx('qz-opt', large && 'is-large', state !== 'idle' && `is-${state}`);
   const body = (
     <>
       {fill !== undefined && <span className="qz-opt-bar" style={{ '--p': fill } as CSSProperties} aria-hidden="true" />}
-      <span className="qz-opt-letter" aria-hidden="true">{OPTION_LETTERS[index]}</span>
-      <span className="qz-opt-label">{label}</span>
+      {!inlineLetter && <span className="qz-opt-letter" aria-hidden="true">{OPTION_LETTERS[index]}</span>}
+      <span className="qz-opt-label">{inlineLetter && `${OPTION_LETTERS[index]}. `}{label}</span>
       {(pct !== undefined || flag) && (
         <span className="qz-opt-stat">
           {flag === 'correct' && <Check size={16} aria-hidden="true" className="text-[var(--success-text)]" />}
