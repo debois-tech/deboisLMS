@@ -3438,6 +3438,46 @@ body:has([role="dialog"]) .notice-chip { display: none; }
   text-transform: none;
 }
 
+/* Three capsules in place of a status dropdown. The chosen one fills with its tone;
+   a pending (not yet approved) record keeps the tone but is dashed. */
+.attendance-capsules {
+  display: inline-flex;
+  gap: 0.375rem;
+}
+
+.attendance-capsule {
+  padding: 0.3125rem 0.8125rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.attendance-capsule:disabled { opacity: 0.55; cursor: progress; }
+.attendance-capsule:focus-visible { outline: 2px solid var(--primary-light); outline-offset: 2px; }
+
+.attendance-capsule.is-present { --capsule-tone: var(--success); --capsule-text: var(--success-text); }
+.attendance-capsule.is-partial { --capsule-tone: var(--warning); --capsule-text: var(--warning-text); }
+.attendance-capsule.is-absent  { --capsule-tone: var(--danger);  --capsule-text: var(--danger-text); }
+
+.attendance-capsule:not(:disabled):hover {
+  border-color: var(--capsule-tone);
+  color: var(--capsule-text);
+}
+
+.attendance-capsule[aria-pressed='true'] {
+  border-color: var(--capsule-tone);
+  background: color-mix(in srgb, var(--capsule-tone) 18%, transparent);
+  color: var(--capsule-text);
+}
+
+.attendance-capsule[data-pending='true'] { border-style: dashed; }
+
 .manual-attendance-count {
   font-size: 0.8125rem;
   font-weight: 600;

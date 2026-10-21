@@ -12,6 +12,7 @@ import { errorMessage } from '@/lib/utils/errors';
 import { useReloadableSection } from '@/lib/hooks/useInitialLoad';
 
 const STATUSES: AttendanceStatus[] = ['present', 'partial', 'absent'];
+const STATUS_LABEL: Record<AttendanceStatus, string> = { present: 'Present', partial: 'Partial', absent: 'Absent' };
 const SOURCES: AttendanceSource[] = ['manual', 'automated'];
 
 interface Draft {
@@ -112,12 +113,15 @@ export function ManualAttendance({ lectureId, batchId, scheduledMinutes, onChang
     }
   };
 
-  const toggle = async (studentId: string) => {
+  // A capsule is the judgement: it records that status and approves it. Pressing the status a student
+  // already has, once approved, takes them off the register again.
+  const chooseStatus = async (studentId: string, status: AttendanceStatus) => {
     const existing = recordFor(studentId);
 
-    // No record, or one still waiting for review: ticking approves it. Only a ticked row is removed.
-    if (!existing || !existing.approved) {
-      await write(studentId, drafts[studentId], true);
+    if (!existing || existing.status !== status || !existing.approved) {
+      const next = { ...drafts[studentId], status };
+      setDrafts((current) => ({ ...current, [studentId]: next }));
+      await write(studentId, next, true);
       return;
     }
 
@@ -133,8 +137,8 @@ export function ManualAttendance({ lectureId, batchId, scheduledMinutes, onChang
     }
   };
 
-  // Editing a row that is already marked saves straight away; editing one that is
-  // not just prepares what the tick will write.
+  // Editing a row that is already on the register saves straight away; editing one that is
+  // not just prepares what the next capsule press will write.
   const edit = (studentId: string, patch: Partial<Draft>, save: boolean) => {
     const next = { ...drafts[studentId], ...patch };
     setDrafts((current) => ({ ...current, [studentId]: next }));
@@ -153,24 +157,22 @@ export function ManualAttendance({ lectureId, batchId, scheduledMinutes, onChang
         <p className="manual-attendance-count">
           {markedCount} of {roster.length} marked
         </p>
-        <p className="manual-attendance-note">Ticking a student records and approves in one step.</p>
+        <p className="manual-attendance-note">Choosing a status records and approves it in one step.</p>
       </div>
 
       <Table maxHeight="28rem">
         <THead>
           <TR>
             <TH>Student</TH>
-            <TH>Status</TH>
             <TH>Minutes</TH>
+            <TH>Status</TH>
             <TH>Source</TH>
-            <TH align="center">Marked</TH>
           </TR>
         </THead>
         <TBody>
           {roster.map((student) => {
             const draft = drafts[student.id];
             const record = recordFor(student.id);
-            const marked = Boolean(record?.approved);
             const busy = pending.has(student.id);
             if (!draft) return null;
 
@@ -186,20 +188,6 @@ export function ManualAttendance({ lectureId, batchId, scheduledMinutes, onChang
                 </TD>
 
                 <TD>
-                  <select
-                    className="manual-attendance-field"
-                    value={draft.status}
-                    disabled={busy}
-                    onChange={(event) => edit(student.id, { status: event.target.value as AttendanceStatus }, true)}
-                    aria-label={`Status for ${student.name}`}
-                  >
-                    {STATUSES.map((status) => (
-                      <option key={status} value={status}>{status}</option>
-                    ))}
-                  </select>
-                </TD>
-
-                <TD>
                   <input
                     type="number"
                     min={0}
@@ -209,6 +197,25 @@ export function ManualAttendance({ lectureId, batchId, scheduledMinutes, onChang
                     onBlur={() => { if (record) void write(student.id, draft, Boolean(record.approved)); }}
                     aria-label={`Minutes for ${student.name}`}
                   />
+                </TD>
+
+                <TD>
+                  <div className="attendance-capsules" role="group" aria-label={`Status for ${student.name}`}>
+                    {STATUSES.map((status) => (
+                      <button
+                        key={status}
+                        type="button"
+                        className={`attendance-capsule is-${status}`}
+                        // A pending record reads as chosen too, but only an approved one counts as marked.
+                        aria-pressed={record?.status === status}
+                        data-pending={record?.status === status && !record.approved ? 'true' : undefined}
+                        disabled={busy}
+                        onClick={() => void chooseStatus(student.id, status)}
+                      >
+                        {STATUS_LABEL[status]}
+                      </button>
+                    ))}
+                  </div>
                 </TD>
 
                 <TD>
@@ -225,16 +232,6 @@ export function ManualAttendance({ lectureId, batchId, scheduledMinutes, onChang
                   </select>
                 </TD>
 
-                <TD align="center">
-                  <input
-                    type="checkbox"
-                    className="data-table-checkbox"
-                    checked={marked}
-                    disabled={busy}
-                    onChange={() => void toggle(student.id)}
-                    aria-label={`Mark ${student.name} as attended`}
-                  />
-                </TD>
               </TR>
             );
           })}
