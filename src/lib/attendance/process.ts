@@ -1,4 +1,5 @@
-import { clearUploads, insertAttendance, loadProcessingContext, loadUploadRows } from './db';
+import { consolidateByStudent, splitProtected } from './consolidate';
+import { clearUploads, insertAttendance, loadExistingAttendance, loadProcessingContext, loadUploadRows } from './db';
 import { getGeminiUnavailableReason } from './gemini';
 import { matchParticipant } from './match';
 import { mergeSessions } from './merge';
@@ -50,6 +51,7 @@ export async function processAttendance(
   const matched: { participant: MergedParticipant; match: NameMatch }[] = [];
   const unmatched: UnmatchedRecord[] = [];
   const tutorsDetected: string[] = [];
+  const tutorIds: string[] = [];
 
   for (const participant of participants) {
     const match = await matchParticipant(participant.displayName, ctx.roster, ctx.tutors, options);
@@ -61,6 +63,7 @@ export async function processAttendance(
       );
     } else if (match.kind === 'tutor') {
       tutorsDetected.push(participant.displayName);
+      if (match.tutorId) tutorIds.push(match.tutorId);
       log(
         `Detected tutor "${participant.displayName}" (${match.reason}); excluded from student attendance.`,
       );
@@ -72,15 +75,16 @@ export async function processAttendance(
 
   // 4. Validate tutor relationships
   const tutorMismatches: string[] = [];
-  for (const displayName of tutorsDetected) {
-    const tutor = ctx.tutors.find((t) => t.name === displayName);
+  // By id, not name: a tutor matched fuzzily never equals the CSV's display name.
+  tutorsDetected.forEach((displayName, i) => {
+    const tutor = ctx.tutors.find((t) => t.id === tutorIds[i]);
     if (tutor && !ctx.batchTutorIds.has(tutor.id)) {
       tutorMismatches.push(displayName);
       log(`WARN: tutor "${displayName}" is NOT assigned to batch ${ctx.batchId}.`);
     } else if (tutor) {
       log(`Tutor "${displayName}" is correctly assigned to batch ${ctx.batchId}.`);
     }
-  }
+  });
 
   // 4b. Report AI-matching health
   const geminiUnavailableReason = getGeminiUnavailableReason();
@@ -89,8 +93,20 @@ export async function processAttendance(
   }
 
   // 5. Build cleaned records
-  const payloads: AttendanceInsertPayload[] = matched.map(({ participant, match }) => ({
-    student_id: match.studentId!,
+  // Two names can resolve to one student; the upsert needs each student exactly once.
+  const { merged, collapsed } = consolidateByStudent(
+    matched.map(({ participant, match }) => ({
+      studentId: match.studentId!,
+      displayName: participant.displayName,
+      totalMinutes: participant.totalMinutes,
+      rawUploadIds: participant.rawUploadIds,
+    })),
+    ctx.scheduledMinutes,
+  );
+  for (const name of collapsed) log(`"${name}" resolved to a student already matched in this file; minutes combined.`);
+
+  const candidates: AttendanceInsertPayload[] = merged.map((participant) => ({
+    student_id: participant.studentId,
     batch_id: ctx.batchId,
     lecture_id: ctx.lectureId,
     status: computeStatus(participant.totalMinutes, ctx.scheduledMinutes),
@@ -101,6 +117,10 @@ export async function processAttendance(
   }));
 
   // 6. Insert, then 7. clear uploads — only reached on success
+  // Approved and hand-entered records are somebody's judgement; a re-run leaves them as they are.
+  const { toWrite: payloads, kept } = splitProtected(candidates, await loadExistingAttendance(lectureId));
+  if (kept.length > 0) log(`Kept ${kept.length} approved or hand-entered record(s) unchanged.`);
+
   const inserted = payloads.length > 0 ? await insertAttendance(payloads) : 0;
   log(`Inserted ${inserted} attendance records.`);
 
@@ -121,6 +141,7 @@ export async function processAttendance(
     tutorMismatches,
     unmatched,
     attendanceInserted: inserted,
+    existingKept: kept.length,
     uploadsCleaned: true,
     geminiUnavailableReason: geminiUnavailableReason ?? undefined,
     logs,
@@ -150,6 +171,7 @@ function emptyReport(logs: string[]): ProcessingReport {
     tutorMismatches: [],
     unmatched: [],
     attendanceInserted: 0,
+    existingKept: 0,
     uploadsCleaned: false,
     logs,
   };

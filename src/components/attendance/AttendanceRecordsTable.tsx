@@ -13,6 +13,10 @@ interface AttendanceRecordsTableProps {
   onToggleApproved: (id: string, approved: boolean) => void;
   /** Renders the Approve All toolbar above the table, only while rows await approval. */
   onApproveAll?: () => void;
+  /** True while Approve All is running, so it cannot be fired twice. */
+  approvingAll?: boolean;
+  /** Rows with a request in flight; their checkbox is held until it settles. */
+  busyIds?: ReadonlySet<string>;
   maxHeight?: string;
 }
 
@@ -26,6 +30,8 @@ export function AttendanceRecordsTable({
   records,
   onToggleApproved,
   onApproveAll,
+  approvingAll = false,
+  busyIds,
   maxHeight = '24rem',
 }: AttendanceRecordsTableProps) {
   const [search, setSearch] = useState('');
@@ -61,7 +67,7 @@ export function AttendanceRecordsTable({
         {onApproveAll && pending > 0 && (
           <div className="table-toolbar">
             <Badge variant="warning">{pending} awaiting approval</Badge>
-            <Button className="action-button-compact" onClick={onApproveAll}>
+            <Button className="action-button-compact" onClick={onApproveAll} loading={approvingAll}>
               <CheckCircle size={14} /> Approve All
             </Button>
           </div>
@@ -104,6 +110,7 @@ export function AttendanceRecordsTable({
                     type="checkbox"
                     className="data-table-checkbox"
                     checked={r.approved}
+                    disabled={busyIds?.has(r.id)}
                     onChange={(e) => onToggleApproved(r.id, e.target.checked)}
                     title={r.approved ? 'Unapprove' : 'Approve'}
                     aria-label={r.approved ? `Unapprove ${r.student?.name ?? 'student'}` : `Approve ${r.student?.name ?? 'student'}`}

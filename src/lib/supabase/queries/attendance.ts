@@ -75,10 +75,13 @@ export interface ManualAttendanceInput {
   status: AttendanceStatus;
   minutes: number;
   source: AttendanceSource;
+  /** Defaults to approved: the tick *is* the judgement. An edit to an existing row passes its current state instead. */
+  approved?: boolean;
 }
 
-/** Marked already-approved: the tick *is* the judgement. Upserts on `(student_id, lecture_id)`. */
+/** Upserts on `(student_id, lecture_id)`. */
 export async function markAttendance(input: ManualAttendanceInput): Promise<AttendanceRecord | undefined> {
+  const approved = input.approved ?? true;
   return maybeRow<AttendanceRecord>(
     await supabase
       .from('attendance')
@@ -90,8 +93,8 @@ export async function markAttendance(input: ManualAttendanceInput): Promise<Atte
           status: input.status,
           total_attended_minutes: input.minutes,
           source: input.source,
-          approved: true,
-          approved_at: new Date().toISOString(),
+          approved,
+          approved_at: approved ? new Date().toISOString() : null,
         },
         { onConflict: 'student_id,lecture_id' },
       )

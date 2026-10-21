@@ -19,7 +19,7 @@ import { ManualAttendance } from '@/components/attendance/ManualAttendance';
 import { DEFAULT_LECTURE_MINUTES } from '@/lib/attendance/types';
 import { exportBatchAttendanceCsv } from '@/lib/attendance/exportCsv';
 import { getLecturesByBatch, createLecture } from '@/lib/supabase';
-import { getAttendanceByLecture, insertUploadRows, processAttendance, setAttendanceApproved, bulkApproveAttendance, updateLecture } from '@/lib/supabase';
+import { clearUploads, getAttendanceByLecture, insertUploadRows, processAttendance, setAttendanceApproved, bulkApproveAttendance, updateLecture } from '@/lib/supabase';
 import type { ProcessingReport } from '@/lib/supabase';
 import { getBatches } from '@/lib/supabase';
 import type { Batch, Lecture, AttendanceRecord } from '@/lib/types';
@@ -56,6 +56,14 @@ export default function AttendancePage({ autoApprove = false }: AttendancePagePr
   const [newLectureMode, setNewLectureMode] = useState<'online' | 'offline'>('online');
   const [newLectureDuration, setNewLectureDuration] = useState(DEFAULT_LECTURE_MINUTES);
   const [exporting, setExporting] = useState(false);
+  const [creatingLecture, setCreatingLecture] = useState(false);
+  const [approvingAll, setApprovingAll] = useState(false);
+  const [approvalBusy, setApprovalBusy] = useState<ReadonlySet<string>>(new Set());
+  // Refs, not state: a second click lands before the re-render that would disable the control.
+  const uploadingRef = useRef(false);
+  const creatingRef = useRef(false);
+  const approvingAllRef = useRef(false);
+  const approvalInFlight = useRef(new Set<string>());
   const fileRef = useRef<HTMLInputElement>(null);
   const { showToast } = useToast();
 
@@ -90,6 +98,15 @@ export default function AttendancePage({ autoApprove = false }: AttendancePagePr
       showToast(errorMessage(err, 'Failed to load attendance records'), 'error');
     }
     setLoadingRecords(false);
+  };
+
+  // A queued file belongs to the lecture it was chosen for, so picking another one drops it.
+  const selectLecture = (lecId: string) => {
+    if (lecId !== selectedLecture) {
+      resetCsv();
+      setLastReport(null);
+    }
+    return loadRecords(lecId);
   };
 
   const resetCsv = () => {
@@ -139,12 +156,15 @@ export default function AttendancePage({ autoApprove = false }: AttendancePagePr
   // Uploads the CSV into the `uploads` table, then immediately processes it into
   // attendance records and clears the uploads — one action end-to-end for the admin.
   const handleUploadAndProcess = async () => {
-    if (!selectedLecture || csvRows.length === 0 || meetingCodeMismatch) return;
+    if (!selectedLecture || csvRows.length === 0 || meetingCodeMismatch || uploadingRef.current) return;
+    uploadingRef.current = true;
     setProcessing(true);
     setLastReport(null);
 
     try {
       const code = lecture?.meeting_code || csvMeetingCode;
+      // Anything still in `uploads` is left over from a run that failed; a clean run clears it.
+      await clearUploads(selectedLecture);
       await insertUploadRows(selectedLecture, code, lecture?.lecture_date, csvRows);
       const report = await processAttendance(selectedLecture);
       if (autoApprove) await bulkApproveAttendance(selectedLecture);
@@ -163,39 +183,58 @@ export default function AttendancePage({ autoApprove = false }: AttendancePagePr
       const parts = [`${report.attendanceInserted} attendance records created`];
       if (report.tutorsDetected.length > 0) parts.push(`${report.tutorsDetected.length} tutor(s) detected`);
       if (report.duplicateRowsIgnored > 0) parts.push(`${report.duplicateRowsIgnored} duplicate rows merged`);
+      if (report.existingKept > 0) parts.push(`${report.existingKept} approved/manual record(s) kept as they were`);
       if (report.unmatched.length > 0) parts.push(`${report.unmatched.length} participant(s) need review`);
       showToast(parts.join(' · '), report.unmatched.length > 0 ? 'warning' : 'success');
     } catch (err) {
+      // Don't leave this file's rows behind to be processed with the next upload.
+      await clearUploads(selectedLecture).catch(() => undefined);
       showToast(errorMessage(err, 'Attendance upload failed'), 'error');
     }
+    uploadingRef.current = false;
     setProcessing(false);
   };
 
   const handleToggleApproved = async (id: string, approved: boolean) => {
+    if (approvalInFlight.current.has(id)) return;
+    approvalInFlight.current.add(id);
+    setApprovalBusy(new Set(approvalInFlight.current));
+
     setRecords((prev) => prev.map((r) => (r.id === id ? { ...r, approved } : r)));
     try {
       const updated = await setAttendanceApproved(id, approved);
       if (updated) {
         setRecords((prev) => prev.map((r) => (r.id === id ? updated : r)));
       }
-    } catch {
+    } catch (err) {
       setRecords((prev) => prev.map((r) => (r.id === id ? { ...r, approved: !approved } : r)));
+      showToast(errorMessage(err, 'Failed to update approval'), 'error');
+    } finally {
+      approvalInFlight.current.delete(id);
+      setApprovalBusy(new Set(approvalInFlight.current));
     }
   };
 
   const handleBulkApprove = async () => {
-    if (!selectedLecture) return;
+    if (!selectedLecture || approvingAllRef.current) return;
+    approvingAllRef.current = true;
+    setApprovingAll(true);
     try {
       await bulkApproveAttendance(selectedLecture);
-      loadRecords(selectedLecture);
+      await loadRecords(selectedLecture);
       showToast('All records approved');
     } catch (error) {
       showToast(errorMessage(error, 'Failed to approve records'), 'error');
+    } finally {
+      approvingAllRef.current = false;
+      setApprovingAll(false);
     }
   };
 
   const handleCreateLecture = async () => {
-    if (!selectedBatch || !newLectureDate) return;
+    if (!selectedBatch || !newLectureDate || creatingRef.current) return;
+    creatingRef.current = true;
+    setCreatingLecture(true);
     try {
       const start = new Date(`${newLectureDate}T${newLectureTime}:00`);
       const end = new Date(start.getTime() + newLectureDuration * 60_000);
@@ -220,6 +259,9 @@ export default function AttendancePage({ autoApprove = false }: AttendancePagePr
       showToast('Lecture created');
     } catch (error) {
       showToast(errorMessage(error, 'Failed to create lecture'), 'error');
+    } finally {
+      creatingRef.current = false;
+      setCreatingLecture(false);
     }
   };
 
@@ -274,7 +316,7 @@ export default function AttendancePage({ autoApprove = false }: AttendancePagePr
             ) : lectures.length === 0 ? (
               <FieldNotice>No lectures yet — create one</FieldNotice>
             ) : (
-              <LectureSelect lectures={lectures} value={selectedLecture} onChange={loadRecords} />
+              <LectureSelect lectures={lectures} value={selectedLecture} onChange={selectLecture} />
             )}
           </FormField>
         </div>
@@ -389,6 +431,8 @@ export default function AttendancePage({ autoApprove = false }: AttendancePagePr
                 records={records}
                 onToggleApproved={handleToggleApproved}
                 onApproveAll={handleBulkApprove}
+                approvingAll={approvingAll}
+                busyIds={approvalBusy}
                 maxHeight="none"
               />
             )}
@@ -421,7 +465,7 @@ export default function AttendancePage({ autoApprove = false }: AttendancePagePr
         footer={
           <>
             <Button variant="ghost" onClick={() => setShowNewLecture(false)}>Cancel</Button>
-            <Button className="action-button-compact" onClick={handleCreateLecture} disabled={!newLectureDate}>
+            <Button className="action-button-compact" onClick={handleCreateLecture} disabled={!newLectureDate} loading={creatingLecture}>
               Create Lecture
             </Button>
           </>

@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Users } from 'lucide-react';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -12,6 +12,7 @@ import { errorMessage } from '@/lib/utils/errors';
 import { useReloadableSection } from '@/lib/hooks/useInitialLoad';
 
 const STATUSES: AttendanceStatus[] = ['present', 'partial', 'absent'];
+const STATUS_LABEL: Record<AttendanceStatus, string> = { present: 'Present', partial: 'Partial', absent: 'Absent' };
 const SOURCES: AttendanceSource[] = ['manual', 'automated'];
 
 interface Draft {
@@ -36,7 +37,9 @@ export function ManualAttendance({ lectureId, batchId, scheduledMinutes, onChang
   const [roster, setRoster] = useState<(Student & { mapping: BatchStudentMapping })[]>([]);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
-  const [pending, setPending] = useState<string | null>(null);
+  // Per student, not one shared slot: a second click elsewhere must not re-enable a row whose write is still in flight.
+  const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
+  const inFlight = useRef(new Set<string>());
   const { showToast } = useToast();
 
   const load = useCallback(async () => {
@@ -72,8 +75,23 @@ export function ManualAttendance({ lectureId, batchId, scheduledMinutes, onChang
 
   const recordFor = (studentId: string) => records.find((row) => row.student_id === studentId);
 
-  const write = async (studentId: string, draft: Draft) => {
-    setPending(studentId);
+  /** Claims a student's row for one request; false when another is already running for them. */
+  const begin = (studentId: string) => {
+    if (inFlight.current.has(studentId)) return false;
+    inFlight.current.add(studentId);
+    setPending(new Set(inFlight.current));
+    return true;
+  };
+
+  const finish = (studentId: string) => {
+    inFlight.current.delete(studentId);
+    setPending(new Set(inFlight.current));
+  };
+
+  // `approved` is the state the row should end in. An edit passes the row's current one, so changing
+  // a pending record's minutes does not quietly approve it.
+  const write = async (studentId: string, draft: Draft, approved: boolean) => {
+    if (!begin(studentId)) return;
     try {
       const saved = await markAttendance({
         studentId,
@@ -82,6 +100,7 @@ export function ManualAttendance({ lectureId, batchId, scheduledMinutes, onChang
         status: draft.status,
         minutes: draft.minutes,
         source: draft.source,
+        approved,
       });
       if (saved) {
         setRecords((current) => [...current.filter((row) => row.student_id !== studentId), saved]);
@@ -90,19 +109,23 @@ export function ManualAttendance({ lectureId, batchId, scheduledMinutes, onChang
     } catch (err) {
       showToast(errorMessage(err, 'Could not mark the attendance'), 'error');
     } finally {
-      setPending(null);
+      finish(studentId);
     }
   };
 
-  const toggle = async (studentId: string) => {
+  // A capsule is the judgement: it records that status and approves it. Pressing the status a student
+  // already has, once approved, takes them off the register again.
+  const chooseStatus = async (studentId: string, status: AttendanceStatus) => {
     const existing = recordFor(studentId);
 
-    if (!existing) {
-      await write(studentId, drafts[studentId]);
+    if (!existing || existing.status !== status || !existing.approved) {
+      const next = { ...drafts[studentId], status };
+      setDrafts((current) => ({ ...current, [studentId]: next }));
+      await write(studentId, next, true);
       return;
     }
 
-    setPending(studentId);
+    if (!begin(studentId)) return;
     try {
       await deleteAttendance(existing.id);
       setRecords((current) => current.filter((row) => row.student_id !== studentId));
@@ -110,22 +133,23 @@ export function ManualAttendance({ lectureId, batchId, scheduledMinutes, onChang
     } catch (err) {
       showToast(errorMessage(err, 'Could not remove the attendance'), 'error');
     } finally {
-      setPending(null);
+      finish(studentId);
     }
   };
 
-  // Editing a row that is already marked saves straight away; editing one that is
-  // not just prepares what the tick will write.
+  // Editing a row that is already on the register saves straight away; editing one that is
+  // not just prepares what the next capsule press will write.
   const edit = (studentId: string, patch: Partial<Draft>, save: boolean) => {
     const next = { ...drafts[studentId], ...patch };
     setDrafts((current) => ({ ...current, [studentId]: next }));
-    if (save && recordFor(studentId)) void write(studentId, next);
+    const existing = recordFor(studentId);
+    if (save && existing) void write(studentId, next, Boolean(existing.approved));
   };
 
   if (error) return <ErrorState message={error} onRetry={reload} />;
   if (roster.length === 0) return <EmptyState icon={<Users size={32} />} title="No active students in this batch" />;
 
-  const markedCount = roster.filter((student) => recordFor(student.id)).length;
+  const markedCount = roster.filter((student) => recordFor(student.id)?.approved).length;
 
   return (
     <div className="table-block">
@@ -133,23 +157,23 @@ export function ManualAttendance({ lectureId, batchId, scheduledMinutes, onChang
         <p className="manual-attendance-count">
           {markedCount} of {roster.length} marked
         </p>
-        <p className="manual-attendance-note">Ticking a student records and approves in one step.</p>
+        <p className="manual-attendance-note">Choosing a status records and approves it in one step.</p>
       </div>
 
       <Table maxHeight="28rem">
         <THead>
           <TR>
             <TH>Student</TH>
-            <TH>Status</TH>
             <TH>Minutes</TH>
+            <TH>Status</TH>
             <TH>Source</TH>
-            <TH align="center">Marked</TH>
           </TR>
         </THead>
         <TBody>
           {roster.map((student) => {
             const draft = drafts[student.id];
-            const marked = Boolean(recordFor(student.id));
+            const record = recordFor(student.id);
+            const busy = pending.has(student.id);
             if (!draft) return null;
 
             return (
@@ -164,34 +188,41 @@ export function ManualAttendance({ lectureId, batchId, scheduledMinutes, onChang
                 </TD>
 
                 <TD>
-                  <select
-                    className="manual-attendance-field"
-                    value={draft.status}
-                    onChange={(event) => edit(student.id, { status: event.target.value as AttendanceStatus }, true)}
-                    aria-label={`Status for ${student.name}`}
-                  >
-                    {STATUSES.map((status) => (
-                      <option key={status} value={status}>{status}</option>
-                    ))}
-                  </select>
-                </TD>
-
-                <TD>
                   <input
                     type="number"
                     min={0}
                     className="manual-attendance-field is-minutes"
                     value={draft.minutes}
                     onChange={(event) => edit(student.id, { minutes: Number(event.target.value) }, false)}
-                    onBlur={() => { if (marked) void write(student.id, draft); }}
+                    onBlur={() => { if (record) void write(student.id, draft, Boolean(record.approved)); }}
                     aria-label={`Minutes for ${student.name}`}
                   />
+                </TD>
+
+                <TD>
+                  <div className="attendance-capsules" role="group" aria-label={`Status for ${student.name}`}>
+                    {STATUSES.map((status) => (
+                      <button
+                        key={status}
+                        type="button"
+                        className={`attendance-capsule is-${status}`}
+                        // A pending record reads as chosen too, but only an approved one counts as marked.
+                        aria-pressed={record?.status === status}
+                        data-pending={record?.status === status && !record.approved ? 'true' : undefined}
+                        disabled={busy}
+                        onClick={() => void chooseStatus(student.id, status)}
+                      >
+                        {STATUS_LABEL[status]}
+                      </button>
+                    ))}
+                  </div>
                 </TD>
 
                 <TD>
                   <select
                     className="manual-attendance-field"
                     value={draft.source}
+                    disabled={busy}
                     onChange={(event) => edit(student.id, { source: event.target.value as AttendanceSource }, true)}
                     aria-label={`Source for ${student.name}`}
                   >
@@ -201,16 +232,6 @@ export function ManualAttendance({ lectureId, batchId, scheduledMinutes, onChang
                   </select>
                 </TD>
 
-                <TD align="center">
-                  <input
-                    type="checkbox"
-                    className="data-table-checkbox"
-                    checked={marked}
-                    disabled={pending === student.id}
-                    onChange={() => void toggle(student.id)}
-                    aria-label={`Mark ${student.name} as attended`}
-                  />
-                </TD>
               </TR>
             );
           })}

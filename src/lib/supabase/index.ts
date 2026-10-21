@@ -6,6 +6,7 @@ export { getTutors, getTutorById, getTutorActions, createTutor, getTutorBatches,
 export type { TutorAction } from './queries/tutors';
 export { getLecturesByBatch, getLectureById, createLecture, updateLecture, deleteLecture } from './queries/lectures';
 export { getUploadsByLecture, getAttendanceByLecture, getAttendanceByBatch, getApprovedAttendanceByStudent, insertUploadRows, markAttendance, deleteAttendance, approveAttendance, setAttendanceApproved, bulkApproveAttendance, getUnapprovedCount } from './queries/attendance';
+export { clearUploads } from '@/lib/attendance/db';
 export { processAttendance, computeStatus, ATTENDANCE_PRESENT_PERCENT, ATTENDANCE_PARTIAL_PERCENT } from '@/lib/attendance/process';
 export type { ProcessingReport, ProcessOptions } from '@/lib/attendance/process';
 export { getFeesByBatch, setStudentFee, updateFeePayment, getFeePaymentLogs, addFeePaymentLog, deleteFeePayment, getBatchFeeSummary, getEarningBreakdown, getFeesByStudent, getFeePaymentLogsByStudent, getMyFeeDues } from './queries/fees';
