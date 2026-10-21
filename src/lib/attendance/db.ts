@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase/client';
+import type { ExistingRecord } from './consolidate';
 import { DEFAULT_LECTURE_MINUTES } from './types';
 import type {
   AttendanceInsertPayload,
@@ -21,19 +22,20 @@ export async function loadUploadRows(lectureId: string): Promise<RawUploadRow[]>
 
 /** Build the processing context: lecture metadata, the active roster, and assigned tutors. */
 export async function loadProcessingContext(lectureId: string): Promise<ProcessingContext> {
-  const [lectureRes, tutorsRes, tutorMapRes] = await Promise.all([
+  const [lectureRes, tutorsRes] = await Promise.all([
     supabase
       .from('lectures')
       .select('id, batch_id, lecture_date, meeting_code, scheduled_duration_minutes')
       .eq('id', lectureId)
       .maybeSingle(),
     supabase.from('tutors').select('id, name'),
-    supabase.from('tutor_batch_mapping').select('tutor_id').eq('batch_id', lectureId),
   ]);
 
   if (lectureRes.error) throw new Error(`Failed to load lecture: ${lectureRes.error.message}`);
   const lecture = lectureRes.data;
   if (!lecture) throw new Error(`Lecture ${lectureId} not found`);
+
+  const tutorMapRes = await supabase.from('tutor_batch_mapping').select('tutor_id').eq('batch_id', lecture.batch_id);
 
   const rosterRes = await supabase
     .from('batch_student_mapping')
@@ -64,6 +66,17 @@ export async function loadProcessingContext(lectureId: string): Promise<Processi
     tutors,
     batchTutorIds,
   };
+}
+
+/** What is already on the register for a lecture, so a re-run can leave approved and hand-entered rows alone. */
+export async function loadExistingAttendance(lectureId: string): Promise<ExistingRecord[]> {
+  const { data, error } = await supabase
+    .from('attendance')
+    .select('student_id, source, approved')
+    .eq('lecture_id', lectureId);
+
+  if (error) throw new Error(`Failed to read existing attendance: ${error.message}`);
+  return (data ?? []) as ExistingRecord[];
 }
 
 /** Idempotent on `(student_id, lecture_id)`, so a re-run cannot duplicate. Returns rows written. */

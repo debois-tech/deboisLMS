@@ -97,6 +97,8 @@ export interface ProcessingReport {
   tutorMismatches: string[];
   unmatched: UnmatchedRecord[];
   attendanceInserted: number;
+  /** Students whose approved or hand-entered record was left untouched. */
+  existingKept: number;
   uploadsCleaned: boolean;
   /** Why AI name matching was unavailable, if it was. */
   geminiUnavailableReason?: string;

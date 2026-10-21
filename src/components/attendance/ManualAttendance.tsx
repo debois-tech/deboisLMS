@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Users } from 'lucide-react';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -36,7 +36,9 @@ export function ManualAttendance({ lectureId, batchId, scheduledMinutes, onChang
   const [roster, setRoster] = useState<(Student & { mapping: BatchStudentMapping })[]>([]);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
-  const [pending, setPending] = useState<string | null>(null);
+  // Per student, not one shared slot: a second click elsewhere must not re-enable a row whose write is still in flight.
+  const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
+  const inFlight = useRef(new Set<string>());
   const { showToast } = useToast();
 
   const load = useCallback(async () => {
@@ -72,8 +74,23 @@ export function ManualAttendance({ lectureId, batchId, scheduledMinutes, onChang
 
   const recordFor = (studentId: string) => records.find((row) => row.student_id === studentId);
 
-  const write = async (studentId: string, draft: Draft) => {
-    setPending(studentId);
+  /** Claims a student's row for one request; false when another is already running for them. */
+  const begin = (studentId: string) => {
+    if (inFlight.current.has(studentId)) return false;
+    inFlight.current.add(studentId);
+    setPending(new Set(inFlight.current));
+    return true;
+  };
+
+  const finish = (studentId: string) => {
+    inFlight.current.delete(studentId);
+    setPending(new Set(inFlight.current));
+  };
+
+  // `approved` is the state the row should end in. An edit passes the row's current one, so changing
+  // a pending record's minutes does not quietly approve it.
+  const write = async (studentId: string, draft: Draft, approved: boolean) => {
+    if (!begin(studentId)) return;
     try {
       const saved = await markAttendance({
         studentId,
@@ -82,6 +99,7 @@ export function ManualAttendance({ lectureId, batchId, scheduledMinutes, onChang
         status: draft.status,
         minutes: draft.minutes,
         source: draft.source,
+        approved,
       });
       if (saved) {
         setRecords((current) => [...current.filter((row) => row.student_id !== studentId), saved]);
@@ -90,19 +108,20 @@ export function ManualAttendance({ lectureId, batchId, scheduledMinutes, onChang
     } catch (err) {
       showToast(errorMessage(err, 'Could not mark the attendance'), 'error');
     } finally {
-      setPending(null);
+      finish(studentId);
     }
   };
 
   const toggle = async (studentId: string) => {
     const existing = recordFor(studentId);
 
-    if (!existing) {
-      await write(studentId, drafts[studentId]);
+    // No record, or one still waiting for review: ticking approves it. Only a ticked row is removed.
+    if (!existing || !existing.approved) {
+      await write(studentId, drafts[studentId], true);
       return;
     }
 
-    setPending(studentId);
+    if (!begin(studentId)) return;
     try {
       await deleteAttendance(existing.id);
       setRecords((current) => current.filter((row) => row.student_id !== studentId));
@@ -110,7 +129,7 @@ export function ManualAttendance({ lectureId, batchId, scheduledMinutes, onChang
     } catch (err) {
       showToast(errorMessage(err, 'Could not remove the attendance'), 'error');
     } finally {
-      setPending(null);
+      finish(studentId);
     }
   };
 
@@ -119,13 +138,14 @@ export function ManualAttendance({ lectureId, batchId, scheduledMinutes, onChang
   const edit = (studentId: string, patch: Partial<Draft>, save: boolean) => {
     const next = { ...drafts[studentId], ...patch };
     setDrafts((current) => ({ ...current, [studentId]: next }));
-    if (save && recordFor(studentId)) void write(studentId, next);
+    const existing = recordFor(studentId);
+    if (save && existing) void write(studentId, next, Boolean(existing.approved));
   };
 
   if (error) return <ErrorState message={error} onRetry={reload} />;
   if (roster.length === 0) return <EmptyState icon={<Users size={32} />} title="No active students in this batch" />;
 
-  const markedCount = roster.filter((student) => recordFor(student.id)).length;
+  const markedCount = roster.filter((student) => recordFor(student.id)?.approved).length;
 
   return (
     <div className="table-block">
@@ -149,7 +169,9 @@ export function ManualAttendance({ lectureId, batchId, scheduledMinutes, onChang
         <TBody>
           {roster.map((student) => {
             const draft = drafts[student.id];
-            const marked = Boolean(recordFor(student.id));
+            const record = recordFor(student.id);
+            const marked = Boolean(record?.approved);
+            const busy = pending.has(student.id);
             if (!draft) return null;
 
             return (
@@ -167,6 +189,7 @@ export function ManualAttendance({ lectureId, batchId, scheduledMinutes, onChang
                   <select
                     className="manual-attendance-field"
                     value={draft.status}
+                    disabled={busy}
                     onChange={(event) => edit(student.id, { status: event.target.value as AttendanceStatus }, true)}
                     aria-label={`Status for ${student.name}`}
                   >
@@ -183,7 +206,7 @@ export function ManualAttendance({ lectureId, batchId, scheduledMinutes, onChang
                     className="manual-attendance-field is-minutes"
                     value={draft.minutes}
                     onChange={(event) => edit(student.id, { minutes: Number(event.target.value) }, false)}
-                    onBlur={() => { if (marked) void write(student.id, draft); }}
+                    onBlur={() => { if (record) void write(student.id, draft, Boolean(record.approved)); }}
                     aria-label={`Minutes for ${student.name}`}
                   />
                 </TD>
@@ -192,6 +215,7 @@ export function ManualAttendance({ lectureId, batchId, scheduledMinutes, onChang
                   <select
                     className="manual-attendance-field"
                     value={draft.source}
+                    disabled={busy}
                     onChange={(event) => edit(student.id, { source: event.target.value as AttendanceSource }, true)}
                     aria-label={`Source for ${student.name}`}
                   >
@@ -206,7 +230,7 @@ export function ManualAttendance({ lectureId, batchId, scheduledMinutes, onChang
                     type="checkbox"
                     className="data-table-checkbox"
                     checked={marked}
-                    disabled={pending === student.id}
+                    disabled={busy}
                     onChange={() => void toggle(student.id)}
                     aria-label={`Mark ${student.name} as attended`}
                   />
