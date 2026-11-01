@@ -1,5 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { Sun, Moon, LogOut, ChevronDown, Menu } from 'lucide-react';
+import { Sun, Moon, LogOut, ChevronDown, Menu, Settings } from 'lucide-react';
+import { SettingsModal } from '@/components/settings/SettingsModal';
 import { useTheme } from '@/lib/context/ThemeContext';
 import { useAuth } from '@/lib/context/AuthContext';
 import { supabase } from '@/lib/supabase/client';
@@ -10,15 +11,16 @@ interface NavbarProps {
   onMenuClick?: () => void;
   /** Where the logo links to. Defaults to the admin dashboard. */
   homePath?: string;
-  /** Dark mode in the menu, for a shell with no Settings popup of its own. The admin's lives on the dashboard. */
+  /** Dark mode in the menu, for a shell with no Settings popup of its own. The admin's opens from the header icon. */
   themeToggle?: boolean;
 }
 
 export function Navbar({ onMenuClick, homePath = '/', themeToggle = false }: NavbarProps) {
   const navigate = useNavigate();
   const { theme, toggle } = useTheme();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -58,6 +60,14 @@ export function Navbar({ onMenuClick, homePath = '/', themeToggle = false }: Nav
 
       <div className="flex items-center gap-1">
       <NotificationBell />
+      {isAdmin && (
+        <>
+          <button type="button" className="notif-bell" onClick={() => setSettingsOpen(true)} aria-label="Settings">
+            <Settings size={18} />
+          </button>
+          <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+        </>
+      )}
       <div className="relative" ref={dropdownRef}>
         <button
           onClick={() => setDropdownOpen((o) => !o)}

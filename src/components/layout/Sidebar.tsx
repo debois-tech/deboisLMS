@@ -114,7 +114,7 @@ export function Sidebar({ open, collapsed, onClose, onToggle, items = navItems, 
                 onClick={onClose}
                 title={collapsed ? item.label : undefined}
                 className={clsx(
-                   'flex items-center rounded-[var(--radius-md)] text-sm font-medium transition-all duration-200 h-10 w-full',
+                   'flex items-center rounded-[var(--radius-md)] text-sm font-medium transition-all duration-200 h-10 w-full hover:-translate-y-0.5 motion-reduce:hover:translate-y-0',
           collapsed ? 'justify-center' : 'gap-2.5 pl-2',
                   active
                     ? 'bg-[var(--primary)] text-white shadow-[var(--primary-glow)]'

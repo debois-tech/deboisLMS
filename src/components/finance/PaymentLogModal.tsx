@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { History, Plus, Trash2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Plus, Trash2 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { ClaimActions } from '@/components/finance/ClaimActions';
@@ -50,6 +50,20 @@ export function PaymentLogModal({
     getPendingClaims(studentId).then((c) => { if (live) setClaims(c); }).catch(console.error);
     return () => { live = false; };
   }, [studentId]);
+
+  // A log added from the form (or an approved claim) scrolls the table into view; opening the modal does not.
+  const logsRef = useRef<HTMLDivElement>(null);
+  const before = useRef<number | null>(null);
+  useEffect(() => {
+    before.current = null;
+  }, [studentId]);
+  useEffect(() => {
+    if (submitting) before.current = paymentLogs.length;
+    else if (before.current !== null && paymentLogs.length > before.current) {
+      before.current = null;
+      logsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [submitting, paymentLogs.length]);
 
   // Filtered on render so a previous student's claims never flash on open.
   const shownClaims = fee ? claims.filter((c) => c.student_id === fee.student_id && c.batch_id === fee.batch_id) : [];
@@ -129,10 +143,8 @@ export function PaymentLogModal({
 
           <hr className="divider m-0" />
 
-          <div>
-            <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
-              <History size={15} /> Previous Payments
-            </div>
+          <div ref={logsRef}>
+            <div className="mb-6 text-sm font-semibold text-[var(--text-primary)]">Logs</div>
             {paymentLogs.length === 0 && shownClaims.length === 0 ? (
               <p className="text-sm text-[var(--text-muted)]">No payment logs yet.</p>
             ) : (

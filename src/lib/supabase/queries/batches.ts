@@ -100,14 +100,6 @@ export async function deleteBatch(id: string): Promise<void> {
   await removeStoredDocuments(enrolments.map((e) => e.id));
 }
 
-/** One way: the batch and its students leave every total, and the students take refs from the test series. */
-export async function convertBatchToTest(id: string): Promise<{ converted: number }> {
-  return row<{ converted: number }>(
-    await supabase.rpc('convert_batch_to_test', { p_batch_id: id }),
-    'Could not convert this batch',
-  );
-}
-
 // Every programme, from the database rather than a list in the app.
 export async function getBatchPrograms(): Promise<BatchProgramOption[]> {
   return rows<BatchProgramOption>(

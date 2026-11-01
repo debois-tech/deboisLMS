@@ -29,10 +29,21 @@ export function newDraft(): QuizDraft {
   };
 }
 
-export function quizToDraft(quiz: QuizFull, copy = false): QuizDraft {
+// "Quiz" copies to "Quiz (c)", then "(c1)", "(c2)": the first free name, counted from the original's title.
+export function copyTitle(title: string, taken: string[]): string {
+  const base = title.replace(/(\s*\((c\d*|copy)\))+$/i, '');
+  const used = new Set(taken);
+  for (let n = 0; ; n++) {
+    const name = `${base} (c${n || ''})`;
+    if (!used.has(name)) return name;
+  }
+}
+
+// `taken` (every quiz title) makes this a copy: fresh id, next free title.
+export function quizToDraft(quiz: QuizFull, taken?: string[]): QuizDraft {
   return {
-    id: copy ? crypto.randomUUID() : quiz.id,
-    title: copy ? `${quiz.title} (copy)` : quiz.title,
+    id: taken ? crypto.randomUUID() : quiz.id,
+    title: taken ? copyTitle(quiz.title, taken) : quiz.title,
     batch_id: quiz.batch_id,
     seconds_per_question: quiz.seconds_per_question,
     show_answer: quiz.show_answer,
