@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
+import { useInFlight, useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { Modal } from '@/components/ui/Modal';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { BatchSelect } from '@/components/ui/BatchSelect';
@@ -18,10 +18,8 @@ import { AttendanceRecordsTable } from '@/components/attendance/AttendanceRecord
 import { ManualAttendance } from '@/components/attendance/ManualAttendance';
 import { DEFAULT_LECTURE_MINUTES } from '@/lib/attendance/types';
 import { exportBatchAttendanceCsv } from '@/lib/attendance/exportCsv';
-import { getLecturesByBatch, createLecture } from '@/lib/supabase';
-import { clearUploads, getAttendanceByLecture, insertUploadRows, processAttendance, setAttendanceApproved, bulkApproveAttendance, updateLecture } from '@/lib/supabase';
+import { clearUploads, createLecture, getAttendanceByLecture, getBatches, getLecturesByBatch, insertUploadRows, processAttendance, setAttendanceApproved, bulkApproveAttendance, updateLecture } from '@/lib/supabase';
 import type { ProcessingReport } from '@/lib/supabase';
-import { getBatches } from '@/lib/supabase';
 import type { Batch, Lecture, AttendanceRecord } from '@/lib/types';
 import { meetingCodesMatch, parseCsv } from '@/lib/utils/csvParser';
 import type { CsvRow } from '@/lib/utils/csvParser';
@@ -41,7 +39,6 @@ export default function AttendancePage({ autoApprove = false }: AttendancePagePr
   const [selectedLecture, setSelectedLecture] = useState<string | null>(null);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [loadingRecords, setLoadingRecords] = useState(false);
-  const [processing, setProcessing] = useState(false);
 
   const [csvRows, setCsvRows] = useState<CsvRow[]>([]);
   const [csvFileName, setCsvFileName] = useState('');
@@ -56,14 +53,11 @@ export default function AttendancePage({ autoApprove = false }: AttendancePagePr
   const [newLectureMode, setNewLectureMode] = useState<'online' | 'offline'>('online');
   const [newLectureDuration, setNewLectureDuration] = useState(DEFAULT_LECTURE_MINUTES);
   const [exporting, setExporting] = useState(false);
-  const [creatingLecture, setCreatingLecture] = useState(false);
-  const [approvingAll, setApprovingAll] = useState(false);
-  const [approvalBusy, setApprovalBusy] = useState<ReadonlySet<string>>(new Set());
-  // Refs, not state: a second click lands before the re-render that would disable the control.
-  const uploadingRef = useRef(false);
-  const creatingRef = useRef(false);
-  const approvingAllRef = useRef(false);
-  const approvalInFlight = useRef(new Set<string>());
+  // Keys: 'upload', 'create', 'approveAll', or a record id while its approval is saving.
+  const { busy, begin, finish } = useInFlight();
+  const processing = busy.has('upload');
+  const creatingLecture = busy.has('create');
+  const approvingAll = busy.has('approveAll');
   const fileRef = useRef<HTMLInputElement>(null);
   const { showToast } = useToast();
 
@@ -156,9 +150,7 @@ export default function AttendancePage({ autoApprove = false }: AttendancePagePr
   // Uploads the CSV into the `uploads` table, then immediately processes it into
   // attendance records and clears the uploads — one action end-to-end for the admin.
   const handleUploadAndProcess = async () => {
-    if (!selectedLecture || csvRows.length === 0 || meetingCodeMismatch || uploadingRef.current) return;
-    uploadingRef.current = true;
-    setProcessing(true);
+    if (!selectedLecture || csvRows.length === 0 || meetingCodeMismatch || !begin('upload')) return;
     setLastReport(null);
 
     try {
@@ -191,14 +183,11 @@ export default function AttendancePage({ autoApprove = false }: AttendancePagePr
       await clearUploads(selectedLecture).catch(() => undefined);
       showToast(errorMessage(err, 'Attendance upload failed'), 'error');
     }
-    uploadingRef.current = false;
-    setProcessing(false);
+    finish('upload');
   };
 
   const handleToggleApproved = async (id: string, approved: boolean) => {
-    if (approvalInFlight.current.has(id)) return;
-    approvalInFlight.current.add(id);
-    setApprovalBusy(new Set(approvalInFlight.current));
+    if (!begin(id)) return;
 
     setRecords((prev) => prev.map((r) => (r.id === id ? { ...r, approved } : r)));
     try {
@@ -210,15 +199,12 @@ export default function AttendancePage({ autoApprove = false }: AttendancePagePr
       setRecords((prev) => prev.map((r) => (r.id === id ? { ...r, approved: !approved } : r)));
       showToast(errorMessage(err, 'Failed to update approval'), 'error');
     } finally {
-      approvalInFlight.current.delete(id);
-      setApprovalBusy(new Set(approvalInFlight.current));
+      finish(id);
     }
   };
 
   const handleBulkApprove = async () => {
-    if (!selectedLecture || approvingAllRef.current) return;
-    approvingAllRef.current = true;
-    setApprovingAll(true);
+    if (!selectedLecture || !begin('approveAll')) return;
     try {
       await bulkApproveAttendance(selectedLecture);
       await loadRecords(selectedLecture);
@@ -226,15 +212,12 @@ export default function AttendancePage({ autoApprove = false }: AttendancePagePr
     } catch (error) {
       showToast(errorMessage(error, 'Failed to approve records'), 'error');
     } finally {
-      approvingAllRef.current = false;
-      setApprovingAll(false);
+      finish('approveAll');
     }
   };
 
   const handleCreateLecture = async () => {
-    if (!selectedBatch || !newLectureDate || creatingRef.current) return;
-    creatingRef.current = true;
-    setCreatingLecture(true);
+    if (!selectedBatch || !newLectureDate || !begin('create')) return;
     try {
       const start = new Date(`${newLectureDate}T${newLectureTime}:00`);
       const end = new Date(start.getTime() + newLectureDuration * 60_000);
@@ -260,8 +243,7 @@ export default function AttendancePage({ autoApprove = false }: AttendancePagePr
     } catch (error) {
       showToast(errorMessage(error, 'Failed to create lecture'), 'error');
     } finally {
-      creatingRef.current = false;
-      setCreatingLecture(false);
+      finish('create');
     }
   };
 
@@ -432,7 +414,7 @@ export default function AttendancePage({ autoApprove = false }: AttendancePagePr
                 onToggleApproved={handleToggleApproved}
                 onApproveAll={handleBulkApprove}
                 approvingAll={approvingAll}
-                busyIds={approvalBusy}
+                busyIds={busy}
                 maxHeight="none"
               />
             )}

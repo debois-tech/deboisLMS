@@ -54,21 +54,6 @@ async function findMatchingStudents(input: { name?: string; phone?: string; emai
   });
 }
 
-/** Rows that look like an existing student by name alone — shown as a warning, never acted on. */
-export async function findNameCollisions(names: string[]): Promise<string[]> {
-  const wanted = new Set(names.map((n) => n.trim().toLowerCase()).filter(Boolean));
-  if (wanted.size === 0) return [];
-
-  const students = rows<Student>(
-    await supabase.from('students').select('*'),
-    'Could not check for duplicate names',
-  );
-
-  return students
-    .filter((s) => wanted.has(s.name.trim().toLowerCase()))
-    .map((s) => s.name);
-}
-
 // A live account (a login, or a batch still running) blocks a new one; closed ones stay as they are and the new student gets a new ref
 export async function createNewStudent(input: Omit<Student, 'id' | 'created_at'>): Promise<{ student: Student; earlier?: Student }> {
   const matches = await findMatchingStudents(input);

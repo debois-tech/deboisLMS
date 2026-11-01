@@ -25,12 +25,3 @@ export function Spinner({ size = 20, centered = false }: { size?: number; center
     </div>
   );
 }
-
-export function PageLoader() {
-  return (
-    <div className="flex flex-col items-center justify-center min-h-[300px] gap-4">
-      <Spinner size={36} />
-      <p className="text-sm text-[var(--text-muted)]">Loading...</p>
-    </div>
-  );
-}

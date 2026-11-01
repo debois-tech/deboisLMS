@@ -49,6 +49,26 @@ export function useInitialLoad(load: () => Promise<void>, generic = false) {
   return { loading, error, retry };
 }
 
+/** Keys with a request running. `begin` is a synchronous guard (false when already running); `busy` drives `disabled`. */
+export function useInFlight() {
+  const live = useRef(new Set<string>());
+  const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
+
+  const begin = useCallback((key: string) => {
+    if (live.current.has(key)) return false;
+    live.current.add(key);
+    setBusy(new Set(live.current));
+    return true;
+  }, []);
+
+  const finish = useCallback((key: string) => {
+    live.current.delete(key);
+    setBusy(new Set(live.current));
+  }, []);
+
+  return { busy, begin, finish };
+}
+
 /** Refetch with no loading flag, so the table does not blink out. `load` must be stable. */
 export function useReloadableSection(load: () => Promise<void>) {
   const [error, setError] = useState<string | null>(null);

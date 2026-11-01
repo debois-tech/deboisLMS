@@ -1,11 +1,5 @@
 import type { CurriculumDraftNode, CurriculumKind, CurriculumNode, CurriculumStatus } from '@/lib/types';
 
-export const CHILD_KIND: Record<CurriculumKind, CurriculumKind | null> = {
-  module: 'topic',
-  topic: 'subtopic',
-  subtopic: null,
-};
-
 type Linked = { id: string; parent_id: string | null; position?: number };
 
 /** Children per parent (`null` = the modules), in position order; ties keep array order. */

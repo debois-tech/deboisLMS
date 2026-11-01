@@ -355,16 +355,6 @@ export interface EarningBreakdown {
   is_test: boolean;
 }
 
-export interface BatchAttendanceSummary {
-  batch_id: string;
-  batch_name: string;
-  total_lectures: number;
-  present_count: number;
-  partial_count: number;
-  absent_count: number;
-  pending_approval: number;
-}
-
 export type ToastVariant = 'success' | 'error' | 'warning' | 'info';
 
 export interface Toast {
@@ -373,12 +363,6 @@ export interface Toast {
   variant: ToastVariant;
   /** Set for the length of the exit animation, just before the toast is dropped. */
   leaving?: boolean;
-}
-
-export interface NavItem {
-  label: string;
-  href: string;
-  icon?: string;
 }
 
 export type CurriculumKind = 'module' | 'topic' | 'subtopic';

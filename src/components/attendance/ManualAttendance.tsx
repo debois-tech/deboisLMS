@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Users } from 'lucide-react';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -9,7 +9,7 @@ import type { AttendanceRecord, AttendanceSource, AttendanceStatus, BatchStudent
 import { DEFAULT_LECTURE_MINUTES } from '@/lib/attendance/types';
 import { useToast } from '@/lib/context/ToastContext';
 import { errorMessage } from '@/lib/utils/errors';
-import { useReloadableSection } from '@/lib/hooks/useInitialLoad';
+import { useInFlight, useReloadableSection } from '@/lib/hooks/useInitialLoad';
 
 const STATUSES: AttendanceStatus[] = ['present', 'partial', 'absent'];
 const STATUS_LABEL: Record<AttendanceStatus, string> = { present: 'Present', partial: 'Partial', absent: 'Absent' };
@@ -38,8 +38,7 @@ export function ManualAttendance({ lectureId, batchId, scheduledMinutes, onChang
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   // Per student, not one shared slot: a second click elsewhere must not re-enable a row whose write is still in flight.
-  const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
-  const inFlight = useRef(new Set<string>());
+  const { busy: pending, begin, finish } = useInFlight();
   const { showToast } = useToast();
 
   const load = useCallback(async () => {
@@ -74,19 +73,6 @@ export function ManualAttendance({ lectureId, batchId, scheduledMinutes, onChang
   const { error, reload } = useReloadableSection(load);
 
   const recordFor = (studentId: string) => records.find((row) => row.student_id === studentId);
-
-  /** Claims a student's row for one request; false when another is already running for them. */
-  const begin = (studentId: string) => {
-    if (inFlight.current.has(studentId)) return false;
-    inFlight.current.add(studentId);
-    setPending(new Set(inFlight.current));
-    return true;
-  };
-
-  const finish = (studentId: string) => {
-    inFlight.current.delete(studentId);
-    setPending(new Set(inFlight.current));
-  };
 
   // `approved` is the state the row should end in. An edit passes the row's current one, so changing
   // a pending record's minutes does not quietly approve it.

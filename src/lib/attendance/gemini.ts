@@ -9,11 +9,6 @@ export function getGeminiUnavailableReason(): string | null {
   return geminiUnavailableReason;
 }
 
-/** Optimistic until the first call proves otherwise. */
-export function isGeminiConfigured(): boolean {
-  return geminiUnavailableReason === null;
-}
-
 export interface GeminiMatchResult {
   index: number;
   confidence: number;
