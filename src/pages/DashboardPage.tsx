@@ -52,7 +52,7 @@ export default function DashboardPage() {
     <div className="page-section">
       <PageHeader title="Dashboard" />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="fluid-grid">
         <StatCard label="Total Batches" value={stats?.total_batches ?? 0} />
         <StatCard label="Active Batches" value={stats?.active_batches ?? 0} />
         <StatCard label="Total Students" value={stats?.total_students ?? 0} />

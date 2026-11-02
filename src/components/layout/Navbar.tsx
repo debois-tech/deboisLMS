@@ -4,7 +4,7 @@ import { SettingsModal } from '@/components/settings/SettingsModal';
 import { useTheme } from '@/lib/context/ThemeContext';
 import { useAuth } from '@/lib/context/AuthContext';
 import { supabase } from '@/lib/supabase/client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 
 interface NavbarProps {
@@ -13,9 +13,13 @@ interface NavbarProps {
   homePath?: string;
   /** Dark mode in the menu, for a shell with no Settings popup of its own. The admin's opens from the header icon. */
   themeToggle?: boolean;
+  /** Middle of the bar, for navs that live in the header. No menu button without `onMenuClick`. */
+  center?: ReactNode;
+  /** Temporary: a showcase switch shown before the bell. */
+  demo?: ReactNode;
 }
 
-export function Navbar({ onMenuClick, homePath = '/', themeToggle = false }: NavbarProps) {
+export function Navbar({ onMenuClick, homePath = '/', themeToggle = false, center, demo }: NavbarProps) {
   const navigate = useNavigate();
   const { theme, toggle } = useTheme();
   const { user, isAdmin } = useAuth();
@@ -46,19 +50,24 @@ export function Navbar({ onMenuClick, homePath = '/', themeToggle = false }: Nav
       className="h-14 border-b border-[var(--border)] bg-[var(--bg-surface)]/80 backdrop-blur-md sticky top-0 z-40 flex items-center justify-between gap-2 sm:gap-3"
       style={{ paddingLeft: '2rem', paddingRight: '2rem' }}
     >
-      <button
-        onClick={onMenuClick}
-        aria-label="Open menu"
-        className="lg:hidden w-9 h-9 rounded-[var(--radius-md)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-all"
-      >
-        <Menu size={18} />
-      </button>
+      {onMenuClick && (
+        <button
+          onClick={onMenuClick}
+          aria-label="Open menu"
+          className="lg:hidden w-9 h-9 rounded-[var(--radius-md)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-all"
+        >
+          <Menu size={18} />
+        </button>
+      )}
 
       <Link to={homePath} className="flex items-center select-none hover:opacity-80 transition-opacity">
         <img src={theme === 'dark' ? '/logo-dark.png' : '/logo.png'} alt="deboistech" className="h-9 w-auto" />
       </Link>
 
+      {center && <div className="nav4-center">{center}</div>}
+
       <div className="flex items-center gap-1">
+      {demo}
       <NotificationBell />
       {isAdmin && (
         <>

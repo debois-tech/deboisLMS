@@ -279,7 +279,7 @@ export function OverviewTab({ batch, programLabel, showFees = true }: { batch: B
 
   return (
     <div className="flex flex-col gap-4">
-      <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${showFees ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
+      <div className={showFees ? 'fluid-grid fluid-grid-4' : 'fluid-grid'}>
         <Card padding="sm">
           <p className="text-xs text-[var(--text-muted)]">Total Students</p>
           <p className="text-lg font-bold text-[var(--text-primary)] mt-1">{students.filter((s) => s.mapping.status === 'active').length}</p>
