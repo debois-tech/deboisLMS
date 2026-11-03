@@ -5971,28 +5971,35 @@ button.qz-dot:disabled { opacity: 0.45; cursor: not-allowed; }
 .hx-cell.is-dim { opacity: 0.1; scale: 0.88; pointer-events: none; }
 .hx-cell.is-dim .hx::after { pointer-events: none; }
 
-/* Electric static behind the lit tile, in the lattice layer so every other tile covers it. Three strand sets take turns, which makes it crackle. */
-.hx-zap {
+/* Electric veins behind the lit tile, in the lattice layer so every tile covers them. One svg per tile, in cell widths (viewBox -3.6..3.6),
+   drawn ring by ring (--k) while the tile pops up and withdrawn when it drops; static in between. Dashes are in those units, so no non-scaling-stroke here. */
+.hx-vein {
   position: absolute;
-  left: calc(var(--gx) * (var(--hex) + var(--g)) - var(--hex));
-  top: calc(var(--gy) * (var(--hex) + var(--g)) * 0.866 - var(--hex) * 1.1547);
-  width: calc(2 * var(--hex));
-  height: calc(2.3094 * var(--hex));
+  left: calc((var(--gx) - 3.6) * var(--p));
+  top: calc(var(--gy) * var(--p) * 0.866 - 3.6 * var(--p));
+  width: calc(7.2 * var(--p));
+  height: calc(7.2 * var(--p));
   overflow: visible;
+  visibility: hidden;
   pointer-events: none;
-  animation: hxSocket 0.2s ease-out both;
+  transition: visibility 0s 0.2s;
 }
-.hx-zap path { fill: none; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
-.hx-socket { fill: rgba(0, 0, 0, 0.5); stroke: color-mix(in srgb, var(--primary) 55%, transparent); stroke-width: 1; vector-effect: non-scaling-stroke; }
-.hx-zap-glow { stroke: color-mix(in srgb, var(--primary) 30%, transparent); stroke-width: 8; }
-.hx-zap-mid { stroke: color-mix(in srgb, var(--primary-light) 75%, transparent); stroke-width: 2.4; }
-.hx-zap-core { stroke: #eafff6; stroke-width: 1; }
-html.light .hx-zap-core { stroke: var(--primary-dark); }
-.hx-zap-set { opacity: 0; animation: hxStatic 0.24s steps(1) infinite; }
-.hx-zap-set:nth-of-type(2) { animation-delay: -0.16s; }
-.hx-zap-set:nth-of-type(3) { animation-delay: -0.08s; }
-@keyframes hxStatic { 0%, 33% { opacity: 1; } 34%, 100% { opacity: 0; } }
-@keyframes hxSocket { from { opacity: 0; } }
+.hx-vein.is-on { visibility: visible; transition-delay: 0s; }
+.hx-vein g { opacity: calc(1 - var(--k) * 0.09); }
+.hx-vein path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.hx-vg, .hx-vc, .hx-vh { stroke-dasharray: 0.7 1; stroke-dashoffset: 0.7; transition: stroke-dashoffset 0.15s ease-in; }
+.is-on .hx-vg, .is-on .hx-vc, .is-on .hx-vh { stroke-dashoffset: 0; transition: stroke-dashoffset 0.22s ease-out calc(var(--k) * 45ms); }
+.hx-vg { stroke: color-mix(in srgb, var(--primary) 32%, transparent); stroke-width: 0.026; }
+.hx-vc { stroke: #eafff6; stroke-width: 0.006; }
+.hx-vh { stroke: var(--primary-light); stroke-width: 0.0035; }
+.hx-vn { stroke: #eafff6; stroke-width: 0.02; opacity: 0; transition: opacity 0.15s; }
+.hx-vo { stroke: color-mix(in srgb, var(--primary-light) 40%, transparent); stroke-width: 0.075; }
+.is-on .hx-vn { opacity: 1; transition: opacity 0.2s ease-out calc(var(--k) * 45ms + 0.15s); }
+.hx-socket { fill: rgba(0, 0, 0, 0.5); stroke: color-mix(in srgb, var(--primary) 55%, transparent); stroke-width: 1; vector-effect: non-scaling-stroke; opacity: 0; transition: opacity 0.15s; }
+.is-on .hx-socket { opacity: 1; transition-duration: 0.2s; }
+html.light .hx-vc, html.light .hx-vn { stroke: var(--primary-dark); }
+html.light .hx-vh { stroke: var(--primary); }
+html.light .hx-socket { fill: rgba(0, 0, 0, 0.12); }
 
 @keyframes hxIn { from { opacity: 0; transform: translateY(0.75rem) scale(0.82); } }
 @keyframes hxDots { to { background-position: 7px 7px; } }
@@ -6005,16 +6012,11 @@ html.light .hx-zap-core { stroke: var(--primary-dark); }
 .nav4-ov.is-lite.is-open .hx-cell { animation-duration: 0.2s; animation-delay: 0s; }
 .nav4-ov.is-lite .hx-cell, .nav4-ov.is-lite .hx-cell:has(.hx:hover, .hx:focus-visible) { filter: none; }
 .nav4-ov.is-lite .hx:hover .hx-in::after, .nav4-ov.is-lite .nav4-lattice { animation: none; }
-.nav4-ov.is-lite .hx-zap-set { animation: none; }
-.nav4-ov.is-lite .hx-zap-set:not(:first-of-type) { display: none; }
-.nav4-ov.is-lite .hx-zap-set:first-of-type { opacity: 1; }
+.nav4-ov.is-lite .hx-vg, .nav4-ov.is-lite .hx-vh, .nav4-ov.is-lite .hx-vn, .nav4-ov.is-lite .hx-vo { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
-  .nav4-ov, .nav4-ov * { animation-duration: 0.01ms !important; animation-delay: 0s !important; transition-duration: 0.01ms !important; }
+  .nav4-ov, .nav4-ov * { animation-duration: 0.01ms !important; animation-delay: 0s !important; transition-duration: 0.01ms !important; transition-delay: 0s !important; }
   .nav4-lattice, .hx:hover .hx-in::after { animation: none !important; }
-  .hx-zap-set { animation: none !important; }
-  .hx-zap-set:not(:first-of-type) { display: none; }
-  .hx-zap-set:first-of-type { opacity: 1; }
 }
 
 /* Temporary showcase switch in the header (rail vs mosaic). Delete with the nav that loses. */
