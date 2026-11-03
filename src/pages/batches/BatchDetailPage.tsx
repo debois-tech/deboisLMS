@@ -213,7 +213,7 @@ export default function BatchDetailPage() {
             {active === 'tutors' && <TutorsTab batchId={batch.id} isTest={Boolean(batch.is_test)} />}
             {active === 'lectures' && <LecturesTab batchId={batch.id} />}
             {active === 'attendance' && <AttendanceTab batchId={batch.id} batchName={batch.name} />}
-            {active === 'finance' && <FinanceTab batchId={batch.id} />}
+            {active === 'finance' && <FinanceTab batchId={batch.id} batchName={batch.name} />}
             {active === 'assignments' && <AssignmentsTab batchId={batch.id} />}
             {active === 'curriculum' && (
               <Suspense fallback={<Spinner centered />}>
@@ -945,7 +945,7 @@ export function AttendanceTab({ batchId, batchName }: { batchId: string; batchNa
   );
 }
 
-function FinanceTab({ batchId }: { batchId: string }) {
+function FinanceTab({ batchId, batchName }: { batchId: string; batchName: string }) {
   const [fees, setFees] = useState<StudentFee[]>([]);
   const [students, setStudents] = useState<(Student & { mapping: BatchStudentMapping })[]>([]);
   const [loggingFee, setLoggingFee] = useState<StudentFee | null>(null);
@@ -1134,6 +1134,8 @@ function FinanceTab({ batchId }: { batchId: string }) {
       <PaymentLogModal
         fee={loggingFee}
         studentName={students.find((s) => s.id === loggingFee?.student_id)?.name ?? 'Student'}
+        student={students.find((s) => s.id === loggingFee?.student_id)}
+        batchName={batchName}
         paymentLogs={paymentLogs}
         form={logForm}
         onFormChange={setLogForm}

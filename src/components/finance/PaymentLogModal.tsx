@@ -1,16 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Receipt, Trash2 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { ClaimActions } from '@/components/finance/ClaimActions';
-import { getPendingClaims } from '@/lib/supabase';
+import { downloadFeeReceipt, getPendingClaims } from '@/lib/supabase';
+import { useToast } from '@/lib/context/ToastContext';
+import { errorMessage } from '@/lib/utils/errors';
+import { fromDateValue } from '@/lib/utils/date';
 import { Button } from '@/components/ui/Button';
 import { FormField } from '@/components/ui/FormField';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { SearchSelect } from '@/components/ui/SearchSelect';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
-import type { StudentFee, FeePaymentLog, PaymentClaim, PaymentMethod } from '@/lib/types';
+import type { StudentFee, FeePaymentLog, PaymentClaim, PaymentMethod, Student } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils/format';
 import { REGISTRATION_NOTE } from '@/lib/utils/installments';
 
@@ -21,9 +24,14 @@ export interface PaymentLogFormState {
   notes: string;
 }
 
+const METHOD_LABEL: Record<PaymentMethod, string> = { cash: 'Cash', upi: 'UPI', bank_transfer: 'Bank transfer', other: 'Other' };
+
 interface PaymentLogModalProps {
   fee: StudentFee | null;
   studentName: string;
+  /** Fills the fee receipt; without it the receipt buttons are not shown. */
+  student?: Student;
+  batchName?: string;
   paymentLogs: FeePaymentLog[];
   form: PaymentLogFormState;
   onFormChange: (form: PaymentLogFormState) => void;
@@ -38,9 +46,11 @@ interface PaymentLogModalProps {
 }
 
 export function PaymentLogModal({
-  fee, studentName, paymentLogs, form, onFormChange, onClose, onSubmit, submitting, onDelete, deletingId, onClaimApproved,
+  fee, studentName, student, batchName, paymentLogs, form, onFormChange, onClose, onSubmit, submitting, onDelete, deletingId, onClaimApproved,
 }: PaymentLogModalProps) {
   const [claims, setClaims] = useState<PaymentClaim[]>([]);
+  const [printing, setPrinting] = useState<string | null>(null);
+  const { showToast } = useToast();
 
   const studentId = fee?.student_id;
 
@@ -64,6 +74,36 @@ export function PaymentLogModal({
       logsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, [submitting, paymentLogs.length]);
+
+  // A receipt shows the fee as it stood on that payment: every payment up to and including it, oldest first.
+  const printReceipt = async (log: FeePaymentLog) => {
+    if (!student || !fee) return;
+    setPrinting(log.id);
+    try {
+      const ordered = [...paymentLogs].sort((a, b) => a.payment_date.localeCompare(b.payment_date) || a.created_at.localeCompare(b.created_at));
+      let numbered = 0;
+      await downloadFeeReceipt({
+        receiptNo: student.student_code ?? '',
+        date: fromDateValue(log.payment_date) ?? new Date(),
+        name: student.name.trim(),
+        programme: batchName ?? '',
+        email: student.email ?? '',
+        phone: student.phone,
+        rows: ordered.slice(0, ordered.findIndex((entry) => entry.id === log.id) + 1).map((entry) => ({
+          label: entry.notes === REGISTRATION_NOTE ? 'Registration fee' : `Programme fee - Payment ${++numbered}`,
+          date: fromDateValue(entry.payment_date) ?? new Date(),
+          amount: Number(entry.amount),
+        })),
+        totalFee: fee.total_fee,
+        mode: METHOD_LABEL[log.payment_method ?? 'other'],
+        txn: null, // the transaction id is not wired in yet
+      });
+    } catch (err) {
+      showToast(errorMessage(err, 'Could not build the receipt'), 'error');
+    } finally {
+      setPrinting(null);
+    }
+  };
 
   // Filtered on render so a previous student's claims never flash on open.
   const shownClaims = fee ? claims.filter((c) => c.student_id === fee.student_id && c.batch_id === fee.batch_id) : [];
@@ -187,18 +227,31 @@ export function PaymentLogModal({
                       <TD className="cell-muted">{log.notes || '—'}</TD>
                       <TD><Badge variant="success" dot>Verified</Badge></TD>
                       <TD className="w-px">
-                        {/* The registration fee is written by a trigger, so nothing could put it back. */}
-                        {log.notes !== REGISTRATION_NOTE && (
-                          <Button
-                            variant="ghost"
-                            className="action-button-compact action-button-danger"
-                            onClick={() => onDelete(log)}
-                            loading={deletingId === log.id}
-                            aria-label={`Delete the ${formatCurrency(Number(log.amount))} payment from ${log.payment_date}`}
-                          >
-                            <Trash2 size={14} />
-                          </Button>
-                        )}
+                        <div className="flex items-center justify-end gap-1">
+                          {student && (
+                            <Button
+                              variant="ghost"
+                              className="action-button-compact"
+                              onClick={() => void printReceipt(log)}
+                              loading={printing === log.id}
+                              aria-label={`Download the receipt for the ${formatCurrency(Number(log.amount))} payment from ${log.payment_date}`}
+                            >
+                              <Receipt size={14} />
+                            </Button>
+                          )}
+                          {/* The registration fee is written by a trigger, so nothing could put it back. */}
+                          {log.notes !== REGISTRATION_NOTE && (
+                            <Button
+                              variant="ghost"
+                              className="action-button-compact action-button-danger"
+                              onClick={() => onDelete(log)}
+                              loading={deletingId === log.id}
+                              aria-label={`Delete the ${formatCurrency(Number(log.amount))} payment from ${log.payment_date}`}
+                            >
+                              <Trash2 size={14} />
+                            </Button>
+                          )}
+                        </div>
                       </TD>
                     </TR>
                   ))}

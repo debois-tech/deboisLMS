@@ -230,6 +230,8 @@ export default function FeesPage() {
       <PaymentLogModal
         fee={loggingFee}
         studentName={students.find((s) => s.id === loggingFee?.student_id)?.name ?? 'Student'}
+        student={students.find((s) => s.id === loggingFee?.student_id)}
+        batchName={batches.find((b) => b.id === loggingFee?.batch_id)?.name}
         paymentLogs={paymentLogs}
         form={logForm}
         onFormChange={setLogForm}
