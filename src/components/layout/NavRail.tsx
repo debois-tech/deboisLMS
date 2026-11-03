@@ -15,14 +15,14 @@ export interface Leaf {
 }
 
 // One item = a direct link; more = a hub with a flyout (rail) or tiles (wide).
-interface Group {
+export interface Group {
   id: string;
   label: string;
   icon: LucideIcon;
   items: Leaf[];
 }
 
-export const GROUPS: Group[] = [
+export const ADMIN_GROUPS: Group[] = [
   { id: 'home', label: 'Dashboard', icon: LayoutDashboard, items: [{ label: 'Dashboard', to: '/', icon: LayoutDashboard, end: true }] },
   {
     id: 'people', label: 'People', icon: Users, items: [
@@ -49,6 +49,25 @@ export const GROUPS: Group[] = [
   },
   { id: 'money', label: 'Money', icon: DollarSign, items: [{ label: 'Finance', to: '/fees', icon: DollarSign }] },
 ];
+export const ADMIN_NEW = { label: 'New Batch', to: '/batches/new' };
+
+export const TUTOR_GROUPS: Group[] = [
+  { id: 'home', label: 'Dashboard', icon: LayoutDashboard, items: [{ label: 'Dashboard', to: '/tutor', icon: LayoutDashboard, end: true }] },
+  { id: 'students', label: 'Students', icon: Users, items: [{ label: 'Students', to: '/tutor/students', icon: Users }] },
+  {
+    id: 'teaching', label: 'Teaching', icon: Layers, items: [
+      { label: 'Attendance', to: '/tutor/attendance', icon: ClipboardCheck },
+      { label: 'Assignments', to: '/tutor/assignments', icon: FileText },
+      { label: 'Exams', to: '/tutor/exams', icon: ClipboardList },
+    ],
+  },
+  {
+    id: 'content', label: 'Content', icon: LibraryBig, items: [
+      { label: 'Curriculum', to: '/tutor/curriculum', icon: LibraryBig },
+      { label: 'Study Material', to: '/tutor/materials', icon: BookOpen },
+    ],
+  },
+];
 
 const DESKTOP = '(min-width: 1024px)';
 const watchDesktop = (notify: () => void) => {
@@ -59,6 +78,9 @@ const watchDesktop = (notify: () => void) => {
 const useDesktop = () => useSyncExternalStore(watchDesktop, () => window.matchMedia(DESKTOP).matches, () => true);
 
 interface NavRailProps {
+  groups: Group[];
+  /** The bottom "+ New" shortcut; none for a role that has nothing to create. */
+  newAction?: { label: string; to: string } | null;
   /** Mobile drawer. */
   open: boolean;
   /** Desktop rail (true) or wide (false). The drawer is always wide. */
@@ -67,15 +89,15 @@ interface NavRailProps {
   onToggle: () => void;
 }
 
-// Admin nav, option 2: icon rail with a hover flyout, or a wide sidebar with tiles under each hub.
-export function NavRail({ open, collapsed, onClose, onToggle }: NavRailProps) {
+// Icon rail with a hover flyout, or a wide sidebar with tiles under each hub.
+export function NavRail({ groups, newAction, open, collapsed, onClose, onToggle }: NavRailProps) {
   const { pathname } = useLocation();
   const desktop = useDesktop();
   const wide = !desktop || !collapsed;
 
   const isActive = (leaf: Leaf) =>
     leaf.end ? pathname === leaf.to : pathname === leaf.to || pathname.startsWith(`${leaf.to}/`);
-  const current = GROUPS.find((group) => group.items.some(isActive))?.id;
+  const current = groups.find((group) => group.items.some(isActive))?.id;
 
   // A hub the tutor folded or opened by hand wins; the rest follow the current page.
   const [manual, setManual] = useState<Record<string, boolean>>({});
@@ -83,7 +105,7 @@ export function NavRail({ open, collapsed, onClose, onToggle }: NavRailProps) {
 
   // `hub` is the hovered hub; `shown` outlives it so the flyout keeps its content while it slides out.
   const [hub, setHub] = useState<string | null>(null);
-  const [shown, setShown] = useState('teaching');
+  const [shown, setShown] = useState((groups.find((group) => group.items.length > 1) ?? groups[0]).id);
   const timer = useRef<number>(0);
   const panel = useRef<HTMLDivElement>(null);
   const show = (id: string) => {
@@ -98,7 +120,7 @@ export function NavRail({ open, collapsed, onClose, onToggle }: NavRailProps) {
   };
   useEffect(() => () => window.clearTimeout(timer.current), []);
 
-  const flyout = GROUPS.find((group) => group.id === shown)!;
+  const flyout = groups.find((group) => group.id === shown)!;
   const flyoutOpen = !wide && hub !== null;
 
   // With a pointer the flyout stays put while the page loads and closes when the pointer leaves; touch has no leave.
@@ -136,7 +158,7 @@ export function NavRail({ open, collapsed, onClose, onToggle }: NavRailProps) {
         </div>
 
         <nav className="nav2-scroll" aria-label="Main">
-          {GROUPS.map((group) => {
+          {groups.map((group) => {
             const Icon = group.icon;
             const direct = group.items.length === 1;
             const lit = current === group.id;
@@ -206,12 +228,14 @@ export function NavRail({ open, collapsed, onClose, onToggle }: NavRailProps) {
           })}
         </nav>
 
-        <div className="nav2-bottom">
-          <Link to="/batches/new" onClick={pick} onMouseEnter={hide} className="nav2-new" aria-label="New Batch">
-            <span className="nav2-ico"><Plus size={18} /></span>
-            <span className="nav2-label">New Batch</span>
-          </Link>
-        </div>
+        {newAction && (
+          <div className="nav2-bottom">
+            <Link to={newAction.to} onClick={pick} onMouseEnter={hide} className="nav2-new" aria-label={newAction.label}>
+              <span className="nav2-ico"><Plus size={18} /></span>
+              <span className="nav2-label">{newAction.label}</span>
+            </Link>
+          </div>
+        )}
 
         <div className="nav2-fly-clip">
           <div ref={panel} className={clsx('nav2-fly', flyoutOpen && 'is-open')} aria-hidden={!flyoutOpen}>

@@ -15,11 +15,11 @@ interface NavbarProps {
   themeToggle?: boolean;
   /** Middle of the bar, for navs that live in the header. No menu button without `onMenuClick`. */
   center?: ReactNode;
-  /** Temporary: a showcase switch shown before the bell. */
-  demo?: ReactNode;
+  /** The navigation-style pill: in the bar on wide screens, in the user menu on phones. */
+  switcher?: ReactNode;
 }
 
-export function Navbar({ onMenuClick, homePath = '/', themeToggle = false, center, demo }: NavbarProps) {
+export function Navbar({ onMenuClick, homePath = '/', themeToggle = false, center, switcher }: NavbarProps) {
   const navigate = useNavigate();
   const { theme, toggle } = useTheme();
   const { user, isAdmin } = useAuth();
@@ -67,7 +67,7 @@ export function Navbar({ onMenuClick, homePath = '/', themeToggle = false, cente
       {center && <div className="nav4-center">{center}</div>}
 
       <div className="flex items-center gap-1">
-      {demo}
+      {switcher && <div className="nav-switch-bar">{switcher}</div>}
       <NotificationBell />
       {isAdmin && (
         <>
@@ -97,6 +97,8 @@ export function Navbar({ onMenuClick, homePath = '/', themeToggle = false, cente
               <p className="text-sm font-semibold text-[var(--text-primary)]">{user?.full_name}</p>
               <p className="text-xs text-[var(--text-muted)] mt-1">{user?.email}</p>
             </div>
+
+            {switcher && <div className="nav-switch-menu">{switcher}</div>}
 
             {themeToggle && (
               <button

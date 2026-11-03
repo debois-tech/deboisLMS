@@ -5813,6 +5813,21 @@ button.qz-dot:disabled { opacity: 0.45; cursor: not-allowed; }
 }
 .nav4-ov.is-open { opacity: 1; visibility: visible; transition: opacity 0.18s ease-out; }
 
+/* Faint green dots drifting behind everything: one oversized layer moved by transform, so it costs no repaint. */
+.nav4-ov::before {
+  content: '';
+  position: fixed;
+  inset: -14px;
+  z-index: 0;
+  background: radial-gradient(circle, var(--primary-light) 0 1px, transparent 1.6px) 0 0 / 14px 14px;
+  -webkit-mask-image: radial-gradient(ellipse at 50% 50%, #000 15%, transparent 78%);
+  mask-image: radial-gradient(ellipse at 50% 50%, #000 15%, transparent 78%);
+  opacity: 0.22;
+  pointer-events: none;
+  animation: hxDrift 9s linear infinite;
+}
+@keyframes hxDrift { to { transform: translate(14px, 14px); } }
+
 
 .nav4-bar {
   position: relative;
@@ -5839,7 +5854,6 @@ button.qz-dot:disabled { opacity: 0.45; cursor: not-allowed; }
 /* --hex fits n tiles across and the rows down the screen, so it works from phone to desktop. */
 .nav4-mosaic {
   --g: 0.375rem;
-  --p: calc(var(--hex) + var(--g));
   --hex: min(11rem, calc((100vw - 2rem) / (var(--n) + 0.5) - var(--g)), calc((100dvh - 8.5rem) / (var(--r) * 0.866 + 0.289)));
   position: relative;
   z-index: 1;
@@ -5971,36 +5985,6 @@ button.qz-dot:disabled { opacity: 0.45; cursor: not-allowed; }
 .hx-cell.is-dim { opacity: 0.1; scale: 0.88; pointer-events: none; }
 .hx-cell.is-dim .hx::after { pointer-events: none; }
 
-/* Electric veins behind the lit tile, in the lattice layer so every tile covers them. One svg per tile, in cell widths (viewBox -3.6..3.6),
-   drawn ring by ring (--k) while the tile pops up and withdrawn when it drops; static in between. Dashes are in those units, so no non-scaling-stroke here. */
-.hx-vein {
-  position: absolute;
-  left: calc((var(--gx) - 3.6) * var(--p));
-  top: calc(var(--gy) * var(--p) * 0.866 - 3.6 * var(--p));
-  width: calc(7.2 * var(--p));
-  height: calc(7.2 * var(--p));
-  overflow: visible;
-  visibility: hidden;
-  pointer-events: none;
-  transition: visibility 0s 0.2s;
-}
-.hx-vein.is-on { visibility: visible; transition-delay: 0s; }
-.hx-vein g { opacity: calc(1 - var(--k) * 0.09); }
-.hx-vein path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
-.hx-vg, .hx-vc, .hx-vh { stroke-dasharray: 0.7 1; stroke-dashoffset: 0.7; transition: stroke-dashoffset 0.15s ease-in; }
-.is-on .hx-vg, .is-on .hx-vc, .is-on .hx-vh { stroke-dashoffset: 0; transition: stroke-dashoffset 0.22s ease-out calc(var(--k) * 45ms); }
-.hx-vg { stroke: color-mix(in srgb, var(--primary) 32%, transparent); stroke-width: 0.026; }
-.hx-vc { stroke: #eafff6; stroke-width: 0.006; }
-.hx-vh { stroke: var(--primary-light); stroke-width: 0.0035; }
-.hx-vn { stroke: #eafff6; stroke-width: 0.02; opacity: 0; transition: opacity 0.15s; }
-.hx-vo { stroke: color-mix(in srgb, var(--primary-light) 40%, transparent); stroke-width: 0.075; }
-.is-on .hx-vn { opacity: 1; transition: opacity 0.2s ease-out calc(var(--k) * 45ms + 0.15s); }
-.hx-socket { fill: rgba(0, 0, 0, 0.5); stroke: color-mix(in srgb, var(--primary) 55%, transparent); stroke-width: 1; vector-effect: non-scaling-stroke; opacity: 0; transition: opacity 0.15s; }
-.is-on .hx-socket { opacity: 1; transition-duration: 0.2s; }
-html.light .hx-vc, html.light .hx-vn { stroke: var(--primary-dark); }
-html.light .hx-vh { stroke: var(--primary); }
-html.light .hx-socket { fill: rgba(0, 0, 0, 0.12); }
-
 @keyframes hxIn { from { opacity: 0; transform: translateY(0.75rem) scale(0.82); } }
 @keyframes hxDots { to { background-position: 7px 7px; } }
 .nav4-ov.is-open .hx-cell { animation: hxIn 0.42s cubic-bezier(0.23, 1, 0.32, 1) both; animation-delay: calc(var(--i) * 28ms + 50ms); }
@@ -6011,17 +5995,16 @@ html.light .hx-socket { fill: rgba(0, 0, 0, 0.12); }
 /* Slow hardware: no stagger, no glow, no moving dots. */
 .nav4-ov.is-lite.is-open .hx-cell { animation-duration: 0.2s; animation-delay: 0s; }
 .nav4-ov.is-lite .hx-cell, .nav4-ov.is-lite .hx-cell:has(.hx:hover, .hx:focus-visible) { filter: none; }
-.nav4-ov.is-lite .hx:hover .hx-in::after, .nav4-ov.is-lite .nav4-lattice { animation: none; }
-.nav4-ov.is-lite .hx-vg, .nav4-ov.is-lite .hx-vh, .nav4-ov.is-lite .hx-vn, .nav4-ov.is-lite .hx-vo { display: none; }
+.nav4-ov.is-lite .hx:hover .hx-in::after, .nav4-ov.is-lite .nav4-lattice, .nav4-ov.is-lite::before { animation: none; }
 
 @media (prefers-reduced-motion: reduce) {
   .nav4-ov, .nav4-ov * { animation-duration: 0.01ms !important; animation-delay: 0s !important; transition-duration: 0.01ms !important; transition-delay: 0s !important; }
-  .nav4-lattice, .hx:hover .hx-in::after { animation: none !important; }
+  .nav4-lattice, .nav4-ov::before, .hx:hover .hx-in::after { animation: none !important; }
 }
 
-/* Temporary showcase switch in the header (rail vs mosaic). Delete with the nav that loses. */
-.nav-demo { display: inline-flex; padding: 0.125rem; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--bg-elevated); }
-.nav-demo button {
+/* Navigation style pill (Rail | Mosaic): in the header on wide screens, in the user menu on phones. */
+.nav-switch { display: inline-flex; padding: 0.125rem; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--bg-elevated); }
+.nav-switch button {
   padding: 0.25rem 0.625rem;
   border-radius: calc(var(--radius-md) - 2px);
   color: var(--text-muted);
@@ -6029,6 +6012,8 @@ html.light .hx-socket { fill: rgba(0, 0, 0, 0.12); }
   font-weight: 600;
   transition: background-color 0.15s, color 0.15s;
 }
-.nav-demo button:hover { color: var(--text-primary); }
-.nav-demo button[aria-pressed='true'] { background: var(--primary); color: #fff; }
-@media (max-width: 40rem) { .nav-demo { display: none; } }
+.nav-switch button:hover { color: var(--text-primary); }
+.nav-switch button[aria-pressed='true'] { background: var(--primary); color: #fff; }
+.nav-switch-bar { display: none; }
+@media (min-width: 40rem) { .nav-switch-bar { display: inline-flex; } .nav-switch-menu { display: none; } }
+.nav-switch-menu { margin: 0.5rem 0.75rem; }
