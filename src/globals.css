@@ -5824,7 +5824,7 @@ button.qz-dot:disabled { opacity: 0.45; cursor: not-allowed; }
   mask-image: radial-gradient(ellipse at 50% 50%, #000 15%, transparent 78%);
   opacity: 0.22;
   pointer-events: none;
-  animation: hxDrift 9s linear infinite;
+  animation: hxDrift 4.5s linear infinite;
 }
 @keyframes hxDrift { to { transform: translate(14px, 14px); } }
 
