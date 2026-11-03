@@ -144,7 +144,7 @@ export default function FeesPage() {
         title="Finance"
         action={
           <Button size="sm" variant="secondary" className="action-button-compact" onClick={handleExportClaims} loading={exportingClaims}>
-            <Download size={14} /> Export Payment Claims
+            <Download size={14} /> Payment Claims
           </Button>
         }
       />
