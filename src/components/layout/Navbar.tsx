@@ -1,24 +1,30 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { Sun, Moon, LogOut, ChevronDown, Menu } from 'lucide-react';
+import { Sun, Moon, LogOut, ChevronDown, Menu, Settings } from 'lucide-react';
+import { SettingsModal } from '@/components/settings/SettingsModal';
 import { useTheme } from '@/lib/context/ThemeContext';
 import { useAuth } from '@/lib/context/AuthContext';
 import { supabase } from '@/lib/supabase/client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 
 interface NavbarProps {
   onMenuClick?: () => void;
   /** Where the logo links to. Defaults to the admin dashboard. */
   homePath?: string;
-  /** Dark mode in the menu, for a shell with no Settings popup of its own. The admin's lives on the dashboard. */
+  /** Dark mode in the menu, for a shell with no Settings popup of its own. The admin's opens from the header icon. */
   themeToggle?: boolean;
+  /** Middle of the bar, for navs that live in the header. No menu button without `onMenuClick`. */
+  center?: ReactNode;
+  /** The navigation-style pill: in the bar on wide screens, in the user menu on phones. */
+  switcher?: ReactNode;
 }
 
-export function Navbar({ onMenuClick, homePath = '/', themeToggle = false }: NavbarProps) {
+export function Navbar({ onMenuClick, homePath = '/', themeToggle = false, center, switcher }: NavbarProps) {
   const navigate = useNavigate();
   const { theme, toggle } = useTheme();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -44,20 +50,33 @@ export function Navbar({ onMenuClick, homePath = '/', themeToggle = false }: Nav
       className="h-14 border-b border-[var(--border)] bg-[var(--bg-surface)]/80 backdrop-blur-md sticky top-0 z-40 flex items-center justify-between gap-2 sm:gap-3"
       style={{ paddingLeft: '2rem', paddingRight: '2rem' }}
     >
-      <button
-        onClick={onMenuClick}
-        aria-label="Open menu"
-        className="lg:hidden w-9 h-9 rounded-[var(--radius-md)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-all"
-      >
-        <Menu size={18} />
-      </button>
+      {onMenuClick && (
+        <button
+          onClick={onMenuClick}
+          aria-label="Open menu"
+          className="lg:hidden w-9 h-9 rounded-[var(--radius-md)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-all"
+        >
+          <Menu size={18} />
+        </button>
+      )}
 
       <Link to={homePath} className="flex items-center select-none hover:opacity-80 transition-opacity">
         <img src={theme === 'dark' ? '/logo-dark.png' : '/logo.png'} alt="deboistech" className="h-9 w-auto" />
       </Link>
 
+      {center && <div className="nav4-center">{center}</div>}
+
       <div className="flex items-center gap-1">
+      {switcher && <div className="nav-switch-bar">{switcher}</div>}
       <NotificationBell />
+      {isAdmin && (
+        <>
+          <button type="button" className="notif-bell" onClick={() => setSettingsOpen(true)} aria-label="Settings">
+            <Settings size={18} />
+          </button>
+          <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+        </>
+      )}
       <div className="relative" ref={dropdownRef}>
         <button
           onClick={() => setDropdownOpen((o) => !o)}
@@ -78,6 +97,8 @@ export function Navbar({ onMenuClick, homePath = '/', themeToggle = false }: Nav
               <p className="text-sm font-semibold text-[var(--text-primary)]">{user?.full_name}</p>
               <p className="text-xs text-[var(--text-muted)] mt-1">{user?.email}</p>
             </div>
+
+            {switcher && <div className="nav-switch-menu">{switcher}</div>}
 
             {themeToggle && (
               <button

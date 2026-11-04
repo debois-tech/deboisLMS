@@ -18,7 +18,7 @@ import { useConfirm } from '@/lib/context/ConfirmContext';
 import { useToast } from '@/lib/context/ToastContext';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import {
-  getBatches, getQuiz, openQuizLobby, QUIZ_IMAGE_ACCEPT, QUIZ_IMAGE_EXTENSIONS, QUIZ_IMAGE_MAX_BYTES,
+  getBatches, getQuiz, getQuizzes, openQuizLobby, QUIZ_IMAGE_ACCEPT, QUIZ_IMAGE_EXTENSIONS, QUIZ_IMAGE_MAX_BYTES,
   quizImageUrl, saveQuiz, uploadQuizImage,
 } from '@/lib/supabase';
 import type { Batch, QuizDraft, QuizDraftQuestion } from '@/lib/types';
@@ -56,7 +56,11 @@ export default function ExamBuilderPage() {
   const [audienceSet, setAudienceSet] = useState(false);
 
   const { loading, error, retry } = useInitialLoad(async () => {
-    const [batchRows, source] = await Promise.all([getBatches(), quizId || from ? getQuiz((quizId ?? from)!) : undefined]);
+    const [batchRows, source, all] = await Promise.all([
+      getBatches(),
+      quizId || from ? getQuiz((quizId ?? from)!) : undefined,
+      from ? getQuizzes() : undefined,
+    ]);
     setBatches(batchRows);
     if (quizId || from) {
       if (!source) {
@@ -68,7 +72,7 @@ export default function ExamBuilderPage() {
         return;
       }
       setInLobby(Boolean(quizId) && source.status === 'lobby');
-      const loaded = quizToDraft(source, Boolean(from));
+      const loaded = quizToDraft(source, all?.map((quiz) => quiz.title));
       setDraft(loaded);
       setOpen(loaded.questions[0]?.key ?? null);
       setDirty(Boolean(from));

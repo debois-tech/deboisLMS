@@ -426,8 +426,11 @@ html.light .glass {
   flex-direction: column;
   gap: var(--space-section);
   width: 100%;
-  max-width: 80rem;
+  max-width: 120rem;
 }
+
+/* Fills the room the sidebar leaves, centred only on very wide screens. */
+.page-section:not(.narrow) { margin-inline: auto; }
 
 .page-section.narrow {
   max-width: 42rem;
@@ -5465,3 +5468,552 @@ button.qz-dot:disabled { opacity: 0.45; cursor: not-allowed; }
 .cv-canvas .cv-toolbar { flex-wrap: wrap; align-items: center; max-width: calc(100% - 5rem); }
 .cv-toolbar .qz-seg { background: var(--bg-surface); box-shadow: var(--shadow-sm); }
 @media (max-width: 64rem) { .cv-canvas .cv-banner-slot { margin-top: 4.5rem; max-width: calc(100% - 1.5rem); } }
+
+/* ── Admin nav (option 2): icon rail, hover flyout, wide sidebar with tiles ── */
+.nav2 {
+  --nav2-rail: 4.75rem;
+  --nav2-wide: 18rem;
+  --nav2-fly: 15rem;
+  --nav2-t: 0.26s;
+  --nav2-ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --nav2-pop: cubic-bezier(0.23, 1, 0.32, 1);
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  width: var(--nav2-wide);
+  height: 100%;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border);
+  transform: translateX(-100%);
+  transition: transform var(--nav2-t) var(--nav2-ease), width var(--nav2-t) var(--nav2-ease);
+}
+.nav2.is-open { transform: none; }
+
+@media (min-width: 64rem) {
+  .nav2 {
+    position: sticky;
+    top: var(--navbar-h);
+    flex: none;
+    width: var(--nav2-rail);
+    height: calc(100vh - var(--navbar-h));
+    transform: none;
+  }
+  .nav2.is-wide { width: var(--nav2-wide); }
+}
+
+.nav2-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease-out, visibility 0s 0.2s;
+}
+.nav2-scrim.is-open { opacity: 1; visibility: visible; transition: opacity 0.2s ease-out; }
+@media (min-width: 64rem) { .nav2-scrim { display: none; } }
+
+.nav2-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--navbar-h);
+  padding: 0 0.75rem 0 1.25rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.nav2-head button { display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: var(--radius-md); color: var(--text-muted); }
+.nav2-head button:hover { background: var(--bg-elevated); color: var(--text-primary); }
+@media (min-width: 64rem) { .nav2-head { display: none; } }
+
+.nav2-top { display: none; padding: 0.5rem 0.5rem 0; }
+@media (min-width: 64rem) { .nav2-top { display: block; } }
+
+.nav2-scroll {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-height: 0;
+  padding: 0.5rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.nav2-bottom { padding: 0.5rem; }
+
+/* A hub row: the icon never moves; the label slides from under it to its right (transform only, no reflow). */
+.nav2-row {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 3.625rem;
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: height var(--nav2-t) var(--nav2-ease), background-color 0.15s, color 0.15s,
+    translate 0.15s var(--nav2-pop), scale 0.15s var(--nav2-pop);
+}
+.nav2.is-wide .nav2-row { height: 2.75rem; }
+
+.nav2-ico {
+  position: absolute;
+  top: 0.75rem;
+  left: 0;
+  display: flex;
+  justify-content: center;
+  width: 3.75rem;
+  translate: 0 -0.125rem;
+  transition: translate var(--nav2-t) var(--nav2-ease);
+}
+.nav2.is-wide .nav2-ico { translate: 0 0; }
+
+/* Laid out where it sits when wide; in the rail it is shrunk (11/14) and tucked under the icon. */
+.nav2-label {
+  position: absolute;
+  top: 0;
+  left: 3.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 2.75rem;
+  white-space: nowrap;
+  transform-origin: 0 50%;
+  translate: calc(-1.875rem - 39.3%) 1.125rem;
+  scale: 0.786;
+  transition: translate var(--nav2-t) var(--nav2-ease), scale var(--nav2-t) var(--nav2-ease), opacity 0.2s ease-out;
+}
+.nav2.is-wide .nav2-label { translate: 0 0; scale: 1; }
+
+.nav2-chev {
+  position: absolute;
+  top: 0.8125rem;
+  right: 0.875rem;
+  opacity: 0;
+  transition: opacity 0.15s ease-out, rotate 0.24s var(--nav2-ease);
+}
+.nav2.is-wide .nav2-chev { opacity: 1; transition-delay: 0.08s, 0s; }
+.nav2-chev.is-open { rotate: 180deg; }
+
+.nav2-row.is-active { color: var(--primary-light); }
+.nav2-row.is-direct.is-active,
+.nav2:not(.is-wide) .nav2-row.is-active { background: var(--primary-glow-soft); }
+.nav2-row.is-direct.is-active::before,
+.nav2:not(.is-wide) .nav2-row.is-active::before {
+  content: '';
+  position: absolute;
+  top: 0.875rem;
+  bottom: 0.875rem;
+  left: -0.5rem;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--primary);
+}
+.nav2-row:not(.is-active):hover,
+.nav2-row.is-hub:not(.is-active) { background: var(--bg-elevated); color: var(--text-primary); }
+.nav2-row:active, .nav2-tile:active, .nav2-fly-row:active { scale: 0.97; }
+
+/* The lift moves the item out from under the pointer; this strip keeps the old bottom edge hoverable so it cannot flicker. */
+.nav2-row::after, .nav2-tile::after, .nav2-fly-row::after { content: ''; position: absolute; inset: 0 0 -2px; }
+
+/* Collapse toggle: same row, always short, its label only shows when wide. */
+.nav2-toggle, .nav2.is-wide .nav2-toggle { height: 2.75rem; }
+.nav2-toggle .nav2-ico { translate: 0 0; }
+.nav2-toggle .nav2-label, .nav2-new .nav2-label { translate: 0 0; scale: 1; opacity: 0; }
+.nav2.is-wide .nav2-toggle .nav2-label, .nav2.is-wide .nav2-new .nav2-label { opacity: 1; transition-delay: 0s, 0s, 0.08s; }
+
+/* Tiles under a hub (wide only): the group slides open by animating its row from 0fr. */
+.nav2-kids {
+  display: grid;
+  grid-template-rows: 0fr;
+  visibility: hidden;
+  transition: grid-template-rows var(--nav2-t) var(--nav2-ease), visibility 0s var(--nav2-t);
+}
+.nav2-kids[data-open='true'] {
+  grid-template-rows: 1fr;
+  visibility: visible;
+  transition: grid-template-rows var(--nav2-t) var(--nav2-ease), visibility 0s;
+}
+.nav2-clip { min-height: 0; overflow: hidden; }
+.nav2-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.375rem; padding: 0.375rem 0.125rem 0.625rem; }
+
+.nav2-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3125rem;
+  min-height: 4rem;
+  padding: 0.5rem 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-elevated) 55%, transparent);
+  color: var(--text-secondary);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: center;
+  opacity: 0;
+  translate: 0 -4px;
+  transition: opacity 0.2s ease-out, translate 0.2s var(--nav2-pop), background-color 0.15s,
+    border-color 0.15s, color 0.15s, scale 0.15s var(--nav2-pop);
+}
+.nav2-kids[data-open='true'] .nav2-tile { opacity: 1; translate: 0 0; }
+.nav2-tile.is-active { border-color: var(--primary); background: var(--primary-glow-soft); color: var(--primary-light); }
+
+/* New Batch: the icon square widens into a full button. No lift: overflow clips the hover strip. */
+.nav2-new {
+  position: relative;
+  display: block;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin-left: 0.5rem;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: var(--primary);
+  color: #fff;
+  box-shadow: 0 0 18px var(--primary-glow);
+  transition: width var(--nav2-t) var(--nav2-ease), margin-left var(--nav2-t) var(--nav2-ease),
+    background-color 0.15s, scale 0.15s var(--nav2-pop);
+}
+.nav2.is-wide .nav2-new { width: 100%; margin-left: 0; }
+.nav2-new:hover { background: var(--primary-light); }
+.nav2-new:active { scale: 0.97; }
+.nav2-new .nav2-ico { top: 0.8125rem; translate: -0.5rem 0; }
+.nav2-new .nav2-label { font-weight: 600; }
+
+/* The second sidebar: slides out from behind the rail while a hub is hovered. */
+.nav2-fly-clip { display: none; }
+@media (min-width: 64rem) {
+  .nav2-fly-clip {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 100%;
+    display: block;
+    width: calc(var(--nav2-fly) + 2rem);
+    overflow: hidden;
+    pointer-events: none;
+  }
+}
+.nav2-fly {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  width: var(--nav2-fly);
+  padding: 0.75rem 0.5rem;
+  background: var(--bg-elevated);
+  border-right: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-lg);
+  visibility: hidden;
+  transform: translateX(-100%);
+  transition: transform 0.24s var(--nav2-ease), visibility 0s 0.24s;
+}
+.nav2-fly.is-open { visibility: visible; pointer-events: auto; transform: none; transition: transform 0.24s var(--nav2-ease), visibility 0s; }
+.nav2-fly-body { animation: nav2Swap 0.18s ease-out; }
+@keyframes nav2Swap { from { opacity: 0; } to { opacity: 1; } }
+.nav2-fly-title {
+  padding: 0.25rem 0.75rem 0.75rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.nav2-fly-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  height: 2.5rem;
+  margin-bottom: 0.125rem;
+  padding: 0 0.75rem;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: translate 0.15s var(--nav2-pop), scale 0.15s var(--nav2-pop), background-color 0.15s, color 0.15s;
+}
+.nav2-fly-row:hover { background: var(--bg-overlay); color: var(--text-primary); }
+.nav2-fly-row.is-active { background: var(--primary-glow-soft); color: var(--primary-light); }
+
+/* The same 2px lift on every nav item, only where a hover exists. */
+@media (hover: hover) and (pointer: fine) {
+  .nav2-row:hover, .nav2-row.is-hub, .nav2-fly-row:hover { translate: 0 -2px; }
+  .nav2-kids[data-open='true'] .nav2-tile:hover { translate: 0 -2px; border-color: var(--border-strong); background: var(--bg-elevated); color: var(--text-primary); }
+  .nav2-kids[data-open='true'] .nav2-tile.is-active:hover { border-color: var(--primary); color: var(--primary-light); }
+}
+
+.nav2 :is(a, button):focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .nav2, .nav2 *, .nav2-scrim {
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* Stat cards take the room they are given: up to --cols across, fewer as the page narrows (sidebar or phone). */
+.fluid-grid {
+  --cols: 3;
+  display: grid;
+  gap: var(--space-card);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, max(15rem, (100% - (var(--cols) - 1) * var(--space-card)) / var(--cols))), 1fr));
+}
+.fluid-grid-4 { --cols: 4; }
+
+/* ── Admin nav (option 4): header card opens a honeycomb of every page ── */
+.nav4-center { display: flex; flex: 1; min-width: 0; justify-content: center; }
+@media (min-width: 64rem) {
+  .nav4-center { position: absolute; left: 50%; flex: none; translate: -50% 0; }
+}
+
+.nav4-now {
+  max-width: 100%;
+  padding: 0.375rem 1rem;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: border-color 0.15s, box-shadow 0.15s, scale 0.15s cubic-bezier(0.23, 1, 0.32, 1);
+}
+.nav4-now:hover { border-color: var(--primary); box-shadow: 0 0 14px var(--primary-glow); }
+.nav4-now:active { scale: 0.97; }
+.nav4-now:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+.nav4-ov {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 50% 48%, color-mix(in srgb, var(--primary) 13%, transparent), transparent 62%),
+    color-mix(in srgb, var(--bg-base) 98%, transparent);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.18s ease-out, visibility 0s 0.18s;
+}
+.nav4-ov.is-open { opacity: 1; visibility: visible; transition: opacity 0.18s ease-out; }
+
+/* Faint green dots drifting behind everything: one oversized layer moved by transform, so it costs no repaint. */
+.nav4-ov::before {
+  content: '';
+  position: fixed;
+  inset: -14px;
+  z-index: 0;
+  background: radial-gradient(circle, var(--primary-light) 0 1px, transparent 1.6px) 0 0 / 14px 14px;
+  -webkit-mask-image: radial-gradient(ellipse at 50% 50%, #000 15%, transparent 78%);
+  mask-image: radial-gradient(ellipse at 50% 50%, #000 15%, transparent 78%);
+  opacity: 0.22;
+  pointer-events: none;
+  animation: hxDrift 4.5s linear infinite;
+}
+@keyframes hxDrift { to { transform: translate(14px, 14px); } }
+
+
+.nav4-bar {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  flex: none;
+  grid-template-columns: 1fr minmax(0, 24rem) 1fr;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+}
+.nav4-close {
+  display: grid;
+  place-items: center;
+  justify-self: end;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  transition: background-color 0.15s, color 0.15s;
+}
+.nav4-close:hover { background: var(--bg-elevated); color: var(--text-primary); }
+
+/* --hex fits n tiles across and the rows down the screen, so it works from phone to desktop. */
+.nav4-mosaic {
+  --g: 0.375rem;
+  --hex: min(11rem, calc((100vw - 2rem) / (var(--n) + 0.5) - var(--g)), calc((100dvh - 8.5rem) / (var(--r) * 0.866 + 0.289)));
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.nav4-row { display: flex; justify-content: center; }
+.nav4-row + .nav4-row { margin-top: calc(var(--hex) * -0.2887 + var(--g) * 0.866); }
+
+/* Empty cells: outline hexagons on the same lattice as the tiles, centred on the mosaic. */
+.nav4-lattice { position: absolute; top: 50%; left: 50%; width: 0; height: 0; pointer-events: none; }
+.hx-ghost {
+  flex: none;
+  width: var(--hex);
+  height: calc(var(--hex) * 1.1547);
+  margin: 0 calc(var(--g) / 2);
+  overflow: visible;
+  fill: color-mix(in srgb, var(--primary) calc(var(--o) * 10%), transparent);
+  stroke: color-mix(in srgb, var(--primary) calc(var(--o) * 100%), transparent);
+  stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+.hx-ghost polygon { vector-effect: non-scaling-stroke; }
+.nav4-lattice .hx-ghost {
+  position: absolute;
+  margin: 0;
+  left: calc(var(--gx) * (var(--hex) + var(--g)) - var(--hex) / 2);
+  top: calc(var(--gy) * (var(--hex) + var(--g)) * 0.866 - var(--hex) * 0.5774);
+}
+@keyframes hxGhostIn { from { opacity: 0; } }
+@keyframes hxBreathe { from { opacity: 0.7; } to { opacity: 1; } }
+.nav4-ov.is-open .nav4-lattice { animation: hxBreathe 6s ease-in-out infinite alternate; }
+.nav4-ov.is-open .hx-ghost { animation: hxGhostIn 0.9s ease-out 0.25s both; }
+
+/* Comets are drawn on this canvas by navComets.ts, above the tiles and under the search bar. */
+.nav4-sparks { --comet: var(--primary-light); position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; pointer-events: none; }
+.nav4-empty { position: absolute; font-size: 0.875rem; color: var(--text-muted); }
+
+.hx-cell {
+  position: relative;
+  flex: none;
+  width: var(--hex);
+  height: calc(var(--hex) * 1.1547);
+  margin: 0 calc(var(--g) / 2);
+  transition: opacity 0.2s ease-out, scale 0.22s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* .hx is the stay-put socket that catches the pointer; .hx-face is the tile itself and is what floats. */
+.hx {
+  --clip: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  position: absolute;
+  inset: 0;
+  display: block;
+  color: var(--text-secondary);
+  outline: none;
+  pointer-events: none;
+  transition: color 0.15s;
+}
+.hx::after { content: ''; position: absolute; inset: 0; clip-path: var(--clip); pointer-events: auto; }
+
+/* Border = the outer hexagon's gradient (dim top, lit underside); fill = a slightly smaller one inside it. */
+.hx-face {
+  position: absolute;
+  inset: 0;
+  clip-path: var(--clip);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--primary) 14%, transparent), color-mix(in srgb, var(--primary) 90%, transparent));
+  transition: transform 0.3s cubic-bezier(0.22, 1.25, 0.36, 1);
+}
+.hx-in {
+  position: absolute;
+  inset: 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--hex) * 0.04);
+  padding: 0 12%;
+  overflow: hidden;
+  clip-path: var(--clip);
+  background: linear-gradient(180deg, var(--bg-elevated), color-mix(in srgb, var(--primary) 9%, var(--bg-surface)));
+  text-align: center;
+}
+.hx-in svg { flex: none; width: calc(var(--hex) * 0.27); height: calc(var(--hex) * 0.27); }
+.hx-in span {
+  font-size: clamp(0.625rem, calc(var(--hex) * 0.115), 0.8125rem);
+  font-weight: 600;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+/* The dotted green texture, laid over the tile and faded toward its top. */
+.hx-in::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle, var(--primary-light) 0 1px, transparent 1.6px) 0 0 / 7px 7px;
+  -webkit-mask-image: linear-gradient(180deg, transparent 5%, #000 95%);
+  mask-image: linear-gradient(180deg, transparent 5%, #000 95%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease-out;
+}
+
+.hx.is-current .hx-face { background: var(--primary); }
+.hx.is-current { color: var(--primary-light); }
+.hx.is-current .hx-in { background: color-mix(in srgb, var(--primary) 16%, var(--bg-surface)); }
+.hx.is-action { color: #fff; }
+.hx.is-action .hx-in { background: var(--primary); }
+
+/* Hover: the tile floats up a little over its neighbours, with electric static in the socket behind it. It stays there until the pointer leaves or it is pressed. */
+.hx:hover .hx-face, .hx:focus-visible .hx-face, .hx-cell.is-solo .hx-face {
+  transform: translateY(-9%) scale(1.07);
+  background: linear-gradient(180deg, var(--primary-light), var(--primary));
+}
+.hx:hover, .hx:focus-visible, .hx-cell.is-solo .hx { color: var(--text-primary); }
+.hx.is-action:hover, .hx.is-action:focus-visible { color: #fff; }
+.hx:hover .hx-in::after, .hx:focus-visible .hx-in::after, .hx-cell.is-solo .hx-in::after { opacity: 0.5; }
+.hx:active .hx-face { transform: scale(0.97); transition-duration: 0.12s; }
+.hx-cell:has(.hx:hover, .hx:focus-visible), .hx-cell.is-solo {
+  z-index: 3;
+  filter: drop-shadow(0 0.35rem 0.5rem rgba(0, 0, 0, 0.5)) drop-shadow(0 0 0.7rem var(--primary-glow-strong));
+}
+.hx-cell:has(.hx:active) { filter: none; }
+.hx-cell.is-hit .hx-face { background: linear-gradient(180deg, var(--primary-light), var(--primary)); }
+.hx-cell.is-dim { opacity: 0.1; scale: 0.88; pointer-events: none; }
+.hx-cell.is-dim .hx::after { pointer-events: none; }
+
+@keyframes hxIn { from { opacity: 0; transform: translateY(0.75rem) scale(0.82); } }
+@keyframes hxDots { to { background-position: 7px 7px; } }
+.nav4-ov.is-open .hx-cell { animation: hxIn 0.42s cubic-bezier(0.23, 1, 0.32, 1) both; animation-delay: calc(var(--i) * 28ms + 50ms); }
+@media (hover: hover) and (pointer: fine) {
+  .hx:hover .hx-in::after { animation: hxDots 1.4s linear infinite; }
+}
+
+/* Slow hardware: no stagger, no glow, no moving dots. */
+.nav4-ov.is-lite.is-open .hx-cell { animation-duration: 0.2s; animation-delay: 0s; }
+.nav4-ov.is-lite .hx-cell, .nav4-ov.is-lite .hx-cell:has(.hx:hover, .hx:focus-visible) { filter: none; }
+.nav4-ov.is-lite .hx:hover .hx-in::after, .nav4-ov.is-lite .nav4-lattice, .nav4-ov.is-lite::before { animation: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .nav4-ov, .nav4-ov * { animation-duration: 0.01ms !important; animation-delay: 0s !important; transition-duration: 0.01ms !important; transition-delay: 0s !important; }
+  .nav4-lattice, .nav4-ov::before, .hx:hover .hx-in::after { animation: none !important; }
+}
+
+/* Navigation style pill (Rail | Mosaic): in the header on wide screens, in the user menu on phones. */
+.nav-switch { display: inline-flex; padding: 0.125rem; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--bg-elevated); }
+.nav-switch button {
+  padding: 0.25rem 0.625rem;
+  border-radius: calc(var(--radius-md) - 2px);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  transition: background-color 0.15s, color 0.15s;
+}
+.nav-switch button:hover { color: var(--text-primary); }
+.nav-switch button[aria-pressed='true'] { background: var(--primary); color: #fff; }
+.nav-switch-bar { display: none; }
+@media (min-width: 40rem) { .nav-switch-bar { display: inline-flex; } .nav-switch-menu { display: none; } }
+.nav-switch-menu { margin: 0.5rem 0.75rem; }

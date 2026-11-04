@@ -2,7 +2,6 @@ import { ReactNode, useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { clsx } from 'clsx';
 import { X } from 'lucide-react';
-import { Button } from './Button';
 import { useExitAnimation } from '@/lib/hooks/useExitAnimation';
 
 /** Keep in step with .animate-modal-out in globals.css — the longer of the two exit animations. */
@@ -146,37 +145,5 @@ export function Modal({ open, onClose, title, description, children, footer, siz
       </div>
     </div>,
     document.body
-  );
-}
-
-interface ConfirmModalProps {
-  open: boolean;
-  onClose: () => void;
-  onConfirm: () => void;
-  title: string;
-  description?: string;
-  confirmLabel?: string;
-  confirmVariant?: 'primary' | 'danger';
-  loading?: boolean;
-}
-
-export function ConfirmModal({
-  open, onClose, onConfirm, title, description,
-  confirmLabel = 'Confirm', confirmVariant = 'danger', loading,
-}: ConfirmModalProps) {
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={title}
-      description={description}
-      size="sm"
-      footer={
-        <>
-          <Button variant="ghost" onClick={onClose} disabled={loading}>Cancel</Button>
-          <Button variant={confirmVariant} onClick={onConfirm} loading={loading}>{confirmLabel}</Button>
-        </>
-      }
-    />
   );
 }

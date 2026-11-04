@@ -144,7 +144,7 @@ export default function FeesPage() {
         title="Finance"
         action={
           <Button size="sm" variant="secondary" className="action-button-compact" onClick={handleExportClaims} loading={exportingClaims}>
-            <Download size={14} /> Export Payment Claims
+            <Download size={14} /> Payment Claims
           </Button>
         }
       />
@@ -155,7 +155,7 @@ export default function FeesPage() {
       </Card>
 
       {selectedBatch && selectedSummary && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="fluid-grid fluid-grid-4">
           <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Total Fees</p><p className="mt-1 text-lg font-bold text-[var(--text-primary)]">{formatCurrency(selectedSummary.total_fees)}</p></Card>
           <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Collected</p><p className="mt-1 text-lg font-bold text-[var(--success-text)]">{formatCurrency(selectedSummary.total_collected)}</p></Card>
           <Card padding="sm"><p className="text-xs text-[var(--text-muted)]">Outstanding</p><p className="mt-1 text-lg font-bold text-[var(--danger-text)]">{formatCurrency(selectedSummary.total_outstanding)}</p></Card>
@@ -230,6 +230,8 @@ export default function FeesPage() {
       <PaymentLogModal
         fee={loggingFee}
         studentName={students.find((s) => s.id === loggingFee?.student_id)?.name ?? 'Student'}
+        student={students.find((s) => s.id === loggingFee?.student_id)}
+        batchName={batches.find((b) => b.id === loggingFee?.batch_id)?.name}
         paymentLogs={paymentLogs}
         form={logForm}
         onFormChange={setLogForm}

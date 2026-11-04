@@ -213,7 +213,7 @@ export default function BatchDetailPage() {
             {active === 'tutors' && <TutorsTab batchId={batch.id} isTest={Boolean(batch.is_test)} />}
             {active === 'lectures' && <LecturesTab batchId={batch.id} />}
             {active === 'attendance' && <AttendanceTab batchId={batch.id} batchName={batch.name} />}
-            {active === 'finance' && <FinanceTab batchId={batch.id} />}
+            {active === 'finance' && <FinanceTab batchId={batch.id} batchName={batch.name} />}
             {active === 'assignments' && <AssignmentsTab batchId={batch.id} />}
             {active === 'curriculum' && (
               <Suspense fallback={<Spinner centered />}>
@@ -279,7 +279,7 @@ export function OverviewTab({ batch, programLabel, showFees = true }: { batch: B
 
   return (
     <div className="flex flex-col gap-4">
-      <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${showFees ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
+      <div className={showFees ? 'fluid-grid fluid-grid-4' : 'fluid-grid'}>
         <Card padding="sm">
           <p className="text-xs text-[var(--text-muted)]">Total Students</p>
           <p className="text-lg font-bold text-[var(--text-primary)] mt-1">{students.filter((s) => s.mapping.status === 'active').length}</p>
@@ -945,7 +945,7 @@ export function AttendanceTab({ batchId, batchName }: { batchId: string; batchNa
   );
 }
 
-function FinanceTab({ batchId }: { batchId: string }) {
+function FinanceTab({ batchId, batchName }: { batchId: string; batchName: string }) {
   const [fees, setFees] = useState<StudentFee[]>([]);
   const [students, setStudents] = useState<(Student & { mapping: BatchStudentMapping })[]>([]);
   const [loggingFee, setLoggingFee] = useState<StudentFee | null>(null);
@@ -1134,6 +1134,8 @@ function FinanceTab({ batchId }: { batchId: string }) {
       <PaymentLogModal
         fee={loggingFee}
         studentName={students.find((s) => s.id === loggingFee?.student_id)?.name ?? 'Student'}
+        student={students.find((s) => s.id === loggingFee?.student_id)}
+        batchName={batchName}
         paymentLogs={paymentLogs}
         form={logForm}
         onFormChange={setLogForm}
