@@ -3,6 +3,7 @@ import { ok, rows } from './result';
 import type { Batch, BatchStudentMapping, DocumentKind, Student } from '@/lib/types';
 import { fromDateValue } from '@/lib/utils/date';
 import { buildDocumentPdf, type DocumentAssets, type DocumentDates } from '@/lib/utils/documents';
+import { buildReceiptPdf, type ReceiptAssets, type ReceiptData } from '@/lib/utils/receipt';
 import regularFont from '@/assets/fonts/manrope-400.woff?url';
 import mediumFont from '@/assets/fonts/manrope-500.woff?url';
 import boldFont from '@/assets/fonts/manrope-700.woff?url';
@@ -42,6 +43,32 @@ function loadAssets(): Promise<DocumentAssets> {
       throw err;
     });
   return assets;
+}
+
+// The fee receipt: fonts and the logo, fetched once per session. It is built on each click and downloaded, never stored.
+let receiptAssets: Promise<ReceiptAssets> | undefined;
+export async function downloadFeeReceipt(data: ReceiptData): Promise<void> {
+  receiptAssets ??= Promise.all([fetchBytes(regularFont), fetchBytes(mediumFont), fetchBytes(boldFont), fetchBytes('/logo.png')])
+    .then(([regular, medium, bold, logo]) => ({ regular, medium, bold, logo }))
+    .catch((err) => {
+      receiptAssets = undefined;
+      throw err;
+    });
+  const bytes = await buildReceiptPdf(data, await receiptAssets);
+  const slug = (text: string) => text.trim().replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  saveBlob(new Blob([bytes as BlobPart], { type: 'application/pdf' }), `Fee-Receipt-${slug(data.receiptNo) || 'receipt'}-${slug(data.name)}.pdf`);
+}
+
+function saveBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  try {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 // One document on an admin's click, stored under the enrolment; the dates are the ones the admin typed
@@ -100,15 +127,7 @@ export async function setDocumentShared(mappingId: string, kind: DocumentKind, s
 export async function downloadStoredDocument(path: string, filename: string): Promise<void> {
   const { data, error } = await supabase.storage.from(BUCKET).download(path);
   if (error || !data) throw new Error('The file is missing from storage.');
-  const url = URL.createObjectURL(data);
-  try {
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    link.click();
-  } finally {
-    URL.revokeObjectURL(url);
-  }
+  saveBlob(data, filename);
 }
 
 // Drops one generated document: the file, the path and the shared flag
