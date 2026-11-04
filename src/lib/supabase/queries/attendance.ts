@@ -67,6 +67,14 @@ export async function insertUploadRows(
   if (error) throw new Error(`Failed to upload rows: ${error.message}`);
 }
 
+/** One student's rows in one batch, with their lectures, for staff. Unlike the portal's, this keeps the not-marked ones. */
+export async function getStudentBatchAttendance(studentId: string, batchId: string): Promise<AttendanceRecord[]> {
+  return unwrapRows<AttendanceRecord>(
+    await supabase.from('attendance').select('*, lecture:lectures(*)').eq('student_id', studentId).eq('batch_id', batchId),
+    "Could not load this student's attendance",
+  );
+}
+
 interface AttendanceInput {
   studentId: string;
   status: AttendanceStatus;
