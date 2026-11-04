@@ -9,7 +9,7 @@ export function getGeminiUnavailableReason(): string | null {
   return geminiUnavailableReason;
 }
 
-export interface GeminiMatchResult {
+interface GeminiMatchResult {
   index: number;
   confidence: number;
 }

@@ -13,7 +13,7 @@ export function normalizeName(raw: string): string {
 }
 
 /** Split a name into word tokens (normalized). */
-export function nameTokens(name: string): string[] {
+function nameTokens(name: string): string[] {
   return normalizeName(name).split(' ').filter(Boolean);
 }
 

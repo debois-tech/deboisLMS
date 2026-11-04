@@ -8,7 +8,7 @@ export interface CsvRow {
   attended_minutes?: number;
 }
 
-export interface CsvTable {
+interface CsvTable {
   headers: string[];
   rows: Record<string, string>[];
 }
@@ -101,14 +101,14 @@ function toNaiveLocal(date: Date): string {
   );
 }
 
-export interface ParsedAttendanceCsv {
+interface ParsedAttendanceCsv {
   rows: CsvRow[];
   /** The export's meeting code, used to spot a CSV already processed for this lecture. */
   meetingCode?: string;
 }
 
 // Case-insensitive, hyphens ignored, and a pasted Meet link reduced to its code.
-export function normalizeMeetingCode(code: string | undefined | null): string {
+function normalizeMeetingCode(code: string | undefined | null): string {
   const raw = (code ?? '').trim();
   if (!raw) return '';
 

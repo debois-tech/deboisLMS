@@ -27,7 +27,7 @@ function withoutCode(input: Partial<Student>): Partial<Student> {
   return fields;
 }
 
-export async function createStudent(input: Omit<Student, 'id' | 'created_at'>): Promise<Student> {
+async function createStudent(input: Omit<Student, 'id' | 'created_at'>): Promise<Student> {
   return row<Student>(
     await supabase.from('students').insert(withoutCode(input)).select().single(),
     'Could not create the student',
@@ -55,7 +55,7 @@ async function findMatchingStudents(input: { name?: string; phone?: string; emai
 }
 
 // A live account (a login, or a batch still running) blocks a new one; closed ones stay as they are and the new student gets a new ref
-export async function createNewStudent(input: Omit<Student, 'id' | 'created_at'>): Promise<{ student: Student; earlier?: Student }> {
+async function createNewStudent(input: Omit<Student, 'id' | 'created_at'>): Promise<{ student: Student; earlier?: Student }> {
   const matches = await findMatchingStudents(input);
   if (matches.length > 0) {
     const running = rows<{ student_id: string }>(
@@ -358,7 +358,7 @@ export async function deleteStudent(id: string): Promise<void> {
   await removeStoredDocuments(mappings.map((m) => m.id));
 }
 
-export interface TerminationResult {
+interface TerminationResult {
   instalments_due: number;
   expected_on_exit: number;
   /** Owed on the day they left and unpaid. Recorded, never chased. */

@@ -11,7 +11,7 @@ import {
   PortalStatus,
   usePortalStudentId,
 } from '@/components/portal';
-import { ATTENDANCE_PARTIAL_PERCENT, getApprovedAttendanceByStudent } from '@/lib/supabase';
+import { ATTENDANCE_PARTIAL_PERCENT, getAttendanceByStudent } from '@/lib/supabase';
 import type { AttendanceRecord } from '@/lib/types';
 import { usePortalBatch } from '@/lib/context/PortalBatchContext';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
@@ -25,16 +25,18 @@ export default function PortalAttendancePage() {
 
   const { loading, error, retry } = useInitialLoad(async () => {
     if (!studentId) return;
-    setRecords((await getApprovedAttendanceByStudent(studentId)).filter((record) => record.batch_id === batchId && countsFor(record.lecture?.lecture_date, current?.joined_at ?? '', current?.count_earlier_work)));
+    setRecords((await getAttendanceByStudent(studentId)).filter((record) => record.batch_id === batchId && countsFor(record.lecture?.lecture_date, current?.joined_at ?? '', current?.count_earlier_work)));
   }, true);
 
-  const attended = records.filter((record) => record.status !== 'absent').length;
-  const missed = records.length - attended;
-  const rate = records.length > 0 ? Math.round((attended / records.length) * 100) : null;
+  // N/A classes are listed but are not held against the student.
+  const counted = records.filter((record) => record.status !== 'no_appli');
+  const attended = counted.filter((record) => record.status !== 'absent').length;
+  const missed = counted.length - attended;
+  const rate = counted.length > 0 ? Math.round((attended / counted.length) * 100) : null;
 
   return (
     <PortalPage title="Your attendance" loading={loading} error={error} onRetry={retry}>
-      {records.length === 0 ? (
+      {counted.length === 0 ? (
         <PortalEmpty icon={CalendarCheck}>No attendance marked yet.</PortalEmpty>
       ) : (
         <>
@@ -45,7 +47,7 @@ export default function PortalAttendancePage() {
               value={`${rate}%`}
               tone={rate !== null && rate >= ATTENDANCE_PARTIAL_PERCENT ? 'positive' : 'attention'}
               progress={rate ?? undefined}
-              note={`${attended} of ${records.length} classes`}
+              note={`${attended} of ${counted.length} classes`}
             />
             <PortalStat
               label="Missed"
@@ -62,7 +64,7 @@ export default function PortalAttendancePage() {
                   key={record.id}
                   primary={record.lecture ? formatDayLabel(record.lecture.lecture_date) : 'Class'}
                   secondary={
-                    record.total_attended_minutes != null
+                    record.status !== 'no_appli' && record.total_attended_minutes != null
                       ? `${Math.round(Number(record.total_attended_minutes))} min`
                       : undefined
                   }

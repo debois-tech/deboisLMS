@@ -2,7 +2,7 @@ import { ReactNode, useEffect, useRef } from 'react';
 import { Search, SlidersHorizontal, X } from 'lucide-react';
 import { clsx } from 'clsx';
 
-export type SearchBarSize = 'sm' | 'md' | 'lg';
+type SearchBarSize = 'sm' | 'md' | 'lg';
 
 /** Icon scales with the field so the two never drift apart again. */
 const iconSize: Record<SearchBarSize, number> = { sm: 14, md: 16, lg: 18 };

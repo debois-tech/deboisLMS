@@ -13,7 +13,6 @@ export interface DashboardStats {
   total_batches: number;
   active_batches: number;
   total_students: number;
-  pending_attendance: number;
   total_fees_collected: number;
   total_fees_outstanding: number;
 }
@@ -22,15 +21,14 @@ export interface RecentActivity {
   id: string;
   text: string;
   timestamp: string;
-  type: 'batch_created' | 'student_joined' | 'attendance_approved' | 'payment_made';
+  type: 'batch_created' | 'student_joined' | 'payment_made';
 }
 
 export async function getDashboardStats(): Promise<DashboardStats> {
-  const [batchRes, activeRes, studentRes, attendanceRes, feeSummary] = await Promise.all([
+  const [batchRes, activeRes, studentRes, feeSummary] = await Promise.all([
     supabase.from('batches').select('*', { count: 'exact', head: true }).eq('is_test', false),
     supabase.from('batches').select('*', { count: 'exact', head: true }).eq('status', 'ongoing').eq('is_test', false),
     supabase.from('students').select('*', { count: 'exact', head: true }).eq('is_test', false),
-    supabase.from('attendance').select('*', { count: 'exact', head: true }).eq('approved', false),
     getBatchFeeSummary(),
   ]);
 
@@ -40,7 +38,6 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     total_batches: count(batchRes, 'Could not count batches'),
     active_batches: count(activeRes, 'Could not count active batches'),
     total_students: count(studentRes, 'Could not count students'),
-    pending_attendance: count(attendanceRes, 'Could not count pending attendance'),
     total_fees_collected: live.reduce((s, f) => s + f.total_collected, 0),
     total_fees_outstanding: live.reduce((s, f) => s + f.total_outstanding, 0),
   };

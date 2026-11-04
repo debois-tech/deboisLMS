@@ -4,7 +4,7 @@ import type { DocumentKind } from '@/lib/types';
 // Offer letter and internship certificate, drawn as real text on the letterhead. The layout is a port of the two
 // original HTML templates (content box at 13% / 19.5%, 10.2pt at line-height 1.48, the same margins and <br> gaps).
 
-export interface DocumentData {
+interface DocumentData {
   name: string;
   // The student's ID, used as the offer's Ref. No. and the certificate's number.
   code: string;
@@ -42,7 +42,7 @@ const PX = 0.75;
 const BODY = 10.2;
 const LINE = 1.48;
 
-export const longDate = (date: Date) => date.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+const longDate = (date: Date) => date.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
 
 // Both days count, rounded to the nearest week and never below one.
 const duration = (start: Date, end: Date) => {

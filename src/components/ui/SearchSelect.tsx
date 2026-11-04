@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from 'lucide-react';
 import { SearchBar } from '@/components/ui/SearchBar';
 
-export interface SearchSelectOption {
+interface SearchSelectOption {
   value: string;
   label: string;
   searchText?: string;

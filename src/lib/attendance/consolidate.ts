@@ -1,13 +1,13 @@
 /** Pure helpers for turning matched participants into attendance writes. No I/O, so they are unit-tested directly. */
 
-export interface MatchedParticipant {
+interface MatchedParticipant {
   studentId: string;
   displayName: string;
   totalMinutes: number;
   rawUploadIds: string[];
 }
 
-export interface ConsolidatedParticipants {
+interface ConsolidatedParticipants {
   merged: MatchedParticipant[];
   /** Display names folded into another participant that matched the same student. */
   collapsed: string[];
@@ -41,22 +41,35 @@ export function consolidateByStudent(
   return { merged: [...byStudent.values()], collapsed };
 }
 
+/**
+ * Everyone on the roster the file did not cover: Absent, or N/A when the lecture predates their joining.
+ * `joinedAt` and `lectureDate` are `YYYY-MM-DD`, so plain string comparison orders them.
+ */
+export function fillRoster(
+  roster: { studentId: string; joinedAt: string | null }[],
+  coveredIds: Set<string>,
+  lectureDate: string,
+): { studentId: string; status: 'absent' | 'no_appli'; minutes: number | null }[] {
+  return roster
+    .filter((student) => !coveredIds.has(student.studentId))
+    .map((student) => {
+      const beforeJoining = Boolean(student.joinedAt) && lectureDate < student.joinedAt!;
+      return { studentId: student.studentId, status: beforeJoining ? 'no_appli' : 'absent', minutes: beforeJoining ? null : 0 };
+    });
+}
+
 export interface ExistingRecord {
   student_id: string;
   source: string | null;
-  approved: boolean | null;
 }
 
-/**
- * A record that was approved, or entered by hand, is a person's judgement. Re-processing a CSV
- * must not overwrite it or send it back to pending review.
- */
+/** A record entered or edited by hand is a person's judgement. Re-processing a CSV must not overwrite it. */
 export function splitProtected<T extends { student_id: string }>(
   payloads: T[],
   existing: ExistingRecord[],
 ): { toWrite: T[]; kept: T[] } {
   const protectedIds = new Set(
-    existing.filter((row) => row.source === 'manual' || row.approved === true).map((row) => row.student_id),
+    existing.filter((row) => row.source === 'manual').map((row) => row.student_id),
   );
 
   const toWrite: T[] = [];

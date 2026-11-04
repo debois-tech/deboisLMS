@@ -131,7 +131,7 @@ export async function getStudentRepo(studentId: string, batchId: string): Promis
   return (data ?? undefined) as StudentRepo | undefined;
 }
 
-export async function saveStudentRepo(studentId: string, batchId: string, repoUrl: string): Promise<StudentRepo> {
+async function saveStudentRepo(studentId: string, batchId: string, repoUrl: string): Promise<StudentRepo> {
   const { data, error } = await supabase
     .from('student_repos')
     .upsert({ student_id: studentId, batch_id: batchId, repo_url: repoUrl }, { onConflict: 'student_id,batch_id' })

@@ -1,8 +1,6 @@
 import { useMemo, useState } from 'react';
-import { CheckCircle, Search } from 'lucide-react';
-import { Badge } from '@/components/ui/Badge';
+import { Search } from 'lucide-react';
 import { StatusPill } from '@/components/ui/StatusPill';
-import { Button } from '@/components/ui/Button';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import { SearchFilterBar } from '@/components/ui/SearchFilterBar';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -10,13 +8,6 @@ import type { AttendanceRecord, AttendanceStatus } from '@/lib/types';
 
 interface AttendanceRecordsTableProps {
   records: AttendanceRecord[];
-  onToggleApproved: (id: string, approved: boolean) => void;
-  /** Renders the Approve All toolbar above the table, only while rows await approval. */
-  onApproveAll?: () => void;
-  /** True while Approve All is running, so it cannot be fired twice. */
-  approvingAll?: boolean;
-  /** Rows with a request in flight; their checkbox is held until it settles. */
-  busyIds?: ReadonlySet<string>;
   maxHeight?: string;
 }
 
@@ -24,20 +15,13 @@ const STATUS_OPTIONS: { value: AttendanceStatus; label: string }[] = [
   { value: 'present', label: 'Present' },
   { value: 'partial', label: 'Partial' },
   { value: 'absent', label: 'Absent' },
+  { value: 'no_appli', label: 'N/A' },
+  { value: 'no_mark', label: 'Not marked' },
 ];
 
-export function AttendanceRecordsTable({
-  records,
-  onToggleApproved,
-  onApproveAll,
-  approvingAll = false,
-  busyIds,
-  maxHeight = '24rem',
-}: AttendanceRecordsTableProps) {
+export function AttendanceRecordsTable({ records, maxHeight = '24rem' }: AttendanceRecordsTableProps) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<AttendanceStatus | null>(null);
-
-  const pending = records.filter((r) => !r.approved).length;
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -51,28 +35,17 @@ export function AttendanceRecordsTable({
 
   return (
     <div className="table-block">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <SearchFilterBar
-          className="max-w-sm"
-          value={search}
-          onChange={setSearch}
-          placeholder="Search by student name, email or phone"
-          filterLabel="Status"
-          allLabel="All statuses"
-          filterValue={statusFilter}
-          filterOptions={STATUS_OPTIONS}
-          onFilterChange={(value) => setStatusFilter(value as AttendanceStatus | null)}
-        />
-
-        {onApproveAll && pending > 0 && (
-          <div className="table-toolbar">
-            <Badge variant="warning">{pending} awaiting approval</Badge>
-            <Button className="action-button-compact" onClick={onApproveAll} loading={approvingAll}>
-              <CheckCircle size={14} /> Approve All
-            </Button>
-          </div>
-        )}
-      </div>
+      <SearchFilterBar
+        className="max-w-sm"
+        value={search}
+        onChange={setSearch}
+        placeholder="Search by student name, email or phone"
+        filterLabel="Status"
+        allLabel="All statuses"
+        filterValue={statusFilter}
+        filterOptions={STATUS_OPTIONS}
+        onFilterChange={(value) => setStatusFilter(value as AttendanceStatus | null)}
+      />
 
       {filtered.length === 0 ? (
         <EmptyState icon={<Search size={32} />} title="No matching records" />
@@ -85,7 +58,6 @@ export function AttendanceRecordsTable({
               <TH>Status</TH>
               <TH>Minutes</TH>
               <TH>Source</TH>
-              <TH align="center">Approved</TH>
             </TR>
           </THead>
           <TBody>
@@ -105,17 +77,6 @@ export function AttendanceRecordsTable({
                   {r.total_attended_minutes != null ? `${r.total_attended_minutes} min` : '—'}
                 </TD>
                 <TD className="cell-muted capitalize">{r.source}</TD>
-                <TD align="center">
-                  <input
-                    type="checkbox"
-                    className="data-table-checkbox"
-                    checked={r.approved}
-                    disabled={busyIds?.has(r.id)}
-                    onChange={(e) => onToggleApproved(r.id, e.target.checked)}
-                    title={r.approved ? 'Unapprove' : 'Approve'}
-                    aria-label={r.approved ? `Unapprove ${r.student?.name ?? 'student'}` : `Approve ${r.student?.name ?? 'student'}`}
-                  />
-                </TD>
               </TR>
             ))}
           </TBody>

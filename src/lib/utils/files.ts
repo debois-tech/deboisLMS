@@ -1,5 +1,5 @@
 /** Three fates by MIME type: `paged` (watermarked), `text` (as-is), `download` (everything else). */
-export type MaterialKind = 'paged' | 'text' | 'download';
+type MaterialKind = 'paged' | 'text' | 'download';
 
 const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 const TEXT_TYPES = ['text/markdown', 'text/plain', 'text/x-markdown'];
@@ -7,7 +7,7 @@ const TEXT_TYPES = ['text/markdown', 'text/plain', 'text/x-markdown'];
 export const DOCX_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
 /** Extensions, not MIME types: a folder pick reports half of these as an empty string. */
-export const ACCEPTED_EXTENSIONS = [
+const ACCEPTED_EXTENSIONS = [
   'pdf', 'png', 'jpg', 'jpeg', 'webp', 'md', 'txt', 'docx',
   'xlsx', 'pptx', 'csv', 'json', 'zip',
 ] as const;
@@ -47,7 +47,7 @@ export function materialKind(mimeType?: string | null): MaterialKind {
   return 'download';
 }
 
-export function isImageType(mimeType?: string | null): boolean {
+function isImageType(mimeType?: string | null): boolean {
   return Boolean(mimeType && IMAGE_TYPES.includes(mimeType));
 }
 
@@ -63,7 +63,7 @@ export function fileTypeLabel(mimeType?: string | null, name?: string): string {
   return ext ? ext.toUpperCase() : 'File';
 }
 
-export interface DroppedFile {
+interface DroppedFile {
   file: File;
   // Path within the drop, e.g. "MyFolder/sub/file.pdf" — just the filename when it wasn't inside a folder.
   relativePath: string;
@@ -108,7 +108,7 @@ export async function filesFromDataTransfer(dataTransfer: DataTransfer): Promise
 }
 
 /** Longest edge kept on upload. pdf-lib decodes PNG to raw RGBA, so a 12MP shot OOMs the watermarker. */
-export const MAX_IMAGE_EDGE = 2400;
+const MAX_IMAGE_EDGE = 2400;
 
 /** WebP to PNG (pdf-lib cannot embed WebP) and downscale past MAX_IMAGE_EDGE. Small PNG/JPEG passes through. */
 export async function prepareImageForUpload(file: File): Promise<File> {

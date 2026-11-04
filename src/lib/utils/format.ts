@@ -1,5 +1,5 @@
 import type { Batch, BatchStatus } from '@/lib/types';
-import { toDateValue } from '@/lib/utils/date';
+import { toDateValue } from './date.ts';
 
 /** Ongoing on its start date. `completed` is set by hand and never re-opened by a date. */
 export function deriveBatchStatus(batch: Pick<Partial<Batch>, 'status' | 'start_date'>): BatchStatus {

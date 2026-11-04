@@ -38,8 +38,8 @@ export interface MergedParticipant {
   rawUploadIds: string[];
 }
 
-export type MatchKind = 'student' | 'tutor' | 'unmatched';
-export type MatchConfidence = 'exact' | 'fuzzy' | 'ai' | 'unmatched';
+type MatchKind = 'student' | 'tutor' | 'unmatched';
+type MatchConfidence = 'exact' | 'fuzzy' | 'ai' | 'unmatched';
 
 export interface NameMatch {
   kind: MatchKind;
@@ -54,6 +54,8 @@ export interface NameMatch {
 export interface RosterEntry {
   studentId: string;
   name: string;
+  /** `YYYY-MM-DD`. A lecture before it is N/A for this student. */
+  joinedAt: string | null;
 }
 
 /** Everything the parser needs to resolve one lecture's attendance. */
@@ -75,10 +77,9 @@ export interface AttendanceInsertPayload {
   batch_id: string;
   lecture_id: string;
   status: AttendanceStatus;
-  total_attended_minutes: number;
+  total_attended_minutes: number | null;
   raw_upload_ids: string[];
   source: AttendanceSource;
-  approved: boolean;
 }
 
 export interface UnmatchedRecord {
@@ -97,7 +98,9 @@ export interface ProcessingReport {
   tutorMismatches: string[];
   unmatched: UnmatchedRecord[];
   attendanceInserted: number;
-  /** Students whose approved or hand-entered record was left untouched. */
+  /** Roster students given Absent or N/A because the CSV had no match for them. */
+  filledFromRoster: number;
+  /** Students whose hand-entered record was left untouched. */
   existingKept: number;
   uploadsCleaned: boolean;
   /** Why AI name matching was unavailable, if it was. */

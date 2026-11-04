@@ -27,6 +27,8 @@ const attendance: Record<AttendanceStatus, [string, Tone]> = {
   present: ['Present', 'success'],
   partial: ['Partial', 'warning'],
   absent: ['Absent', 'danger'],
+  no_appli: ['N/A', 'default'],
+  no_mark: ['Not marked', 'warning'],
 };
 
 type StatusProps =

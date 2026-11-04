@@ -1,5 +1,5 @@
 import { supabase } from '../client';
-import { maybeRow, row, rows } from './result';
+import { row, rows } from './result';
 import type { StudentFee, StudentFeeDue, BatchFeeSummary, EarningBreakdown, FeePaymentLog, PaymentMethod } from '@/lib/types';
 
 // Reading never writes: a student with no fee row has no fee yet
@@ -7,18 +7,6 @@ export async function getFeesByBatch(batchId: string): Promise<StudentFee[]> {
   return rows<StudentFee>(
     await supabase.from('student_fees').select('*').eq('batch_id', batchId),
     'Could not load fees for this batch',
-  );
-}
-
-export async function updateFeePayment(id: string, paidAmount: number): Promise<StudentFee | undefined> {
-  return maybeRow<StudentFee>(
-    await supabase
-      .from('student_fees')
-      .update({ paid_amount: paidAmount, updated_at: new Date().toISOString() })
-      .eq('id', id)
-      .select()
-      .single(),
-    'Could not save the payment',
   );
 }
 

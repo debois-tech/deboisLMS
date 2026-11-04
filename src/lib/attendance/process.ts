@@ -1,4 +1,4 @@
-import { consolidateByStudent, splitProtected } from './consolidate';
+import { consolidateByStudent, fillRoster, splitProtected } from './consolidate';
 import { clearUploads, insertAttendance, loadExistingAttendance, loadProcessingContext, loadUploadRows } from './db';
 import { getGeminiUnavailableReason } from './gemini';
 import { matchParticipant } from './match';
@@ -113,13 +113,30 @@ export async function processAttendance(
     total_attended_minutes: participant.totalMinutes,
     raw_upload_ids: participant.rawUploadIds,
     source: 'automated',
-    approved: false,
   }));
 
+  // Nobody is left blank: a roster student the CSV did not match is Absent, or N/A if the lecture predates their joining.
+  // A real attendee under an unrecognised name is fixed by hand afterwards.
+  const filled: AttendanceInsertPayload[] = fillRoster(
+    ctx.roster,
+    new Set(merged.map((participant) => participant.studentId)),
+    ctx.lectureDate,
+  ).map((fill) => ({
+    student_id: fill.studentId,
+    batch_id: ctx.batchId,
+    lecture_id: ctx.lectureId,
+    status: fill.status,
+    total_attended_minutes: fill.minutes,
+    raw_upload_ids: [],
+    source: 'automated',
+  }));
+  candidates.push(...filled);
+  if (filled.length > 0) log(`${filled.length} roster student(s) not in the file marked Absent or N/A.`);
+
   // 6. Insert, then 7. clear uploads — only reached on success
-  // Approved and hand-entered records are somebody's judgement; a re-run leaves them as they are.
+  // Hand-entered records are somebody's judgement; a re-run leaves them as they are.
   const { toWrite: payloads, kept } = splitProtected(candidates, await loadExistingAttendance(lectureId));
-  if (kept.length > 0) log(`Kept ${kept.length} approved or hand-entered record(s) unchanged.`);
+  if (kept.length > 0) log(`Kept ${kept.length} hand-entered record(s) unchanged.`);
 
   const inserted = payloads.length > 0 ? await insertAttendance(payloads) : 0;
   log(`Inserted ${inserted} attendance records.`);
@@ -141,6 +158,7 @@ export async function processAttendance(
     tutorMismatches,
     unmatched,
     attendanceInserted: inserted,
+    filledFromRoster: filled.length,
     existingKept: kept.length,
     uploadsCleaned: true,
     geminiUnavailableReason: geminiUnavailableReason ?? undefined,
@@ -171,6 +189,7 @@ function emptyReport(logs: string[]): ProcessingReport {
     tutorMismatches: [],
     unmatched: [],
     attendanceInserted: 0,
+    filledFromRoster: 0,
     existingKept: 0,
     uploadsCleaned: false,
     logs,

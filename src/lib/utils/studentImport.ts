@@ -44,12 +44,12 @@ export function roleForBatch(batch: { program?: BatchProgram; batch_code?: strin
   return code ? ROLE_BY_CODE[code] : undefined;
 }
 
-export type StudentImportInput = Omit<Student, 'id' | 'created_at'>;
+type StudentImportInput = Omit<Student, 'id' | 'created_at'>;
 
 const normalizeCsvHeader = (header: string) => header.toLowerCase().replace(/[^a-z0-9]/g, '');
 
 /** Read a cell by any of its accepted header spellings, ignoring case and punctuation. */
-export function getImportValue(row: Record<string, string>, aliases: readonly string[]): string | undefined {
+function getImportValue(row: Record<string, string>, aliases: readonly string[]): string | undefined {
   const entry = Object.entries(row).find(([header]) =>
     aliases.some((alias) => normalizeCsvHeader(header) === normalizeCsvHeader(alias)),
   );
@@ -65,7 +65,7 @@ function toAmount(raw: string): number | undefined {
   return cleaned && Number.isFinite(amount) ? amount : undefined;
 }
 
-export type FeePlan = { fee: number; discount: number } | { error: string };
+type FeePlan = { fee: number; discount: number } | { error: string };
 
 /**
  * What a row is charged. Fee wins over Discount; a Discount is rupees or a percentage of the base; with neither the
@@ -93,7 +93,7 @@ export function planImportFee(row: Record<string, string>, base: number): FeePla
   return { fee: rounded, discount: base - rounded };
 }
 
-export interface ImportPlan {
+interface ImportPlan {
   ready: { row: Record<string, string>; name: string; fee: number; discount: number }[];
   rejected: { name: string; reason: string }[];
 }
@@ -121,11 +121,11 @@ export const normalizeRole = (role: string) => role.toLowerCase().replace(/[^a-z
 export const cleanRole = (role: string) => role.trim().replace(/\s+/g, ' ');
 
 /** The row's programme abbreviation, normalised. Valid codes live in `batch_programs`. */
-export function getImportProgram(row: Record<string, string>): BatchProgram | undefined {
+function getImportProgram(row: Record<string, string>): BatchProgram | undefined {
   return getImportValue(row, BATCH_ALIASES)?.toUpperCase().trim();
 }
 
-export interface ParsedStudentCsv {
+interface ParsedStudentCsv {
   headers: string[];
   rows: Record<string, string>[];
   // Rows dropped for a missing required field.

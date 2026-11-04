@@ -25,7 +25,7 @@ import { addDays, countsFor, fromDateValue, toDateValue } from '@/lib/utils/date
 import { formatCurrency, formatDate, timeAgo } from '@/lib/utils/format';
 import { dueInstallment, installmentDetail, installmentLabel } from '@/lib/utils/installments';
 
-export interface NoticeRow {
+interface NoticeRow {
   key: string;
   primary: string;
   meta?: string[];

@@ -1,8 +1,10 @@
 import { getAttendanceByBatch, getBatchStudents, getLecturesByBatch } from '@/lib/supabase';
 import { formatDate } from '@/lib/utils/format';
 import { toCsv, downloadCsv, toFileStem } from '@/lib/utils/csvExport';
+import type { AttendanceStatus } from '@/lib/types';
 
-const STATUS_LABEL: Record<string, string> = { present: 'Present', partial: 'Partial', absent: 'Absent' };
+// Every student has a row for every lecture, so a blank cell can only mean a row went missing.
+const STATUS_LABEL: Record<AttendanceStatus, string> = { present: 'Present', partial: 'Partial', absent: 'Absent', no_appli: 'N/A', no_mark: 'Not marked' };
 
 // One row per student, one column per lecture — the batch's whole attendance history at once.
 export async function exportBatchAttendanceCsv(batchId: string, batchName: string): Promise<void> {
@@ -34,7 +36,7 @@ export async function exportBatchAttendanceCsv(batchId: string, batchName: strin
 
   const rows = students.map((student) => [
     student.name,
-    ...sorted.map((lecture) => STATUS_LABEL[statusByKey.get(`${student.id}:${lecture.id}`) ?? ''] ?? ''),
+    ...sorted.map((lecture) => STATUS_LABEL[statusByKey.get(`${student.id}:${lecture.id}`) as AttendanceStatus] ?? ''),
   ]);
 
   downloadCsv(`${toFileStem(batchName)}-attendance.csv`, toCsv(headers, rows));

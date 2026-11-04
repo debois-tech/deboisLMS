@@ -13,14 +13,9 @@ export async function getLecturesByBatch(batchId: string): Promise<Lecture[]> {
   );
 }
 
-export async function getLectureById(id: string): Promise<Lecture | undefined> {
-  return maybeRow<Lecture>(
-    await supabase.from('lectures').select('*').eq('id', id).single(),
-    'Could not load this lecture',
-  );
-}
-
 export async function createLecture(input: Omit<Lecture, 'id' | 'created_at'>): Promise<Lecture> {
+  // The database rejects a zero length with a constraint name; say it plainly instead.
+  if ((input.scheduled_duration_minutes ?? 1) < 1) throw new Error('Lecture time cannot be 0');
   return row<Lecture>(
     await supabase.from('lectures').insert(input).select().single(),
     'Could not create the lecture',

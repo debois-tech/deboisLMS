@@ -1,9 +1,8 @@
 import type { PDFFont } from 'pdf-lib';
 
-// Fee receipt, drawn as real text. A port of docs/Fee receipt.html: the same 794 x 1123 page, frame, rows and
-// colours, measured in that template's CSS pixels and scaled to A4 points.
+// Fee receipt, drawn as real text on a 794 x 1123 page (CSS pixels, scaled to A4 points).
 
-export interface ReceiptRow {
+interface ReceiptRow {
   label: string;
   date: Date;
   amount: number;
@@ -38,7 +37,7 @@ const two = (n: number) => (n < 20 ? ONES[n] : TENS[Math.floor(n / 10)] + (n % 1
 const three = (n: number) => [n >= 100 ? `${ONES[Math.floor(n / 100)]} Hundred` : '', n % 100 ? two(n % 100) : ''].filter(Boolean).join(' ');
 
 /** Indian grouping: crore, lakh, thousand. */
-export function inWords(amount: number): string {
+function inWords(amount: number): string {
   let n = Math.round(amount);
   if (!n) return 'Zero';
   const parts: string[] = [];
