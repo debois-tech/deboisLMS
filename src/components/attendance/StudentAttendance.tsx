@@ -123,20 +123,23 @@ export function StudentAttendance({ studentId, studentName, batchId, batchName, 
 }
 
 const dayOf = (record: AttendanceRecord) => record.lecture?.lecture_date.slice(0, 10);
+const timeOf = (record: AttendanceRecord) =>
+  record.lecture?.start_at ? new Date(record.lecture.start_at).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }) : '';
 
 /** Opens on today's month. The arrows only reach months that had a lecture; with none, nothing moves. */
 function AttendanceCalendar({ records }: { records: AttendanceRecord[] }) {
   const today = toDateValue(new Date());
   const [month, setMonth] = useState(() => startOfMonth(new Date()));
 
-  // One dot per lecture, in its status colour. N/A lectures get no dot.
-  const dots = useMemo(() => {
-    const map = new Map<string, Shown[]>();
+  // A day's lectures, earliest first. N/A lectures are left out, so those days stay plain.
+  const byDay = useMemo(() => {
+    const map = new Map<string, AttendanceRecord[]>();
     for (const record of records) {
       const day = dayOf(record);
       if (!day || record.status === 'no_appli') continue;
-      map.set(day, [...(map.get(day) ?? []), record.status]);
+      map.set(day, [...(map.get(day) ?? []), record]);
     }
+    for (const list of map.values()) list.sort((a, b) => (a.lecture?.start_at ?? '').localeCompare(b.lecture?.start_at ?? ''));
     return map;
   }, [records]);
 
@@ -166,21 +169,39 @@ function AttendanceCalendar({ records }: { records: AttendanceRecord[] }) {
         {WEEKDAY_LABELS.map((label) => <span key={label}>{label}</span>)}
       </div>
       <div className="calendar-grid">
-        {monthGrid(month).map((date) => {
+        {monthGrid(month).map((date, index) => {
           const value = toDateValue(date);
           const inMonth = date.getMonth() === month.getMonth();
-          const statuses = inMonth ? dots.get(value) ?? [] : [];
+          const lectures = inMonth ? byDay.get(value) ?? [] : [];
+          // The circle takes the day's first lecture; each further lecture adds a dot under it.
+          const first = lectures[0]?.status;
+          const number = (
+            <span className={clsx('att-cal-num', first && `is-${first}`, value === today && 'is-today')}>{date.getDate()}</span>
+          );
           return (
-            <div
-              key={value}
-              className={clsx('att-cal-day', !inMonth && 'is-outside', value === today && 'is-today')}
-              title={statuses.length ? `${formatDateValue(value)}: ${statuses.map((s) => LABEL[s]).join(', ')}` : undefined}
-            >
-              {date.getDate()}
-              {statuses.length > 0 && (
-                <span className="att-cal-dots" aria-hidden="true">
-                  {statuses.map((status, index) => <span key={index} className={`att-cal-dot is-${status}`} />)}
-                </span>
+            <div key={value} className={clsx('att-cal-cell', !inMonth && 'is-outside', index % 7 < 2 && 'is-left', index % 7 > 4 && 'is-right')}>
+              {lectures.length === 0 ? (
+                <div className="att-cal-day">{number}</div>
+              ) : (
+                <>
+                  <button type="button" className="att-cal-day" aria-label={`${formatDateValue(value)}, ${lectures.length} lecture${lectures.length > 1 ? 's' : ''}`}>
+                    {number}
+                    {lectures.length > 1 && (
+                      <span className="att-cal-dots" aria-hidden="true">
+                        {lectures.map((record) => <span key={record.id} className={`att-cal-dot is-${record.status}`} />)}
+                      </span>
+                    )}
+                  </button>
+                  <span className="att-cal-tip" role="tooltip">
+                    <span className="att-cal-tip-date">{formatDateValue(value)}</span>
+                    {lectures.map((record) => (
+                      <span key={record.id} className="att-cal-tip-row">
+                        <span className={`att-cal-dot is-${record.status}`} />
+                        {[timeOf(record), LABEL[record.status as Shown], record.status === 'no_mark' ? '' : `${Number(record.total_attended_minutes ?? 0)} min`].filter(Boolean).join(' · ')}
+                      </span>
+                    ))}
+                  </span>
+                </>
               )}
             </div>
           );
