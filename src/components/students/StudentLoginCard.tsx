@@ -19,7 +19,7 @@ interface EmailCredentialsButtonProps {
  * press would send a second copy of the same password with nothing on screen
  * admitting it happened twice. The import dialog runs its own, per row.
  */
-export function EmailCredentialsButton({ studentId, password, size = 'md' }: EmailCredentialsButtonProps) {
+function EmailCredentialsButton({ studentId, password, size = 'md' }: EmailCredentialsButtonProps) {
   const [sending, setSending] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState('');

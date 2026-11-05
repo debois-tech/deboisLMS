@@ -70,14 +70,14 @@ export async function getMaterialsByAssignment(assignmentId: string): Promise<Ma
   );
 }
 
-export async function getMaterialById(id: string): Promise<Material | undefined> {
+async function getMaterialById(id: string): Promise<Material | undefined> {
   return maybeRow<Material>(
     await supabase.from('materials').select('*, batch:batches(*), tutor:tutors(*)').eq('id', id).single(),
     'Could not load this material',
   );
 }
 
-export interface UploadMaterialInput {
+interface UploadMaterialInput {
   // null = for every student.
   batchId: string | null;
   // Set to attach the file to an assignment instead of the material library.
@@ -92,7 +92,7 @@ export interface UploadMaterialInput {
 }
 
 // Uploads the file first and only then writes the row; a failed insert removes the orphaned object.
-export async function uploadMaterial(input: UploadMaterialInput): Promise<Material> {
+async function uploadMaterial(input: UploadMaterialInput): Promise<Material> {
   // Converted first, so a PDF or image inherits the paged reader without its own path.
   const incoming = fileMimeType(input.file);
   const converted =
@@ -137,7 +137,7 @@ export async function uploadMaterial(input: UploadMaterialInput): Promise<Materi
   return data as Material;
 }
 
-export interface BulkUploadResult {
+interface BulkUploadResult {
   uploaded: Material[];
   failed: { name: string; reason: string }[];
 }
@@ -208,7 +208,7 @@ export async function getMaterialViews(materialId: string): Promise<MaterialView
   );
 }
 
-export interface OpenedMaterial {
+interface OpenedMaterial {
   // Blob URL. The caller owns it and must `URL.revokeObjectURL` it.
   url: string;
   // What came back, which is not always what was uploaded: an image arrives as a PDF.

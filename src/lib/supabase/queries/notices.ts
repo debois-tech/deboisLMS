@@ -4,14 +4,14 @@ import { ok, rows } from './result';
 
 export type FailureKind = 'cleanup' | 'document_email' | 'csv_import' | 'login_create';
 
-export interface ActionFailure {
+interface ActionFailure {
   id: string;
   kind: FailureKind;
   detail: string;
   created_at: string;
 }
 
-export interface ExpiringStudent {
+interface ExpiringStudent {
   student_id: string;
   student_name: string;
   student_code: string;

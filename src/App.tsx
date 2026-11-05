@@ -110,7 +110,7 @@ export default function App() {
               <Route path="students" element={<TutorStudentsPage />} />
               <Route path="students/:studentId" element={<TutorStudentDetailPage />} />
               <Route path="batches/:batchId" element={<TutorBatchDetailPage />} />
-              <Route path="attendance" element={<AttendancePage autoApprove />} />
+              <Route path="attendance" element={<AttendancePage />} />
               <Route path="assignments" element={<AssignmentsPage />} />
               <Route path="materials" element={<MaterialsPage allowEveryone={false} />} />
               <Route path="curriculum" element={<CurriculumPage />} />

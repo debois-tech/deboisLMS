@@ -11,8 +11,9 @@ import { StatusPill } from '@/components/ui/StatusPill';
 import { EnrolmentSelect } from '@/components/ui/BatchSelect';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { StudentIdChip } from '@/components/students/StudentLink';
-import { getStudentById, getStudentBatches, getLecturesByBatch } from '@/lib/supabase';
-import type { Student, BatchStudentMapping, Batch, Lecture } from '@/lib/types';
+import { StudentAttendance } from '@/components/attendance/StudentAttendance';
+import { getStudentById, getStudentBatches } from '@/lib/supabase';
+import type { Student, BatchStudentMapping, Batch } from '@/lib/types';
 import { formatDate } from '@/lib/utils/format';
 
 // Read-only, and only what a tutor is meant to see: no fees, no login, no edit.
@@ -20,7 +21,6 @@ export default function TutorStudentDetailPage() {
   const { studentId } = useParams();
   const [student, setStudent] = useState<Student | null>(null);
   const [batchMappings, setBatchMappings] = useState<(BatchStudentMapping & { batch?: Batch })[]>([]);
-  const [nextLectures, setNextLectures] = useState<Record<string, Lecture | undefined>>({});
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
 
   const { loading, error, retry } = useInitialLoad(async () => {
@@ -30,16 +30,6 @@ export default function TutorStudentDetailPage() {
     const mappings = all.filter((m) => m.batch);
     setStudent(s ?? null);
     setBatchMappings(mappings);
-
-    const live = mappings.filter((m) => m.status === 'active');
-    const lectureSets = await Promise.all(live.map((m) => getLecturesByBatch(m.batch_id)));
-    const today = new Date().toISOString().slice(0, 10);
-    setNextLectures(Object.fromEntries(live.map((m, i) => [
-      m.batch_id,
-      lectureSets[i]
-        .filter((l) => l.lecture_date.slice(0, 10) >= today)
-        .sort((a, b) => a.lecture_date.localeCompare(b.lecture_date))[0],
-    ])));
   });
 
   if (loading) return <Spinner centered />;
@@ -53,7 +43,6 @@ export default function TutorStudentDetailPage() {
     batchMappings.find((m) => m.batch_id === selectedBatchId)
     ?? newestFirst.find((m) => m.status === 'active')
     ?? newestFirst[0];
-  const nextLecture = current ? nextLectures[current.batch_id] : undefined;
 
   const profileFacts = [
     { label: 'Date of Birth', value: student.date_of_birth ? formatDate(student.date_of_birth) : '' },
@@ -123,19 +112,15 @@ export default function TutorStudentDetailPage() {
               <p className="student-summary-meta">Joined {formatDate(current.joined_at)}</p>
             </div>
           </Card>
-          <Card padding="sm" className="student-summary-card">
-            <p className="student-summary-label">Next Lecture</p>
-            {nextLecture ? (
-              <div className="student-summary-lecture">
-                <p className="student-summary-value">{formatDate(nextLecture.lecture_date)}</p>
-                <p className="student-summary-meta">
-                  {nextLecture.session_type}{nextLecture.meeting_code ? ` • ${nextLecture.meeting_code}` : ''}
-                </p>
-              </div>
-            ) : (
-              <p className="student-summary-empty">{current.status === 'active' ? 'All lectures up to date' : '—'}</p>
-            )}
-          </Card>
+          <StudentAttendance
+            key={current.batch_id}
+            studentId={student.id}
+            studentName={student.name}
+            batchId={current.batch_id}
+            batchName={current.batch?.name ?? 'batch'}
+            joinedAt={current.joined_at}
+            countEarlier={current.count_earlier_work}
+          />
         </div>
       )}
 

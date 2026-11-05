@@ -19,7 +19,7 @@ import {
 } from '@/components/portal';
 import {
   ATTENDANCE_PARTIAL_PERCENT,
-  getApprovedAttendanceByStudent,
+  getAttendanceByStudent,
   getAssignmentsForStudent,
   getMyFeeDues,
   getLecturesByBatch,
@@ -71,7 +71,7 @@ export default function PortalOverviewPage() {
     // Fees across every batch, matching the Fees tab — one batch's balance meant a different number.
     const [record, records, work, feeRows, badgeSet, quizzes] = await Promise.all([
       getStudentById(studentId),
-      getApprovedAttendanceByStudent(studentId),
+      getAttendanceByStudent(studentId),
       getAssignmentsForStudent(studentId),
       getMyFeeDues(),
       // A badge hiccup must not take Home down with it.
@@ -109,8 +109,10 @@ export default function PortalOverviewPage() {
 
   const currentBatch = currentMapping?.batch;
 
-  const attended = attendance.filter((record) => record.status !== 'absent').length;
-  const attendanceRate = attendance.length > 0 ? Math.round((attended / attendance.length) * 100) : null;
+  // N/A classes are not held against the student.
+  const counted = attendance.filter((record) => record.status !== 'no_appli');
+  const attended = counted.filter((record) => record.status !== 'absent').length;
+  const attendanceRate = counted.length > 0 ? Math.round((attended / counted.length) * 100) : null;
   // By state, not submitted/not: closed work is not "to hand in".
   const states = assignments.map((item) => assignmentState(item));
   const handedIn = states.filter((state) => state !== 'todo').length;
@@ -176,8 +178,8 @@ export default function PortalOverviewPage() {
               tone={attendanceRate === null ? 'default' : attendanceRate >= ATTENDANCE_PARTIAL_PERCENT ? 'positive' : 'attention'}
               progress={attendanceRate ?? undefined}
               note={
-                attendance.length > 0
-                  ? `${attended} of ${attendance.length} classes`
+                counted.length > 0
+                  ? `${attended} of ${counted.length} classes`
                     : 'No classes yet'
               }
             />

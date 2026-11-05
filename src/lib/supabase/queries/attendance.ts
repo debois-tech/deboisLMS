@@ -1,14 +1,7 @@
 import { supabase } from '../client';
-import { maybeRow, rows as unwrapRows } from './result';
-import type { UploadRow, AttendanceRecord, AttendanceStatus, AttendanceSource } from '@/lib/types';
+import { rows as unwrapRows } from './result';
+import type { AttendanceRecord, AttendanceStatus, AttendanceSource } from '@/lib/types';
 import { normalizeTimestampForDb } from '@/lib/utils/csvParser';
-
-export async function getUploadsByLecture(lectureId: string): Promise<UploadRow[]> {
-  return unwrapRows<UploadRow>(
-    await supabase.from('uploads').select('*').eq('lecture_id', lectureId).order('sno'),
-    'Could not load the uploaded rows',
-  );
-}
 
 export async function getAttendanceByLecture(lectureId: string): Promise<AttendanceRecord[]> {
   return unwrapRows<AttendanceRecord>(
@@ -21,22 +14,28 @@ export async function getAttendanceByLecture(lectureId: string): Promise<Attenda
   );
 }
 
-// Every attendance row for a batch, across every lecture — the CSV export's source.
+// Every attendance row for a batch, across every lecture — the CSV export's source. Paged, because the API hands back at most 1000 rows a call.
 export async function getAttendanceByBatch(batchId: string): Promise<AttendanceRecord[]> {
-  return unwrapRows<AttendanceRecord>(
-    await supabase.from('attendance').select('*').eq('batch_id', batchId),
-    'Could not load attendance for this batch',
-  );
+  const PAGE = 1000;
+  const all: AttendanceRecord[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const page = unwrapRows<AttendanceRecord>(
+      await supabase.from('attendance').select('*').eq('batch_id', batchId).order('id').range(from, from + PAGE - 1),
+      'Could not load attendance for this batch',
+    );
+    all.push(...page);
+    if (page.length < PAGE) return all;
+  }
 }
 
-/** Approved-only attendance for one student, newest first (RLS enforces the same rule server-side). */
-export async function getApprovedAttendanceByStudent(studentId: string): Promise<AttendanceRecord[]> {
+/** One student's attendance, newest first. The "not marked yet" rows are hidden by RLS as well. */
+export async function getAttendanceByStudent(studentId: string): Promise<AttendanceRecord[]> {
   const records = unwrapRows<AttendanceRecord>(
     await supabase
       .from('attendance')
       .select('*, lecture:lectures(*)')
       .eq('student_id', studentId)
-      .eq('approved', true),
+      .neq('status', 'no_mark'),
     'Could not load your attendance',
   );
 
@@ -68,84 +67,34 @@ export async function insertUploadRows(
   if (error) throw new Error(`Failed to upload rows: ${error.message}`);
 }
 
-export interface ManualAttendanceInput {
+/** One student's rows in one batch, with their lectures, for staff. Unlike the portal's, this keeps the not-marked ones. */
+export async function getStudentBatchAttendance(studentId: string, batchId: string): Promise<AttendanceRecord[]> {
+  return unwrapRows<AttendanceRecord>(
+    await supabase.from('attendance').select('*, lecture:lectures(*)').eq('student_id', studentId).eq('batch_id', batchId),
+    "Could not load this student's attendance",
+  );
+}
+
+interface AttendanceInput {
   studentId: string;
-  batchId: string;
-  lectureId: string;
   status: AttendanceStatus;
   minutes: number;
   source: AttendanceSource;
-  /** Defaults to approved: the tick *is* the judgement. An edit to an existing row passes its current state instead. */
-  approved?: boolean;
 }
 
-/** Upserts on `(student_id, lecture_id)`. */
-export async function markAttendance(input: ManualAttendanceInput): Promise<AttendanceRecord | undefined> {
-  const approved = input.approved ?? true;
-  return maybeRow<AttendanceRecord>(
-    await supabase
-      .from('attendance')
-      .upsert(
-        {
-          student_id: input.studentId,
-          batch_id: input.batchId,
-          lecture_id: input.lectureId,
-          status: input.status,
-          total_attended_minutes: input.minutes,
-          source: input.source,
-          approved,
-          approved_at: approved ? new Date().toISOString() : null,
-        },
-        { onConflict: 'student_id,lecture_id' },
-      )
-      .select('*, student:students(id, name, email, phone)')
-      .single(),
-    'Could not mark the attendance',
+/** Saves a whole lecture's marks in one write. Upserts on `(student_id, lecture_id)`. */
+export async function saveAttendance(batchId: string, lectureId: string, marks: AttendanceInput[]): Promise<void> {
+  if (marks.length === 0) return;
+  const { error } = await supabase.from('attendance').upsert(
+    marks.map((mark) => ({
+      student_id: mark.studentId,
+      batch_id: batchId,
+      lecture_id: lectureId,
+      status: mark.status,
+      total_attended_minutes: mark.minutes,
+      source: mark.source,
+    })),
+    { onConflict: 'student_id,lecture_id' },
   );
-}
-
-/** Unticking a marked student removes the record rather than leaving an unapproved one behind. */
-export async function deleteAttendance(id: string): Promise<void> {
-  const { error } = await supabase.from('attendance').delete().eq('id', id);
-  if (error) throw new Error(`Could not remove the attendance: ${error.message}`);
-}
-
-export async function approveAttendance(id: string): Promise<AttendanceRecord | undefined> {
-  return setAttendanceApproved(id, true);
-}
-
-export async function setAttendanceApproved(id: string, approved: boolean): Promise<AttendanceRecord | undefined> {
-  return maybeRow<AttendanceRecord>(
-    await supabase
-      .from('attendance')
-      .update({
-        approved,
-        approved_at: approved ? new Date().toISOString() : null,
-      })
-      .eq('id', id)
-      .select('*, student:students(id, name, email, phone)')
-      .single(),
-    'Could not update the approval',
-  );
-}
-
-export async function bulkApproveAttendance(lectureId: string): Promise<number> {
-  return unwrapRows<{ id: string }>(
-    await supabase
-      .from('attendance')
-      .update({ approved: true, approved_at: new Date().toISOString() })
-      .eq('lecture_id', lectureId)
-      .eq('approved', false)
-      .select(),
-    'Could not approve the attendance',
-  ).length;
-}
-
-export async function getUnapprovedCount(): Promise<number> {
-  const { count, error } = await supabase
-    .from('attendance')
-    .select('*', { count: 'exact', head: true })
-    .eq('approved', false);
-  if (error) throw new Error(`Could not count pending attendance: ${error.message}`);
-  return count ?? 0;
+  if (error) throw new Error(`Could not save the attendance: ${error.message}`);
 }

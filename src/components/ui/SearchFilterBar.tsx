@@ -2,7 +2,7 @@ import { Check } from 'lucide-react';
 import { ReactNode, useState } from 'react';
 import { SearchBar } from '@/components/ui/SearchBar';
 
-export interface SearchFilterOption {
+interface SearchFilterOption {
   value: string;
   label: string;
 }

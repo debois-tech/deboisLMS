@@ -25,7 +25,7 @@ const AuthContext = createContext<AuthContextValue>({
 const ROLE_LABEL: Record<Role, string> = { admin: 'Admin', student: 'Student', tutor: 'Tutor' };
 
 /** Role comes from app_metadata (set server-side) — never user_metadata, which a user can edit on themselves. */
-export function roleFromUser(user: User): Role {
+function roleFromUser(user: User): Role {
   const role = user.app_metadata?.role;
   return role === 'admin' || role === 'tutor' ? role : 'student';
 }

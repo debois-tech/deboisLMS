@@ -37,7 +37,7 @@ import type { BulkLoginResult } from '@/lib/supabase';
 import { BulkLoginsModal } from '@/components/students/BulkLoginsModal';
 import { getBatchTutors, assignTutorToBatch, removeTutorFromBatch, clearTutorFromTestBatch, getTutors } from '@/lib/supabase';
 import { getLecturesByBatch, createLecture, deleteLecture } from '@/lib/supabase';
-import { getAttendanceByLecture, setAttendanceApproved, bulkApproveAttendance } from '@/lib/supabase';
+import { getAttendanceByLecture } from '@/lib/supabase';
 import { getFeesByBatch, getFeePaymentLogs, addFeePaymentLog } from '@/lib/supabase';
 import { getAssignmentsByBatch } from '@/lib/supabase';
 import type { Batch, BatchProgramOption, Student, Tutor, Lecture, AttendanceRecord, StudentFee, FeeStatus, FeePaymentLog, Assignment, BatchStudentMapping, TutorBatchMapping } from '@/lib/types';
@@ -806,8 +806,8 @@ export function LecturesTab({ batchId }: { batchId: string }) {
             </FormField>
             <FormField label="Start time" required><input type="time" value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} /></FormField>
           </div>
-          <FormField label="Duration (minutes)">
-            <input type="number" value={form.scheduled_duration_minutes} onChange={(e) => setForm({ ...form, scheduled_duration_minutes: Number(e.target.value) })} />
+          <FormField label="Duration (minutes)" required>
+            <input type="number" min="1" value={form.scheduled_duration_minutes} onChange={(e) => setForm({ ...form, scheduled_duration_minutes: Number(e.target.value) })} />
           </FormField>
           <FormField label="Note"><input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} /></FormField>
         </div>
@@ -840,30 +840,6 @@ export function AttendanceTab({ batchId, batchName }: { batchId: string; batchNa
       showToast(errorMessage(err, 'Failed to load attendance records'), 'error');
     }
     setLoading(false);
-  };
-
-  const handleToggleApproved = async (id: string, approved: boolean) => {
-    setRecords((prev) => prev.map((r) => (r.id === id ? { ...r, approved } : r)));
-    try {
-      const updated = await setAttendanceApproved(id, approved);
-      if (updated) {
-        setRecords((prev) => prev.map((r) => (r.id === id ? updated : r)));
-      }
-    } catch (error) {
-      setRecords((prev) => prev.map((r) => (r.id === id ? { ...r, approved: !approved } : r)));
-      showToast(errorMessage(error, 'Failed to update approval'), 'error');
-    }
-  };
-
-  const handleBulkApprove = async () => {
-    if (!selectedLecture) return;
-    try {
-      await bulkApproveAttendance(selectedLecture);
-      loadAttendance(selectedLecture);
-      showToast('All records approved');
-    } catch (error) {
-      showToast(errorMessage(error, 'Failed to approve records'), 'error');
-    }
   };
 
   const selectedLectureData = lectures.find((lecture) => lecture.id === selectedLecture);
@@ -933,12 +909,7 @@ export function AttendanceTab({ batchId, batchName }: { batchId: string; batchNa
         ) : records.length === 0 ? (
           <EmptyState icon={<ClipboardCheck size={32} />} title="No attendance records" />
         ) : (
-          <AttendanceRecordsTable
-            records={records}
-            onToggleApproved={handleToggleApproved}
-            onApproveAll={handleBulkApprove}
-            maxHeight="28rem"
-          />
+          <AttendanceRecordsTable records={records} maxHeight="28rem" />
         )}
       </Modal>
     </div>

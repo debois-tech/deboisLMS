@@ -74,7 +74,7 @@ export function QuizTimer({ left, total, big }: QuizTimerProps) {
   );
 }
 
-export interface BoardRow {
+interface BoardRow {
   rank: number;
   name: string;
   points: number;

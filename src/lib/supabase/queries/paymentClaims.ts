@@ -46,7 +46,7 @@ export async function getPendingClaims(studentId: string): Promise<PaymentClaim[
 /** Fired on window once a claim is approved or dismissed, so the bottom-right notice recounts. */
 export const CLAIMS_CHANGED = 'claims-changed';
 
-export type PendingClaimRow = PaymentClaim & { student?: { name: string; is_test: boolean } | null };
+type PendingClaimRow = PaymentClaim & { student?: { name: string; is_test: boolean } | null };
 
 /** Every live student's pending claim, oldest first, with their name for the notice. Test students' stay on their own page. */
 export async function getAllPendingClaims(): Promise<PendingClaimRow[]> {

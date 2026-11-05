@@ -14,12 +14,13 @@ import { NotFound } from '@/components/ui/NotFound';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import { StudentLoginCard } from '@/components/students/StudentLoginCard';
+import { StudentAttendance } from '@/components/attendance/StudentAttendance';
 import { StudentIdChip } from '@/components/students/StudentLink';
 import { Badge } from '@/components/ui/Badge';
 import { ClaimActions } from '@/components/finance/ClaimActions';
-import { getStudentById, getStudentBatches, getFeesByStudent, getLecturesByBatch, getFeePaymentLogsByStudent, getPendingClaims, terminateEnrolment, updateJoinDate, setStudentFee, getStudentDeletionCounts, deleteStudent } from '@/lib/supabase';
+import { getStudentById, getStudentBatches, getFeesByStudent, getFeePaymentLogsByStudent, getPendingClaims, terminateEnrolment, updateJoinDate, setStudentFee, getStudentDeletionCounts, deleteStudent } from '@/lib/supabase';
 import type { StudentDeletionCounts } from '@/lib/supabase';
-import type { Student, BatchStudentMapping, Batch, StudentFee, Lecture, FeePaymentLog, PaymentClaim } from '@/lib/types';
+import type { Student, BatchStudentMapping, Batch, StudentFee, FeePaymentLog, PaymentClaim } from '@/lib/types';
 import { formatDate, formatCurrency } from '@/lib/utils/format';
 import { useToast } from '@/lib/context/ToastContext';
 import { useConfirm } from '@/lib/context/ConfirmContext';
@@ -42,7 +43,6 @@ export default function StudentDetailPage() {
   const [student, setStudent] = useState<Student | null>(null);
   const [batchMappings, setBatchMappings] = useState<(BatchStudentMapping & { batch?: Batch })[]>([]);
   const [fees, setFees] = useState<StudentFee[]>([]);
-  const [nextLectures, setNextLectures] = useState<Record<string, Lecture | undefined>>({});
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [paymentLogs, setPaymentLogs] = useState<FeePaymentLog[]>([]);
   const [claims, setClaims] = useState<PaymentClaim[]>([]);
@@ -70,17 +70,6 @@ export default function StudentDetailPage() {
     setClaims(pending);
     setBatchMappings(mappings);
     setFees(allFees);
-
-    // Only a live enrolment has a next lecture.
-    const live = mappings.filter((m) => m.status === 'active');
-    const lectureSets = await Promise.all(live.map((m) => getLecturesByBatch(m.batch_id)));
-    const today = new Date().toISOString().slice(0, 10);
-    setNextLectures(Object.fromEntries(live.map((m, i) => [
-      m.batch_id,
-      lectureSets[i]
-        .filter((l) => l.lecture_date.slice(0, 10) >= today)
-        .sort((a, b) => a.lecture_date.localeCompare(b.lecture_date))[0],
-    ])));
   });
 
   if (loading) return <Spinner centered />;
@@ -98,7 +87,6 @@ export default function StudentDetailPage() {
   const currentBatch = currentMapping?.batch;
   const isActive = currentMapping?.status === 'active';
   const currentFee = fees.find((f) => f.batch_id === currentMapping?.batch_id) ?? null;
-  const nextLecture = currentMapping ? nextLectures[currentMapping.batch_id] : undefined;
   // A leaver owes their void, not the rest of the fee.
   const left = currentFee?.status === 'terminated';
   const owed = currentFee ? Math.max((left ? Number(currentFee.expected_on_exit) : currentFee.total_fee) - currentFee.paid_amount, 0) : 0;
@@ -397,19 +385,17 @@ export default function StudentDetailPage() {
             <p className="student-summary-empty">—</p>
           )}
         </Card>
-        <Card padding="sm" className="student-summary-card">
-          <p className="student-summary-label">Next Lecture</p>
-          {nextLecture ? (
-            <div className="student-summary-lecture">
-              <p className="student-summary-value">{formatDate(nextLecture.lecture_date)}</p>
-              <p className="student-summary-meta">
-                {nextLecture.session_type}{nextLecture.meeting_code ? ` • ${nextLecture.meeting_code}` : ''}
-              </p>
-            </div>
-          ) : (
-            <p className="student-summary-empty">{isActive ? 'All lectures up to date' : '—'}</p>
-          )}
-        </Card>
+        {currentMapping && (
+          <StudentAttendance
+            key={currentMapping.batch_id}
+            studentId={student.id}
+            studentName={student.name}
+            batchId={currentMapping.batch_id}
+            batchName={currentBatch?.name ?? 'batch'}
+            joinedAt={currentMapping.joined_at}
+            countEarlier={currentMapping.count_earlier_work}
+          />
+        )}
       </div>
 
       {profileFacts.length > 0 && (

@@ -30,7 +30,7 @@ export function newDraft(): QuizDraft {
 }
 
 // "Quiz" copies to "Quiz (c)", then "(c1)", "(c2)": the first free name, counted from the original's title.
-export function copyTitle(title: string, taken: string[]): string {
+function copyTitle(title: string, taken: string[]): string {
   const base = title.replace(/(\s*\((c\d*|copy)\))+$/i, '');
   const used = new Set(taken);
   for (let n = 0; ; n++) {
@@ -129,7 +129,7 @@ export function percent(count: number, total: number): number {
 }
 
 // A right answer earns 1000 at once, down to 500 at the deadline (quiz_answer in schema.sql).
-export const MAX_POINTS = 1000;
+const MAX_POINTS = 1000;
 
 // Share of the best possible score over the questions asked: both right answers and speed count.
 export function accuracy(points: number, questions: number): number {

@@ -87,7 +87,7 @@ export async function getBatchBadges(batchId: string): Promise<BadgeWithHolders[
   return found.map(({ student_badges, ...badge }) => ({ ...badge, holders: student_badges[0]?.count ?? 0 }));
 }
 
-export interface NewBadgeInput {
+interface NewBadgeInput {
   batchId: string;
   name: string;
   description: string;

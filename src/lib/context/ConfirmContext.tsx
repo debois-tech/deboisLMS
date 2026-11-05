@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useRef, useState, ReactNode } from 'react';
 
-export interface ConfirmOptions {
+interface ConfirmOptions {
   title: string;
   // What actually happens, and what cannot be undone. One or two lines.
   message?: ReactNode;

@@ -18,7 +18,7 @@ import { AttendanceRecordsTable } from '@/components/attendance/AttendanceRecord
 import { ManualAttendance } from '@/components/attendance/ManualAttendance';
 import { DEFAULT_LECTURE_MINUTES } from '@/lib/attendance/types';
 import { exportBatchAttendanceCsv } from '@/lib/attendance/exportCsv';
-import { clearUploads, createLecture, getAttendanceByLecture, getBatches, getLecturesByBatch, insertUploadRows, processAttendance, setAttendanceApproved, bulkApproveAttendance, updateLecture } from '@/lib/supabase';
+import { clearUploads, createLecture, getAttendanceByLecture, getBatches, getLecturesByBatch, insertUploadRows, processAttendance, updateLecture } from '@/lib/supabase';
 import type { ProcessingReport } from '@/lib/supabase';
 import type { Batch, Lecture, AttendanceRecord } from '@/lib/types';
 import { meetingCodesMatch, parseCsv } from '@/lib/utils/csvParser';
@@ -27,12 +27,7 @@ import { useToast } from '@/lib/context/ToastContext';
 import { errorMessage } from '@/lib/utils/errors';
 import { formatDate } from '@/lib/utils/format';
 
-interface AttendancePageProps {
-  /** Skips the pending-review step: CSV rows are approved the moment they're processed. */
-  autoApprove?: boolean;
-}
-
-export default function AttendancePage({ autoApprove = false }: AttendancePageProps) {
+export default function AttendancePage() {
   const [batches, setBatches] = useState<Batch[]>([]);
   const [selectedBatch, setSelectedBatch] = useState<string | null>(null);
   const [lectures, setLectures] = useState<Lecture[]>([]);
@@ -53,11 +48,10 @@ export default function AttendancePage({ autoApprove = false }: AttendancePagePr
   const [newLectureMode, setNewLectureMode] = useState<'online' | 'offline'>('online');
   const [newLectureDuration, setNewLectureDuration] = useState(DEFAULT_LECTURE_MINUTES);
   const [exporting, setExporting] = useState(false);
-  // Keys: 'upload', 'create', 'approveAll', or a record id while its approval is saving.
+  // Keys: 'upload' and 'create'.
   const { busy, begin, finish } = useInFlight();
   const processing = busy.has('upload');
   const creatingLecture = busy.has('create');
-  const approvingAll = busy.has('approveAll');
   const fileRef = useRef<HTMLInputElement>(null);
   const { showToast } = useToast();
 
@@ -159,7 +153,6 @@ export default function AttendancePage({ autoApprove = false }: AttendancePagePr
       await clearUploads(selectedLecture);
       await insertUploadRows(selectedLecture, code, lecture?.lecture_date, csvRows);
       const report = await processAttendance(selectedLecture);
-      if (autoApprove) await bulkApproveAttendance(selectedLecture);
 
       // Remember the code the export came with, so the next upload of the same
       // file has something to be recognised against.
@@ -175,8 +168,8 @@ export default function AttendancePage({ autoApprove = false }: AttendancePagePr
       const parts = [`${report.attendanceInserted} attendance records created`];
       if (report.tutorsDetected.length > 0) parts.push(`${report.tutorsDetected.length} tutor(s) detected`);
       if (report.duplicateRowsIgnored > 0) parts.push(`${report.duplicateRowsIgnored} duplicate rows merged`);
-      if (report.existingKept > 0) parts.push(`${report.existingKept} approved/manual record(s) kept as they were`);
-      if (report.unmatched.length > 0) parts.push(`${report.unmatched.length} participant(s) need review`);
+      if (report.existingKept > 0) parts.push(`${report.existingKept} manual record(s) kept`);
+      if (report.unmatched.length > 0) parts.push(`${report.unmatched.length} unmatched name(s)`);
       showToast(parts.join(' · '), report.unmatched.length > 0 ? 'warning' : 'success');
     } catch (err) {
       // Don't leave this file's rows behind to be processed with the next upload.
@@ -184,36 +177,6 @@ export default function AttendancePage({ autoApprove = false }: AttendancePagePr
       showToast(errorMessage(err, 'Attendance upload failed'), 'error');
     }
     finish('upload');
-  };
-
-  const handleToggleApproved = async (id: string, approved: boolean) => {
-    if (!begin(id)) return;
-
-    setRecords((prev) => prev.map((r) => (r.id === id ? { ...r, approved } : r)));
-    try {
-      const updated = await setAttendanceApproved(id, approved);
-      if (updated) {
-        setRecords((prev) => prev.map((r) => (r.id === id ? updated : r)));
-      }
-    } catch (err) {
-      setRecords((prev) => prev.map((r) => (r.id === id ? { ...r, approved: !approved } : r)));
-      showToast(errorMessage(err, 'Failed to update approval'), 'error');
-    } finally {
-      finish(id);
-    }
-  };
-
-  const handleBulkApprove = async () => {
-    if (!selectedLecture || !begin('approveAll')) return;
-    try {
-      await bulkApproveAttendance(selectedLecture);
-      await loadRecords(selectedLecture);
-      showToast('All records approved');
-    } catch (error) {
-      showToast(errorMessage(error, 'Failed to approve records'), 'error');
-    } finally {
-      finish('approveAll');
-    }
   };
 
   const handleCreateLecture = async () => {
@@ -324,29 +287,15 @@ export default function AttendancePage({ autoApprove = false }: AttendancePagePr
                 </div>
               )}
 
-              {lastReport && (lastReport.unmatched.length > 0 || lastReport.tutorsDetected.length > 0 || lastReport.geminiUnavailableReason) && (
-                <div className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-elevated)]/50 border border-[var(--border)] text-sm">
-                  {lastReport.geminiUnavailableReason && (
-                    <p className="mb-2 text-xs text-amber-500">
-                      AI matching unavailable — {lastReport.geminiUnavailableReason}
+              {lastReport && lastReport.unmatched.length > 0 && (
+                <div className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-elevated)]/50 border border-[var(--border)] text-sm space-y-1.5">
+                  <p className="text-xs font-bold uppercase tracking-widest text-amber-500">Unmatched names</p>
+                  {lastReport.unmatched.map((u) => (
+                    <p key={u.name} className="text-[var(--text-secondary)]">
+                      <span className="font-semibold text-[var(--text-primary)]">{u.name}</span>
+                      <span className="text-[var(--text-muted)]"> — {u.reason}</span>
                     </p>
-                  )}
-                  {lastReport.unmatched.length > 0 && (
-                    <div className="space-y-1.5">
-                      <p className="text-xs font-bold uppercase tracking-widest text-amber-500">Needs manual review</p>
-                      {lastReport.unmatched.map((u) => (
-                        <p key={u.name} className="text-[var(--text-secondary)]">
-                          <span className="font-semibold text-[var(--text-primary)]">{u.name}</span>
-                          <span className="text-[var(--text-muted)]"> — {u.reason}</span>
-                        </p>
-                      ))}
-                    </div>
-                  )}
-                  {lastReport.tutorsDetected.length > 0 && (
-                    <p className="mt-2 text-xs text-[var(--text-muted)]">
-                      Tutors excluded: {lastReport.tutorsDetected.join(', ')}
-                    </p>
-                  )}
+                  ))}
                 </div>
               )}
 
@@ -356,8 +305,8 @@ export default function AttendancePage({ autoApprove = false }: AttendancePagePr
                   <span>
                     This lecture already has attendance from meeting code{' '}
                     <strong>{lecture?.meeting_code}</strong>, and this file carries the same one —
-                    it looks like it has been uploaded already. Re-processing overwrites records,
-                    including any you have corrected by hand.
+                    it looks like it has been uploaded already. Re-processing rewrites automated
+                    records; hand-edited ones stay.
                   </span>
                 </div>
               )}
@@ -409,14 +358,7 @@ export default function AttendancePage({ autoApprove = false }: AttendancePagePr
             ) : records.length === 0 ? (
               <EmptyState icon={<ClipboardCheck size={32} />} title="No attendance records" />
             ) : (
-              <AttendanceRecordsTable
-                records={records}
-                onToggleApproved={handleToggleApproved}
-                onApproveAll={handleBulkApprove}
-                approvingAll={approvingAll}
-                busyIds={busy}
-                maxHeight="none"
-              />
+              <AttendanceRecordsTable records={records} maxHeight="none" />
             )}
           </Card>
         </>
@@ -435,7 +377,7 @@ export default function AttendancePage({ autoApprove = false }: AttendancePagePr
             lectureId={selectedLecture}
             batchId={selectedBatch}
             scheduledMinutes={lecture?.scheduled_duration_minutes ?? undefined}
-            onChanged={() => loadRecords(selectedLecture)}
+            onSaved={() => { setShowManual(false); void loadRecords(selectedLecture); }}
           />
         )}
       </Modal>

@@ -39,16 +39,16 @@ export async function loadProcessingContext(lectureId: string): Promise<Processi
 
   const rosterRes = await supabase
     .from('batch_student_mapping')
-    .select('student_id, students!inner(id, name)')
+    .select('student_id, joined_at, students!inner(id, name)')
     .eq('batch_id', lecture.batch_id)
     .eq('status', 'active');
 
   if (rosterRes.error) throw new Error(`Failed to load roster: ${rosterRes.error.message}`);
 
-  type RosterRow = { student_id: string; students: { id: string; name: string } | null };
+  type RosterRow = { student_id: string; joined_at: string | null; students: { id: string; name: string } | null };
 
   const roster: RosterEntry[] = ((rosterRes.data ?? []) as unknown as RosterRow[])
-    .map((r) => ({ studentId: r.students?.id, name: r.students?.name }))
+    .map((r) => ({ studentId: r.students?.id, name: r.students?.name, joinedAt: r.joined_at }))
     .filter((r): r is RosterEntry => Boolean(r.studentId && r.name));
 
   const tutors = (tutorsRes.data ?? []) as { id: string; name: string }[];
@@ -68,11 +68,11 @@ export async function loadProcessingContext(lectureId: string): Promise<Processi
   };
 }
 
-/** What is already on the register for a lecture, so a re-run can leave approved and hand-entered rows alone. */
+/** What is already on the register for a lecture, so a re-run can leave hand-entered rows alone. */
 export async function loadExistingAttendance(lectureId: string): Promise<ExistingRecord[]> {
   const { data, error } = await supabase
     .from('attendance')
-    .select('student_id, source, approved')
+    .select('student_id, source')
     .eq('lecture_id', lectureId);
 
   if (error) throw new Error(`Failed to read existing attendance: ${error.message}`);

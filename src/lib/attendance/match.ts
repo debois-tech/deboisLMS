@@ -7,7 +7,7 @@ const FUZZY_THRESHOLD = 0.82;
 /** Minimum confidence for accepting a Gemini-provided match. */
 const GEMINI_CONFIDENCE_THRESHOLD = 0.75;
 
-export interface MatchOptions {
+interface MatchOptions {
   useGemini?: boolean;
 }
 

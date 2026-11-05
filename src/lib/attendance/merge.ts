@@ -5,7 +5,7 @@ import type { MergedParticipant, ParsedInterval, RawUploadRow } from './types';
 const MERGE_GAP_MS = 2 * 60 * 1000;
 
 /** Parse a joined/stopped timestamp from the CSV into epoch ms, or `null` if it can't be parsed. */
-export function parseTimestamp(value?: string | null): number | null {
+function parseTimestamp(value?: string | null): number | null {
   if (!value) return null;
   const trimmed = String(value).trim();
   if (!trimmed) return null;

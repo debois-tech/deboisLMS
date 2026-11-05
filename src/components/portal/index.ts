@@ -7,7 +7,7 @@ export { PortalList, PortalRow, PortalFacts } from './PortalList';
 export type { PortalFact } from './PortalList';
 export { PortalTabs } from './PortalTabs';
 export type { PortalTab } from './PortalTabs';
-export { PortalStatus, statusLabel } from './PortalStatus';
+export { PortalStatus } from './PortalStatus';
 export { PortalEmpty } from './PortalEmpty';
 export { PortalBadgeGrid, PortalBadgeCard } from './PortalBadges';
 export { PortalDocumentCard } from './PortalDocuments';

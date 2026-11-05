@@ -6,7 +6,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import type { Batch, BatchStudentMapping } from '@/lib/types';
 import { addDays, fromDateValue, toDateValue } from '@/lib/utils/date';
 
-export type PortalEnrolment = BatchStudentMapping & { batch?: Batch };
+type PortalEnrolment = BatchStudentMapping & { batch?: Batch };
 
 interface PortalBatchValue {
   mappings: PortalEnrolment[];

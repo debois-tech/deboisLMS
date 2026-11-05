@@ -7,7 +7,7 @@
 -- 1. TYPES
 do $$ begin create type batch_status       as enum ('upcoming', 'ongoing', 'completed');      exception when duplicate_object then null; end $$;
 do $$ begin create type session_type       as enum ('online', 'offline');                     exception when duplicate_object then null; end $$;
-do $$ begin create type attendance_status  as enum ('present', 'partial', 'absent');          exception when duplicate_object then null; end $$;
+do $$ begin create type attendance_status  as enum ('present', 'partial', 'absent', 'no_appli', 'no_mark'); exception when duplicate_object then null; end $$;
 do $$ begin create type attendance_source  as enum ('manual', 'automated');                   exception when duplicate_object then null; end $$;
 do $$ begin create type mapping_status     as enum ('active', 'archived', 'terminated', 'transferred');       exception when duplicate_object then null; end $$;
 do $$ begin create type fee_status         as enum ('due', 'paid', 'terminated');             exception when duplicate_object then null; end $$;
@@ -389,8 +389,6 @@ create table if not exists attendance (
   total_attended_minutes numeric,
   raw_upload_ids         uuid[],
   source                 attendance_source default 'manual',
-  approved               boolean default false,
-  approved_at            timestamptz,
   created_at             timestamptz default now(),
   unique (student_id, lecture_id)
 );
@@ -398,6 +396,87 @@ create table if not exists attendance (
 create index if not exists idx_attendance_batch   on attendance(batch_id);
 create index if not exists idx_attendance_lecture on attendance(lecture_id);
 create index if not exists idx_attendance_student on attendance(student_id);
+
+comment on column attendance.status is
+  'no_appli = N/A: before the student joined or after they left. no_mark = the lecture has not been marked yet. '
+  'Every student has a row for every lecture, so a blank cell is never a gap in the data.';
+
+-- A new lecture starts every student at no_mark; anyone outside their dates (before joining, after leaving) at no_appli.
+create or replace function seed_lecture_attendance()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into attendance (student_id, batch_id, lecture_id, status, source)
+  select m.student_id, new.batch_id, new.id,
+    case
+      when new.lecture_date < m.joined_at
+        or (m.status <> 'active' and (m.left_on is null or new.lecture_date >= m.left_on))
+      then 'no_appli'::attendance_status
+      else 'no_mark'::attendance_status
+    end,
+    'automated'
+  from batch_student_mapping m
+  where m.batch_id = new.batch_id
+  on conflict (student_id, lecture_id) do nothing;
+  return null;
+end $$;
+
+drop trigger if exists lectures_seed_attendance on lectures;
+create trigger lectures_seed_attendance
+  after insert on lectures
+  for each row execute function seed_lecture_attendance();
+
+-- A student added to a batch that already has lectures: before their join date no_appli, after it no_mark.
+create or replace function seed_student_attendance()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into attendance (student_id, batch_id, lecture_id, status, source)
+  select new.student_id, l.batch_id, l.id,
+    case when l.lecture_date < new.joined_at then 'no_appli'::attendance_status else 'no_mark'::attendance_status end,
+    'automated'
+  from lectures l
+  where l.batch_id = new.batch_id
+  on conflict (student_id, lecture_id) do nothing;
+  return null;
+end $$;
+
+drop trigger if exists bsm_seed_attendance on batch_student_mapping;
+create trigger bsm_seed_attendance
+  after insert on batch_student_mapping
+  for each row execute function seed_student_attendance();
+
+-- A student who leaves: lectures dated from that day on that were never marked become no_appli. Marked ones stay.
+create or replace function close_left_attendance()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update attendance a
+  set status = 'no_appli'
+  from lectures l
+  where a.lecture_id = l.id
+    and a.student_id = new.student_id
+    and l.batch_id = new.batch_id
+    and a.status = 'no_mark'
+    and l.lecture_date >= coalesce(new.left_on, (now() at time zone 'Asia/Kolkata')::date);
+  return null;
+end $$;
+
+drop trigger if exists bsm_close_attendance on batch_student_mapping;
+create trigger bsm_close_attendance
+  after update of status on batch_student_mapping
+  for each row
+  when (old.status = 'active' and new.status <> 'active')
+  execute function close_left_attendance();
 
 
 -- 5. FEES
@@ -871,10 +950,10 @@ select
   b.id as batch_id,
   b.name as batch_name,
   count(distinct l.id) as total_lectures,
-  count(distinct a.id) filter (where a.status = 'present' and a.approved) as present_count,
-  count(distinct a.id) filter (where a.status = 'partial' and a.approved) as partial_count,
-  count(distinct a.id) filter (where a.status = 'absent' and a.approved) as absent_count,
-  count(distinct a.id) filter (where a.approved = false) as pending_approval
+  count(distinct a.id) filter (where a.status = 'present') as present_count,
+  count(distinct a.id) filter (where a.status = 'partial') as partial_count,
+  count(distinct a.id) filter (where a.status = 'absent') as absent_count,
+  count(distinct a.id) filter (where a.status = 'no_mark') as no_mark_count
 from batches b
 left join lectures l on l.batch_id = b.id
 left join attendance a on a.lecture_id = l.id
@@ -1024,10 +1103,10 @@ create policy student_read_own on lectures
     batch_id in (select batch_id from batch_student_mapping where student_id = current_student_id() and status::text <> 'transferred')
   );
 
--- Approved rows only: unapproved attendance is pending review, not fact.
+-- Every row except the ones nobody has marked yet.
 drop policy if exists student_read_own on attendance;
 create policy student_read_own on attendance
-  for select using (student_id = current_student_id() and approved = true);
+  for select using (student_id = current_student_id() and status <> 'no_mark');
 
 -- No student policy on student_fees: the portal reads student_fee_dues instead,
 -- which exposes the balance without total_fee or paid_amount. See section 9.

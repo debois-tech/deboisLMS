@@ -8,6 +8,8 @@ const attendance: Record<AttendanceStatus, [string, Tone]> = {
   present: ['Attended', 'success'],
   partial: ['Partly attended', 'warning'],
   absent: ['Missed', 'danger'],
+  no_appli: ['N/A', 'default'],
+  no_mark: ['Not marked', 'default'],
 };
 
 const fee: Record<FeeStatus, [string, Tone]> = {
@@ -60,7 +62,3 @@ export function PortalStatus(props: StatusProps) {
   return <Badge variant={tone} dot>{label}</Badge>;
 }
 
-/** The same wording without the pill, for places that need plain text. */
-export function statusLabel(props: StatusProps): string {
-  return (maps[props.kind] as Record<string, [string, Tone]>)[props.value][0];
-}

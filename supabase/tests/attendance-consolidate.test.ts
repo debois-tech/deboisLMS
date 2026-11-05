@@ -1,7 +1,7 @@
 // Run: npm test
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { consolidateByStudent, splitProtected } from '../../src/lib/attendance/consolidate.ts';
+import { consolidateByStudent, fillRoster, splitProtected } from '../../src/lib/attendance/consolidate.ts';
 
 const person = (studentId: string, displayName: string, totalMinutes: number, ids: string[]) => ({
   studentId,
@@ -41,20 +41,35 @@ test('distinct students are left alone', () => {
   assert.deepEqual(collapsed, []);
 });
 
-test('approved and manual records are kept, pending automated ones are rewritten', () => {
-  const payloads = [{ student_id: 'approved' }, { student_id: 'manual' }, { student_id: 'pending' }, { student_id: 'new' }];
+test('hand-entered records are kept, automated ones are rewritten', () => {
+  const payloads = [{ student_id: 'manual' }, { student_id: 'auto' }, { student_id: 'new' }];
   const { toWrite, kept } = splitProtected(payloads, [
-    { student_id: 'approved', source: 'automated', approved: true },
-    { student_id: 'manual', source: 'manual', approved: false },
-    { student_id: 'pending', source: 'automated', approved: false },
+    { student_id: 'manual', source: 'manual' },
+    { student_id: 'auto', source: 'automated' },
   ]);
 
-  assert.deepEqual(kept.map((p) => p.student_id), ['approved', 'manual']);
-  assert.deepEqual(toWrite.map((p) => p.student_id), ['pending', 'new']);
+  assert.deepEqual(kept.map((p) => p.student_id), ['manual']);
+  assert.deepEqual(toWrite.map((p) => p.student_id), ['auto', 'new']);
 });
 
 test('with nothing on file every payload is written', () => {
   const { toWrite, kept } = splitProtected([{ student_id: 'a' }], []);
   assert.equal(toWrite.length, 1);
   assert.equal(kept.length, 0);
+});
+
+test('roster students the file missed are Absent, or N/A before they joined', () => {
+  const roster = [
+    { studentId: 'here', joinedAt: '2026-10-01' },
+    { studentId: 'gone', joinedAt: '2026-10-01' },
+    { studentId: 'late', joinedAt: '2026-10-20' },
+    { studentId: 'nodate', joinedAt: null },
+  ];
+  const fills = fillRoster(roster, new Set(['here']), '2026-10-10');
+
+  assert.deepEqual(fills.map((f) => [f.studentId, f.status, f.minutes]), [
+    ['gone', 'absent', 0],
+    ['late', 'no_appli', null],
+    ['nodate', 'absent', 0],
+  ]);
 });

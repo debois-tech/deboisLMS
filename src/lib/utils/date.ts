@@ -14,7 +14,7 @@ export function fromDateValue(value: string): Date | null {
   return date.getMonth() === Number(month) - 1 ? date : null;
 }
 
-export function fromTimeValue(value: string): number | null {
+function fromTimeValue(value: string): number | null {
   const match = /^(\d{1,2}):(\d{2})$/.exec(value.trim());
   if (!match) return null;
   const hours = Number(match[1]);
