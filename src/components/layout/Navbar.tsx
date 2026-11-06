@@ -1,11 +1,18 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { Sun, Moon, LogOut, ChevronDown, Menu, Settings } from 'lucide-react';
+import { Sun, Moon, LogOut, ChevronDown, Menu, Settings, IndianRupee } from 'lucide-react';
 import { SettingsModal } from '@/components/settings/SettingsModal';
+import { EarningBreakdownModal } from '@/components/finance/EarningBreakdownModal';
 import { useTheme } from '@/lib/context/ThemeContext';
 import { useAuth } from '@/lib/context/AuthContext';
 import { supabase } from '@/lib/supabase/client';
+import { getEarningBreakdown } from '@/lib/supabase';
 import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
+import type { EarningBreakdown } from '@/lib/types';
+
+// Module-level: the cache outlives page navigations, and the TTL keeps it from going stale.
+const BREAKDOWN_TTL = 60_000;
+let breakdownCache: { rows: EarningBreakdown[]; at: number } | null = null;
 
 interface NavbarProps {
   onMenuClick?: () => void;
@@ -25,6 +32,20 @@ export function Navbar({ onMenuClick, homePath = '/', themeToggle = false, cente
   const { user, isAdmin } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [breakdownOpen, setBreakdownOpen] = useState(false);
+  const [breakdown, setBreakdown] = useState<EarningBreakdown[] | null>(() => breakdownCache?.rows ?? null);
+
+  // Cached fetch: module cache serves it, oldest 60 seconds; a stale cache refetches in the background.
+  const openBreakdown = () => {
+    setBreakdownOpen(true);
+    if (breakdownCache && Date.now() - breakdownCache.at < BREAKDOWN_TTL) return;
+    getEarningBreakdown()
+      .then((rows) => {
+        breakdownCache = { rows, at: Date.now() };
+        setBreakdown(rows);
+      })
+      .catch(console.error);
+  };
 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -67,7 +88,16 @@ export function Navbar({ onMenuClick, homePath = '/', themeToggle = false, cente
       {center && <div className="nav4-center">{center}</div>}
 
       <div className="flex items-center gap-1">
-      {switcher && <div className="nav-switch-bar">{switcher}</div>}
+      {switcher && (
+        <div className="nav-switch-bar">
+          {isAdmin && (
+            <button type="button" className="notif-bell" onClick={openBreakdown} aria-label="Earning breakdown">
+              <IndianRupee size={18} />
+            </button>
+          )}
+          {switcher}
+        </div>
+      )}
       <NotificationBell />
       {isAdmin && (
         <>
@@ -76,6 +106,13 @@ export function Navbar({ onMenuClick, homePath = '/', themeToggle = false, cente
           </button>
           <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
         </>
+      )}
+      {isAdmin && (
+        <EarningBreakdownModal
+          open={breakdownOpen}
+          onClose={() => setBreakdownOpen(false)}
+          breakdown={breakdown ?? []}
+        />
       )}
       <div className="relative" ref={dropdownRef}>
         <button
@@ -97,6 +134,16 @@ export function Navbar({ onMenuClick, homePath = '/', themeToggle = false, cente
               <p className="text-sm font-semibold text-[var(--text-primary)]">{user?.full_name}</p>
               <p className="text-xs text-[var(--text-muted)] mt-1">{user?.email}</p>
             </div>
+
+            {isAdmin && (
+              <button
+                onClick={openBreakdown}
+                className="nav-user-dropdown-item flex items-center gap-3 w-full text-sm text-[var(--text-primary)] hover:bg-[var(--bg-overlay)] transition-colors sm:hidden"
+              >
+                <IndianRupee size={16} />
+                <span>Earning breakdown</span>
+              </button>
+            )}
 
             {switcher && <div className="nav-switch-menu">{switcher}</div>}
 
