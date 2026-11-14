@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { History, Search } from 'lucide-react';
+import { History, Search, Trash2 } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -9,8 +10,11 @@ import { SearchSelect } from '@/components/ui/SearchSelect';
 import { Spinner } from '@/components/ui/Spinner';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/Table';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
-import { getBatches, getTutorActions, type TutorAction } from '@/lib/supabase';
+import { getBatches, getTutorActions, deleteOldTutorActions, type TutorAction } from '@/lib/supabase';
 import { formatDateTime } from '@/lib/utils/format';
+import { useConfirm } from '@/lib/context/ConfirmContext';
+import { useToast } from '@/lib/context/ToastContext';
+import { errorMessage } from '@/lib/utils/errors';
 
 const PER_PAGE = 20;
 
@@ -26,6 +30,8 @@ export default function TutorLogPage() {
   const [search, setSearch] = useState('');
   const [tutor, setTutor] = useState<string | null>(null);
   const [view, setView] = useState('live');
+  const confirm = useConfirm();
+  const { showToast } = useToast();
 
   const { loading, error, retry } = useInitialLoad(async () => {
     const [rows, batches] = await Promise.all([getTutorActions(), getBatches()]);
@@ -52,12 +58,33 @@ export default function TutorLogPage() {
 
   const pager = usePager(filtered, PER_PAGE);
 
+  const clearOld = async () => {
+    const yes = await confirm({
+      title: 'Clear logs older than 90 days?',
+      message: 'They are deleted for good.',
+      confirmLabel: 'Clear',
+      danger: true,
+    });
+    if (!yes) return;
+    try {
+      const removed = await deleteOldTutorActions();
+      setActions(await getTutorActions());
+      pager.reset();
+      showToast(removed ? `${removed} old logs cleared` : 'No old logs');
+    } catch (err) {
+      showToast(errorMessage(err, 'Could not clear old logs'), 'error');
+    }
+  };
+
   if (loading) return <Spinner centered />;
   if (error) return <ErrorState centered message={error} onRetry={retry} />;
 
   return (
     <div className="page-section">
-      <PageHeader title="Tutor Log" />
+      <PageHeader
+        title="Tutor Log"
+        action={<Button variant="outline" className="action-button-compact action-button-danger" onClick={clearOld}><Trash2 size={14} /> Clear old</Button>}
+      />
 
       {actions.length === 0 ? (
         <EmptyState icon={<History size={32} />} title="No tutor activity yet" />

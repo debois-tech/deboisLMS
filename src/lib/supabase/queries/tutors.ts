@@ -26,6 +26,14 @@ export async function getTutorBatches(tutorId: string): Promise<(TutorBatchMappi
   );
 }
 
+// Every tutor's assignments, for the Tutors table.
+export async function getAllTutorBatches(): Promise<(TutorBatchMapping & { batch?: Batch })[]> {
+  return rows<TutorBatchMapping & { batch?: Batch }>(
+    await supabase.from('tutor_batch_mapping').select('*, batch:batches(*)'),
+    'Could not load tutor batches',
+  );
+}
+
 export async function createTutor(input: Omit<Tutor, 'id' | 'created_at'>): Promise<Tutor> {
   return row<Tutor>(
     await supabase.from('tutors').insert(input).select().single(),
@@ -102,6 +110,14 @@ export interface TutorAction {
   batch_id: string | null;
   times: number;
   created_at: string;
+}
+
+// The nightly job (expire_students) does this too; this is the on-demand version. Returns how many went.
+export async function deleteOldTutorActions(): Promise<number> {
+  const cutoff = new Date(Date.now() - 90 * 86_400_000).toISOString();
+  const { error, count } = await supabase.from('tutor_actions').delete({ count: 'exact' }).lt('created_at', cutoff);
+  ok({ error }, 'Could not clear old logs');
+  return count ?? 0;
 }
 
 // Newest first; written by database triggers on everything a tutor changes

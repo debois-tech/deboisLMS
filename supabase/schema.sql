@@ -1851,6 +1851,9 @@ begin
   -- Read notifications are kept 30 days
   delete from notifications where read_at < now() - interval '30 days';
 
+  -- Tutor log entries are kept 90 days
+  delete from tutor_actions where created_at < now() - interval '90 days';
+
   for expired in
     select s.id as student_id, s.auth_user_id
     from students s

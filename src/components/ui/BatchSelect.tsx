@@ -55,6 +55,21 @@ export function BatchSelect({
   );
 }
 
+// 1–3 pills on one line; more split over two lines, longer line first.
+export function BatchPills({ batches }: { batches: Batch[] }) {
+  if (batches.length === 0) return <>—</>;
+  const split = batches.length > 3 ? Math.ceil(batches.length / 2) : batches.length;
+  return (
+    <div className="batch-pills">
+      {[batches.slice(0, split), batches.slice(split)].filter((row) => row.length > 0).map((row, at) => (
+        <div key={at} className="batch-pills-row">
+          {row.map((batch) => <span key={batch.id} className="batch-pill" title={batch.name}>{batch.program}</span>)}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const ALL = 'all';
 
 /** Page-level batch filter, sat beside the search bar. `null` means every batch. */

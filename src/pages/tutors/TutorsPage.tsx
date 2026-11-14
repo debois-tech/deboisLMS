@@ -10,15 +10,25 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Avatar } from '@/components/ui/Avatar';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
-import { getTutors } from '@/lib/supabase';
-import type { Tutor } from '@/lib/types';
+import { BatchPills } from '@/components/ui/BatchSelect';
+import { getTutors, getAllTutorBatches } from '@/lib/supabase';
+import type { Tutor, Batch } from '@/lib/types';
 
 export default function TutorsPage() {
   const [tutors, setTutors] = useState<Tutor[]>([]);
+  const [batchesByTutor, setBatchesByTutor] = useState<Map<string, Batch[]>>(new Map());
   const [search, setSearch] = useState('');
 
   const { loading, error, retry } = useInitialLoad(async () => {
-    setTutors(await getTutors());
+    const [tutorData, mappings] = await Promise.all([getTutors(), getAllTutorBatches()]);
+    setTutors(tutorData);
+    // Ongoing and upcoming only: the column shows who teaches what now.
+    const byTutor = new Map<string, Batch[]>();
+    for (const { tutor_id, batch } of mappings) {
+      if (!batch || batch.status === 'completed') continue;
+      byTutor.set(tutor_id, [...(byTutor.get(tutor_id) ?? []), batch]);
+    }
+    setBatchesByTutor(byTutor);
   });
 
   const filteredTutors = useMemo(() => {
@@ -60,6 +70,7 @@ export default function TutorsPage() {
                   <TH>Tutor</TH>
                   <TH>Email</TH>
                   <TH>Phone</TH>
+                  <TH align="center">Batches</TH>
                 </TR>
               </THead>
               <TBody>
@@ -73,6 +84,7 @@ export default function TutorsPage() {
                     </TD>
                     <TD className="cell-secondary">{t.email || '—'}</TD>
                     <TD className="cell-muted">{t.phone || '—'}</TD>
+                    <TD align="center" className="cell-secondary"><BatchPills batches={batchesByTutor.get(t.id) ?? []} /></TD>
                   </TR>
                 ))}
               </TBody>

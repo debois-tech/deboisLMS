@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Plus, Users, Upload, Search } from 'lucide-react';
 import { SearchFilterBar } from '@/components/ui/SearchFilterBar';
 import { FilterTabs } from '@/components/ui/FilterTabs';
-import { BatchFilter } from '@/components/ui/BatchSelect';
+import { BatchFilter, BatchPills } from '@/components/ui/BatchSelect';
 import { SearchSelect } from '@/components/ui/SearchSelect';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
@@ -42,21 +42,6 @@ const ENROLMENT_TABS: { value: EnrolmentTab; label: string }[] = [
   { value: 'archived', label: 'Completed' },
   { value: 'all', label: 'All' },
 ];
-
-// 1–3 pills on one line; more split over two lines, longer line first.
-function BatchPills({ batches }: { batches: Batch[] }) {
-  if (batches.length === 0) return <>—</>;
-  const split = batches.length > 3 ? Math.ceil(batches.length / 2) : batches.length;
-  return (
-    <div className="batch-pills">
-      {[batches.slice(0, split), batches.slice(split)].filter((row) => row.length > 0).map((row, at) => (
-        <div key={at} className="batch-pills-row">
-          {row.map((batch) => <span key={batch.id} className="batch-pill" title={batch.name}>{batch.program}</span>)}
-        </div>
-      ))}
-    </div>
-  );
-}
 
 const SORT_OPTIONS = [
   { value: 'newest', label: 'Newest first' },
