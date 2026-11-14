@@ -64,7 +64,7 @@ export function PortalDocumentCard({ studentId, mapping }: { studentId: string; 
         <span className="portal-badge-copy">
           <span className="portal-badge-kicker">Document ready</span>
           <span className="portal-badge-title">{LABELS[kind]}</span>
-          <span className="portal-badge-detail-line">Shared {formatDate(at)} · Tap to view</span>
+          <span className="portal-badge-detail-line">Available {formatDate(at)} · Tap to view</span>
           {others.length > 0 && <span className="portal-badge-more">+{others.length} more</span>}
         </span>
         <span className="portal-badge-open-arrow" aria-hidden="true">→</span>

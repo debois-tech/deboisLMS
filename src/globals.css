@@ -1720,18 +1720,43 @@ html.light .glass {
   color: var(--text-secondary);
 }
 
+/* Native checkboxes carry the OS palette; draw them from the theme instead. */
 .data-table-checkbox {
   width: 1.125rem;
   height: 1.125rem;
+  flex: none;
   margin: 0;
   padding: 0;
-  border: none;
-  border-radius: 0;
-  background: none;
-  accent-color: var(--primary);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--bg-elevated);
   cursor: pointer;
-  -webkit-appearance: checkbox;
-  appearance: auto;
+  appearance: none;
+  -webkit-appearance: none;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.data-table-checkbox:hover:not(:disabled) {
+  border-color: var(--primary);
+}
+
+.data-table-checkbox:checked {
+  border-color: var(--primary);
+  background-color: var(--primary);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23fff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-6'/%3E%3C/svg%3E");
+  background-size: 0.85rem 0.85rem;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.data-table-checkbox:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.data-table-checkbox:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 /* ── Table block — a toolbar sitting above a data table ──────── */
@@ -1758,33 +1783,110 @@ html.light .glass {
   margin-left: auto;
 }
 
-/* Bulk generate: the documents block stays lit, the rest of the app greys out. */
-#root :has(.docs-bulk-active) > :not(:has(.docs-bulk-active)):not(.docs-bulk-active):not(.toast-stack) {
-  opacity: 0.35;
-  filter: grayscale(1);
-  pointer-events: none;
-  transition: opacity 0.2s;
-}
-
-.docs-bulk-panel {
+/* The Access / Email / Generate popups: a ticked roster, greyed rows carry the reason. */
+.doc-picker {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  padding: 1.25rem;
+}
+
+/* Inset to the rows' own 0.875rem padding, so Select all sits over the checkbox column. */
+.doc-picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0 0.875rem;
+}
+
+.doc-picker-count {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.doc-picker-all {
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--primary-light);
+}
+
+.doc-picker-all:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.doc-picker-all:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.doc-picker-list {
+  display: flex;
+  flex-direction: column;
+  max-height: min(50vh, 20rem);
+  overflow-y: auto;
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--bg-surface);
+  border-radius: var(--radius-md);
+}
+
+.doc-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 0.875rem;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.doc-picker-row:last-child {
+  border-bottom: none;
+}
+
+.doc-picker-row:hover {
+  background: var(--bg-elevated);
+}
+
+.doc-picker-row.is-off {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.doc-picker-row.is-off:hover {
+  background: transparent;
+}
+
+.doc-picker-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.doc-picker-name {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doc-picker-code {
+  color: var(--text-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+}
+
+.doc-picker-row .ui-badge {
+  flex: none;
 }
 
 .docs-dates {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
   gap: 1rem;
-}
-
-.docs-bulk-actions {
-  display: flex;
-  justify-content: flex-end;
 }
 
 .submission-toggle {

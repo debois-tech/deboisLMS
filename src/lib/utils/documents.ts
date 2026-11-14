@@ -1,5 +1,5 @@
 import type { PDFFont } from 'pdf-lib';
-import type { DocumentKind } from '@/lib/types';
+import type { Batch, BatchStudentMapping, DocumentKind } from '@/lib/types';
 
 // Offer letter and internship certificate, drawn as real text on the letterhead. The layout is a port of the two
 // original HTML templates (content box at 13% / 19.5%, 10.2pt at line-height 1.48, the same margins and <br> gaps).
@@ -285,4 +285,26 @@ export async function buildDocumentPdf(kind: DocumentKind, data: DocumentData, a
   draw(note, BOX.x + (BOX.w - medium.widthOfTextAtSize(note, noteSize)) / 2, y, noteSize, LINE, medium, muted, { ySkew: degrees(12) });
 
   return pdf.save();
+}
+
+// The roster's view of one document kind, shared by the table and its popups.
+export const DOC_LABELS: Record<DocumentKind, string> = { offer_letter: 'Offer Letter', cert: 'Certificate' };
+export type DocStatus = 'missing' | 'pending' | 'shared';
+
+export function docPath(mapping: BatchStudentMapping, kind: DocumentKind) {
+  return kind === 'offer_letter' ? mapping.offer_letter_path : mapping.cert_path;
+}
+
+export function docShared(mapping: BatchStudentMapping, kind: DocumentKind) {
+  return kind === 'offer_letter' ? mapping.offer_letter_shared : mapping.cert_shared;
+}
+
+export function docStatus(mapping: BatchStudentMapping, kind: DocumentKind): DocStatus {
+  if (!docPath(mapping, kind)) return 'missing';
+  return docShared(mapping, kind) ? 'shared' : 'pending';
+}
+
+// Locked once the batch has ended and both documents are generated and shared.
+export function docLocked(mapping: BatchStudentMapping, batch: Batch) {
+  return Boolean(batch.ended_at) && docStatus(mapping, 'offer_letter') === 'shared' && docStatus(mapping, 'cert') === 'shared';
 }
