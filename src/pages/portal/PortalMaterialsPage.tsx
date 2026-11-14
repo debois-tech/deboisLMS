@@ -84,7 +84,6 @@ export default function PortalMaterialsPage() {
       action={
         materials.length > 0 ? (
           <SearchFilterBar
-            className="portal-search"
             value={query}
             onChange={setQuery}
             placeholder="Search material"

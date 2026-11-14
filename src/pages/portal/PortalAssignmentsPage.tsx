@@ -141,7 +141,6 @@ export default function PortalAssignmentsPage() {
       action={
         assignments.length > 0 ? (
           <SearchBar
-            className="portal-search"
             value={query}
             onChange={handleQuery}
             placeholder="Search assignments"

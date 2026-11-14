@@ -25,7 +25,6 @@ interface SearchBarProps {
   autoFocus?: boolean;
   /** Accessible name. Falls back to the placeholder. */
   label?: string;
-  className?: string;
   /** Omit entirely on surfaces that have nothing to filter by. */
   filter?: SearchBarFilter;
 }
@@ -38,7 +37,6 @@ export function SearchBar({
   size = 'md',
   autoFocus,
   label,
-  className,
   filter,
 }: SearchBarProps) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -69,7 +67,7 @@ export function SearchBar({
   };
 
   return (
-    <div ref={rootRef} className={clsx('searchbar', `searchbar-${size}`, className)}>
+    <div ref={rootRef} className={clsx('searchbar', `searchbar-${size}`)}>
       <div className="searchbar-field">
         <Search size={iconSize[size]} className="searchbar-icon" />
 

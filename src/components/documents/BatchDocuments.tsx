@@ -288,7 +288,6 @@ export function BatchDocuments({ batch }: { batch: Batch }) {
     <div className={bulkMode ? 'table-block docs-bulk-active' : 'table-block'}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <SearchFilterBar
-          className="max-w-md"
           value={search}
           onChange={setSearch}
           placeholder="Search by name or ID"

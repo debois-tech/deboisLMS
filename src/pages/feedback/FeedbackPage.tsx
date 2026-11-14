@@ -71,12 +71,12 @@ export default function FeedbackPage() {
         <EmptyState icon={<MessageSquare size={32} />} title="No feedback yet" />
       ) : (
         <>
-          <div className="mb-4 max-w-md">
-            <SearchBar value={search} onChange={setSearch} placeholder="Search by student or text" />
+          <div className="mb-4">
+            <FilterTabs tabs={tabs} value={status} onChange={setStatus} label="Feedback status" />
           </div>
 
           <div className="mb-4">
-            <FilterTabs tabs={tabs} value={status} onChange={setStatus} label="Feedback status" />
+            <SearchBar value={search} onChange={setSearch} placeholder="Search by student or text" />
           </div>
 
           {visible.length === 0 ? (

@@ -64,18 +64,16 @@ export default function TutorLogPage() {
       ) : (
         <>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div className="min-w-0 max-w-md flex-1">
-              <SearchFilterBar
-                value={search}
-                onChange={(value) => { setSearch(value); pager.reset(); }}
-                placeholder="Search by item, detail or batch"
-                filterLabel="Tutor"
-                allLabel="All tutors"
-                filterValue={tutor}
-                filterOptions={tutors.map((name) => ({ value: name, label: name }))}
-                onFilterChange={(value) => { setTutor(value); pager.reset(); }}
-              />
-            </div>
+            <SearchFilterBar
+              value={search}
+              onChange={(value) => { setSearch(value); pager.reset(); }}
+              placeholder="Search by item, detail or batch"
+              filterLabel="Tutor"
+              allLabel="All tutors"
+              filterValue={tutor}
+              filterOptions={tutors.map((name) => ({ value: name, label: name }))}
+              onFilterChange={(value) => { setTutor(value); pager.reset(); }}
+            />
             <SearchSelect
               options={VIEW_OPTIONS}
               value={view}

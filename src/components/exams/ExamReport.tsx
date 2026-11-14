@@ -93,7 +93,7 @@ export function ExamReport({ quiz, studentBase }: { quiz: QuizFull; studentBase:
         <div className="qz-section-head">
           <h2 id="rep-students" className="qz-section-title">Students</h2>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="w-64 max-w-full"><SearchBar value={term} onChange={setTerm} placeholder="Search students" size="sm" /></div>
+            <SearchBar value={term} onChange={setTerm} placeholder="Search students" />
             <Button className="action-button-compact" variant="secondary" size="sm" onClick={exportCsv}><Download size={14} /> Export CSV</Button>
           </div>
         </div>

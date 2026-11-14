@@ -3,12 +3,10 @@ import type { CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { clsx } from 'clsx';
-import { Plus, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { SearchBar } from '@/components/ui/SearchBar';
 import type { Group, Leaf } from '@/components/layout/NavRail';
 import { startComets } from '@/components/layout/navComets';
-
-type Tile = Leaf & { action?: boolean };
 
 // Tiles per long row; rows alternate n, n-1 so they interlock. Admin's 14 tiles fill 5/4/5 and 4/3/4/3 exactly.
 const colsFor = (width: number) => (width < 520 ? 3 : width < 820 ? 4 : 5);
@@ -33,8 +31,8 @@ const Ghost = ({ d, style }: { d: number; style?: CSSProperties }) => (
 );
 
 // Tiles per row, as slices of the list: rows alternate cols, cols-1.
-const rowsFor = (tiles: Tile[], cols: number) => {
-  const rows: Tile[][] = [];
+const rowsFor = (tiles: Leaf[], cols: number) => {
+  const rows: Leaf[][] = [];
   for (let at = 0, row = 0; at < tiles.length; row++) {
     const size = row % 2 ? cols - 1 : cols;
     rows.push(tiles.slice(at, at + size));
@@ -43,17 +41,11 @@ const rowsFor = (tiles: Tile[], cols: number) => {
   return rows;
 };
 
-const matches = (tile: Tile, pathname: string) =>
+const matches = (tile: Leaf, pathname: string) =>
   tile.end ? pathname === tile.to : pathname === tile.to || pathname.startsWith(`${tile.to}/`);
 
-interface NavHexProps {
-  groups: Group[];
-  /** The "+ New" tile at the end; none for a role that has nothing to create. */
-  newAction?: { label: string; to: string } | null;
-}
-
 // The header shows where you are; click it (or Ctrl+K) for a honeycomb of every page.
-export function NavHex({ groups, newAction }: NavHexProps) {
+export function NavHex({ groups }: { groups: Group[] }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const cols = useCols();
@@ -65,11 +57,8 @@ export function NavHex({ groups, newAction }: NavHexProps) {
   const mosaic = useRef<HTMLDivElement>(null);
   const sparks = useRef<HTMLCanvasElement>(null);
 
-  // Every page as one flat mosaic, plus the "+ New" shortcut of the sidebars.
-  const tiles = useMemo<Tile[]>(
-    () => [...groups.flatMap((group) => group.items), ...(newAction ? [{ ...newAction, icon: Plus, action: true }] : [])],
-    [groups, newAction],
-  );
+  // Every page as one flat mosaic.
+  const tiles = useMemo<Leaf[]>(() => groups.flatMap((group) => group.items), [groups]);
   const rows = useMemo(() => rowsFor(tiles, cols), [tiles, cols]);
 
   // The deepest match wins: /batches/new is "New Batch", not "Batches".
@@ -174,7 +163,7 @@ export function NavHex({ groups, newAction }: NavHexProps) {
                     onClick={close}
                     tabIndex={term && !hit ? -1 : 0}
                     aria-current={tile === current ? 'page' : undefined}
-                    className={clsx('hx', tile === current && 'is-current', tile.action && 'is-action')}
+                    className={clsx('hx', tile === current && 'is-current')}
                   >
                     <span className="hx-face">
                       <span className="hx-in">

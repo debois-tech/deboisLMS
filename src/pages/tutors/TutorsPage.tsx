@@ -43,7 +43,7 @@ export default function TutorsPage() {
         <EmptyState icon={<GraduationCap size={32} />} title="No tutors yet" />
       ) : (
         <>
-          <div className="mb-4 max-w-md">
+          <div className="mb-4">
             <SearchBar
               value={search}
               onChange={setSearch}

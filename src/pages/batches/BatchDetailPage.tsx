@@ -1039,7 +1039,6 @@ function FinanceTab({ batchId, batchName }: { batchId: string; batchName: string
         ) : (
           <div className="table-block" style={{ marginTop: '0.75rem' }}>
             <SearchFilterBar
-              className="max-w-sm"
               value={search}
               onChange={setSearch}
               placeholder="Search by student name"

@@ -71,12 +71,12 @@ export default function BatchesPage() {
         <EmptyState icon={<Layers size={32} />} title="No batches yet" />
       ) : (
         <>
-          <div className="mb-4 max-w-md">
-            <SearchBar value={search} onChange={setSearch} placeholder="Search by name or track" />
+          <div className="mb-4">
+            <FilterTabs tabs={tabs} value={status} onChange={setStatus} label="Batch status" />
           </div>
 
           <div className="mb-4">
-            <FilterTabs tabs={tabs} value={status} onChange={setStatus} label="Batch status" />
+            <SearchBar value={search} onChange={setSearch} placeholder="Search by name or track" />
           </div>
 
           {filteredBatches.length === 0 ? (

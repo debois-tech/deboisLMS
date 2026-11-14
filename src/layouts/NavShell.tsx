@@ -27,13 +27,12 @@ const remember = (key: string, value: string) => {
 
 interface NavShellProps {
   groups: Group[];
-  newAction?: { label: string; to: string } | null;
   homePath?: string;
   themeToggle?: boolean;
 }
 
 // The signed-in shell for admin and tutor: header, a navigation the user picks (icon rail or mosaic), and the page.
-export function NavShell({ groups, newAction, homePath, themeToggle }: NavShellProps) {
+export function NavShell({ groups, homePath, themeToggle }: NavShellProps) {
   const { pathname } = useLocation();
   const [mode, setMode] = useState<Mode>(() => (remembered(MODE_KEY, 'mosaic') === 'rail' ? 'rail' : 'mosaic'));
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -71,12 +70,12 @@ export function NavShell({ groups, newAction, homePath, themeToggle }: NavShellP
         homePath={homePath}
         themeToggle={themeToggle}
         onMenuClick={mode === 'rail' ? () => setDrawerOpen(true) : undefined}
-        center={mode === 'mosaic' ? <NavHex groups={groups} newAction={newAction} /> : undefined}
+        center={mode === 'mosaic' ? <NavHex groups={groups} /> : undefined}
         switcher={switcher}
       />
       <div className="app-shell">
         {mode === 'rail' && (
-          <NavRail groups={groups} newAction={newAction} open={drawerOpen} collapsed={icons} onClose={() => setDrawerOpen(false)} onToggle={toggleIcons} />
+          <NavRail groups={groups} open={drawerOpen} collapsed={icons} onClose={() => setDrawerOpen(false)} onToggle={toggleIcons} />
         )}
         <main key={pathname} className="app-content animate-fade-in">
           {/* The page loads in here, so a first visit never blanks the navigation. */}

@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Search, Users } from 'lucide-react';
-import { SearchFilterBar } from '@/components/ui/SearchFilterBar';
+import { SearchBar } from '@/components/ui/SearchBar';
+import { BatchFilter } from '@/components/ui/BatchSelect';
 import { Spinner } from '@/components/ui/Spinner';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -68,17 +69,9 @@ export default function TutorStudentsPage() {
         <EmptyState icon={<Users size={32} />} title="No students in your batches yet" />
       ) : (
         <>
-          <div className="mb-4 max-w-md">
-            <SearchFilterBar
-              value={search}
-              onChange={setSearch}
-              placeholder="Search by name, phone, or email"
-              filterLabel="Batch"
-              allLabel="All my batches"
-              filterValue={selectedBatchId}
-              filterOptions={batches.map((batch) => ({ value: batch.id, label: batch.name }))}
-              onFilterChange={setSelectedBatchId}
-            />
+          <div className="search-row mb-4">
+            <SearchBar value={search} onChange={setSearch} placeholder="Search by name, phone, or email" />
+            <BatchFilter batches={batches} value={selectedBatchId} onChange={setSelectedBatchId} allLabel="All my batches" />
           </div>
 
           {filteredStudents.length === 0 ? (

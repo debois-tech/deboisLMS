@@ -12,17 +12,17 @@ interface SearchFilterBarProps {
   onChange: (value: string) => void;
   placeholder: string;
   label?: string;
-  filterLabel: string;
-  allLabel: string;
-  filterValue: string | null;
-  filterOptions: SearchFilterOption[];
-  onFilterChange: (value: string | null) => void;
+  // The filter group is optional: omit these for a sort-only bar.
+  filterLabel?: string;
+  allLabel?: string;
+  filterValue?: string | null;
+  filterOptions?: SearchFilterOption[];
+  onFilterChange?: (value: string | null) => void;
   sortLabel?: string;
   sortValue?: string;
   sortOptions?: SearchFilterOption[];
   onSortChange?: (value: string) => void;
   defaultSortValue?: string;
-  className?: string;
 }
 
 //search filter
@@ -31,22 +31,21 @@ export function SearchFilterBar({
   onChange,
   placeholder,
   label,
-  filterLabel,
-  allLabel,
-  filterValue,
-  filterOptions,
+  filterLabel = 'Filter',
+  allLabel = 'All',
+  filterValue = null,
+  filterOptions = [],
   onFilterChange,
   sortLabel,
   sortValue,
   sortOptions,
   onSortChange,
   defaultSortValue,
-  className,
 }: SearchFilterBarProps) {
   const [open, setOpen] = useState(false);
 
   const hasSort = Boolean(sortOptions?.length && onSortChange);
-  const hasFilter = filterOptions.length > 0;
+  const hasFilter = filterOptions.length > 0 && Boolean(onFilterChange);
   const sortChanged = hasSort && sortValue !== defaultSortValue;
 
   const group = (heading: string, body: ReactNode) =>
@@ -61,7 +60,6 @@ export function SearchFilterBar({
 
   return (
     <SearchBar
-      className={className}
       value={value}
       onChange={onChange}
       placeholder={placeholder}
@@ -70,7 +68,7 @@ export function SearchFilterBar({
         open,
         onOpenChange: setOpen,
         active: filterValue !== null || sortChanged,
-        label: hasSort ? `${sortLabel ?? 'Sort'} and ${filterLabel.toLowerCase()}` : filterLabel,
+        label: !hasSort ? filterLabel : hasFilter ? `${sortLabel ?? 'Sort'} and ${filterLabel.toLowerCase()}` : (sortLabel ?? 'Sort'),
         panel: (
           <div className="searchbar-panel-scroll">
             {hasSort && group(sortLabel ?? 'Sort', (
@@ -97,7 +95,7 @@ export function SearchFilterBar({
                   type="button"
                   role="option"
                   aria-selected={filterValue === null}
-                  onClick={() => { onFilterChange(null); setOpen(false); }}
+                  onClick={() => { onFilterChange!(null); setOpen(false); }}
                   className="searchbar-option"
                 >
                   <span>{allLabel}</span>
@@ -109,7 +107,7 @@ export function SearchFilterBar({
                     type="button"
                     role="option"
                     aria-selected={filterValue === option.value}
-                    onClick={() => { onFilterChange(option.value); setOpen(false); }}
+                    onClick={() => { onFilterChange!(option.value); setOpen(false); }}
                     className="searchbar-option"
                   >
                     <span>{option.label}</span>

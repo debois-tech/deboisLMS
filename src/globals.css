@@ -2244,6 +2244,40 @@ html.light .glass {
   width: 100%;
 }
 
+/* Page-level search: one width everywhere. Pages never size it; in a .search-row it shares the line. */
+.searchbar-md {
+  flex: 1 1 16rem;
+  max-width: 28rem;
+}
+
+.batch-filter {
+  flex: none;
+  width: 15rem;
+  max-width: 100%;
+}
+
+/* A student's batches: pills the size of the nav switch, up to three a line, lines centred. */
+.batch-pills { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; }
+.batch-pills-row { display: flex; justify-content: center; gap: 0.25rem; }
+.batch-pill {
+  padding: 0.25rem 0.625rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+/* Search, then the page's own controls beside it (e.g. a batch filter). */
+.search-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
 .searchbar-field {
   display: flex;
   align-items: center;
@@ -3612,18 +3646,6 @@ body:has([role="dialog"]) .notice-chip { display: none; }
 @media (max-width: 480px) {
   .material-viewer-logo { height: 1.375rem; }
   .material-viewer-title { font-size: 0.875rem; }
-}
-
-/* ── Portal search ───────────────────────────────────────────── */
-/* Sits in `PortalPage`'s action slot on any portal page with enough rows to be
-   worth searching. Narrower than the list it filters. */
-.portal-search {
-  width: 100%;
-  max-width: 20rem;
-}
-
-@media (max-width: 640px) {
-  .portal-search { max-width: none; }
 }
 
 /* ── Portal tabs ─────────────────────────────────────────────── */
@@ -5559,7 +5581,6 @@ button.qz-dot:disabled { opacity: 0.45; cursor: not-allowed; }
   overflow-y: auto;
   scrollbar-width: thin;
 }
-.nav2-bottom { padding: 0.5rem; }
 
 /* A hub row: the icon never moves; the label slides from under it to its right (transform only, no reflow). */
 .nav2-row {
@@ -5639,8 +5660,8 @@ button.qz-dot:disabled { opacity: 0.45; cursor: not-allowed; }
 /* Collapse toggle: same row, always short, its label only shows when wide. */
 .nav2-toggle, .nav2.is-wide .nav2-toggle { height: 2.75rem; }
 .nav2-toggle .nav2-ico { translate: 0 0; }
-.nav2-toggle .nav2-label, .nav2-new .nav2-label { translate: 0 0; scale: 1; opacity: 0; }
-.nav2.is-wide .nav2-toggle .nav2-label, .nav2.is-wide .nav2-new .nav2-label { opacity: 1; transition-delay: 0s, 0s, 0.08s; }
+.nav2-toggle .nav2-label { translate: 0 0; scale: 1; opacity: 0; }
+.nav2.is-wide .nav2-toggle .nav2-label { opacity: 1; transition-delay: 0s, 0s, 0.08s; }
 
 /* Tiles under a hub (wide only): the group slides open by animating its row from 0fr. */
 .nav2-kids {
@@ -5681,27 +5702,6 @@ button.qz-dot:disabled { opacity: 0.45; cursor: not-allowed; }
 }
 .nav2-kids[data-open='true'] .nav2-tile { opacity: 1; translate: 0 0; }
 .nav2-tile.is-active { border-color: var(--primary); background: var(--primary-glow-soft); color: var(--primary-light); }
-
-/* New Batch: the icon square widens into a full button. No lift: overflow clips the hover strip. */
-.nav2-new {
-  position: relative;
-  display: block;
-  width: 2.75rem;
-  height: 2.75rem;
-  margin-left: 0.5rem;
-  overflow: hidden;
-  border-radius: var(--radius-md);
-  background: var(--primary);
-  color: #fff;
-  box-shadow: 0 0 18px var(--primary-glow);
-  transition: width var(--nav2-t) var(--nav2-ease), margin-left var(--nav2-t) var(--nav2-ease),
-    background-color 0.15s, scale 0.15s var(--nav2-pop);
-}
-.nav2.is-wide .nav2-new { width: 100%; margin-left: 0; }
-.nav2-new:hover { background: var(--primary-light); }
-.nav2-new:active { scale: 0.97; }
-.nav2-new .nav2-ico { top: 0.8125rem; translate: -0.5rem 0; }
-.nav2-new .nav2-label { font-weight: 600; }
 
 /* The second sidebar: slides out from behind the rail while a hub is hovered. */
 .nav2-fly-clip { display: none; }
@@ -5978,8 +5978,6 @@ button.qz-dot:disabled { opacity: 0.45; cursor: not-allowed; }
 .hx.is-current .hx-face { background: var(--primary); }
 .hx.is-current { color: var(--primary-light); }
 .hx.is-current .hx-in { background: color-mix(in srgb, var(--primary) 16%, var(--bg-surface)); }
-.hx.is-action { color: #fff; }
-.hx.is-action .hx-in { background: var(--primary); }
 
 /* Hover: the tile floats up a little over its neighbours, with electric static in the socket behind it. It stays there until the pointer leaves or it is pressed. */
 .hx:hover .hx-face, .hx:focus-visible .hx-face, .hx-cell.is-solo .hx-face {
@@ -5987,7 +5985,6 @@ button.qz-dot:disabled { opacity: 0.45; cursor: not-allowed; }
   background: linear-gradient(180deg, var(--primary-light), var(--primary));
 }
 .hx:hover, .hx:focus-visible, .hx-cell.is-solo .hx { color: var(--text-primary); }
-.hx.is-action:hover, .hx.is-action:focus-visible { color: #fff; }
 .hx:hover .hx-in::after, .hx:focus-visible .hx-in::after, .hx-cell.is-solo .hx-in::after { opacity: 0.5; }
 .hx:active .hx-face { transform: scale(0.97); transition-duration: 0.12s; }
 .hx-cell:has(.hx:hover, .hx:focus-visible), .hx-cell.is-solo {

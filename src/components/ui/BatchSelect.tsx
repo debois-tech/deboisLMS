@@ -30,10 +30,11 @@ interface BatchSelectProps {
   placeholder?: string;
   /** Override the row text where the name alone cannot tell two batches apart. */
   label?: (batch: Batch) => string;
+  className?: string;
 }
 
 export function BatchSelect({
-  batches, value, onChange, extraOptions = [], placeholder = 'Select a batch', label,
+  batches, value, onChange, extraOptions = [], placeholder = 'Select a batch', label, className,
 }: BatchSelectProps) {
   const { isAdmin } = useAuth();
   // Only admins know about test batches.
@@ -49,6 +50,28 @@ export function BatchSelect({
       placeholder={placeholder}
       searchPlaceholder="Search batches"
       emptyText="No batches found"
+      className={className}
+    />
+  );
+}
+
+const ALL = 'all';
+
+/** Page-level batch filter, sat beside the search bar. `null` means every batch. */
+export function BatchFilter({ batches, value, onChange, extraOptions = [], allLabel = 'All batches' }: {
+  batches: Batch[];
+  value: string | null;
+  onChange: (batchId: string | null) => void;
+  extraOptions?: { id: string; name: string }[];
+  allLabel?: string;
+}) {
+  return (
+    <BatchSelect
+      className="batch-filter"
+      batches={batches}
+      value={value ?? ALL}
+      onChange={(id) => onChange(id === ALL ? null : id)}
+      extraOptions={[{ id: ALL, name: allLabel }, ...extraOptions]}
     />
   );
 }

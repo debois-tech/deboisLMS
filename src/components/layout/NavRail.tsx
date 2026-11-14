@@ -4,7 +4,7 @@ import { clsx } from 'clsx';
 import type { LucideIcon } from 'lucide-react';
 import {
   ChevronDown, ClipboardCheck, ClipboardList, DollarSign, FileText, GraduationCap, History, BookOpen,
-  Layers, LayoutDashboard, LibraryBig, MessageSquare, PanelLeft, Plus, ScrollText, Users, X,
+  Layers, LayoutDashboard, LibraryBig, MessageSquare, PanelLeft, ScrollText, Users, X,
 } from 'lucide-react';
 
 export interface Leaf {
@@ -49,7 +49,6 @@ export const ADMIN_GROUPS: Group[] = [
   },
   { id: 'money', label: 'Money', icon: DollarSign, items: [{ label: 'Finance', to: '/fees', icon: DollarSign }] },
 ];
-export const ADMIN_NEW = { label: 'New Batch', to: '/batches/new' };
 
 export const TUTOR_GROUPS: Group[] = [
   { id: 'home', label: 'Dashboard', icon: LayoutDashboard, items: [{ label: 'Dashboard', to: '/tutor', icon: LayoutDashboard, end: true }] },
@@ -79,8 +78,6 @@ const useDesktop = () => useSyncExternalStore(watchDesktop, () => window.matchMe
 
 interface NavRailProps {
   groups: Group[];
-  /** The bottom "+ New" shortcut; none for a role that has nothing to create. */
-  newAction?: { label: string; to: string } | null;
   /** Mobile drawer. */
   open: boolean;
   /** Desktop rail (true) or wide (false). The drawer is always wide. */
@@ -90,7 +87,7 @@ interface NavRailProps {
 }
 
 // Icon rail with a hover flyout, or a wide sidebar with tiles under each hub.
-export function NavRail({ groups, newAction, open, collapsed, onClose, onToggle }: NavRailProps) {
+export function NavRail({ groups, open, collapsed, onClose, onToggle }: NavRailProps) {
   const { pathname } = useLocation();
   const desktop = useDesktop();
   const wide = !desktop || !collapsed;
@@ -227,15 +224,6 @@ export function NavRail({ groups, newAction, open, collapsed, onClose, onToggle 
             );
           })}
         </nav>
-
-        {newAction && (
-          <div className="nav2-bottom">
-            <Link to={newAction.to} onClick={pick} onMouseEnter={hide} className="nav2-new" aria-label={newAction.label}>
-              <span className="nav2-ico"><Plus size={18} /></span>
-              <span className="nav2-label">{newAction.label}</span>
-            </Link>
-          </div>
-        )}
 
         <div className="nav2-fly-clip">
           <div ref={panel} className={clsx('nav2-fly', flyoutOpen && 'is-open')} aria-hidden={!flyoutOpen}>

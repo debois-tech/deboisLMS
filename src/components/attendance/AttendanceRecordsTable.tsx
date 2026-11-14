@@ -36,7 +36,6 @@ export function AttendanceRecordsTable({ records, maxHeight = '24rem' }: Attenda
   return (
     <div className="table-block">
       <SearchFilterBar
-        className="max-w-sm"
         value={search}
         onChange={setSearch}
         placeholder="Search by student name, email or phone"
