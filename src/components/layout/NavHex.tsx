@@ -8,7 +8,7 @@ import { SearchBar } from '@/components/ui/SearchBar';
 import type { Group, Leaf } from '@/components/layout/NavRail';
 import { startComets } from '@/components/layout/navComets';
 
-// Tiles per long row; rows alternate n, n-1 so they interlock. Admin's 14 tiles fill 5/4/5 and 4/3/4/3 exactly.
+// Most tiles in a row. Admin's 14 tiles fill 5/4/5 and 4/3/4/3 exactly; fewer tiles are balanced and centred.
 const colsFor = (width: number) => (width < 520 ? 3 : width < 820 ? 4 : 5);
 const watchResize = (notify: () => void) => {
   window.addEventListener('resize', notify);
@@ -30,15 +30,29 @@ const Ghost = ({ d, style }: { d: number; style?: CSSProperties }) => (
   </svg>
 );
 
-// Tiles per row, as slices of the list: rows alternate cols, cols-1.
-const rowsFor = (tiles: Leaf[], cols: number) => {
-  const rows: Leaf[][] = [];
-  for (let at = 0, row = 0; at < tiles.length; row++) {
-    const size = row % 2 ? cols - 1 : cols;
-    rows.push(tiles.slice(at, at + size));
+// `shift` nudges a row half a cell sideways so it still interlocks with the row above.
+interface Row { tiles: Leaf[]; shift: number }
+
+// The fewest rows that fit, every row centred. Sizes alternate L, L-1 when the count allows it, else they are balanced.
+const rowsFor = (tiles: Leaf[], cols: number): Row[] => {
+  const n = tiles.length;
+  let count = 1;
+  while (count * cols - Math.floor(count / 2) < n) count++;
+  const half = Math.floor(count / 2);
+  const sizes = Array.from({ length: count }, (_, i) =>
+    (n + half) % count === 0 ? (n + half) / count - (i % 2) : Math.floor(n / count) + (i < n % count ? 1 : 0),
+  );
+
+  let at = 0;
+  let phase = 0; // where the row above puts its tile centres, modulo one cell
+  return sizes.map((size, i) => {
+    const natural = ((size - 1) / 2) % 1;
+    const shift = i === 0 ? 0 : (((phase + 0.5 - natural) % 1) + 1) % 1;
+    phase = (natural + shift) % 1;
+    const row = { tiles: tiles.slice(at, at + size), shift };
     at += size;
-  }
-  return rows;
+    return row;
+  });
 };
 
 const matches = (tile: Leaf, pathname: string) =>
@@ -97,22 +111,26 @@ export function NavHex({ groups }: { groups: Group[] }) {
     return () => { document.body.style.overflow = ''; };
   }, [open]);
 
-  // Lattice slots outside the real rows, as offsets from the centre in cell widths and row heights.
+  // Lattice slots outside the real tiles, as offsets from the centre in cell widths and row heights.
   const ghosts: { key: string; x: number; y: number; d: number }[] = [];
+  const reach = Math.max(...rows.map((row) => (row.tiles.length - 1) / 2 + row.shift)) + RINGS;
   for (let k = -RINGS; k < rows.length + RINGS; k++) {
-    const cap = Math.abs(k) % 2 ? cols - 1 : cols;
     const dy = k < 0 ? -k : k >= rows.length ? k - rows.length + 1 : 0;
-    for (let slot = -RINGS; slot < cap + RINGS; slot++) {
-      if (k >= 0 && k < rows.length && slot >= 0 && slot < cap) continue;
-      const dx = slot < 0 ? -slot : slot >= cap ? slot - cap + 1 : 0;
-      const d = dy + Math.max(0, dx - Math.ceil(dy / 2));
-      if (d <= RINGS) ghosts.push({ key: `${k}:${slot}`, x: slot - (cap - 1) / 2, y: k - (rows.length - 1) / 2, d });
+    // Rows past the ends continue the edge row, each half a cell off the last.
+    const edge = rows[Math.min(Math.max(k, 0), rows.length - 1)];
+    const span = (edge.tiles.length - 1) / 2;
+    const phase = (span + edge.shift + (dy % 2) * 0.5) % 1;
+    for (let x = phase - Math.ceil(reach); x <= reach; x++) {
+      const out = Math.abs(x - edge.shift) - span;
+      if (dy === 0 && out < 0.001) continue;
+      const d = dy + Math.max(0, Math.ceil(out - 0.001) - Math.ceil(dy / 2));
+      if (d <= RINGS) ghosts.push({ key: `${k}:${x}`, x, y: k - (rows.length - 1) / 2, d });
     }
   }
 
   useEffect(() => {
-    if (open && sparks.current && mosaic.current) return startComets(sparks.current, mosaic.current, cols, rows.length, LITE);
-  }, [open, cols, rows.length]);
+    if (open && sparks.current && mosaic.current) return startComets(sparks.current, mosaic.current, rows, LITE);
+  }, [open, rows]);
 
   const overlay = (
     <div
@@ -141,15 +159,15 @@ export function NavHex({ groups }: { groups: Group[] }) {
         <button ref={closeButton} type="button" className="nav4-close" onClick={close} aria-label="Close"><X size={20} /></button>
       </div>
 
-      <div ref={mosaic} className="nav4-mosaic" style={{ '--n': cols, '--r': rows.length } as CSSProperties}>
+      <div ref={mosaic} className="nav4-mosaic" style={{ '--n': Math.max(...rows.map((row) => row.tiles.length)), '--r': rows.length } as CSSProperties}>
         <div className="nav4-lattice" aria-hidden>
           {ghosts.map((ghost) => (
             <Ghost key={ghost.key} d={ghost.d} style={{ '--gx': ghost.x, '--gy': ghost.y } as CSSProperties} />
           ))}
         </div>
         {rows.map((row, r) => (
-          <div key={r} className="nav4-row">
-            {row.map((tile) => {
+          <div key={r} className="nav4-row" style={{ '--shift': row.shift } as CSSProperties}>
+            {row.tiles.map((tile) => {
               const Icon = tile.icon;
               const hit = hits.includes(tile);
               return (
@@ -175,8 +193,6 @@ export function NavHex({ groups }: { groups: Group[] }) {
                 </div>
               );
             })}
-            {/* A short last row keeps its place in the lattice instead of re-centring. */}
-            {Array.from({ length: (r % 2 ? cols - 1 : cols) - row.length }, (_, at) => <Ghost key={`fill${at}`} d={1} />)}
           </div>
         ))}
         {term && hits.length === 0 && <p className="nav4-empty">No match</p>}

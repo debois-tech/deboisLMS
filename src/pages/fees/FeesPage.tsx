@@ -173,7 +173,6 @@ export default function FeesPage() {
               <Table maxHeight="none">
               <THead>
                 <TR>
-                  <TH align="center" className="w-12">#</TH>
                   <TH>Student</TH>
                   <TH>Total Fee</TH>
                   <TH>Paid</TH>
@@ -183,7 +182,7 @@ export default function FeesPage() {
                 </TR>
               </THead>
               <TBody>
-                {fees.map((fee, index) => {
+                {fees.map((fee) => {
                   const student = students.find((item) => item.id === fee.student_id);
                   // A leaver owes their void; the rest of the fee never became due.
                   const left = fee.status === 'terminated';
@@ -192,7 +191,6 @@ export default function FeesPage() {
                   const isPaid = fee.status === 'paid' || remaining <= 0;
                   return (
                     <TR key={fee.id}>
-                      <TD align="center" className="cell-muted">{index + 1}</TD>
                       <TD className="font-medium">
                         <StudentLink studentId={fee.student_id} name={student?.name ?? 'Unknown'} />
                       </TD>

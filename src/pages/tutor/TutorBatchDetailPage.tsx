@@ -71,7 +71,7 @@ export default function TutorBatchDetailPage() {
           { label: 'Badges', value: 'badges' },
           { label: 'Material', value: 'material' },
         ]}
-        defaultValue={searchParams.get('tab') ?? 'overview'}
+        defaultValue="overview"
       >
         {(active) => (
           <>

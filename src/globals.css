@@ -1709,6 +1709,13 @@ html.light .glass {
   color: var(--text-muted);
 }
 
+/* Sr No.: as narrow as its content. */
+.data-table .serial-col {
+  width: 1%;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 .data-table .cell-secondary {
   color: var(--text-secondary);
 }
@@ -5878,7 +5885,7 @@ button.qz-dot:disabled { opacity: 0.45; cursor: not-allowed; }
   justify-content: center;
   padding: 1rem;
 }
-.nav4-row { display: flex; justify-content: center; }
+.nav4-row { display: flex; justify-content: center; translate: calc(var(--shift, 0) * (var(--hex) + var(--g))) 0; }
 .nav4-row + .nav4-row { margin-top: calc(var(--hex) * -0.2887 + var(--g) * 0.866); }
 
 /* Empty cells: outline hexagons on the same lattice as the tiles, centred on the mosaic. */

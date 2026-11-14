@@ -127,7 +127,7 @@ export default function TutorLogPage() {
                     <TH>Batch</TH>
                   </TR>
                 </THead>
-                <TBody>
+                <TBody from={pager.from}>
                   {pager.slice.map((action) => (
                     <TR key={action.id}>
                       <TD className="cell-muted">{formatDateTime(action.created_at)}</TD>

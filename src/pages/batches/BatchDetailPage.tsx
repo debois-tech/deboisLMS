@@ -1055,7 +1055,6 @@ function FinanceTab({ batchId, batchName }: { batchId: string; batchName: string
               <Table maxHeight="none">
               <THead>
                 <TR>
-                  <TH align="center" className="w-12">#</TH>
                   <TH>Student</TH>
                   <TH>Total Fee</TH>
                   <TH>Paid</TH>
@@ -1065,9 +1064,8 @@ function FinanceTab({ batchId, batchName }: { batchId: string; batchName: string
                 </TR>
               </THead>
               <TBody>
-                {filteredFeeRows.map(({ fee, student, remaining, status }, index) => (
+                {filteredFeeRows.map(({ fee, student, remaining, status }) => (
                   <TR key={fee.id}>
-                    <TD align="center" className="cell-muted">{index + 1}</TD>
                     <TD className="font-medium">
                       <StudentLink studentId={fee.student_id} name={student?.name ?? 'Unknown'} />
                     </TD>

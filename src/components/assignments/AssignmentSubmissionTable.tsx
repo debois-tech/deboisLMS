@@ -140,7 +140,6 @@ export function AssignmentSubmissionTable({
         <Table maxHeight="none">
           <THead>
             <TR>
-              <TH align="center" className="w-12">#</TH>
               <TH>Student</TH>
               <TH align="center">Submitted</TH>
               <TH align="center">Mark</TH>
@@ -149,9 +148,8 @@ export function AssignmentSubmissionTable({
             </TR>
           </THead>
           <TBody>
-            {filteredRows.map((row, index) => (
+            {filteredRows.map((row) => (
               <TR key={row.student_id}>
-                <TD align="center" className="cell-muted">{index + 1}</TD>
                 <TD className="font-medium text-[var(--text-primary)]">{row.student_name}</TD>
                 <TD align="center">
                   <span

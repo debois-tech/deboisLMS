@@ -1,4 +1,5 @@
-import { useState, ReactNode } from 'react';
+import { ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { clsx } from 'clsx';
 
 interface Tab { label: string; value: string; badge?: number; soon?: boolean }
@@ -11,10 +12,13 @@ interface TabsProps {
 }
 
 export function Tabs({ tabs, defaultValue, onChange, children }: TabsProps) {
-  const [active, setActive] = useState(defaultValue ?? tabs[0]?.value);
+  // The tab lives in the URL, so Back from a student or tutor lands on this section, not on Overview.
+  const [params, setParams] = useSearchParams();
+  const asked = params.get('tab');
+  const active = tabs.some((tab) => tab.value === asked) ? asked! : defaultValue ?? tabs[0]?.value;
 
   const handleChange = (val: string) => {
-    setActive(val);
+    setParams((prev) => { const next = new URLSearchParams(prev); next.set('tab', val); return next; }, { replace: true });
     onChange?.(val);
   };
 

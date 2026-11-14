@@ -24,7 +24,7 @@ const rgb = (hex: string): [number, number, number] => {
 };
 
 /** Starts the animation; the returned function stops it. */
-export function startComets(canvas: HTMLCanvasElement, mosaic: HTMLElement, cols: number, rowCount: number, lite: boolean): () => void {
+export function startComets(canvas: HTMLCanvasElement, mosaic: HTMLElement, layout: { tiles: unknown[]; shift: number }[], lite: boolean): () => void {
   const ctx = canvas.getContext('2d');
   if (!ctx || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return () => {};
 
@@ -65,10 +65,10 @@ export function startComets(canvas: HTMLCanvasElement, mosaic: HTMLElement, cols
   };
 
   const spawn = (): Comet => {
-    const row = Math.floor(Math.random() * rowCount);
-    const cap = row % 2 ? cols - 1 : cols;
-    const x = Math.floor(Math.random() * cap) - (cap - 1) / 2;
-    const y = (row - (rowCount - 1) / 2) * 0.866;
+    const row = Math.floor(Math.random() * layout.length);
+    const size = layout[row].tiles.length;
+    const x = Math.floor(Math.random() * size) - (size - 1) / 2 + layout[row].shift;
+    const y = (row - (layout.length - 1) / 2) * 0.866;
     const corner = Math.floor(Math.random() * 6);
     const comet: Comet = {
       verts: [[x + CORNERS[corner][0], y + CORNERS[corner][1]]],
