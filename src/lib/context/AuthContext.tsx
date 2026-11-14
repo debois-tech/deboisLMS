@@ -7,7 +7,9 @@ import { getStudentByAuthUserId, getTutorByAuthUserId } from '@/lib/supabase';
 interface AuthContextValue {
   user: Profile | null;
   setUser: (u: Profile | null) => void;
+  /** Admin or developer: the developer works on the admin pages too. */
   isAdmin: boolean;
+  isDeveloper: boolean;
   isStudent: boolean;
   isTutor: boolean;
   loading: boolean;
@@ -17,17 +19,18 @@ const AuthContext = createContext<AuthContextValue>({
   user: null,
   setUser: () => {},
   isAdmin: false,
+  isDeveloper: false,
   isStudent: false,
   isTutor: false,
   loading: true,
 });
 
-const ROLE_LABEL: Record<Role, string> = { admin: 'Admin', student: 'Student', tutor: 'Tutor' };
+const ROLE_LABEL: Record<Role, string> = { admin: 'Admin', student: 'Student', tutor: 'Tutor', developer: 'Developer' };
 
 /** Role comes from app_metadata (set server-side) — never user_metadata, which a user can edit on themselves. */
 function roleFromUser(user: User): Role {
   const role = user.app_metadata?.role;
-  return role === 'admin' || role === 'tutor' ? role : 'student';
+  return role === 'admin' || role === 'tutor' || role === 'developer' ? role : 'student';
 }
 
 export async function profileFromUser(user: User): Promise<Profile> {
@@ -98,7 +101,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         setUser,
-        isAdmin: user?.role === 'admin',
+        isAdmin: user?.role === 'admin' || user?.role === 'developer',
+        isDeveloper: user?.role === 'developer',
         isStudent: user?.role === 'student',
         isTutor: user?.role === 'tutor',
         loading,

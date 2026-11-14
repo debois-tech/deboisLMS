@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 import { getEarningBreakdown } from '@/lib/supabase';
 import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
+import { Badge } from '@/components/ui/Badge';
 import type { EarningBreakdown } from '@/lib/types';
 
 // Module-level: the cache outlives page navigations, and the TTL keeps it from going stale.
@@ -29,7 +30,7 @@ interface NavbarProps {
 export function Navbar({ onMenuClick, homePath = '/', themeToggle = false, center, switcher }: NavbarProps) {
   const navigate = useNavigate();
   const { theme, toggle } = useTheme();
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, isDeveloper } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [breakdownOpen, setBreakdownOpen] = useState(false);
@@ -84,6 +85,7 @@ export function Navbar({ onMenuClick, homePath = '/', themeToggle = false, cente
       <Link to={homePath} className="flex items-center select-none hover:opacity-80 transition-opacity">
         <img src={theme === 'dark' ? '/logo-dark.png' : '/logo.png'} alt="deboistech" className="h-9 w-auto" />
       </Link>
+      {isDeveloper && <Badge variant="warning">Developer</Badge>}
 
       {center && <div className="nav4-center">{center}</div>}
 

@@ -17,7 +17,8 @@ const NewStudentPage = lazy(() => import('@/pages/students/NewStudentPage'));
 const StudentDetailPage = lazy(() => import('@/pages/students/StudentDetailPage'));
 const EditStudentPage = lazy(() => import('@/pages/students/EditStudentPage'));
 const TutorsPage = lazy(() => import('@/pages/tutors/TutorsPage'));
-const TutorLogPage = lazy(() => import('@/pages/tutors/TutorLogPage'));
+const LogsPage = lazy(() => import('@/pages/logs/LogsPage'));
+const AccountsPage = lazy(() => import('@/pages/dev/AccountsPage'));
 const NewTutorPage = lazy(() => import('@/pages/tutors/NewTutorPage'));
 const TutorDetailPage = lazy(() => import('@/pages/tutors/TutorDetailPage'));
 const AttendancePage = lazy(() => import('@/pages/attendance/AttendancePage'));
@@ -26,8 +27,7 @@ const AssignmentsPage = lazy(() => import('@/pages/assignments/AssignmentsPage')
 const MaterialsPage = lazy(() => import('@/pages/materials/MaterialsPage'));
 const FeedbackPage = lazy(() => import('@/pages/feedback/FeedbackPage'));
 const NotificationsPage = lazy(() => import('@/pages/notifications/NotificationsPage'));
-const LoginPage = lazy(() => import('@/pages/auth/LoginPage'));
-const LoginChoicePage = lazy(() => import('@/pages/auth/LoginChoicePage'));
+const LoginPage = lazy(() => import('@/pages/auth/LoginPage'));const LoginChoicePage = lazy(() => import('@/pages/auth/LoginChoicePage'));
 const UserLoginPage = lazy(() => import('@/pages/auth/UserLoginPage'));
 const TutorLoginPage = lazy(() => import('@/pages/auth/TutorLoginPage'));
 
@@ -68,8 +68,7 @@ export default function App() {
       <Suspense fallback={<PageFallback />}>
         <Routes>
           <Route path="/auth/login" element={<LoginChoicePage />} />
-          <Route path="/auth/login/admin" element={<LoginPage />} />
-          <Route path="/auth/login/user" element={<UserLoginPage />} />
+          <Route path="/auth/login/admin" element={<LoginPage />} />          <Route path="/auth/login/user" element={<UserLoginPage />} />
           <Route path="/auth/login/tutor" element={<TutorLoginPage />} />
 
           <Route path="/" element={<ProtectedRoute role="admin" />}>
@@ -84,8 +83,7 @@ export default function App() {
               <Route path="students/:studentId" element={<StudentDetailPage />} />
               <Route path="students/:studentId/edit" element={<EditStudentPage />} />
               <Route path="tutors" element={<TutorsPage />} />
-              <Route path="tutor-log" element={<TutorLogPage />} />
-              <Route path="tutors/new" element={<NewTutorPage />} />
+              <Route path="logs" element={<LogsPage />} />              <Route path="tutors/new" element={<NewTutorPage />} />
               <Route path="tutors/:tutorId" element={<TutorDetailPage />} />
               <Route path="attendance" element={<AttendancePage />} />
               <Route path="fees" element={<FeesPage />} />
@@ -98,7 +96,10 @@ export default function App() {
               <Route path="exams/new" element={<ExamBuilderPage />} />
               <Route path="exams/:quizId" element={<ExamRunPage />} />
               <Route path="exams/:quizId/edit" element={<ExamBuilderPage />} />
-              <Route path="feedback" element={<FeedbackPage />} />
+              <Route path="dev" element={<ProtectedRoute role="developer" />}>
+                <Route path="bug-reports" element={<FeedbackPage />} />
+                <Route path="accounts" element={<AccountsPage />} />
+              </Route>
               <Route path="notifications" element={<NotificationsPage />} />
               <Route path="*" element={<NotFoundPage />} />
             </Route>

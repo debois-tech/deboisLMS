@@ -73,7 +73,7 @@ Deno.serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } },
     );
     const { data: { user: caller } } = await callerClient.auth.getUser();
-    if (!caller || caller.app_metadata?.role !== 'admin') {
+    if (!caller || !['admin', 'developer'].includes(caller.app_metadata?.role)) {
       return json({ error: 'Admin only' }, 403);
     }
 
@@ -101,10 +101,13 @@ Deno.serve(async (req) => {
 
     const { data: student, error: studentError } = await adminClient
       .from('students')
-      .select('name, email')
+      .select('name, email, is_test')
       .eq('id', student_id)
       .single();
     if (studentError || !student) return json({ error: 'Student not found' }, 404);
+    if (caller.app_metadata?.role === 'developer' && !student.is_test) {
+      return json({ error: 'Developers can only email test students' }, 403);
+    }
     if (!student.email) return json({ error: 'No email on file for this student' }, 400);
 
     const { data: file, error: downloadError } = await adminClient.storage.from('documents').download(path);

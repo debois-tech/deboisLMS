@@ -19,6 +19,7 @@ import { getStudents, getBatches, getAllBatchStudentMappings, createStudentLogin
 import type { BulkLoginResult } from '@/lib/supabase';
 import type { Student, Batch, BatchStudentMapping, MappingStatus } from '@/lib/types';
 import { useToast } from '@/lib/context/ToastContext';
+import { useAuth } from '@/lib/context/AuthContext';
 
 const NO_BATCH = 'none';
 
@@ -74,6 +75,7 @@ export default function StudentsPage() {
   const [showImport, setShowImport] = useState(false);
   const [bulkLogins, setBulkLogins] = useState<BulkLoginResult | null>(null);
   const { showToast } = useToast();
+  const { isDeveloper } = useAuth();
 
   const { loading, error, retry } = useInitialLoad(async () => {
     const [studentData, batchData, mappingData] = await Promise.all([
@@ -197,16 +199,18 @@ export default function StudentsPage() {
         <>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <FilterTabs tabs={tabs} value={enrolment} onChange={setEnrolment} label="Enrolment" />
-            <SearchSelect
-              options={VIEW_OPTIONS}
-              value={view}
-              onChange={selectView}
-              placeholder="Original"
-              searchPlaceholder=""
-              emptyText=""
-              showSearch={false}
-              className="!w-auto !max-w-none"
-            />
+            {isDeveloper && (
+              <SearchSelect
+                options={VIEW_OPTIONS}
+                value={view}
+                onChange={selectView}
+                placeholder="Original"
+                searchPlaceholder=""
+                emptyText=""
+                showSearch={false}
+                className="!w-auto !max-w-none"
+              />
+            )}
           </div>
 
           <div className="search-row mb-4">

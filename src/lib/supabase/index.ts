@@ -1,6 +1,7 @@
 export * from './queries/batches';
 export * from './queries/students';
 export * from './queries/tutors';
+export * from './queries/logs';
 export * from './queries/lectures';
 export * from './queries/attendance';
 export * from './queries/fees';

@@ -36,9 +36,9 @@ interface BatchSelectProps {
 export function BatchSelect({
   batches, value, onChange, extraOptions = [], placeholder = 'Select a batch', label, className,
 }: BatchSelectProps) {
-  const { isAdmin } = useAuth();
-  // Only admins know about test batches.
-  const text = label ?? ((batch: Batch) => (isAdmin && batch.is_test ? `${batch.name} (Test)` : batch.name));
+  const { isDeveloper } = useAuth();
+  // Only the developer works with test batches.
+  const text = label ?? ((batch: Batch) => (isDeveloper && batch.is_test ? `${batch.name} (Test)` : batch.name));
   return (
     <SearchSelect
       options={[

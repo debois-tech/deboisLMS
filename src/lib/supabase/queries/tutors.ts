@@ -99,31 +99,3 @@ export async function getTutorByAuthUserId(authUserId: string): Promise<Tutor | 
 export async function createTutorLogin(tutorId: string, rotate = false): Promise<StudentCredentials> {
   return invokeLoginFunction('create-tutor-login', { tutor_id: tutorId, rotate });
 }
-
-export interface TutorAction {
-  id: string;
-  tutor_id: string | null;
-  tutor_name: string;
-  op: 'created' | 'updated' | 'deleted';
-  item: string;
-  detail: string | null;
-  batch_id: string | null;
-  times: number;
-  created_at: string;
-}
-
-// The nightly job (expire_students) does this too; this is the on-demand version. Returns how many went.
-export async function deleteOldTutorActions(): Promise<number> {
-  const cutoff = new Date(Date.now() - 90 * 86_400_000).toISOString();
-  const { error, count } = await supabase.from('tutor_actions').delete({ count: 'exact' }).lt('created_at', cutoff);
-  ok({ error }, 'Could not clear old logs');
-  return count ?? 0;
-}
-
-// Newest first; written by database triggers on everything a tutor changes
-export async function getTutorActions(): Promise<TutorAction[]> {
-  return rows<TutorAction>(
-    await supabase.from('tutor_actions').select('*').order('created_at', { ascending: false }).limit(500),
-    'Could not load the tutor log',
-  );
-}

@@ -17,14 +17,14 @@ export default function LoginPage() {
 interface LoginPanelProps {
   title: string;
   emailPlaceholder: string;
-  /** The only role this door opens for. Anything else is signed straight back out. */
-  expectedRole: Role;
+  /** The only role this door opens for (the admin door also admits the developer). Anything else is signed straight back out. */
+  expectedRole: Exclude<Role, 'developer'>;
   hint?: string;
 }
 
-const HOME_FOR_ROLE: Record<Role, string> = { admin: '/', student: '/portal', tutor: '/tutor' };
+const HOME_FOR_ROLE: Record<Role, string> = { admin: '/', developer: '/', student: '/portal', tutor: '/tutor' };
 
-const WRONG_DOOR: Record<Role, string> = {
+const WRONG_DOOR: Record<Exclude<Role, 'developer'>, string> = {
   admin: 'Not an admin account. Use the student or tutor login.',
   student: 'Not a student account. Use the admin or tutor login.',
   tutor: 'Not a tutor account. Use the admin or student login.',
@@ -59,7 +59,7 @@ export function LoginPanel({ title, emailPlaceholder, expectedRole, hint }: Logi
 
       // Credentials were right but for the other door. Drop the session — leaving
       // it would let the next page load in as whatever they actually are.
-      if (profile.role !== expectedRole) {
+      if (profile.role !== expectedRole && !(expectedRole === 'admin' && profile.role === 'developer')) {
         await supabase.auth.signOut();
         setUser(null);
         setError(WRONG_DOOR[expectedRole]);
@@ -68,7 +68,7 @@ export function LoginPanel({ title, emailPlaceholder, expectedRole, hint }: Logi
       }
 
       setUser(profile);
-      navigate(HOME_FOR_ROLE[expectedRole]);
+      navigate(HOME_FOR_ROLE[profile.role]);
     }
     setLoading(false);
   };

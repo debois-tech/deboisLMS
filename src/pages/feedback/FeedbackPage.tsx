@@ -65,7 +65,7 @@ export default function FeedbackPage() {
 
   return (
     <div className="page-section">
-      <PageHeader title="Feedback" />
+      <PageHeader title="Bug report" />
 
       {reports.length === 0 ? (
         <EmptyState icon={<MessageSquare size={32} />} title="No feedback yet" />

@@ -30,3 +30,33 @@ export async function setMaintenanceMode(enabled: boolean): Promise<boolean> {
   if (error) throw new Error(error.message);
   return data.maintenance_mode;
 }
+
+export interface AdminAccount {
+  id: string;
+  email: string;
+  name: string;
+  created_at: string;
+  last_sign_in_at: string | null;
+}
+
+// Developer only: the edge function refuses anyone else.
+async function manageAdmins<T>(body: Record<string, unknown>): Promise<T> {
+  const { data, error } = await supabase.functions.invoke('manage-admins', { body });
+  if (error) {
+    const response = (error as { context?: Response }).context;
+    const detail = response && typeof response.json === 'function'
+      ? await response.json().then((reply: { error?: string } | null) => reply?.error).catch(() => undefined)
+      : undefined;
+    throw new Error(detail ?? error.message);
+  }
+  if (data?.error) throw new Error(data.error);
+  return data as T;
+}
+
+export async function listAdminAccounts(): Promise<AdminAccount[]> {
+  return (await manageAdmins<{ admins: AdminAccount[] }>({ action: 'list' })).admins;
+}
+
+export async function createAdminAccount(input: { full_name: string; email: string; password: string }): Promise<void> {
+  await manageAdmins({ action: 'create', ...input });
+}

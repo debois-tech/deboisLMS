@@ -3,8 +3,8 @@ import { Link, useLocation } from 'react-router-dom';
 import { clsx } from 'clsx';
 import type { LucideIcon } from 'lucide-react';
 import {
-  ChevronDown, ClipboardCheck, ClipboardList, DollarSign, FileText, GraduationCap, History, BookOpen,
-  Layers, LayoutDashboard, LibraryBig, MessageSquare, PanelLeft, ScrollText, Users, X,
+  Bug, ChevronDown, ClipboardCheck, ClipboardList, Code2, DollarSign, FileText, GraduationCap, History, BookOpen,
+  KeyRound, Layers, LayoutDashboard, LibraryBig, PanelLeft, ScrollText, Users, X,
 } from 'lucide-react';
 
 export interface Leaf {
@@ -28,7 +28,7 @@ export const ADMIN_GROUPS: Group[] = [
     id: 'people', label: 'People', icon: Users, items: [
       { label: 'Students', to: '/students', icon: Users },
       { label: 'Tutors', to: '/tutors', icon: GraduationCap },
-      { label: 'Tutor Log', to: '/tutor-log', icon: History },
+      { label: 'Logs', to: '/logs', icon: History },
       { label: 'Documents', to: '/documents', icon: ScrollText },
     ],
   },
@@ -38,7 +38,6 @@ export const ADMIN_GROUPS: Group[] = [
       { label: 'Attendance', to: '/attendance', icon: ClipboardCheck },
       { label: 'Assignments', to: '/assignments', icon: FileText },
       { label: 'Exams', to: '/exams', icon: ClipboardList },
-      { label: 'Feedback', to: '/feedback', icon: MessageSquare },
     ],
   },
   {
@@ -48,6 +47,17 @@ export const ADMIN_GROUPS: Group[] = [
     ],
   },
   { id: 'money', label: 'Money', icon: DollarSign, items: [{ label: 'Finance', to: '/fees', icon: DollarSign }] },
+];
+
+// The developer sees every admin page, plus these.
+export const DEV_GROUPS: Group[] = [
+  ...ADMIN_GROUPS,
+  {
+    id: 'dev', label: 'Developer', icon: Code2, items: [
+      { label: 'Bug report', to: '/dev/bug-reports', icon: Bug },
+      { label: 'Accounts', to: '/dev/accounts', icon: KeyRound },
+    ],
+  },
 ];
 
 export const TUTOR_GROUPS: Group[] = [

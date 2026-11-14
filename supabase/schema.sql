@@ -861,7 +861,8 @@ language sql
 stable
 set search_path = public
 as $$
-  select coalesce((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin', false);
+  -- The developer passes every admin check; section 22 is what keeps them off live data.
+  select coalesce((auth.jwt() -> 'app_metadata' ->> 'role') in ('admin', 'developer'), false);
 $$;
 
 create or replace function current_student_id()
@@ -1851,8 +1852,9 @@ begin
   -- Read notifications are kept 30 days
   delete from notifications where read_at < now() - interval '30 days';
 
-  -- Tutor log entries are kept 90 days
+  -- Tutor and admin log entries are kept 90 days
   delete from tutor_actions where created_at < now() - interval '90 days';
+  delete from admin_actions where created_at < now() - interval '90 days';
 
   for expired in
     select s.id as student_id, s.auth_user_id
@@ -4143,3 +4145,253 @@ end $$;
 
 revoke all on function verify_document(text, text, text) from public, anon, authenticated;
 grant execute on function verify_document(text, text, text) to service_role;
+
+-- 22. DEVELOPER ROLE
+-- is_admin() admits the developer too, so every admin policy and function keeps working for them. What stops a
+-- developer changing live data is guard_developer(), a trigger on every table below: it refuses any write to a
+-- row that is not test data. Triggers fire inside security definer functions as well, so the RPCs are covered.
+-- Whatever a developer inserts is born test.
+create or replace function is_dev()
+returns boolean
+language sql
+stable
+set search_path = public
+as $$
+  select coalesce((auth.jwt() -> 'app_metadata' ->> 'role') = 'developer', false);
+$$;
+
+-- Is this batch a test batch? Reads past RLS, so a policy can use it on a batch the caller cannot see.
+create or replace function batch_is_test(b uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce((select is_test from batches where id = b), false);
+$$;
+
+-- Is a row test data? Follows whichever key it carries to its batch or student. Rows with no such key (tutors,
+-- settings, programmes) are never test. Null = the parent is already gone, which only happens in a cascade.
+create or replace function row_is_test(doc jsonb)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select case
+    when doc ? 'is_test' then (doc ->> 'is_test')::boolean
+    when nullif(doc ->> 'batch_id', '') is not null then (select is_test from batches where id = (doc ->> 'batch_id')::uuid)
+    when nullif(doc ->> 'student_id', '') is not null then (select is_test from students where id = (doc ->> 'student_id')::uuid)
+    when nullif(doc ->> 'lecture_id', '') is not null then
+      (select b.is_test from lectures l join batches b on b.id = l.batch_id where l.id = (doc ->> 'lecture_id')::uuid)
+    when nullif(doc ->> 'assignment_id', '') is not null then
+      (select b.is_test from assignments a join batches b on b.id = a.batch_id where a.id = (doc ->> 'assignment_id')::uuid)
+    when nullif(doc ->> 'quiz_id', '') is not null then
+      (select coalesce(b.is_test, false) from quizzes q left join batches b on b.id = q.batch_id where q.id = (doc ->> 'quiz_id')::uuid)
+    when nullif(doc ->> 'question_id', '') is not null then
+      (select coalesce(b.is_test, false) from quiz_questions qq join quizzes q on q.id = qq.quiz_id left join batches b on b.id = q.batch_id
+        where qq.id = (doc ->> 'question_id')::uuid)
+    when nullif(doc ->> 'badge_id', '') is not null then
+      (select b.is_test from batch_badges bb join batches b on b.id = bb.batch_id where bb.id = (doc ->> 'badge_id')::uuid)
+    when nullif(doc ->> 'node_id', '') is not null then
+      (select b.is_test from curriculum_nodes n join batches b on b.id = n.batch_id where n.id = (doc ->> 'node_id')::uuid)
+    when nullif(doc ->> 'material_id', '') is not null then
+      (select b.is_test from materials m join batches b on b.id = m.batch_id where m.id = (doc ->> 'material_id')::uuid)
+    else false
+  end;
+$$;
+
+-- A developer's new batch or student is test from the first insert; nobody has to flag it.
+create or replace function dev_born_test()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if is_dev() then
+    new.is_test := true;
+    if tg_table_name = 'students' then
+      new.student_code := next_test_student_code();
+      -- The default already drew a live ref; hand it back.
+      perform resync_student_code_seq();
+    end if;
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists aa_dev_born_test on batches;
+create trigger aa_dev_born_test before insert on batches for each row execute function dev_born_test();
+drop trigger if exists aa_dev_born_test on students;
+create trigger aa_dev_born_test before insert on students for each row execute function dev_born_test();
+
+create or replace function guard_developer()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  mine boolean;
+begin
+  if not is_dev() then
+    return case when tg_op = 'DELETE' then old else new end;
+  end if;
+
+  if tg_op <> 'INSERT' then
+    mine := row_is_test(to_jsonb(old));
+    if mine is not null and not mine then
+      raise exception 'Developer accounts can only change test data';
+    end if;
+  end if;
+  if tg_op <> 'DELETE' then
+    if row_is_test(to_jsonb(new)) is not true then
+      raise exception 'Developer accounts can only change test data';
+    end if;
+  end if;
+  return case when tg_op = 'DELETE' then old else new end;
+end $$;
+
+-- Files follow the same rule: a developer writes only into a test batch's folder or a test enrolment's documents.
+create or replace function dev_may_write_file(bucket text, name text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select not is_dev() or case bucket
+    when 'materials' then batch_is_test(safe_uuid(split_part(name, '/', 1)))
+    when 'documents' then coalesce(
+      (select b.is_test from batch_student_mapping m join batches b on b.id = m.batch_id where m.id = safe_uuid(split_part(name, '/', 1))),
+      false)
+    else false
+  end;
+$$;
+
+drop policy if exists dev_files_insert on storage.objects;
+create policy dev_files_insert on storage.objects as restrictive for insert with check (dev_may_write_file(bucket_id, name));
+drop policy if exists dev_files_update on storage.objects;
+create policy dev_files_update on storage.objects as restrictive for update using (dev_may_write_file(bucket_id, name));
+drop policy if exists dev_files_delete on storage.objects;
+create policy dev_files_delete on storage.objects as restrictive for delete using (dev_may_write_file(bucket_id, name));
+
+-- ADMIN LOG: every write by an admin or developer account, folded the way the tutor log is.
+do $$ begin create type admin_actor_role as enum ('admin', 'developer'); exception when duplicate_object then null; end $$;
+
+create table if not exists admin_actions (
+  id         uuid primary key default gen_random_uuid(),
+  -- No foreign key: the history outlives the account.
+  admin_id   uuid,
+  admin_name text not null,
+  actor_role admin_actor_role not null,
+  op         tutor_action_op not null,
+  item       text not null,
+  detail     text,
+  batch_id   uuid,
+  times      int not null default 1,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_admin_actions_created on admin_actions(created_at desc);
+
+alter table admin_actions enable row level security;
+-- An admin reads admin entries; the developer reads everyone's. Only the developer deletes.
+drop policy if exists read_admin_actions on admin_actions;
+create policy read_admin_actions on admin_actions
+  for select using (is_admin() and (is_dev() or actor_role = 'admin'));
+drop policy if exists dev_deletes_admin_actions on admin_actions;
+create policy dev_deletes_admin_actions on admin_actions
+  for delete using (is_dev());
+
+-- The tutor log: same split. Test-batch entries are the developer's.
+drop policy if exists admin_full_access on tutor_actions;
+drop policy if exists read_tutor_actions on tutor_actions;
+create policy read_tutor_actions on tutor_actions
+  for select using (is_admin() and (is_dev() or not batch_is_test(batch_id)));
+drop policy if exists dev_deletes_tutor_actions on tutor_actions;
+create policy dev_deletes_tutor_actions on tutor_actions
+  for delete using (is_dev());
+
+create or replace function log_admin_action()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  doc       jsonb := case when tg_op = 'DELETE' then to_jsonb(old) else to_jsonb(new) end;
+  action_op tutor_action_op := case tg_op when 'INSERT' then 'created' when 'UPDATE' then 'updated' else 'deleted' end;
+  label     text := case tg_table_name
+    when 'students' then 'Student'
+    when 'batches' then 'Batch'
+    when 'tutors' then 'Tutor'
+    when 'batch_student_mapping' then 'Enrolment'
+    when 'tutor_batch_mapping' then 'Tutor assignment'
+    when 'student_fees' then 'Fee'
+    when 'fee_payment_logs' then 'Payment'
+    when 'payment_claims' then 'Payment claim'
+    when 'app_settings' then 'Setting'
+    else initcap(replace(tg_table_name, '_', ' '))
+  end;
+  about     text := coalesce(doc ->> 'title', doc ->> 'name', doc ->> 'student_code', doc ->> 'email');
+  who       text := coalesce(nullif(auth.jwt() -> 'user_metadata' ->> 'full_name', ''), auth.jwt() ->> 'email', 'Unknown');
+  batch     uuid := coalesce(nullif(doc ->> 'batch_id', '')::uuid, case when tg_table_name = 'batches' then (doc ->> 'id')::uuid end);
+begin
+  if not is_admin() then
+    return null;
+  end if;
+
+  update admin_actions
+  set times = times + 1
+  where admin_id = auth.uid() and op = action_op and item = label
+    and batch_id is not distinct from batch
+    and detail is not distinct from about
+    and created_at > now() - interval '1 minute';
+
+  if not found then
+    insert into admin_actions (admin_id, admin_name, actor_role, op, item, detail, batch_id)
+    values (auth.uid(), who, (case when is_dev() then 'developer' else 'admin' end)::admin_actor_role, action_op, label, about, batch);
+  end if;
+
+  return null;
+end $$;
+
+-- Test data is the developer's alone: an admin never sees a test batch, student or quiz.
+drop policy if exists hide_test_from_admin on batches;
+create policy hide_test_from_admin on batches as restrictive for select using (is_dev() or not is_admin() or not is_test);
+drop policy if exists hide_test_from_admin on students;
+create policy hide_test_from_admin on students as restrictive for select using (is_dev() or not is_admin() or not is_test);
+drop policy if exists hide_test_from_admin on quizzes;
+create policy hide_test_from_admin on quizzes as restrictive for select using (is_dev() or not is_admin() or not batch_is_test(batch_id));
+
+do $$
+declare t text;
+begin
+  -- Every table an admin or developer can change. The guard covers all of them; the log skips what students write.
+  foreach t in array array[
+    'tutors', 'batch_programs', 'batches', 'students', 'batch_student_mapping', 'tutor_batch_mapping',
+    'lectures', 'uploads', 'attendance', 'student_fees', 'fee_payment_logs', 'assignments',
+    'assignment_completions', 'student_repos', 'materials', 'material_views', 'feedback', 'app_settings',
+    'payment_claims', 'curriculum_nodes', 'curriculum_requests', 'batch_badges', 'student_badges', 'badge_codes',
+    'curriculum_node_badges', 'quizzes', 'quiz_questions', 'quiz_options', 'quiz_participants', 'quiz_answers'
+  ] loop
+    execute format('drop trigger if exists zz_guard_developer on %I', t);
+    execute format('create trigger zz_guard_developer before insert or update or delete on %I for each row execute function guard_developer()', t);
+  end loop;
+
+  foreach t in array array[
+    'tutors', 'batch_programs', 'batches', 'students', 'batch_student_mapping', 'tutor_batch_mapping',
+    'lectures', 'uploads', 'attendance', 'student_fees', 'fee_payment_logs', 'assignments',
+    'assignment_completions', 'materials', 'feedback', 'app_settings', 'payment_claims', 'curriculum_nodes',
+    'curriculum_requests', 'batch_badges', 'student_badges', 'quizzes', 'quiz_questions'
+  ] loop
+    execute format('drop trigger if exists log_admin_action on %I', t);
+    execute format('create trigger log_admin_action after insert or update or delete on %I for each row execute function log_admin_action()', t);
+  end loop;
+end $$;
+
+-- Test status was only ever set by this, back when no account could be trusted with test data.
+drop function if exists convert_batch_to_test(uuid);

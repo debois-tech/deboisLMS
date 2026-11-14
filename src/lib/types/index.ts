@@ -1,4 +1,4 @@
-export type Role = 'admin' | 'student' | 'tutor';
+export type Role = 'admin' | 'student' | 'tutor' | 'developer';
 
 export type BatchStatus = 'upcoming' | 'ongoing' | 'completed';
 export type SessionType = 'online' | 'offline';
