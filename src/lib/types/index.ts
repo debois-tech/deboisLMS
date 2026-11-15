@@ -5,8 +5,8 @@ export type SessionType = 'online' | 'offline';
 /** no_appli is N/A (outside the student's dates); no_mark is a lecture nobody has marked yet. */
 export type AttendanceStatus = 'present' | 'partial' | 'absent' | 'no_appli' | 'no_mark';
 export type AttendanceSource = 'manual' | 'automated';
-// archived = 90 days after the batch ended, account closed; terminated = left mid-batch; transferred = moved to another batch
-export type MappingStatus = 'active' | 'archived' | 'terminated' | 'transferred';
+// archived = 90 days after the batch ended, account closed; terminated = left mid-batch; transferred = moved to another batch; removed = taken out of one batch while in another, record kept
+export type MappingStatus = 'active' | 'archived' | 'terminated' | 'transferred' | 'removed';
 /** Students only hand work in through the portal now. */
 export type SubmissionChannel = 'portal';
 /** Open, not a union: admins mint new codes and the valid set lives in `batch_programs`. */

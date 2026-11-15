@@ -25,11 +25,8 @@ const variants = {
     'bg-transparent border border-[var(--primary)] text-[var(--primary)] hover:bg-[var(--primary)] hover:text-white active:scale-[0.98]',
 };
 
-const sizes = {
-  sm: 'min-h-11 px-6 py-3 text-xs',
-  md: 'min-h-12 px-7 py-3.5 text-sm',
-  lg: 'min-h-12 px-7 py-3 text-base',
-};
+// Real CSS classes: Tailwind padding utilities do nothing in this project, so a Button used to hug its label.
+const sizes = { sm: 'btn-sm', md: 'btn-md', lg: 'btn-lg' };
 
 export function Button({
   variant = 'primary',

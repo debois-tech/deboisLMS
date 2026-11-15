@@ -266,7 +266,7 @@ export function StudentImportModal({ open, onClose, batches, batch, onImport }: 
         <div className="flex justify-end gap-3">
           <Button variant="ghost" onClick={close} disabled={importing}>Cancel</Button>
           <Button
-            className="action-button-import"
+            className="action-button-compact"
             onClick={handleImport}
             loading={importing}
             disabled={incomplete}

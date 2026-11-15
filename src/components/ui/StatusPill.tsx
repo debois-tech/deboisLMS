@@ -15,6 +15,7 @@ const enrollment: Record<MappingStatus, [string, Tone]> = {
   archived: ['Archived', 'default'],
   terminated: ['Terminated', 'danger'],
   transferred: ['Transferred', 'default'],
+  removed: ['Removed', 'default'],
 };
 
 const fee: Record<FeeStatus, [string, Tone]> = {

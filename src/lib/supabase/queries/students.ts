@@ -379,3 +379,25 @@ export async function terminateEnrolment(mappingId: string, leftOn?: string): Pr
   await processDocumentCleanup().catch((err) => console.error('[terminate] file clean-up', err));
   return result;
 }
+
+export interface EnrolmentFootprint {
+  mapping_id: string;
+  student_id: string;
+  total_fee: number;
+  paid: number;
+  payments: number;
+  attendance: number;
+  submissions: number;
+  badges: number;
+}
+
+/** What each enrolment holds, so the remove flow can say what Delete would erase. */
+export async function getEnrolmentFootprints(mappingIds: string[]): Promise<EnrolmentFootprint[]> {
+  return rows<EnrolmentFootprint>(await supabase.rpc('enrolment_footprints', { p_mappings: mappingIds }), 'Could not load what these students hold');
+}
+
+/** Takes one student out of one batch they share with another. Keep leaves a hidden record; delete erases it. */
+export async function removeEnrolment(mappingId: string, erase: boolean): Promise<void> {
+  ok(await supabase.rpc('remove_enrolment', { p_mapping_id: mappingId, p_delete: erase }), 'Could not remove this student');
+  await processDocumentCleanup().catch((err) => console.error('[remove] file clean-up', err));
+}

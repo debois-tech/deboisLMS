@@ -187,7 +187,7 @@ export default function StudentsPage() {
         title="Students"
         action={
           <div className="flex flex-wrap justify-end gap-2">
-            <Button className="action-button-import" variant="secondary" onClick={() => setShowImport(true)}><Upload size={16} />Import</Button>
+            <Button className="action-button-compact" variant="secondary" onClick={() => setShowImport(true)}><Upload size={16} />Import</Button>
             <Link to="/students/new"><Button className="action-button-compact"><Plus size={16} />Add Student</Button></Link>
           </div>
         }

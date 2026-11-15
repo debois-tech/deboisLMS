@@ -4475,3 +4475,143 @@ begin
   end if;
   return null;
 end $$;
+
+-- 24. REMOVE A STUDENT FROM ONE BATCH
+-- For a student who is in another batch too and decides not to stay in this one. Keep: the enrolment stays as a
+-- hidden 'removed' record with its payments and data. Delete: this batch's footprint is erased. Never the student.
+alter type mapping_status add value if not exists 'removed';
+
+-- Removed enrolments leave the head-count and the amounts owed, as transferred ones do; money banked stays counted.
+create or replace view batch_fee_summary as
+select
+  b.id as batch_id,
+  b.name as batch_name,
+  count(distinct bsm.student_id) filter (where bsm.status::text not in ('terminated', 'transferred', 'removed')) as total_students,
+  coalesce(sum(sf.total_fee) filter (where bsm.status::text not in ('terminated', 'transferred', 'removed')), 0) as total_fees,
+  coalesce(sum(sf.paid_amount), 0) as total_collected,
+  coalesce(sum(greatest(sf.total_fee - sf.paid_amount, 0)) filter (where bsm.status::text not in ('terminated', 'transferred', 'removed')), 0) as total_outstanding,
+  b.is_test
+from batches b
+left join batch_student_mapping bsm on bsm.batch_id = b.id
+left join student_fees sf on sf.batch_id = b.id and sf.student_id = bsm.student_id
+group by b.id, b.name;
+
+create or replace view earning_breakdown as
+select
+  b.id   as batch_id,
+  b.name as batch_name,
+  count(bsm.id) filter (where bsm.status::text not in ('terminated', 'transferred', 'removed')) as active_students,
+  count(bsm.id) filter (where bsm.status =  'terminated') as terminated_students,
+  coalesce(sum(sf.paid_amount), 0) as collected,
+  coalesce(sum(sf.paid_amount) filter (where bsm.status::text not in ('terminated', 'transferred', 'removed')), 0) as collected_active,
+  coalesce(sum(sf.paid_amount) filter (where bsm.status =  'terminated'), 0) as collected_terminated,
+  coalesce(sum(greatest(sf.total_fee - sf.paid_amount, 0))
+    filter (where bsm.status::text not in ('terminated', 'transferred', 'removed')), 0) as pending,
+  coalesce(sum(greatest(coalesce(sf.expected_on_exit, 0) - sf.paid_amount, 0))
+    filter (where bsm.status = 'terminated'), 0) as void_amount,
+  coalesce(sum(greatest(sf.total_fee - coalesce(sf.expected_on_exit, 0), 0))
+    filter (where bsm.status = 'terminated'), 0) as never_due,
+  coalesce(sum(greatest(sf.paid_amount - coalesce(sf.paid_at_exit, sf.paid_amount), 0))
+    filter (where bsm.status = 'terminated'), 0) as recovered,
+  b.is_test
+from batches b
+left join batch_student_mapping bsm on bsm.batch_id = b.id
+left join student_fees sf on sf.batch_id = b.id and sf.student_id = bsm.student_id
+group by b.id, b.name;
+
+-- What an enrolment holds, so the admin sees what Delete would erase.
+create or replace function enrolment_footprints(p_mappings uuid[])
+returns table (mapping_id uuid, student_id uuid, total_fee numeric, paid numeric, payments int, attendance int, submissions int, badges int)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select m.id, m.student_id,
+    coalesce((select sf.total_fee from student_fees sf where sf.student_id = m.student_id and sf.batch_id = m.batch_id), 0),
+    coalesce((select sf.paid_amount from student_fees sf where sf.student_id = m.student_id and sf.batch_id = m.batch_id), 0),
+    (select count(*) from fee_payment_logs p where p.student_id = m.student_id and p.batch_id = m.batch_id)::int,
+    (select count(*) from attendance a where a.student_id = m.student_id and a.batch_id = m.batch_id)::int,
+    (select count(*) from assignment_completions c join assignments x on x.id = c.assignment_id
+      where c.student_id = m.student_id and x.batch_id = m.batch_id)::int,
+    (select count(*) from student_badges sb join batch_badges bb on bb.id = sb.badge_id
+      where sb.student_id = m.student_id and bb.batch_id = m.batch_id)::int
+  from batch_student_mapping m
+  where m.id = any(p_mappings) and is_admin();
+$$;
+
+revoke all on function enrolment_footprints(uuid[]) from public, anon;
+grant execute on function enrolment_footprints(uuid[]) to authenticated;
+
+create or replace function remove_enrolment(p_mapping_id uuid, p_delete boolean)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  m batch_student_mapping%rowtype;
+begin
+  if not is_admin() then
+    raise exception 'Admin only';
+  end if;
+
+  select * into m from batch_student_mapping where id = p_mapping_id;
+  if not found then
+    raise exception 'Enrolment not found';
+  end if;
+  if m.status <> 'active' then
+    raise exception 'Only an active enrolment can be removed';
+  end if;
+  if not exists (
+    select 1 from batch_student_mapping o
+    where o.student_id = m.student_id and o.id <> m.id and o.status = 'active'
+  ) then
+    raise exception 'Only a student who is in another batch can be removed';
+  end if;
+
+  -- Their documents for this batch go either way
+  insert into document_cleanup (path)
+  select p from unnest(array[m.offer_letter_path, m.cert_path]) as p where p is not null
+  on conflict do nothing;
+
+  if not p_delete then
+    update batch_student_mapping
+    set status = 'removed', left_on = current_date,
+        offer_letter_path = null, cert_path = null, offer_letter_shared = false, cert_shared = false
+    where id = p_mapping_id;
+    return;
+  end if;
+
+  delete from attendance where student_id = m.student_id and batch_id = m.batch_id;
+  delete from assignment_completions where student_id = m.student_id and assignment_id in (select id from assignments where batch_id = m.batch_id);
+  delete from student_repos where student_id = m.student_id and batch_id = m.batch_id;
+  delete from student_badges where student_id = m.student_id and badge_id in (select id from batch_badges where batch_id = m.batch_id);
+  delete from badge_codes where student_id = m.student_id and badge_id in (select id from batch_badges where batch_id = m.batch_id);
+  delete from material_views where student_id = m.student_id and material_id in (select id from materials where batch_id = m.batch_id);
+  delete from quiz_answers where student_id = m.student_id and quiz_id in (select id from quizzes where batch_id = m.batch_id);
+  delete from quiz_participants where student_id = m.student_id and quiz_id in (select id from quizzes where batch_id = m.batch_id);
+  delete from payment_claims where student_id = m.student_id and batch_id = m.batch_id;
+  delete from student_fees where student_id = m.student_id and batch_id = m.batch_id;
+  delete from batch_student_mapping where id = p_mapping_id;
+end $$;
+
+revoke all on function remove_enrolment(uuid, boolean) from public, anon;
+grant execute on function remove_enrolment(uuid, boolean) to authenticated;
+
+-- A tutor sees the other tutors of their own batches (the Tutors card on the batch overview), nothing wider.
+create or replace function tutor_batch_ids()
+returns setof uuid
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select batch_id from tutor_batch_mapping where tutor_id = current_tutor_id();
+$$;
+
+drop policy if exists tutor_read_batch_mates on tutor_batch_mapping;
+create policy tutor_read_batch_mates on tutor_batch_mapping for select using (batch_id in (select tutor_batch_ids()));
+drop policy if exists tutor_read_batch_tutors on tutors;
+create policy tutor_read_batch_tutors on tutors for select
+  using (id in (select tutor_id from tutor_batch_mapping where batch_id in (select tutor_batch_ids())));

@@ -256,8 +256,12 @@ select option {
   border-radius: var(--radius-md);
 }
 
+/* Button sizes: the label always gets the same room, whether or not an action-button class follows. */
+.btn-sm { min-height: 2.75rem; padding-inline: 0.875rem; font-size: 0.75rem; }
+.btn-md { min-height: 3rem; padding-inline: 1.125rem; font-size: 0.875rem; }
+.btn-lg { min-height: 3rem; padding-inline: 1.25rem; font-size: 1rem; }
+
 .action-button { min-width: 10rem; }
-.action-button-import { min-width: 8.5rem; }
 .action-button-compact { min-width: 6rem; padding-left: 0.875rem; padding-right: 0.875rem; }
 
 /* Icon only, no label — square, no forced min-width. */
@@ -1687,6 +1691,9 @@ html.light .glass {
   vertical-align: middle;
 }
 
+/* Dense rows for long rosters. */
+.data-table.data-table-compact tbody td { padding-block: 0.375rem; }
+
 .data-table tbody tr:last-child td {
   border-bottom: none;
 }
@@ -2088,42 +2095,6 @@ html.light .glass {
 .action-button-danger:hover:not(:disabled) {
   border-color: var(--danger-text);
   background: color-mix(in srgb, var(--danger-text) 10%, transparent);
-}
-
-/* ── Roster row actions ──────────────────────────────────────── */
-/* Both destroy something, and they used to be two bare glyphs hovering to the
-   same red — the only difference between deleting a login and detaching a row
-   was which 14px icon you happened to hit. Chrome, separate hover identities and
-   a real target instead. */
-.roster-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-}
-
-.roster-action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--bg-surface);
-  color: var(--text-muted);
-  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
-}
-
-/* Red: the login is deleted and the fees settled. Nothing here comes back. */
-.roster-action.is-terminate:hover {
-  color: var(--danger-text);
-  border-color: color-mix(in srgb, var(--danger-text) 45%, var(--border));
-  background: color-mix(in srgb, var(--danger-text) 10%, var(--bg-surface));
-}
-
-.roster-action:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
 }
 
 /* ── Filter tabs ─────────────────────────────────────────────── */
@@ -6142,3 +6113,21 @@ button.qz-dot:disabled { opacity: 0.45; cursor: not-allowed; }
 .report-copy { display: flex; flex: 1; flex-direction: column; min-width: 0; }
 .report-message { overflow: hidden; color: var(--text-primary); font-size: 0.875rem; text-overflow: ellipsis; white-space: nowrap; }
 .report-meta { color: var(--text-muted); font-size: 0.75rem; }
+
+/* Remove students: one card per student with its keep / delete choice. */
+.remove-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+/* A card whose header sits right above a table needs a real gap: Tailwind margin utilities do nothing here. */
+.card-header-gap { margin-bottom: 1.25rem; }
+
+/* Divides toolbar buttons into groups by how much they change. */
+.toolbar-sep { align-self: center; width: 1px; height: 1.5rem; margin-inline: 0.25rem; background: var(--border-strong); }
