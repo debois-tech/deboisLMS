@@ -1,3 +1,4 @@
+import { techError } from '@/lib/utils/errors';
 import { supabase } from '../client';
 import { removeStoredDocuments } from './documents';
 import { deleteBatchMaterials } from './materials';
@@ -69,7 +70,7 @@ export async function getBatchDeletionCounts(batchId: string): Promise<BatchDele
       .from(table)
       .select('*', { count: 'exact', head: true })
       .eq('batch_id', batchId);
-    if (error) throw new Error(`Could not count ${table}: ${error.message}`);
+    if (error) throw techError(`Could not count ${table}`, error.message);
     return total ?? 0;
   };
 

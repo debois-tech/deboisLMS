@@ -1,3 +1,4 @@
+import { techError } from '@/lib/utils/errors';
 import { supabase } from '../client';
 import { deleteMaterial, getMaterialsByAssignment } from './materials';
 import type { Assignment, AssignmentCompletion, StudentRepo, SubmissionChannel } from '@/lib/types';
@@ -73,7 +74,7 @@ export async function deleteAssignment(id: string): Promise<void> {
   await Promise.all(materials.map((material) => deleteMaterial(material)));
 
   const { error } = await supabase.from('assignments').delete().eq('id', id);
-  if (error) throw new Error(`Could not delete the assignment: ${error.message}`);
+  if (error) throw techError('Could not delete the assignment', error.message);
 }
 
 // Every active student and their submission. The CSV export ships these same rows.

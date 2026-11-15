@@ -4255,17 +4255,17 @@ begin
 end $$;
 
 -- Files follow the same rule: a developer writes only into a test batch's folder or a test enrolment's documents.
-create or replace function dev_may_write_file(bucket text, name text)
+create or replace function dev_may_write_file(p_bucket text, p_name text)
 returns boolean
 language sql
 stable
 security definer
 set search_path = public
 as $$
-  select not is_dev() or case bucket
-    when 'materials' then batch_is_test(safe_uuid(split_part(name, '/', 1)))
+  select not is_dev() or case p_bucket
+    when 'materials' then batch_is_test(safe_uuid(split_part(p_name, '/', 1)))
     when 'documents' then coalesce(
-      (select b.is_test from batch_student_mapping m join batches b on b.id = m.batch_id where m.id = safe_uuid(split_part(name, '/', 1))),
+      (select b.is_test from batch_student_mapping m join batches b on b.id = m.batch_id where m.id = safe_uuid(split_part(p_name, '/', 1))),
       false)
     else false
   end;
@@ -4374,7 +4374,7 @@ begin
   foreach t in array array[
     'tutors', 'batch_programs', 'batches', 'students', 'batch_student_mapping', 'tutor_batch_mapping',
     'lectures', 'uploads', 'attendance', 'student_fees', 'fee_payment_logs', 'assignments',
-    'assignment_completions', 'student_repos', 'materials', 'material_views', 'feedback', 'app_settings',
+    'assignment_completions', 'student_repos', 'materials', 'material_views', 'app_settings',
     'payment_claims', 'curriculum_nodes', 'curriculum_requests', 'batch_badges', 'student_badges', 'badge_codes',
     'curriculum_node_badges', 'quizzes', 'quiz_questions', 'quiz_options', 'quiz_participants', 'quiz_answers'
   ] loop
@@ -4395,3 +4395,83 @@ end $$;
 
 -- Test status was only ever set by this, back when no account could be trusted with test data.
 drop function if exists convert_batch_to_test(uuid);
+
+-- 23. BUG REPORTS FROM EVERY ROLE
+-- Anyone signed in reports a bug and sees their own reports; only the developer sees all of them and resolves them.
+do $$ begin create type feedback_reporter_role as enum ('student', 'tutor', 'admin', 'developer'); exception when duplicate_object then null; end $$;
+
+alter table feedback add column if not exists reporter_id   uuid;
+alter table feedback add column if not exists reporter_name text;
+alter table feedback add column if not exists reporter_role feedback_reporter_role;
+alter table feedback alter column student_id drop not null;
+
+update feedback f
+set reporter_id = s.auth_user_id, reporter_name = s.name, reporter_role = 'student'
+from students s
+where s.id = f.student_id and f.reporter_role is null;
+
+-- Who is reporting is read from the login, never taken from the client.
+create or replace function stamp_feedback_reporter()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  role_claim text := coalesce(auth.jwt() -> 'app_metadata' ->> 'role', 'student');
+begin
+  new.reporter_id := auth.uid();
+  new.reporter_role := case when role_claim in ('tutor', 'admin', 'developer') then role_claim else 'student' end::feedback_reporter_role;
+  new.student_id := case when new.reporter_role = 'student' then current_student_id() end;
+  new.reporter_name := coalesce(
+    case new.reporter_role
+      when 'student' then (select name from students where id = new.student_id)
+      when 'tutor' then (select name from tutors where id = current_tutor_id())
+    end,
+    nullif(auth.jwt() -> 'user_metadata' ->> 'full_name', ''),
+    auth.jwt() ->> 'email',
+    'Unknown');
+  return new;
+end $$;
+
+drop trigger if exists feedback_reporter_stamp on feedback;
+create trigger feedback_reporter_stamp before insert on feedback for each row execute function stamp_feedback_reporter();
+
+drop policy if exists admin_full_access on feedback;
+drop policy if exists student_read_own on feedback;
+drop policy if exists student_insert_own on feedback;
+drop policy if exists report_own on feedback;
+create policy report_own on feedback for insert with check (reporter_id = auth.uid());
+drop policy if exists read_own_reports on feedback;
+create policy read_own_reports on feedback for select using (reporter_id = auth.uid() or is_dev());
+drop policy if exists dev_resolves_reports on feedback;
+create policy dev_resolves_reports on feedback for update using (is_dev()) with check (is_dev());
+
+-- The inbox is the developer's own work, live reporters included.
+drop trigger if exists zz_guard_developer on feedback;
+
+create or replace function developer_users()
+returns uuid[]
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(array_agg(u.id), '{}') from auth.users u where u.raw_app_meta_data ->> 'role' = 'developer';
+$$;
+
+create or replace function notify_feedback()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if tg_op = 'INSERT' then
+    perform notify_users(developer_users(), 'feedback_new', null, coalesce(new.reporter_name, 'Someone'), '/dev/bug-reports');
+  elsif new.status = 'resolved' and old.status is distinct from new.status and new.reporter_id is not null then
+    perform notify_users(array[new.reporter_id], 'feedback_resolved', null, left(new.message, 60),
+      case new.reporter_role when 'student' then '/portal' when 'tutor' then '/tutor' else '/' end);
+  end if;
+  return null;
+end $$;

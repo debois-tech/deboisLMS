@@ -1,3 +1,4 @@
+import { techError } from '@/lib/utils/errors';
 import type { PostgrestError } from '@supabase/supabase-js';
 import { supabase } from '../client';
 import { rows } from './result';
@@ -5,7 +6,7 @@ import { getBatchFeeSummary } from './fees';
 
 /** Count queries answer with `count`, not `data`, so they need their own check. */
 function count(result: { count: number | null; error: { message: string } | null }, what: string): number {
-  if (result.error) throw new Error(`${what}: ${result.error.message}`);
+  if (result.error) throw techError(what, result.error.message);
   return result.count ?? 0;
 }
 

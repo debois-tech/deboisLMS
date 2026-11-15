@@ -8,7 +8,6 @@ import { DocumentDatesFields, EMPTY_DATES, datesReady } from '@/components/docum
 import { useConfirm } from '@/lib/context/ConfirmContext';
 import { useToast } from '@/lib/context/ToastContext';
 import {
-  deleteStoredDocument,
   generateAndStoreDocument,
   logFailures,
   sendDocumentEmail,
@@ -62,25 +61,22 @@ export function DocumentActionModal({ open, mode, kind, batch, rows, onClose, on
   const hasAccess = (row: DocumentRow) => docShared(row.mapping, kind);
 
   const eligible = (row: DocumentRow) => {
-    if (mode === 'email') return hasDoc(row) && hasAccess(row);
-    if (mode === 'access') return give ? hasDoc(row) : hasAccess(row);
+    if (mode === 'email') return hasDoc(row);
+    // Giving access again would restamp its date and resurface the student's "Document ready" card.
+    if (mode === 'access') return give ? hasDoc(row) && !hasAccess(row) : hasAccess(row);
     return !docLocked(row.mapping, batch);
   };
 
   const reason = (row: DocumentRow) => {
     if (mode === 'generate') return docLocked(row.mapping, batch) ? 'Locked' : null;
     if (!hasDoc(row)) return 'Not generated';
-    if (mode === 'email' || !give) return hasAccess(row) ? null : 'No access';
-    return null;
+    if (mode !== 'access') return null;
+    return give ? (hasAccess(row) ? 'Has access' : null) : (hasAccess(row) ? null : 'No access');
   };
 
-  const state = (row: DocumentRow) =>
-    mode === 'generate'
-      ? (hasDoc(row) ? 'Generated' : 'Not generated')
-      : (hasAccess(row) ? 'Access' : 'No access');
-
-  const tone = (row: DocumentRow) =>
-    mode === 'generate' ? (hasDoc(row) ? 'success' : 'default') : (hasAccess(row) ? 'success' : 'default');
+  // What the badge reports: the document in Generate, access everywhere else.
+  const on = (row: DocumentRow) => (mode === 'generate' ? hasDoc(row) : hasAccess(row));
+  const state = (row: DocumentRow) => (mode === 'generate' ? (on(row) ? 'Generated' : 'Not generated') : on(row) ? 'Access' : 'No access');
 
   const available = rows.filter(eligible);
   const allSelected = available.length > 0 && available.every((row) => selected.has(row.id));
@@ -99,10 +95,11 @@ export function DocumentActionModal({ open, mode, kind, batch, rows, onClose, on
     const existing = mode === 'generate' ? picked.filter(hasDoc) : [];
     if (existing.length > 0) {
       const proceed = await confirm({
-        title: `Replace ${existing.length} existing ${existing.length === 1 ? 'document' : 'documents'}?`,
-        message: 'Old files are deleted first. Access resets.',
+        title: `${existing.length} already ${existing.length === 1 ? 'has' : 'have'} this document`,
+        message: 'New ones replace them. Access is removed until given again.',
         confirmLabel: 'Proceed',
-        danger: true,
+        requireCheck: 'Replace the existing documents',
+        quick: true,
       });
       if (!proceed) return;
     }
@@ -118,8 +115,10 @@ export function DocumentActionModal({ open, mode, kind, batch, rows, onClose, on
         } else if (mode === 'email') {
           await sendDocumentEmail(row.id, batch.id, kind);
         } else {
-          if (hasDoc(row)) onPatch(row.id, await deleteStoredDocument(row.mapping.id, kind));
+          // The new file overwrites the old one at the same path, so a failed generate leaves the old document intact.
+          const hadAccess = hasAccess(row);
           onPatch(row.id, await generateAndStoreDocument(kind, row.mapping, row, batch, dates));
+          if (hadAccess) onPatch(row.id, await setDocumentShared(row.mapping.id, kind, false));
         }
         done++;
       } catch (err) {
@@ -157,7 +156,7 @@ export function DocumentActionModal({ open, mode, kind, batch, rows, onClose, on
             disabled={busy || selected.size === 0 || (mode === 'generate' && !datesReady(dates))}
             onClick={() => void apply()}
           >
-            {mode === 'generate' ? 'Generate' : 'Send'}
+            {mode === 'generate' ? 'Generate' : 'Proceed'}
           </Button>
         </>
       }
@@ -168,7 +167,7 @@ export function DocumentActionModal({ open, mode, kind, batch, rows, onClose, on
         {mode === 'access' && (
           <FilterTabs
             tabs={[
-              { value: 'give', label: 'Give', count: rows.filter(hasDoc).length },
+              { value: 'give', label: 'Give', count: rows.filter((row) => hasDoc(row) && !hasAccess(row)).length },
               { value: 'remove', label: 'Remove', count: rows.filter(hasAccess).length },
             ]}
             value={side}
@@ -200,7 +199,7 @@ export function DocumentActionModal({ open, mode, kind, batch, rows, onClose, on
                   <span className="doc-picker-name">{row.name}</span>
                   <span className="doc-picker-code">{row.student_code || '—'}</span>
                 </span>
-                <Badge variant={off ? 'default' : tone(row)}>{reason(row) ?? state(row)}</Badge>
+                <Badge variant={!off && on(row) ? 'success' : 'default'}>{reason(row) ?? state(row)}</Badge>
               </label>
             );
           })}

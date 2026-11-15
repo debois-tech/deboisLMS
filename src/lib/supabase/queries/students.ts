@@ -3,7 +3,7 @@ import { processDocumentCleanup, removeStoredDocuments } from './documents';
 import { logFailures } from './notices';
 import { invokeLoginFunction, maybeRow, ok, row, rows } from './result';
 import type { Batch, Student, BatchStudentMapping, StudentCredentials } from '@/lib/types';
-import { errorMessage } from '@/lib/utils/errors';
+import { errorMessage, techError } from '@/lib/utils/errors';
 import { planImportRows, toStudentInput, type ImportFailure } from '@/lib/utils/studentImport';
 
 export async function getStudents(): Promise<Student[]> {
@@ -333,7 +333,7 @@ export async function getStudentDeletionCounts(studentId: string): Promise<Stude
       .from(table)
       .select('*', { count: 'exact', head: true })
       .eq('student_id', studentId);
-    if (error) throw new Error(`Could not count ${table}: ${error.message}`);
+    if (error) throw techError(`Could not count ${table}`, error.message);
     return total ?? 0;
   };
 

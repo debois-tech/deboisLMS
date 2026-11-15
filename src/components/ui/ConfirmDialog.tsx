@@ -16,7 +16,9 @@ export function ConfirmDialog() {
 
   const tick = state.requireCheck ?? (state.danger && !state.quick ? 'Yes, I understand this cannot be undone' : undefined);
   const staged = Boolean(state.impact || tick);
-  const steps: Step[] = staged
+  // quick + requireCheck: the tick sits under the message, one step instead of two
+  const oneStep = Boolean(state.quick && state.requireCheck);
+  const steps: Step[] = staged && !oneStep
     ? ['review', ...(tick ? ['check' as const] : []), ...(state.requireText ? ['type' as const] : [])]
     : ['review'];
   const current = steps[Math.min(step, steps.length - 1)];
@@ -39,7 +41,7 @@ export function ConfirmDialog() {
 
   // Each step unlocks only when its own ask is done
   const asksText = Boolean(state.requireText) && (current === 'type' || !staged);
-  const locked = (current === 'check' && !checked) || (asksText && typed.trim() !== state.requireText);
+  const locked = ((current === 'check' || oneStep) && !checked) || (asksText && typed.trim() !== state.requireText);
 
   return (
     <Modal
@@ -109,7 +111,7 @@ export function ConfirmDialog() {
           </>
         )}
 
-        {current === 'check' && tick && (
+        {(current === 'check' || oneStep) && tick && (
           <label className={`repo-confirm ${checked ? 'is-checked' : ''}`}>
             <input type="checkbox" checked={checked} onChange={(event) => setChecked(event.target.checked)} />
             {tick}

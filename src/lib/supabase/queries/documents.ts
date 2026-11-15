@@ -1,3 +1,4 @@
+import { techError } from '@/lib/utils/errors';
 import { supabase } from '../client';
 import { ok, rows } from './result';
 import type { Batch, BatchStudentMapping, DocumentKind, Student } from '@/lib/types';
@@ -97,7 +98,7 @@ export async function generateAndStoreDocument(
 
   const path = `${mapping.id}/${kind}.pdf`;
   const { error } = await supabase.storage.from(BUCKET).upload(path, file, { contentType: 'application/pdf', upsert: true });
-  if (error) throw new Error(`Could not store the ${kind === 'offer_letter' ? 'offer letter' : 'certificate'}: ${error.message}`);
+  if (error) throw techError(`Could not store the ${kind === 'offer_letter' ? 'offer letter' : 'certificate'}`, error.message);
 
   const patch = { [PATH_COLUMN[kind]]: path };
   ok(await supabase.from('batch_student_mapping').update(patch).eq('id', mapping.id), 'The document was stored but the record could not be updated');
@@ -133,7 +134,7 @@ export async function downloadStoredDocument(path: string, filename: string): Pr
 // Drops one generated document: the file, the path and the shared flag
 export async function deleteStoredDocument(mappingId: string, kind: DocumentKind): Promise<Partial<BatchStudentMapping>> {
   const { error } = await supabase.storage.from(BUCKET).remove([`${mappingId}/${kind}.pdf`]);
-  if (error) throw new Error(`Could not remove the file: ${error.message}`);
+  if (error) throw techError('Could not remove the file', error.message);
   const patch = { [PATH_COLUMN[kind]]: null, [SHARE_COLUMN[kind]]: false };
   ok(await supabase.from('batch_student_mapping').update(patch).eq('id', mappingId), 'The file was removed but the record could not be updated');
   return patch;
@@ -153,7 +154,7 @@ export async function processDocumentCleanup(): Promise<void> {
   const paths = rows<{ path: string }>(await supabase.from('document_cleanup').select('path'), 'Could not read the file clean-up list').map((r) => r.path);
   if (paths.length === 0) return;
   const { error } = await supabase.storage.from(BUCKET).remove(paths);
-  if (error) throw new Error(`Could not remove old documents: ${error.message}`);
+  if (error) throw techError('Could not remove old documents', error.message);
   ok(await supabase.from('document_cleanup').delete().in('path', paths), 'Could not clear the file clean-up list');
 }
 
@@ -164,7 +165,7 @@ export async function viewStoredDocument(path: string): Promise<void> {
   window.open(data.signedUrl, '_blank', 'noopener');
 }
 
-/** The edge function re-reads the stored file and the shared flag itself — nothing to pass but ids. */
+/** The edge function re-reads the stored file itself, with or without LMS access — nothing to pass but ids. */
 export async function sendDocumentEmail(studentId: string, batchId: string, kind: DocumentKind): Promise<void> {
   const { data, error } = await supabase.functions.invoke('send-document', {
     body: { student_id: studentId, batch_id: batchId, doc_type: kind },

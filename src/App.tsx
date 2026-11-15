@@ -35,7 +35,6 @@ const PortalOverviewPage = lazy(() => import('@/pages/portal/PortalOverviewPage'
 const PortalAttendancePage = lazy(() => import('@/pages/portal/PortalAttendancePage'));
 const PortalAssignmentsPage = lazy(() => import('@/pages/portal/PortalAssignmentsPage'));
 const PortalMaterialsPage = lazy(() => import('@/pages/portal/PortalMaterialsPage'));
-const PortalFeedbackPage = lazy(() => import('@/pages/portal/PortalFeedbackPage'));
 const PortalProfilePage = lazy(() => import('@/pages/portal/PortalProfilePage'));
 
 const TutorDashboardPage = lazy(() => import('@/pages/tutor/TutorDashboardPage'));
@@ -135,7 +134,6 @@ export default function App() {
               <Route path="quizzes" element={<PortalQuizzesPage />} />
               <Route path="quizzes/:quizId" element={<PortalQuizPage />} />
               <Route path="profile" element={<PortalProfilePage />} />
-              <Route path="feedback" element={<PortalFeedbackPage />} />
               <Route path="notifications" element={<NotificationsPage />} />
               {/* Fees moved inside the profile. Kept so a bookmark still lands somewhere. */}
               <Route path="fees" element={<Navigate to="/portal/profile" replace />} />

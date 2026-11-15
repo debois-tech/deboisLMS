@@ -1,3 +1,4 @@
+import { techError } from '@/lib/utils/errors';
 import { supabase } from '../client';
 import { maybeRow, ok, rows } from './result';
 import { DOCX_TYPE, docxToPdf, extensionOf, fileMimeType, prepareImageForUpload } from '@/lib/utils/files';
@@ -108,7 +109,7 @@ async function uploadMaterial(input: UploadMaterialInput): Promise<Material> {
     .from(BUCKET)
     .upload(storagePath, file, { contentType: mimeType, upsert: false });
 
-  if (uploadError) throw new Error(uploadError.message);
+  if (uploadError) throw techError('Could not upload the file', uploadError.message);
 
   const { data, error } = await supabase
     .from('materials')
@@ -131,7 +132,7 @@ async function uploadMaterial(input: UploadMaterialInput): Promise<Material> {
 
   if (error) {
     await supabase.storage.from(BUCKET).remove([storagePath]);
-    throw new Error(error.message);
+    throw techError('Could not save the material', error.message);
   }
 
   return data as Material;
@@ -171,7 +172,7 @@ export async function uploadMaterials(
 // File first: an orphaned row is visible and fixable, an orphaned object is not.
 export async function deleteMaterial(material: Material): Promise<void> {
   const { error: storageError } = await supabase.storage.from(BUCKET).remove([material.storage_path]);
-  if (storageError) throw new Error(`Could not delete the file (${storageError.message}).`);
+  if (storageError) throw techError('Could not delete the file', storageError.message);
 
   ok(await supabase.from('materials').delete().eq('id', material.id), 'Could not delete the material');
 }
@@ -189,7 +190,7 @@ export async function deleteBatchMaterials(batchId: string, studyOnly = false): 
 
   // Files first: an orphaned row is visible and fixable, an orphaned object is not.
   const { error } = await supabase.storage.from(BUCKET).remove(paths);
-  if (error) throw new Error(error.message);
+  if (error) throw techError('Could not delete the files', error.message);
 
   const remove = supabase.from('materials').delete().eq('batch_id', batchId);
   ok(await (studyOnly ? remove.is('assignment_id', null) : remove), 'Could not clear the material rows');

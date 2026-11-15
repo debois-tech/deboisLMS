@@ -1,3 +1,4 @@
+import { techError } from '@/lib/utils/errors';
 import { supabase } from '../client';
 import { rows as unwrapRows } from './result';
 import type { AttendanceRecord, AttendanceStatus, AttendanceSource } from '@/lib/types';
@@ -64,7 +65,7 @@ export async function insertUploadRows(
   }));
 
   const { error } = await supabase.from('uploads').insert(records);
-  if (error) throw new Error(`Failed to upload rows: ${error.message}`);
+  if (error) throw techError('Failed to upload rows', error.message);
 }
 
 /** One student's rows in one batch, with their lectures, for staff. Unlike the portal's, this keeps the not-marked ones. */
@@ -96,5 +97,5 @@ export async function saveAttendance(batchId: string, lectureId: string, marks: 
     })),
     { onConflict: 'student_id,lecture_id' },
   );
-  if (error) throw new Error(`Could not save the attendance: ${error.message}`);
+  if (error) throw techError('Could not save the attendance', error.message);
 }

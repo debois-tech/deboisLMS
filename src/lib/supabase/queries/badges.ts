@@ -1,3 +1,4 @@
+import { techError } from '@/lib/utils/errors';
 import { supabase } from '../client';
 import { ok, row, rows } from './result';
 import { NOTICES_CHANGED } from './notices';
@@ -97,7 +98,7 @@ interface NewBadgeInput {
 export async function createBatchBadge({ batchId, name, description, file }: NewBadgeInput): Promise<BatchBadge> {
   const path = `badges/${batchId}/${crypto.randomUUID()}.${extensionOf(file.name)}`;
   const upload = await supabase.storage.from('assets').upload(path, file, { contentType: file.type });
-  if (upload.error) throw new Error(`Could not upload the badge image: ${upload.error.message}`);
+  if (upload.error) throw techError('Could not upload the badge image', upload.error.message);
 
   const created = await supabase
     .from('batch_badges')

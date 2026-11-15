@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 import { getEarningBreakdown } from '@/lib/supabase';
 import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
+import { ReportBug } from '@/components/feedback/ReportBug';
 import { Badge } from '@/components/ui/Badge';
 import type { EarningBreakdown } from '@/lib/types';
 
@@ -100,6 +101,7 @@ export function Navbar({ onMenuClick, homePath = '/', themeToggle = false, cente
           {switcher}
         </div>
       )}
+      <ReportBug />
       <NotificationBell />
       {isAdmin && (
         <>

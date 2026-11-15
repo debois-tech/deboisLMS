@@ -28,11 +28,14 @@ const DOC_TYPE_OPTIONS = [
 const STATUS_OPTIONS: { value: DocStatus; label: string }[] = [
   { value: 'missing', label: 'Not generated' },
   { value: 'pending', label: 'Generated, no access' },
-  { value: 'shared', label: 'Access given' },
+  { value: 'shared', label: 'Access' },
 ];
 
-const iconButton =
-  'flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-overlay)] hover:text-[var(--text-primary)] disabled:opacity-50';
+const iconBase =
+  'flex items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-overlay)] hover:text-[var(--text-primary)] disabled:opacity-50';
+const iconButton = `${iconBase} h-8 w-8`;
+// The row's one destructive control gets a full 44px target.
+const deleteButton = `${iconBase} h-11 w-11`;
 
 // A row's document status, access badge and delete button, for whichever kind the dropdown has selected.
 function RowCells({ row, batch, kind, onPatch }: { row: DocumentRow; batch: Batch; kind: DocumentKind; onPatch: (patch: Patch) => void }) {
@@ -71,7 +74,7 @@ function RowCells({ row, batch, kind, onPatch }: { row: DocumentRow; batch: Batc
     <>
       <TD>
         <div className="flex items-center gap-2">
-          <Badge variant={path ? 'success' : 'warning'} dot>{path ? 'Generated' : 'Not generated'}</Badge>
+          <Badge variant={path ? 'success' : 'default'} dot>{path ? 'Generated' : 'Not generated'}</Badge>
           {path && (
             <button type="button" onClick={() => void view()} disabled={busy} aria-label={`View ${label}`} className={iconButton}>
               <Eye size={15} />
@@ -80,11 +83,13 @@ function RowCells({ row, batch, kind, onPatch }: { row: DocumentRow; batch: Batc
         </div>
       </TD>
       <TD>
-        <Badge variant={shared ? 'success' : 'default'} dot>{shared ? 'Access' : 'No access'}</Badge>
+        {path
+          ? <Badge variant={shared ? 'success' : 'default'} dot>{shared ? 'Access' : 'No access'}</Badge>
+          : <span className="cell-muted">—</span>}
       </TD>
       <TD align="center">
         {path && !locked && (
-          <button type="button" onClick={() => void remove()} disabled={busy} aria-label={`Delete ${label}`} className={iconButton}>
+          <button type="button" onClick={() => void remove()} disabled={busy} aria-label={`Delete ${label}`} className={deleteButton}>
             <Trash2 size={15} />
           </button>
         )}

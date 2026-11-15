@@ -3,6 +3,7 @@ import type { User } from '@supabase/supabase-js';
 import type { Profile, Role } from '@/lib/types';
 import { supabase } from '@/lib/supabase/client';
 import { getStudentByAuthUserId, getTutorByAuthUserId } from '@/lib/supabase';
+import { setVerboseErrors } from '@/lib/utils/errors';
 
 interface AuthContextValue {
   user: Profile | null;
@@ -73,6 +74,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let active = true;
 
     const applySession = async (sessionUser: User | null | undefined) => {
+      // Before anything loads, so the developer's first failed query already carries its detail.
+      setVerboseErrors(sessionUser?.app_metadata?.role === 'developer');
       if (!sessionUser) {
         if (active) setUser(null);
         return;

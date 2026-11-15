@@ -745,17 +745,7 @@ html.light .glass {
   white-space: normal;
 }
 
-/* ── Feedback form ───────────────────────────────────────────── */
-.feedback-form {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  padding: 1.25rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--bg-surface);
-}
-
+/* ── Report bug form ─────────────────────────────────────────── */
 .feedback-kinds {
   display: flex;
   flex-wrap: wrap;
@@ -1741,8 +1731,9 @@ html.light .glass {
 }
 
 .data-table-checkbox:checked {
-  border-color: var(--primary);
-  background-color: var(--primary);
+  /* The darker green keeps the white tick above 3:1 in both themes. */
+  border-color: var(--primary-dark);
+  background-color: var(--primary-dark);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23fff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-6'/%3E%3C/svg%3E");
   background-size: 0.85rem 0.85rem;
   background-position: center;
@@ -1848,10 +1839,9 @@ html.light .glass {
   background: var(--bg-elevated);
 }
 
-.doc-picker-row.is-off {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
+/* The reason badge stays at full strength: it is why the row is off. */
+.doc-picker-row.is-off { cursor: not-allowed; }
+.doc-picker-row.is-off > :not(.ui-badge) { opacity: 0.55; }
 
 .doc-picker-row.is-off:hover {
   background: transparent;
@@ -6137,3 +6127,18 @@ button.qz-dot:disabled { opacity: 0.45; cursor: not-allowed; }
 .nav-switch-bar { display: none; }
 @media (min-width: 40rem) { .nav-switch-bar { display: inline-flex; } .nav-switch-menu { display: none; } }
 .nav-switch-menu { margin: 0.5rem 0.75rem; }
+
+/* Report bug popup: the reporter's earlier reports and where each one stands. */
+.report-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 12rem;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.report-row { display: flex; align-items: center; gap: 0.75rem; padding: 0.625rem 0.875rem; }
+.report-row + .report-row { border-top: 1px solid var(--border); }
+.report-copy { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+.report-message { overflow: hidden; color: var(--text-primary); font-size: 0.875rem; text-overflow: ellipsis; white-space: nowrap; }
+.report-meta { color: var(--text-muted); font-size: 0.75rem; }

@@ -1,3 +1,4 @@
+import { techError } from '@/lib/utils/errors';
 import { supabase } from '../client';
 import { row } from './result';
 
@@ -27,7 +28,7 @@ export async function setMaintenanceMode(enabled: boolean): Promise<boolean> {
     .not('id', 'is', null)
     .select('maintenance_mode')
     .single();
-  if (error) throw new Error(error.message);
+  if (error) throw techError('Could not update the setting', error.message);
   return data.maintenance_mode;
 }
 

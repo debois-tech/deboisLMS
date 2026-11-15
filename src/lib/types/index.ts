@@ -180,7 +180,9 @@ export interface FeePaymentLog {
 
 export interface Feedback {
   id: string;
-  student_id: string;
+  /** Stamped by the database from the login; null on old rows whose account is gone. */
+  reporter_name?: string | null;
+  reporter_role?: Role | null;
   kind: FeedbackKind;
   message: string;
   page?: string;
@@ -188,7 +190,6 @@ export interface Feedback {
   status: FeedbackStatus;
   created_at: string;
   resolved_at?: string | null;
-  student?: Student;
 }
 
 export interface Assignment {

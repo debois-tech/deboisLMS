@@ -483,7 +483,7 @@ function StudentsTab({ batch }: { batch: Batch }) {
                       aria-label={`Select ${s.name}`}
                     />
                   ) : (
-                    <span className="data-table-checkbox inline-block" aria-hidden="true" />
+                    <span className="inline-block" style={{ width: '1.125rem' }} aria-hidden="true" />
                   )
                 )}
                 <div>
