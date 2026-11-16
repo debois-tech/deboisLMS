@@ -34,10 +34,12 @@ export default function TutorsPage() {
   const filteredTutors = useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) return tutors;
-    return tutors.filter((t) =>
-      `${t.name} ${t.phone ?? ''} ${t.email ?? ''}`.toLowerCase().includes(term),
-    );
-  }, [tutors, search]);
+    // Batch-wise: the names and programme codes shown in the Batches column are searchable too.
+    return tutors.filter((t) => {
+      const batches = (batchesByTutor.get(t.id) ?? []).map((b) => `${b.name} ${b.program ?? ''}`).join(' ');
+      return `${t.name} ${t.phone ?? ''} ${t.email ?? ''} ${batches}`.toLowerCase().includes(term);
+    });
+  }, [tutors, search, batchesByTutor]);
 
   if (loading) return <Spinner centered />;
   if (error) return <ErrorState centered message={error} onRetry={retry} />;
@@ -57,7 +59,7 @@ export default function TutorsPage() {
             <SearchBar
               value={search}
               onChange={setSearch}
-              placeholder="Search by name, phone, or email"
+              placeholder="Search by name, phone, email or batch"
             />
           </div>
 

@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/Button';
 import { CardHeader } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
-import { ExpandableSearch } from '@/components/ui/ExpandableSearch';
+import { AssignmentFilesButton } from '@/components/assignments/AssignmentFiles';
+import { SearchFilterBar } from '@/components/ui/SearchFilterBar';
 import { Spinner } from '@/components/ui/Spinner';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import { NOTICES_CHANGED, getAssignmentSubmissions, setAssignmentMark } from '@/lib/supabase';
@@ -102,30 +103,33 @@ export function AssignmentSubmissionTable({
             <Badge variant={submittedCount === rows.length && rows.length > 0 ? 'success' : 'default'}>
               {submittedCount} of {rows.length} submitted
             </Badge>
-            <ExpandableSearch
-              value={search}
-              onChange={setSearch}
-              placeholder="Search by student name"
-              filterLabel="Status"
-              allLabel="All"
-              filterValue={statusFilter}
-              filterOptions={[{ value: 'submitted', label: 'Submitted' }, { value: 'pending', label: 'Pending' }]}
-              onFilterChange={(value) => setStatusFilter(value as SubmissionFilter | null)}
-              onClose={() => { setSearch(''); setStatusFilter(null); }}
-            />
           </>
         }
         action={
-          <Button
-            size="sm"
-            variant="secondary"
-            className="action-button-compact"
-            onClick={handleExport}
-            disabled={loading || rows.length === 0}
-          >
-            <Download size={14} /> Export CSV
-          </Button>
+          <div className="flex gap-2">
+            <AssignmentFilesButton assignmentId={assignmentId} batchId={batchId} />
+            <Button
+              size="sm"
+              variant="secondary"
+              className="action-button-compact"
+              onClick={handleExport}
+              disabled={loading || rows.length === 0}
+            >
+              <Download size={14} /> Export
+            </Button>
+          </div>
         }
+      />
+
+      <SearchFilterBar
+        value={search}
+        onChange={setSearch}
+        placeholder="Search by student name"
+        filterLabel="Status"
+        allLabel="All"
+        filterValue={statusFilter}
+        filterOptions={[{ value: 'submitted', label: 'Submitted' }, { value: 'pending', label: 'Pending' }]}
+        onFilterChange={(value) => setStatusFilter(value as SubmissionFilter | null)}
       />
 
       {loading ? (

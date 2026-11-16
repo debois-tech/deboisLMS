@@ -11,7 +11,6 @@ import { AssignmentSelect } from '@/components/ui/AssignmentSelect';
 import { FormField } from '@/components/ui/FormField';
 import { FieldNotice } from '@/components/ui/FieldNotice';
 import { AssignmentSubmissionTable } from '@/components/assignments/AssignmentSubmissionTable';
-import { AssignmentFiles } from '@/components/assignments/AssignmentFiles';
 import { NewAssignmentModal } from '@/components/assignments/NewAssignmentModal';
 import { getBatches, getAssignmentsByBatch, deleteAssignment } from '@/lib/supabase';
 import type { Batch, Assignment } from '@/lib/types';
@@ -91,7 +90,7 @@ export default function AssignmentsPage() {
                   </Button>
                 </>
               )}
-              <Button size="sm" className="action-button-compact" onClick={() => setShowNew(true)}><Plus size={14} /> New Assignment</Button>
+              <Button size="sm" className="action-button-compact" onClick={() => setShowNew(true)}><Plus size={14} /> New</Button>
             </div>
           )}
         />
@@ -110,12 +109,6 @@ export default function AssignmentsPage() {
           </FormField>
         </div>
       </Card>
-
-      {selectedBatch && selectedAsgn && (
-        <Card>
-          <AssignmentFiles key={selectedAsgn} assignmentId={selectedAsgn} batchId={selectedBatch} />
-        </Card>
-      )}
 
       {selectedBatch && selectedAsgn && (
         <Card>

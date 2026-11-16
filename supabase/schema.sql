@@ -1675,8 +1675,9 @@ end $$;
 revoke all on function delete_tutor(uuid) from public;
 grant execute on function delete_tutor(uuid) to authenticated;
 
--- Test batches only: unassigns a tutor and deletes what carries their id there. Returns the file paths for the client to remove.
-create or replace function unassign_tutor_from_test_batch(p_mapping uuid)
+-- Unassigns a tutor from one batch. p_delete false only drops the link; true also erases what
+-- carries their id there and returns the file paths for the client to remove. Admin only.
+create or replace function remove_tutor_from_batch(p_mapping uuid, p_delete boolean)
 returns jsonb
 language plpgsql
 security definer
@@ -1691,8 +1692,10 @@ begin
 
   select * into m from tutor_batch_mapping where id = p_mapping;
   if not found then raise exception 'That assignment no longer exists'; end if;
-  if not exists (select 1 from batches where id = m.batch_id and is_test) then
-    raise exception 'Only a test batch can be cleared this way';
+
+  if not p_delete then
+    delete from tutor_batch_mapping where id = m.id;
+    return jsonb_build_object('materials', '[]'::jsonb, 'images', '[]'::jsonb);
   end if;
 
   select coalesce(array_agg(storage_path), '{}') into mats from materials where tutor_id = m.tutor_id and batch_id = m.batch_id;
@@ -1711,6 +1714,26 @@ begin
   -- A copied quiz shares its pictures: keep any that another quiz still shows.
   select coalesce(array_agg(p), '{}') into imgs from unnest(imgs) p where not exists (select 1 from quiz_questions where image_path = p);
   return jsonb_build_object('materials', to_jsonb(mats), 'images', to_jsonb(imgs));
+end $$;
+
+revoke all on function remove_tutor_from_batch(uuid, boolean) from public, anon;
+grant execute on function remove_tutor_from_batch(uuid, boolean) to authenticated;
+
+-- Kept for older clients: the old test-batch button, same erase, test batches only.
+create or replace function unassign_tutor_from_test_batch(p_mapping uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare is_test boolean;
+begin
+  select b.is_test into is_test
+  from tutor_batch_mapping m join batches b on b.id = m.batch_id
+  where m.id = p_mapping;
+  if not found then raise exception 'That assignment no longer exists'; end if;
+  if not is_test then raise exception 'Only a test batch can be cleared this way'; end if;
+  return remove_tutor_from_batch(p_mapping, true);
 end $$;
 
 revoke all on function unassign_tutor_from_test_batch(uuid) from public;
@@ -2322,6 +2345,10 @@ begin
     select 1 from tutor_batch_mapping where tutor_id = current_tutor_id() and batch_id = b
   )) then
     raise exception 'Not your batch';
+  end if;
+  -- A card with children follows them (refresh_curriculum_parents); only the ones without any are set by hand.
+  if exists (select 1 from curriculum_nodes where parent_id = p_node) then
+    raise exception 'This follows what is under it';
   end if;
   update curriculum_nodes
   set status = p_status,
@@ -4509,6 +4536,30 @@ $$;
 revoke all on function enrolment_footprints(uuid[]) from public, anon;
 grant execute on function enrolment_footprints(uuid[]) to authenticated;
 
+-- What a tutor holds in each batch, so the unassign flow can say what Delete would erase.
+create or replace function tutor_batch_footprints(p_mappings uuid[])
+returns table (mapping_id uuid, materials int, quizzes int, images int, badges int, curriculum int, actions int)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select m.id,
+    (select count(*) from materials x where x.tutor_id = m.tutor_id and x.batch_id = m.batch_id)::int,
+    (select count(*) from quizzes z where z.created_by = m.tutor_id and z.batch_id = m.batch_id)::int,
+    (select count(distinct qq.image_path) from quiz_questions qq join quizzes z on z.id = qq.quiz_id
+      where z.created_by = m.tutor_id and z.batch_id = m.batch_id and qq.image_path is not null)::int,
+    (select count(*) from student_badges sb join batch_badges bb on bb.id = sb.badge_id
+      where sb.issued_by = m.tutor_id and bb.batch_id = m.batch_id)::int,
+    (select count(*) from curriculum_requests c where c.proposed_by = m.tutor_id and c.batch_id = m.batch_id)::int,
+    (select count(*) from tutor_actions a where a.tutor_id = m.tutor_id and a.batch_id = m.batch_id)::int
+  from tutor_batch_mapping m
+  where m.id = any(p_mappings) and is_admin();
+$$;
+
+revoke all on function tutor_batch_footprints(uuid[]) from public, anon;
+grant execute on function tutor_batch_footprints(uuid[]) to authenticated;
+
 create or replace function remove_enrolment(p_mapping_id uuid, p_delete boolean)
 returns void
 language plpgsql
@@ -4681,3 +4732,64 @@ end $$;
 alter table assignment_completions drop constraint if exists assignment_completions_repo_url_github;
 alter table assignment_completions add constraint assignment_completions_repo_url_github
   check (repo_url is null or (repo_url ~ '^https://github\.com/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$' and length(repo_url) <= 200));
+
+-- 26. BUG REPORTS KEPT 30 DAYS
+-- Daily at 02:15 India time, after the student clean-up. Needs pg_cron; without it, run the delete by hand.
+do $$ begin
+  create extension if not exists pg_cron;
+  perform cron.schedule('clear-old-bug-reports', '45 20 * * *', 'delete from public.feedback where created_at < now() - interval ''30 days''');
+exception when others then
+  raise notice 'pg_cron not available (%), clear old bug reports by hand', sqlerrm;
+end $$;
+
+-- 27. CURRICULUM PARENTS FOLLOW THEIR CHILDREN
+-- A topic with subtopics, or a module with topics, is finished once every child is done or skipped and at least one is done;
+-- skipped when all are skipped; otherwise open. Its date is its last done child's. Cards with no children are set by hand.
+create or replace function refresh_curriculum_parents(p_batch uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare lvl text;
+begin
+  -- Subtopics settle their topics first, then topics settle their modules
+  foreach lvl in array array['subtopic', 'topic'] loop
+    update curriculum_nodes p
+    set status = d.status, done_on = d.done_on
+    from (
+      select c.parent_id,
+        (case when bool_or(c.status = 'todo') then 'todo'
+              when bool_or(c.status = 'done') then 'done'
+              else 'skipped' end)::curriculum_status as status,
+        case when not bool_or(c.status = 'todo') and bool_or(c.status = 'done')
+             then max(c.done_on) filter (where c.status = 'done') end as done_on
+      from curriculum_nodes c
+      where c.batch_id = p_batch and c.kind::text = lvl
+      group by c.parent_id
+    ) d
+    where p.id = d.parent_id and (p.status, p.done_on) is distinct from (d.status, d.done_on);
+  end loop;
+end $$;
+
+revoke all on function refresh_curriculum_parents(uuid) from public, anon, authenticated;
+
+create or replace function curriculum_parents_trigger()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform refresh_curriculum_parents(coalesce(new.batch_id, old.batch_id));
+  return null;
+end $$;
+
+drop trigger if exists curriculum_parents_refresh on curriculum_nodes;
+create trigger curriculum_parents_refresh
+  after insert or update of status, parent_id or delete on curriculum_nodes
+  for each row when (pg_trigger_depth() = 0)
+  execute function curriculum_parents_trigger();
+
+-- Settle every existing batch once
+select refresh_curriculum_parents(id) from batches;

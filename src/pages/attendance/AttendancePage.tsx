@@ -1,12 +1,14 @@
 import { useState, useRef } from 'react';
 import { ClipboardCheck, Upload, Loader2, Plus, PenLine, Download, Trash2 } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
+import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useInFlight, useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { Modal } from '@/components/ui/Modal';
+import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { BatchSelect } from '@/components/ui/BatchSelect';
 import { LectureSelect } from '@/components/ui/LectureSelect';
@@ -40,6 +42,8 @@ export default function AttendancePage() {
   const [csvRows, setCsvRows] = useState<CsvRow[]>([]);
   const [csvFileName, setCsvFileName] = useState('');
   const [showManual, setShowManual] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const [showNewLecture, setShowNewLecture] = useState(false);
   const [newLectureDate, setNewLectureDate] = useState('');
   const [newLectureTime, setNewLectureTime] = useState('09:00');
@@ -107,10 +111,8 @@ export default function AttendancePage() {
     if (fileRef.current) fileRef.current.value = '';
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const readCsv = (file: File | undefined) => {
     if (!file) return;
-
     setCsvFileName(file.name);
 
     const reader = new FileReader();
@@ -120,6 +122,21 @@ export default function AttendancePage() {
       setCsvRows(parsed.rows);
     };
     reader.readAsText(file);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => readCsv(e.target.files?.[0]);
+
+  const openImport = () => {
+    resetCsv();
+    setLastReport(null);
+    setShowImport(true);
+  };
+
+  const closeImport = () => {
+    if (processing) return;
+    setShowImport(false);
+    resetCsv();
+    setLastReport(null);
   };
 
   const lecture = lectures.find((l) => l.id === selectedLecture);
@@ -156,6 +173,10 @@ export default function AttendancePage() {
 
   // The tutor taking a new lecture: you, if you are one of the batch's tutors, else the first.
   const defaultTutor = batchTutors.find((t) => t.id === user?.tutor_id)?.id ?? batchTutors[0]?.id ?? '';
+
+  // Present or partial, out of the students who applied (N/A rows left out).
+  const applicable = records.filter((r) => r.status !== 'no_appli').length;
+  const attended = records.filter((r) => r.status === 'present' || r.status === 'partial').length;
 
   const handleDeleteLecture = async () => {
     if (!selectedLecture || !lecture) return;
@@ -242,10 +263,10 @@ export default function AttendancePage() {
                 onClick={handleExportCsv}
                 loading={exporting}
               >
-                <Download size={14} /> Export CSV
+                <Download size={14} /> Export
               </Button>
               <Button size="sm" className="action-button-compact" onClick={() => setShowNewLecture(true)}>
-                <Plus size={14} /> New Lecture
+                <Plus size={14} /> New
               </Button>
               {selectedLecture && (
                 <Button size="sm" variant="secondary" className="action-button-icon action-button-danger" onClick={() => void handleDeleteLecture()} aria-label="Delete this lecture" title="Delete this lecture">
@@ -274,57 +295,18 @@ export default function AttendancePage() {
       {selectedLecture && (
         <>
           <Card>
-            <CardHeader title="Upload CSV" />
-            <div className="space-y-4">
-              <input
-                ref={fileRef}
-                type="file"
-                accept=".csv"
-                onChange={handleFileChange}
-                className="block w-full text-sm text-[var(--text-muted)] file:mr-4 file:py-2 file:px-4 file:rounded-[var(--radius-md)] file:border-0 file:text-sm file:font-semibold file:bg-[var(--primary)] file:text-white hover:file:bg-[var(--primary-light)] file:cursor-pointer"
-              />
-
-              {csvFileName && (
-                <div className="p-3 rounded-[var(--radius-md)] bg-[var(--bg-elevated)]/50 text-sm">
-                  <span className="text-[var(--text-primary)] font-medium">{csvFileName}</span>
-                  <span className="text-[var(--text-muted)] ml-2">— {csvRows.length} participants parsed</span>
-                </div>
-              )}
-
-              {lastReport && lastReport.unmatched.length > 0 && (
-                <div className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-elevated)]/50 border border-[var(--border)] text-sm space-y-1.5">
-                  <p className="text-xs font-bold uppercase tracking-widest text-amber-500">Unmatched names</p>
-                  {lastReport.unmatched.map((u) => (
-                    <p key={u.name} className="text-[var(--text-secondary)]">
-                      <span className="font-semibold text-[var(--text-primary)]">{u.name}</span>
-                      <span className="text-[var(--text-muted)]"> — {u.reason}</span>
-                    </p>
-                  ))}
-                </div>
-              )}
-
-              {showUploadAction && (
-                <Button onClick={handleUploadAndProcess} loading={processing}>
-                  <Upload size={16} /> Upload &amp; Process Attendance
-                </Button>
-              )}
-
-              {processing && (
-                <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
-                  <Loader2 size={16} className="animate-spin" />
-                  Processing attendance — matching students and calculating status...
-                </div>
-              )}
-            </div>
-          </Card>
-
-          <Card>
             <CardHeader
               title="Attendance records"
+              titleAdornment={records.length > 0 && <Badge variant="info">{attended}/{applicable} attended</Badge>}
               action={
-                <Button size="sm" variant="secondary" className="action-button-compact" onClick={() => setShowManual(true)}>
-                  <PenLine size={14} /> Mark manually
-                </Button>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="secondary" className="action-button-compact" onClick={openImport}>
+                    <Upload size={14} /> CSV
+                  </Button>
+                  <Button size="sm" variant="secondary" className="action-button-compact" onClick={() => setShowManual(true)}>
+                    <PenLine size={14} /> Mark manually
+                  </Button>
+                </div>
               }
             />
             {loadingRecords ? (
@@ -337,6 +319,86 @@ export default function AttendancePage() {
           </Card>
         </>
       )}
+
+      <Modal
+        open={showImport}
+        onClose={closeImport}
+        title="Import attendance CSV"
+        size="lg"
+        footer={
+          <>
+            <Button variant="ghost" onClick={closeImport} disabled={processing}>{lastReport && csvRows.length === 0 ? 'Done' : 'Cancel'}</Button>
+            {showUploadAction && (
+              <Button className="action-button-compact" onClick={handleUploadAndProcess} loading={processing}>
+                <Upload size={16} /> Upload &amp; Process
+              </Button>
+            )}
+          </>
+        }
+      >
+        {lastReport && csvRows.length === 0 ? (
+          <div className="flex flex-col gap-3 text-sm text-[var(--text-secondary)]">
+            <p>
+              {lastReport.attendanceInserted} attendance records created
+              {lastReport.duplicateRowsIgnored > 0 ? ` · ${lastReport.duplicateRowsIgnored} duplicate rows merged` : ''}
+              {lastReport.existingKept > 0 ? ` · ${lastReport.existingKept} manual records kept` : ''}
+            </p>
+            {lastReport.unmatched.length > 0 && (
+              <div className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-elevated)]/50 border border-[var(--border)] space-y-1.5">
+                <p className="text-xs font-bold uppercase tracking-widest text-amber-500">Unmatched names</p>
+                {lastReport.unmatched.map((u) => (
+                  <p key={u.name}>
+                    <span className="font-semibold text-[var(--text-primary)]">{u.name}</span>
+                    <span className="text-[var(--text-muted)]"> — {u.reason}</span>
+                  </p>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4">
+            <label
+              className={`csv-drop ${dragging ? 'is-over' : ''}`}
+              onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={(event) => { event.preventDefault(); setDragging(false); readCsv(event.dataTransfer.files[0]); }}
+            >
+              <Upload size={22} aria-hidden="true" />
+              <span>{csvFileName ? csvFileName : 'Drop the CSV here, or choose a file'}</span>
+              <input ref={fileRef} type="file" accept=".csv" onChange={handleFileChange} className="hidden" disabled={processing} />
+            </label>
+
+            {csvRows.length > 0 && (
+              <>
+                <p className="text-sm text-[var(--text-muted)]">{csvRows.length} participants found</p>
+                <Table maxHeight="16rem" className="data-table-compact">
+                  <THead>
+                    <TR>
+                      <TH>Participant</TH>
+                      <TH>Attended</TH>
+                    </TR>
+                  </THead>
+                  <TBody>
+                    {csvRows.map((row) => (
+                      <TR key={row.sno}>
+                        <TD className="font-medium text-[var(--text-primary)]">{row.participant_name_raw}</TD>
+                        <TD className="cell-secondary">{row.attended_minutes != null ? `${row.attended_minutes} min` : row.attended_duration_raw || '—'}</TD>
+                      </TR>
+                    ))}
+                  </TBody>
+                </Table>
+              </>
+            )}
+
+            {processing && (
+              <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
+                <Loader2 size={16} className="animate-spin" />
+                Processing attendance — matching students and calculating status...
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
 
       <Modal
         open={showManual}

@@ -2423,58 +2423,6 @@ html.light .glass {
 .searchbar-lg input { font-size: 0.9375rem; }
 .searchbar-lg .searchbar-action { width: 2.25rem; height: 2.25rem; }
 
-/* ── Expandable search ───────────────────────────────────────── */
-/* Collapsed to an icon so it can sit right in a card header without competing
-   with the title. Clicking it swaps the icon for the real search+filter bar —
-   the grow keyframe below is what sells that as the button becoming the bar,
-   not a second element appearing next to it. */
-.expandable-search-trigger {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.75rem;
-  height: 2.75rem;
-  flex-shrink: 0;
-  color: var(--text-secondary);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  transition: color 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
-}
-
-.expandable-search-trigger:hover {
-  color: var(--text-primary);
-  border-color: var(--border-strong);
-}
-
-.expandable-search-open {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  transform-origin: left center;
-  animation: expandable-search-grow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@keyframes expandable-search-grow {
-  from { opacity: 0; transform: scaleX(0.9); }
-  to { opacity: 1; transform: scaleX(1); }
-}
-
-.expandable-search-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.75rem;
-  height: 2.75rem;
-  flex-shrink: 0;
-  color: var(--text-muted);
-  transition: color 0.18s ease;
-}
-
-.expandable-search-close:hover {
-  color: var(--text-primary);
-}
-
 /* ── Dropdown trigger ────────────────────────────────────────── */
 /* Holds its open state visibly: while the panel is down, the control is lit and
    the chevron is turned. Without that, an open dropdown looked identical to a
@@ -3199,83 +3147,7 @@ body:has([role="dialog"]) .notice-chip { display: none; }
   }
 }
 
-.material-admin-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.material-admin-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.75rem 1rem;
-  padding: 0.875rem 1rem;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
-}
-
-
-.material-admin-icon {
-  display: grid;
-  place-items: center;
-  flex: 0 0 auto;
-  width: 2.25rem;
-  height: 2.25rem;
-  color: var(--primary);
-  border-radius: var(--radius-md);
-  background: var(--primary-glow-soft);
-}
-
-.material-admin-body {
-  flex: 1 1 12rem;
-  min-width: 0;
-}
-
-.material-admin-title {
-  overflow: hidden;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.material-admin-meta {
-  margin-top: 0.15rem;
-  font-size: 0.75rem;
-  color: var(--text-muted);
-}
-
-.material-admin-actions {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 0.625rem;
-}
-
-/* Row actions are compact by nature. The shared Button `sm` size is tuned for
-   page-level actions (min-h-11, px-6) and reads as bloated three-across inside a
-   list row — overridden here rather than adding a fourth size to Button, since
-   nothing else needs it. */
-.material-admin-actions > button {
-  min-width: 0;
-  min-height: 2.375rem;
-  padding: 0 0.9375rem;
-  font-size: 0.8125rem;
-  gap: 0.4375rem;
-}
-
-/* Icon-only, so it gets a square target instead of the wide text padding — which
-   is what made the bin look undersized inside an oversized box. */
-.material-admin-actions > .material-admin-delete {
-  width: 2.375rem;
-  padding: 0;
-}
-
-.material-admin-actions > .material-admin-delete:hover {
+.material-admin-delete:hover {
   color: var(--danger-text);
   background: color-mix(in srgb, var(--danger) 12%, transparent);
 }
@@ -4665,7 +4537,6 @@ html.light .cv-canvas {
   color: var(--text-primary);
 }
 .cv-title.is-skipped { color: var(--text-muted); text-decoration: line-through; }
-.cv-kind-icon { flex-shrink: 0; color: var(--text-muted); }
 .cv-muted { font-size: 0.75rem; color: var(--text-muted); }
 .cv-new {
   flex-shrink: 0;
@@ -4709,6 +4580,7 @@ html.light .cv-canvas {
   transition: color 0.15s ease, background-color 0.15s ease;
 }
 .cv-icon-btn:hover { color: var(--text-primary); background: var(--bg-elevated); }
+.cv-icon-btn[aria-pressed='true'] { color: var(--primary); background: var(--primary-glow-soft); }
 .cv-icon-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
 
 /* Empty, done (filled) or skipped (red with a dash): three clear states, not colour alone. */
@@ -6133,3 +6005,7 @@ button.qz-dot:disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* Divides toolbar buttons into groups by how much they change. */
 .toolbar-sep { align-self: center; width: 1px; height: 1.5rem; margin-inline: 0.25rem; background: var(--border-strong); }
+
+/* Drop zone for the attendance CSV. */
+.csv-drop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5rem; padding: 1.5rem; border: 2px dashed var(--border-strong); border-radius: var(--radius-lg); background: var(--bg-elevated); color: var(--text-secondary); font-size: 0.875rem; cursor: pointer; text-align: center; transition: border-color 0.15s, background-color 0.15s; }
+.csv-drop:hover, .csv-drop.is-over { border-color: var(--primary); background: var(--primary-glow-soft); color: var(--primary); }

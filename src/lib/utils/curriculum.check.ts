@@ -1,5 +1,5 @@
 // Run: node src/lib/utils/curriculum.check.ts
-import { averageProgress, childMap, countBelow, diffSummary, filterTree, layoutTree, nextPosition, nextStatus, progressOf, removeSubtree } from './curriculum.ts';
+import { averageProgress, childMap, countBelow, diffSummary, filterTree, layoutTree, nextPosition, toggled, deriveStatuses, progressOf, removeSubtree } from './curriculum.ts';
 
 const must = (cond: boolean, msg: string) => {
   if (!cond) throw new Error(msg);
@@ -44,8 +44,22 @@ const two = (withSubs: boolean) => {
 };
 must(two(true) > two(false), 'a module with subtopics gets a wider column');
 
-must(nextStatus('todo') === 'done' && nextStatus('done') === 'skipped' && nextStatus('skipped') === 'todo', 'cycle');
-must(progressOf([{ status: 'done' }, { status: 'skipped' }, { status: 'todo' }]).done === 1, 'only done counts');
+must(toggled('todo', 'done') === 'done' && toggled('done', 'done') === 'todo' && toggled('skipped', 'done') === 'done', 'tick flips todo and done');
+must(toggled('todo', 'skipped') === 'skipped' && toggled('skipped', 'skipped') === 'todo' && toggled('done', 'skipped') === 'skipped', 'skip flips todo and skipped');
+const skipProg = progressOf([{ status: 'done' }, { status: 'skipped' }, { status: 'todo' }]);
+must(skipProg.done === 1 && skipProg.total === 2, 'skipped is left out of the total');
+const parentOf = (statuses: ('todo' | 'done' | 'skipped')[]) => {
+  const nodes = [
+    { id: 'p', parent_id: null, status: 'todo' as const, done_on: null as string | null },
+    ...statuses.map((status, at) => ({ id: 'k' + at, parent_id: 'p', status, done_on: status === 'done' ? '2026-11-0' + (at + 1) : null })),
+  ];
+  return deriveStatuses(nodes)[0];
+};
+must(parentOf(['done', 'done']).status === 'done', 'all done finishes the parent');
+must(parentOf(['done', 'skipped']).status === 'done' && parentOf(['done', 'skipped']).done_on === '2026-11-01', 'done plus skipped finishes it, dated by the last done child');
+must(parentOf(['skipped', 'skipped']).status === 'skipped', 'all skipped is skipped');
+must(parentOf(['done', 'todo']).status === 'todo' && parentOf(['todo', 'todo']).status === 'todo', 'anything untouched keeps it open');
+must(deriveStatuses([{ id: 'x', parent_id: null, status: 'done' as const, done_on: '2026-11-03' }])[0].status === 'done', 'a card with no children keeps its own');
 must(removeSubtree(tree, 't1').length === 2, 'subtree removed with its children');
 must(nextPosition(tree, 'm') === 2 && nextPosition(tree, 's1') === 0 && nextPosition(tree, null) === 1, 'new sibling goes last');
 

@@ -18,8 +18,8 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {
-  BookOpen, CalendarDays, Check, ChevronDown, ChevronsDownUp, ChevronsUpDown, FileText, Layers, LibraryBig, Maximize2, Minimize2, Minus,
-  Pencil, Plus, Scan, Trash2, ZoomIn, ZoomOut,
+  CalendarDays, Check, ChevronDown, ChevronsDownUp, ChevronsUpDown, LibraryBig, Maximize2, Minimize2, Minus,
+  Pencil, Plus, Scan, SkipForward, Trash2, ZoomIn, ZoomOut,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { QuizSegment } from '@/components/exams/QuizParts';
@@ -55,7 +55,8 @@ import {
   filterTree,
   layoutTree,
   nextPosition,
-  nextStatus,
+  toggled,
+  deriveStatuses,
   progressOf,
   removeSubtree,
   toDraft,
@@ -71,6 +72,8 @@ interface CardData extends Record<string, unknown> {
   node: CurriculumNode;
   done: number;
   total: number;
+  // Direct children. A card with any follows them: no tick, no skip of its own.
+  kids: number;
   view: View;
   canTick: boolean;
   // Badges on the card; `held` is a student's own, so the ones they lack show dimmed
@@ -88,7 +91,8 @@ interface CardData extends Record<string, unknown> {
   gone: boolean;
   enter: { dx: number; dy: number } | null;
   onFold: (id: string) => void;
-  onCycle: (node: CurriculumNode) => void;
+  onTick: (node: CurriculumNode) => void;
+  onSkip: (node: CurriculumNode) => void;
   onDate: (node: CurriculumNode, date: string) => void;
   onRename: (id: string, title: string) => void;
   onRemove: (node: CurriculumNode) => void;
@@ -101,16 +105,14 @@ type CardNode = Node<CardData, 'card'>;
 type GhostNode = Node<GhostData, 'ghost'>;
 type RootNode = Node<RootData, 'root'>;
 
-const KIND_ICON = { module: Layers, topic: BookOpen, subtopic: FileText } as const;
-
-function TriBox({ status, disabled, label, onClick }: { status: CurriculumStatus; disabled: boolean; label: string; onClick: () => void }) {
+function TriBox({ status, disabled, label, title, onClick }: { status: CurriculumStatus; disabled: boolean; label: string; title?: string; onClick: () => void }) {
   return (
     <button
       type="button"
       role="checkbox"
       aria-checked={status === 'done' ? true : status === 'skipped' ? 'mixed' : false}
       aria-label={label}
-      title={disabled ? undefined : 'Click: done, again: skipped, again: clear'}
+      title={title}
       disabled={disabled}
       onClick={onClick}
       className={clsx('cv-box nodrag', `is-${status}`)}
@@ -155,9 +157,9 @@ function RootCard({ data }: NodeProps<RootNode>) {
 }
 
 function CurriculumCard({ data }: NodeProps<CardNode>) {
-  const { node, done, total, view, canTick, isNew, autoFocus, foldable, folded, hidden, gone, enter } = data;
-  const Icon = KIND_ICON[node.kind];
+  const { node, done, total, kids, view, canTick, isNew, autoFocus, foldable, folded, hidden, gone, enter } = data;
   const editing = view === 'edit';
+  const follows = kids > 0;
 
   return (
     <div
@@ -174,9 +176,10 @@ function CurriculumCard({ data }: NodeProps<CardNode>) {
       <div className="cv-row">
         <TriBox
           status={node.status}
-          disabled={!canTick || editing}
+          disabled={!canTick || editing || follows}
           label={`Mark ${node.title || node.kind} done`}
-          onClick={() => data.onCycle(node)}
+          title={follows ? 'Follows what is under it' : canTick && !editing ? (node.status === 'done' ? 'Mark not done' : 'Mark done') : undefined}
+          onClick={() => data.onTick(node)}
         />
         {editing ? (
           <input
@@ -196,9 +199,18 @@ function CurriculumCard({ data }: NodeProps<CardNode>) {
           <button type="button" className="cv-icon-btn nodrag" aria-label={`Remove ${node.title || node.kind}`} onClick={() => data.onRemove(node)}>
             <Trash2 size={15} />
           </button>
-        ) : (
-          <Icon size={15} className="cv-kind-icon" aria-hidden="true" />
-        )}
+        ) : canTick && !follows ? (
+          <button
+            type="button"
+            className="cv-icon-btn nodrag"
+            aria-pressed={node.status === 'skipped'}
+            aria-label={node.status === 'skipped' ? `Undo skip of ${node.title || node.kind}` : `Skip ${node.title || node.kind}`}
+            title={node.status === 'skipped' ? 'Undo skip' : 'Skip'}
+            onClick={() => data.onSkip(node)}
+          >
+            <SkipForward size={15} />
+          </button>
+        ) : null}
       </div>
       <div className="cv-row cv-row-foot">
         {total > 0 ? (
@@ -515,14 +527,14 @@ export function CurriculumCanvas({ batchId, batchName, role, height = 'calc(100v
     if (view === 'edit') return draft;
     if (view === 'review' && pending) {
       const was = new Map(live.map((node) => [node.id, node]));
-      return pending.nodes.map((node) => ({
+      return deriveStatuses(pending.nodes.map((node) => ({
         ...node,
         batch_id: batchId,
         status: was.get(node.id)?.status ?? 'todo',
         done_on: was.get(node.id)?.done_on ?? null,
-      }));
+      })));
     }
-    return live;
+    return deriveStatuses(live);
   }, [view, draft, pending, live, batchId]);
 
   const act = async (work: () => Promise<void>, failure: string) => {
@@ -557,8 +569,8 @@ export function CurriculumCanvas({ batchId, batchName, role, height = 'calc(100v
     setPicking(null);
   };
 
-  const cycle = useCallback((node: CurriculumNode) => {
-    const status = nextStatus(node.status);
+  const set = useCallback((node: CurriculumNode, target: 'done' | 'skipped') => {
+    const status = toggled(node.status, target);
     return mark(node, status, status === 'done' ? toDateValue(new Date()) : null);
   }, [mark]);
 
@@ -744,6 +756,7 @@ export function CurriculumCanvas({ batchId, batchName, role, height = 'calc(100v
           data: {
             node,
             ...progressOf(full.get(node.id) ?? []),
+            kids: (full.get(node.id) ?? []).length,
             foldable: (byParent.get(node.id)?.length ?? 0) > 0,
             folded: folded.has(node.id),
             hidden: countBelow(byParent, node.id),
@@ -758,7 +771,8 @@ export function CurriculumCanvas({ batchId, batchName, role, height = 'calc(100v
             onBadges: setPicking,
             isNew: newIds.has(node.id),
             autoFocus: node.id === focusId,
-            onCycle: (target) => void cycle(target),
+            onTick: (target) => void set(target, 'done'),
+            onSkip: (target) => void set(target, 'skipped'),
             onDate: (target, date) => void mark(target, 'done', date),
             onRename: rename,
             onRemove: (target) => void remove(target),
@@ -771,7 +785,7 @@ export function CurriculumCanvas({ batchId, batchName, role, height = 'calc(100v
       }
     }
     return { flowNodes, flowEdges };
-  }, [layout, slots, view, folded, batchName, canEdit, focusId, reviewDiff, attached, held, addNode, cycle, mark, rename, remove, toggleFold]);
+  }, [layout, slots, view, folded, batchName, canEdit, focusId, reviewDiff, attached, held, addNode, set, mark, rename, remove, toggleFold]);
 
   if (loading) return <Spinner centered />;
   if (error) return <ErrorState centered message={error} onRetry={retry} />;

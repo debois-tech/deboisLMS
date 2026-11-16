@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Mail, Phone, Layers, CalendarDays, GraduationCap, Plus, X, Trash2 } from 'lucide-react';
+import { Mail, Phone, GraduationCap, Plus, X, Trash2 } from 'lucide-react';
 import { BackLink } from '@/components/ui/BackLink';
 import { Card, CardHeader } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
+import { StatusPill } from '@/components/ui/StatusPill';
+import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { FormField } from '@/components/ui/FormField';
@@ -13,8 +14,9 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NotFound } from '@/components/ui/NotFound';
 import { TutorLoginCard } from '@/components/tutors/TutorLoginCard';
+import { UnassignWizard } from '@/components/tutors/UnassignWizard';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
-import { getTutorById, getTutorBatches, getBatches, assignTutorToBatch, removeTutorFromBatch, deleteTutor } from '@/lib/supabase';
+import { getTutorById, getTutorBatches, getBatches, assignTutorToBatch, deleteTutor } from '@/lib/supabase';
 import type { Tutor, TutorBatchMapping, Batch } from '@/lib/types';
 import { formatDate } from '@/lib/utils/format';
 import { useToast } from '@/lib/context/ToastContext';
@@ -30,6 +32,10 @@ export default function TutorDetailPage() {
   const [assignBatchId, setAssignBatchId] = useState<string | null>(null);
   const [assigning, setAssigning] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  // Tick mode, as on a batch's students: tick assignments, then remove them through the wizard.
+  const [removing, setRemoving] = useState(false);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [showUnassign, setShowUnassign] = useState(false);
   const navigate = useNavigate();
   const { showToast } = useToast();
   const confirm = useConfirm();
@@ -63,23 +69,14 @@ export default function TutorDetailPage() {
     }
   };
 
-  const handleRemove = async (mapping: TutorBatchMapping & { batch?: Batch }) => {
-    const ok = await confirm({
-      title: `Remove ${mapping.batch?.name ?? 'this batch'}?`,
-      message: 'The tutor loses access to this batch.',
-      confirmLabel: 'Remove',
-      danger: true,
-    });
-    if (!ok) return;
-
-    try {
-      await removeTutorFromBatch(mapping.id);
-      await reloadBatches();
-      showToast('Batch removed');
-    } catch (err) {
-      showToast(errorMessage(err, 'Could not remove the batch'), 'error');
-    }
+  const exitRemoving = () => {
+    setRemoving(false);
+    setPicked([]);
+    setShowUnassign(false);
   };
+
+  const togglePicked = (id: string) =>
+    setPicked((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
 
   const handleDelete = async () => {
     if (!tutor) return;
@@ -153,39 +150,68 @@ export default function TutorDetailPage() {
       <Card>
         <CardHeader
           title="Assigned Batches"
+          className="card-header-gap"
           action={
-            <Button size="sm" className="action-button-compact" onClick={() => setShowAssign(true)} disabled={assignableBatches.length === 0}>
-              <Plus size={14} /> Assign Batch
-            </Button>
+            <div className="flex flex-wrap justify-end gap-2">
+              {removing ? (
+                <>
+                  <Button size="sm" variant="ghost" onClick={exitRemoving}>Cancel</Button>
+                  <Button size="sm" className="action-button-compact" disabled={picked.length === 0} onClick={() => setShowUnassign(true)}>
+                    <X size={14} /> Remove{picked.length > 0 ? ` (${picked.length})` : ''}
+                  </Button>
+                </>
+              ) : (
+                <>
+                  {batchMappings.length > 0 && (
+                    <Button size="sm" variant="secondary" className="action-button-icon" onClick={() => setRemoving(true)} aria-label="Remove batches from this tutor" title="Remove batches from this tutor">
+                      <X size={16} />
+                    </Button>
+                  )}
+                  <Button size="sm" className="action-button-compact" onClick={() => setShowAssign(true)} disabled={assignableBatches.length === 0}>
+                    <Plus size={14} /> Batch
+                  </Button>
+                </>
+              )}
+            </div>
           }
         />
         {batchMappings.length === 0 ? (
           <EmptyState icon={<GraduationCap size={32} />} title="Not assigned to any batches" />
         ) : (
-          <div className="batch-list">
-            {batchMappings.map((m) => (
-              <div key={m.id} className="batch-list-item flex items-center justify-between gap-4">
-                <Link to={`/batches/${m.batch_id}`} className="group flex min-w-0 flex-1 items-center gap-3">
-                  <Layers size={18} className="shrink-0 text-[var(--primary)]" />
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-[var(--text-primary)] group-hover:text-[var(--primary)]">{m.batch?.name ?? m.batch_id}</p>
-                    <p className="mt-1 flex items-center gap-1 text-xs text-[var(--text-muted)]"><CalendarDays size={12} /> Assigned {formatDate(m.assigned_at)}</p>
-                  </div>
-                </Link>
-                <div className="flex shrink-0 items-center gap-2">
-                  <Badge size="lg" variant="success" dot>assigned</Badge>
-                  <button
-                    type="button"
-                    onClick={() => handleRemove(m)}
-                    aria-label={`Remove ${m.batch?.name ?? 'batch'}`}
-                    className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-overlay)] hover:text-[var(--danger-text)]"
-                  >
-                    <X size={15} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+          <Table maxHeight="none" className="data-table-compact">
+            <THead>
+              <TR>
+                {removing && <TH align="center"><span className="sr-only">Select</span></TH>}
+                <TH>Batch</TH>
+                <TH>Assigned</TH>
+                <TH>Status</TH>
+              </TR>
+            </THead>
+            <TBody>
+              {batchMappings.map((m) => (
+                <TR key={m.id}>
+                  {removing && (
+                    <TD align="center">
+                      <input
+                        type="checkbox"
+                        className="data-table-checkbox"
+                        checked={picked.includes(m.id)}
+                        onChange={() => togglePicked(m.id)}
+                        aria-label={`Select ${m.batch?.name ?? 'batch'}`}
+                      />
+                    </TD>
+                  )}
+                  <TD>
+                    <Link to={`/batches/${m.batch_id}`} className="font-semibold text-[var(--text-primary)] hover:text-[var(--primary)]">
+                      {m.batch?.name ?? m.batch_id}
+                    </Link>
+                  </TD>
+                  <TD className="cell-muted">{formatDate(m.assigned_at)}</TD>
+                  <TD>{m.batch && <StatusPill kind="batch" value={m.batch.status} />}</TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
         )}
       </Card>
 
@@ -206,6 +232,15 @@ export default function TutorDetailPage() {
           <BatchSelect batches={assignableBatches} value={assignBatchId} onChange={setAssignBatchId} />
         </FormField>
       </Modal>
+
+      <UnassignWizard
+        key={showUnassign ? 'unassign-open' : 'unassign-closed'}
+        open={showUnassign}
+        onClose={() => setShowUnassign(false)}
+        tutorName={tutor.name}
+        batches={batchMappings.filter((m) => picked.includes(m.id))}
+        onDone={() => { exitRemoving(); void reloadBatches(); }}
+      />
     </div>
   );
 }

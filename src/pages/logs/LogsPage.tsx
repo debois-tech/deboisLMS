@@ -101,7 +101,7 @@ function LogTable({ kind }: { kind: LogKind }) {
   if (error) return <ErrorState centered message={error} onRetry={retry} />;
 
   return (
-    <>
+    <div className="table-block">
       {isDeveloper && (
         <div className="flex flex-wrap items-center justify-end gap-3">
           <SearchSelect
@@ -184,6 +184,6 @@ function LogTable({ kind }: { kind: LogKind }) {
           )}
         </>
       )}
-    </>
+    </div>
   );
 }

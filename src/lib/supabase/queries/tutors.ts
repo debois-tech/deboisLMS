@@ -64,17 +64,33 @@ export async function assignTutorToBatch(tutorId: string, batchId: string): Prom
   );
 }
 
-export async function removeTutorFromBatch(mappingId: string): Promise<void> {
-  ok(
-    await supabase.from('tutor_batch_mapping').delete().eq('id', mappingId),
-    'Could not remove the tutor',
+/** What a tutor holds in each batch, so the unassign flow can say what Delete would erase. */
+export interface TutorBatchFootprint {
+  mapping_id: string;
+  materials: number;
+  quizzes: number;
+  images: number;
+  badges: number;
+  curriculum: number;
+  actions: number;
+}
+
+export async function getTutorBatchFootprints(mappingIds: string[]): Promise<TutorBatchFootprint[]> {
+  return rows<TutorBatchFootprint>(
+    await supabase.rpc('tutor_batch_footprints', { p_mappings: mappingIds }),
+    'Could not load what this tutor holds',
   );
 }
 
-// Test batch only (the database refuses any other): drops the link and what the tutor made there, then its files.
-export async function clearTutorFromTestBatch(mappingId: string): Promise<void> {
-  const { data, error } = await supabase.rpc('unassign_tutor_from_test_batch', { p_mapping: mappingId });
-  ok({ error }, 'Could not clear the tutor from this batch');
+/** Unassigns the tutor. `erase` also deletes what they made in that batch, files included. */
+export async function removeTutorFromBatch(mappingId: string, erase = false): Promise<void> {
+  const { data, error } = await supabase.rpc('remove_tutor_from_batch', {
+    p_mapping: mappingId,
+    p_delete: erase,
+  });
+  ok({ error }, 'Could not remove the tutor from this batch');
+  if (!erase) return;
+
   const { materials, images } = data as { materials: string[]; images: string[] };
   const results = await Promise.all([
     materials.length > 0 ? supabase.storage.from('materials').remove(materials) : null,

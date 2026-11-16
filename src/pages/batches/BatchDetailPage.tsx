@@ -1,7 +1,7 @@
 import { lazy, Suspense, useState, useCallback, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { BackLink } from '@/components/ui/BackLink';
-import { Archive, ArrowRightLeft, Edit3, Eraser, X, Users, GraduationCap, Layers, ClipboardCheck, FileText, Plus, Trash2, Upload, Download } from 'lucide-react';
+import { Archive, ArrowRightLeft, Edit3, X, Users, GraduationCap, Layers, ClipboardCheck, FileText, Plus, Trash2, Upload, Download } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { StatusPill } from '@/components/ui/StatusPill';
@@ -23,7 +23,6 @@ import { DEFAULT_LECTURE_MINUTES } from '@/lib/attendance/types';
 import { exportBatchAttendanceCsv } from '@/lib/attendance/exportCsv';
 import { AssignmentSubmissionTable } from '@/components/assignments/AssignmentSubmissionTable';
 import { NewAssignmentModal } from '@/components/assignments/NewAssignmentModal';
-import { AssignmentFiles } from '@/components/assignments/AssignmentFiles';
 import { BatchMaterials } from '@/components/materials/BatchMaterials';
 import { BatchBadges } from '@/components/badges/BatchBadges';
 import { BatchDocuments } from '@/components/documents/BatchDocuments';
@@ -37,7 +36,7 @@ import { ProgressBar } from '@/components/ui/ProgressBar';
 import { getBatchStudents, getAllBatchStudentMappings, addStudentToBatch, terminateEnrolment, getStudents, createStudentLoginsBulk, importStudentsIntoBatch, deleteFeePayment } from '@/lib/supabase';
 import type { BulkLoginResult } from '@/lib/supabase';
 import { BulkLoginsModal } from '@/components/students/BulkLoginsModal';
-import { getBatchTutors, assignTutorToBatch, removeTutorFromBatch, clearTutorFromTestBatch, getTutors } from '@/lib/supabase';
+import { getBatchTutors, assignTutorToBatch, getTutors } from '@/lib/supabase';
 import { getLecturesByBatch, createLecture, updateLecture, deleteLecture, getLectureSummaries } from '@/lib/supabase';
 import type { LectureAttendanceSummary } from '@/lib/supabase';
 import { getAttendanceByLecture } from '@/lib/supabase';
@@ -50,6 +49,7 @@ import { StudentImportModal } from '@/components/students/StudentImportModal';
 import { EarlierWorkTick } from '@/components/batches/EarlierWorkTick';
 import { TransferWizard } from '@/components/batches/TransferWizard';
 import { RemoveWizard } from '@/components/batches/RemoveWizard';
+import { UnassignWizard } from '@/components/tutors/UnassignWizard';
 import { useToast } from '@/lib/context/ToastContext';
 import { useConfirm } from '@/lib/context/ConfirmContext';
 import { useAuth } from '@/lib/context/AuthContext';
@@ -321,7 +321,7 @@ export function OverviewTab({ batch, programLabel, showFees = true }: { batch: B
           )}
         </div>
       </Card>
-      <TutorsCard batchId={batch.id} isTest={Boolean(batch.is_test)} />
+      <TutorsCard batch={batch} />
     </div>
   );
 }
@@ -521,6 +521,7 @@ function StudentsTab({ batch }: { batch: Batch }) {
               {selecting && <TH align="center"><span className="sr-only">Select</span></TH>}
               <TH>Student</TH>
               <TH>ID</TH>
+              <TH>Join date</TH>
               <TH>Status</TH>
               {selecting === 'remove' && <TH align="center">Other batches</TH>}
             </TR>
@@ -546,6 +547,7 @@ function StudentsTab({ batch }: { batch: Batch }) {
                   <StudentLink studentId={s.id} name={s.name} className="font-semibold text-[var(--text-primary)] hover:text-[var(--primary)]" />
                 </TD>
                 <TD className="cell-secondary font-mono">{s.student_code || '—'}</TD>
+                <TD className="cell-muted">{s.mapping.joined_at ? formatDate(s.mapping.joined_at) : '—'}</TD>
                 <TD><StatusPill kind="enrollment" value={s.mapping.status} /></TD>
                 {selecting === 'remove' && <TD align="center"><BatchPills batches={otherBatches.get(s.id) ?? []} /></TD>}
               </TR>
@@ -626,15 +628,16 @@ function StudentsTab({ batch }: { batch: Batch }) {
 }
 
 // The batch's tutors, in the overview. Everyone reads it; only admin and developer get the buttons.
-function TutorsCard({ batchId, isTest }: { batchId: string; isTest: boolean }) {
+function TutorsCard({ batch }: { batch: Batch }) {
   const { isAdmin } = useAuth();
+  const batchId = batch.id;
   const [tutors, setTutors] = useState<(Tutor & { mapping: TutorBatchMapping })[]>([]);
   const [allTutors, setAllTutors] = useState<Tutor[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [selectedTutor, setSelectedTutor] = useState('');
+  const [unassigning, setUnassigning] = useState<(Tutor & { mapping: TutorBatchMapping }) | null>(null);
 
   const { showToast } = useToast();
-  const confirm = useConfirm();
 
   const fetchTutors = useCallback(async () => {
     // A tutor only reads the list, so the full tutor roster is for the people who can assign.
@@ -658,47 +661,8 @@ function TutorsCard({ batchId, isTest }: { batchId: string; isTest: boolean }) {
     }
   };
 
-  const handleRemove = async (mappingId: string, name: string) => {
-    const ok = await confirm({
-      title: `Unassign ${name} from this batch?`,
-      message: 'The tutor record stays. Only this assignment is removed.',
-      confirmLabel: 'Unassign',
-      danger: true,
-    });
-    if (!ok) return;
-
-    try {
-      await removeTutorFromBatch(mappingId);
-      void reloadTutors();
-      showToast('Tutor removed from batch');
-    } catch (error) {
-      showToast(errorMessage(error, 'Failed to remove tutor'), 'error');
-    }
-  };
-
-  const handleClear = async (mappingId: string, name: string) => {
-    const ok = await confirm({
-      title: `Unassign ${name} and delete their data?`,
-      message: (
-        <>
-          <span className="block">Only in this test batch</span>
-          <span className="block">Their materials, quizzes, badges given and log entries go, files too</span>
-          <span className="block">Cannot be undone</span>
-        </>
-      ),
-      confirmLabel: 'Unassign and delete',
-      danger: true,
-      requireText: 'Confirm',
-    });
-    if (!ok) return;
-
-    try {
-      await clearTutorFromTestBatch(mappingId);
-      showToast('Tutor cleared from batch');
-    } catch (error) {
-      showToast(errorMessage(error, 'Failed to clear tutor'), 'error');
-    }
-    void reloadTutors();
+  const handleUnassign = (tutor: Tutor & { mapping: TutorBatchMapping }) => {
+    setUnassigning(tutor);
   };
 
   const available = allTutors.filter((t) => !tutors.some((e) => e.id === t.id));
@@ -723,12 +687,7 @@ function TutorsCard({ batchId, isTest }: { batchId: string; isTest: boolean }) {
               </div>
               {isAdmin && (
                 <div className="flex items-center gap-1">
-                  {isTest && (
-                    <button onClick={() => handleClear(t.mapping.id, t.name)} aria-label={`Unassign ${t.name} and delete their data`} className="text-[var(--text-muted)] hover:text-[var(--danger-text)] p-1">
-                      <Eraser size={14} />
-                    </button>
-                  )}
-                  <button onClick={() => handleRemove(t.mapping.id, t.name)} aria-label={`Unassign ${t.name} from batch`} className="text-[var(--text-muted)] hover:text-[var(--danger-text)] p-1">
+                  <button onClick={() => handleUnassign(t)} aria-label={`Unassign ${t.name} from batch`} className="text-[var(--text-muted)] hover:text-[var(--danger-text)] p-1">
                     <Trash2 size={14} />
                   </button>
                 </div>
@@ -753,6 +712,15 @@ function TutorsCard({ batchId, isTest }: { batchId: string; isTest: boolean }) {
           <Button className="action-button" onClick={handleAdd} disabled={!selectedTutor}>Assign</Button>
         </div>
       </Modal>
+
+      <UnassignWizard
+        key={unassigning ? `unassign-${unassigning.mapping.id}` : 'unassign-closed'}
+        open={unassigning !== null}
+        onClose={() => setUnassigning(null)}
+        tutorName={unassigning?.name ?? ''}
+        batches={unassigning ? [{ ...unassigning.mapping, batch }] : []}
+        onDone={() => { setUnassigning(null); void reloadTutors(); }}
+      />
     </Card>
   );
 }
@@ -885,7 +853,7 @@ export function LecturesTab({ batchId }: { batchId: string }) {
 
   return (
     <Card>
-      <CardHeader title="Lectures" action={<Button size="sm" className="action-button-compact" onClick={openNew}><Plus size={14} /> Add Lecture</Button>} />
+      <CardHeader title="Lectures" className="card-header-gap" action={<Button size="sm" className="action-button-compact" onClick={openNew}><Plus size={14} /> Add Lecture</Button>} />
       {lectures.length === 0 ? (
         <EmptyState icon={<Layers size={32} />} title="No lectures yet" />
       ) : (
@@ -902,7 +870,7 @@ export function LecturesTab({ batchId }: { batchId: string }) {
       <Modal
         open={showNew}
         onClose={closeForm}
-        title={editing ? 'Edit Lecture' : 'New Lecture'}
+        title={editing ? 'Edit' : 'New'}
         footer={
           <>
             <Button variant="ghost" onClick={closeForm}>Cancel</Button>
@@ -1024,9 +992,10 @@ export function AttendanceTab({ batchId, batchName }: { batchId: string; batchNa
       <Card>
         <CardHeader
           title="Attendance"
+          className="card-header-gap"
           action={lectures.length > 0 && (
             <Button size="sm" variant="secondary" className="action-button-compact" onClick={handleExportCsv} loading={exporting}>
-              <Download size={14} /> Export CSV
+              <Download size={14} /> Export
             </Button>
           )}
         />
@@ -1323,10 +1292,6 @@ export function AssignmentsTab({ batchId }: { batchId: string }) {
 
       {selectedAsgn ? (
         <div className="space-y-4">
-          <Card>
-            <AssignmentFiles key={selectedAsgn} assignmentId={selectedAsgn} batchId={batchId} />
-          </Card>
-
           <Card>
             <AssignmentSubmissionTable
               key={selectedAsgn}
