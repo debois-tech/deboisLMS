@@ -2315,10 +2315,10 @@ html.light .glass {
 }
 
 /* Page-level search: one width everywhere. Pages never size it; in a .search-row it shares the line. */
-.searchbar-md {
-  flex: 1 1 16rem;
-  max-width: 28rem;
-}
+.searchbar-md { max-width: 28rem; }
+
+/* Only in a row: a flex-basis in a column container is a height, which left a gap above tables. */
+.search-row > .searchbar-md { flex: 1 1 16rem; }
 
 .batch-filter {
   flex: none;
@@ -5065,6 +5065,8 @@ button.badge-admin-holders:hover { color: var(--primary); }
 /* Give-badge picker: inset the scroll surface so rows do not collide with the modal edges or footer. */
 .modal-body.modal-body-badge-picker { padding: 0.75rem 1rem 0.5rem; overflow: hidden; }
 .badge-picker-toolbar { display: flex; flex-direction: column; gap: 0.75rem; padding: 0 0.5rem 0.75rem; }
+/* Inside the badge popup the toolbar already insets; keep Select all over the checkboxes. */
+.badge-picker-toolbar .doc-picker-head { padding-inline: 0.5rem; }
 .badge-picker-list { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-base); }
 .badge-picker-row + .badge-picker-row { border-top: 1px solid var(--border); }
 .badge-picker-option { display: flex; align-items: center; gap: 0.875rem; min-height: 4.25rem; padding: 0.75rem 1rem; font-size: 0.875rem; transition: background-color 0.15s ease; }

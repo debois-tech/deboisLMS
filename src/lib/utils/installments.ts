@@ -7,7 +7,7 @@ const WINDOW_DAYS = 3;
 /** The student is never shown an instalment numbered past this. */
 const MAX_LABELLED = 2;
 
-/** Matches the note written by log_registration_fee() in schema.sql. */
+/** The note old rows carry from log_registration_fee(); new students no longer get one. */
 export const REGISTRATION_NOTE = 'Registration fee';
 
 export interface InstallmentDue {

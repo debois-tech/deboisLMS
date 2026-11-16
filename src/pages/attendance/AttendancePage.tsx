@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { ClipboardCheck, Upload, Loader2, Plus, AlertTriangle, PenLine, Download } from 'lucide-react';
+import { ClipboardCheck, Upload, Loader2, Plus, PenLine, Download, Trash2 } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
@@ -18,12 +18,14 @@ import { AttendanceRecordsTable } from '@/components/attendance/AttendanceRecord
 import { ManualAttendance } from '@/components/attendance/ManualAttendance';
 import { DEFAULT_LECTURE_MINUTES } from '@/lib/attendance/types';
 import { exportBatchAttendanceCsv } from '@/lib/attendance/exportCsv';
-import { clearUploads, createLecture, getAttendanceByLecture, getBatches, getLecturesByBatch, insertUploadRows, processAttendance, updateLecture } from '@/lib/supabase';
+import { clearUploads, createLecture, deleteLecture, getAttendanceByLecture, getBatches, getBatchTutors, getLecturesByBatch, insertUploadRows, processAttendance } from '@/lib/supabase';
 import type { ProcessingReport } from '@/lib/supabase';
-import type { Batch, Lecture, AttendanceRecord } from '@/lib/types';
-import { meetingCodesMatch, parseCsv } from '@/lib/utils/csvParser';
+import type { Batch, Lecture, AttendanceRecord, Tutor } from '@/lib/types';
+import { parseCsv } from '@/lib/utils/csvParser';
 import type { CsvRow } from '@/lib/utils/csvParser';
 import { useToast } from '@/lib/context/ToastContext';
+import { useConfirm } from '@/lib/context/ConfirmContext';
+import { useAuth } from '@/lib/context/AuthContext';
 import { errorMessage } from '@/lib/utils/errors';
 import { formatDate } from '@/lib/utils/format';
 
@@ -37,13 +39,12 @@ export default function AttendancePage() {
 
   const [csvRows, setCsvRows] = useState<CsvRow[]>([]);
   const [csvFileName, setCsvFileName] = useState('');
-  const [csvMeetingCode, setCsvMeetingCode] = useState('');
-  const [forceUpload, setForceUpload] = useState(false);
   const [showManual, setShowManual] = useState(false);
   const [showNewLecture, setShowNewLecture] = useState(false);
   const [newLectureDate, setNewLectureDate] = useState('');
   const [newLectureTime, setNewLectureTime] = useState('09:00');
-  const [newLectureMeeting, setNewLectureMeeting] = useState('');
+  const [batchTutors, setBatchTutors] = useState<Tutor[]>([]);
+  const [newLectureTutor, setNewLectureTutor] = useState('');
   const [newLectureNote, setNewLectureNote] = useState('');
   const [newLectureMode, setNewLectureMode] = useState<'online' | 'offline'>('online');
   const [newLectureDuration, setNewLectureDuration] = useState(DEFAULT_LECTURE_MINUTES);
@@ -54,6 +55,8 @@ export default function AttendancePage() {
   const creatingLecture = busy.has('create');
   const fileRef = useRef<HTMLInputElement>(null);
   const { showToast } = useToast();
+  const confirm = useConfirm();
+  const { user } = useAuth();
 
   const [lastReport, setLastReport] = useState<ProcessingReport | null>(null);
 
@@ -70,6 +73,7 @@ export default function AttendancePage() {
     resetCsv();
     try {
       setLectures(await getLecturesByBatch(batchId));
+      setBatchTutors(await getBatchTutors(batchId));
     } catch (err) {
       setLectures([]);
       showToast(errorMessage(err, 'Failed to load lectures for this batch'), 'error');
@@ -100,8 +104,6 @@ export default function AttendancePage() {
   const resetCsv = () => {
     setCsvRows([]);
     setCsvFileName('');
-    setCsvMeetingCode('');
-    setForceUpload(false);
     if (fileRef.current) fileRef.current.value = '';
   };
 
@@ -110,56 +112,29 @@ export default function AttendancePage() {
     if (!file) return;
 
     setCsvFileName(file.name);
-    setForceUpload(false);
 
     const reader = new FileReader();
     reader.onload = (ev) => {
       const text = ev.target?.result as string;
       const parsed = parseCsv(text);
       setCsvRows(parsed.rows);
-      setCsvMeetingCode(parsed.meetingCode ?? '');
     };
     reader.readAsText(file);
   };
 
   const lecture = lectures.find((l) => l.id === selectedLecture);
 
-  // Only a lecture that already knows its code can disagree with the export.
-  const meetingCodeMismatch = Boolean(
-    csvRows.length > 0 &&
-    lecture?.session_type === 'online' &&
-    lecture.meeting_code &&
-    !meetingCodesMatch(lecture.meeting_code, csvMeetingCode),
-  );
-
-  // Re-upload guard: the pipeline upserts, so a duplicate would rewrite hand-corrected records. A warning, not a wall.
-  const looksAlreadyUploaded = Boolean(
-    records.length > 0 &&
-    csvRows.length > 0 &&
-    csvMeetingCode &&
-    lecture?.meeting_code &&
-    meetingCodesMatch(lecture.meeting_code, csvMeetingCode),
-  );
-
   // Uploads the CSV into the `uploads` table, then immediately processes it into
   // attendance records and clears the uploads — one action end-to-end for the admin.
   const handleUploadAndProcess = async () => {
-    if (!selectedLecture || csvRows.length === 0 || meetingCodeMismatch || !begin('upload')) return;
+    if (!selectedLecture || csvRows.length === 0 || !begin('upload')) return;
     setLastReport(null);
 
     try {
-      const code = lecture?.meeting_code || csvMeetingCode;
       // Anything still in `uploads` is left over from a run that failed; a clean run clears it.
       await clearUploads(selectedLecture);
-      await insertUploadRows(selectedLecture, code, lecture?.lecture_date, csvRows);
+      await insertUploadRows(selectedLecture, lecture?.lecture_date, csvRows);
       const report = await processAttendance(selectedLecture);
-
-      // Remember the code the export came with, so the next upload of the same
-      // file has something to be recognised against.
-      if (!lecture?.meeting_code && csvMeetingCode) {
-        await updateLecture(selectedLecture, { meeting_code: csvMeetingCode });
-        setLectures(await getLecturesByBatch(selectedBatch!));
-      }
 
       setLastReport(report);
       loadRecords(selectedLecture);
@@ -179,6 +154,30 @@ export default function AttendancePage() {
     finish('upload');
   };
 
+  // The tutor taking a new lecture: you, if you are one of the batch's tutors, else the first.
+  const defaultTutor = batchTutors.find((t) => t.id === user?.tutor_id)?.id ?? batchTutors[0]?.id ?? '';
+
+  const handleDeleteLecture = async () => {
+    if (!selectedLecture || !lecture) return;
+    const accepted = await confirm({
+      title: `Delete the lecture on ${formatDate(lecture.lecture_date)}?`,
+      message: 'Attendance for this lecture is also deleted. This cannot be undone.',
+      confirmLabel: 'Delete lecture',
+      danger: true,
+    });
+    if (!accepted) return;
+    try {
+      await deleteLecture(selectedLecture);
+      setSelectedLecture(null);
+      setRecords([]);
+      resetCsv();
+      setLectures(await getLecturesByBatch(selectedBatch!));
+      showToast('Lecture deleted');
+    } catch (err) {
+      showToast(errorMessage(err, 'Failed to delete lecture'), 'error');
+    }
+  };
+
   const handleCreateLecture = async () => {
     if (!selectedBatch || !newLectureDate || !begin('create')) return;
     try {
@@ -187,7 +186,7 @@ export default function AttendancePage() {
       await createLecture({
         batch_id: selectedBatch,
         lecture_date: newLectureDate,
-        meeting_code: newLectureMeeting || undefined,
+        tutor_id: newLectureTutor || defaultTutor || null,
         note: newLectureNote || undefined,
         session_type: newLectureMode,
         scheduled_duration_minutes: newLectureDuration,
@@ -197,7 +196,7 @@ export default function AttendancePage() {
       setShowNewLecture(false);
       setNewLectureDate('');
       setNewLectureTime('09:00');
-      setNewLectureMeeting('');
+      setNewLectureTutor('');
       setNewLectureNote('');
       setNewLectureMode('online');
       setNewLectureDuration(DEFAULT_LECTURE_MINUTES);
@@ -248,6 +247,11 @@ export default function AttendancePage() {
               <Button size="sm" className="action-button-compact" onClick={() => setShowNewLecture(true)}>
                 <Plus size={14} /> New Lecture
               </Button>
+              {selectedLecture && (
+                <Button size="sm" variant="secondary" className="action-button-icon action-button-danger" onClick={() => void handleDeleteLecture()} aria-label="Delete this lecture" title="Delete this lecture">
+                  <Trash2 size={16} />
+                </Button>
+              )}
             </div>
           )}
         />
@@ -299,40 +303,10 @@ export default function AttendancePage() {
                 </div>
               )}
 
-              {looksAlreadyUploaded && (
-                <div className="repo-notice is-warning">
-                  <AlertTriangle size={14} className="shrink-0" />
-                  <span>
-                    This lecture already has attendance from meeting code{' '}
-                    <strong>{lecture?.meeting_code}</strong>, and this file carries the same one —
-                    it looks like it has been uploaded already. Re-processing rewrites automated
-                    records; hand-edited ones stay.
-                  </span>
-                </div>
-              )}
-
-              {meetingCodeMismatch && (
-                <div className="repo-notice is-warning">
-                  <AlertTriangle size={14} className="shrink-0" />
-                  <span>
-                    Meet code mismatch. Lecture: <strong>{lecture?.meeting_code || 'missing'}</strong> · CSV: <strong>{csvMeetingCode || 'missing'}</strong>
-                  </span>
-                </div>
-              )}
-
               {showUploadAction && (
-                meetingCodeMismatch ? null : looksAlreadyUploaded && !forceUpload ? (
-                  <div className="flex flex-wrap gap-2">
-                    <Button variant="secondary" onClick={() => setForceUpload(true)}>
-                      Upload anyway
-                    </Button>
-                    <Button variant="ghost" onClick={resetCsv}>Choose another file</Button>
-                  </div>
-                ) : (
-                  <Button onClick={handleUploadAndProcess} loading={processing}>
-                    <Upload size={16} /> Upload &amp; Process Attendance
-                  </Button>
-                )
+                <Button onClick={handleUploadAndProcess} loading={processing}>
+                  <Upload size={16} /> Upload &amp; Process Attendance
+                </Button>
               )}
 
               {processing && (
@@ -368,7 +342,7 @@ export default function AttendancePage() {
         open={showManual}
         onClose={() => setShowManual(false)}
         title="Mark attendance"
-        description={lecture ? `${formatDate(lecture.lecture_date)}${lecture.meeting_code ? ` · ${lecture.meeting_code}` : ''}` : undefined}
+        description={lecture ? `${formatDate(lecture.lecture_date)}${lecture.tutor ? ` · ${lecture.tutor.name}` : ''}` : undefined}
         size="xl"
       >
         {selectedLecture && selectedBatch && (
@@ -404,8 +378,16 @@ export default function AttendancePage() {
               ariaLabel="Lecture date"
             />
           </FormField>
-          <FormField label="Meeting Code">
-            <input value={newLectureMeeting} onChange={(e) => setNewLectureMeeting(e.target.value)} />
+          <FormField label="Tutor" required>
+            <SearchSelect
+              options={batchTutors.map((tutor) => ({ value: tutor.id, label: tutor.name }))}
+              value={newLectureTutor || defaultTutor || null}
+              onChange={setNewLectureTutor}
+              placeholder="Select a tutor"
+              searchPlaceholder="Search tutors"
+              emptyText="No tutors assigned to this batch"
+              showSearch={batchTutors.length > 6}
+            />
           </FormField>
           <div className="grid grid-cols-2 gap-4">
             <FormField label="Mode" required>

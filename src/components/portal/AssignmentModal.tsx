@@ -65,7 +65,6 @@ function AssignmentModalBody({ assignment, repoUrl, now, closed, onClose, onSubm
   const submitted = state !== 'todo';
   const overdue = Boolean(assignment) && !submitted && isOverdue(assignment!, now);
   const trimmed = draftRepo.trim();
-  const isReplacingRepo = Boolean(repoUrl) && trimmed !== repoUrl && trimmed.length > 0;
 
   const handleSubmit = async () => {
     const { url, error: problem } = validateRepoUrl(draftRepo);
@@ -201,12 +200,6 @@ function AssignmentModalBody({ assignment, repoUrl, now, closed, onClose, onSubm
             My work is in this repo
           </label>
 
-          {isReplacingRepo && (
-            <p className="repo-notice is-warning">
-              <AlertTriangle size={14} className="shrink-0" />
-              <span>Updates the link on all submitted assignments.</span>
-            </p>
-          )}
         </div>
       )}
     </Modal>

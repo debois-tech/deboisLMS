@@ -275,7 +275,6 @@ export async function addStudentToBatch(
   );
 
   // Upsert: a mapping can go without its fee row, so a re-add finds a stale one.
-  // The registration fee is logged by a trigger on insert — see schema.sql.
   ok(
     await supabase
       .from('student_fees')

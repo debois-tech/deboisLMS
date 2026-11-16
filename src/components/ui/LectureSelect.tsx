@@ -10,7 +10,7 @@ interface LectureSelectProps {
 }
 
 function lectureLabel(lecture: Lecture) {
-  return `${formatDate(lecture.lecture_date)}${lecture.meeting_code ? ` (${lecture.meeting_code})` : ''}`;
+  return `${formatDate(lecture.lecture_date)}${lecture.tutor ? ` (${lecture.tutor.name})` : ''}`;
 }
 
 export function LectureSelect({ lectures, value, onChange }: LectureSelectProps) {

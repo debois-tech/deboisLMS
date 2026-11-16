@@ -130,7 +130,9 @@ export interface Lecture {
   batch_id: string;
   lecture_date: string;
   session_type: SessionType;
-  meeting_code?: string;
+  tutor_id?: string | null;
+  /** Joined name of the tutor taking it. */
+  tutor?: { id: string; name: string } | null;
   note?: string;
   scheduled_duration_minutes?: number;
   start_at?: string;
@@ -147,6 +149,10 @@ export interface AttendanceRecord {
   total_attended_minutes?: number;
   raw_upload_ids?: string[];
   source: AttendanceSource;
+  /** Stamped by the database when a person marks the row. */
+  marked_at?: string | null;
+  /** Every person who has marked it, as login emails. */
+  marked_by?: string[];
   created_at: string;
   student?: Student;
   lecture?: Lecture;
@@ -210,6 +216,8 @@ export interface AssignmentCompletion {
   submitted_via: SubmissionChannel;
   submitted_at?: string;
   mark: boolean;
+  /** The repo handed in with this submission; each assignment keeps its own. */
+  repo_url?: string | null;
   student?: Student;
   assignment?: Assignment;
 }

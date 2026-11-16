@@ -339,7 +339,8 @@ create table if not exists lectures (
   -- The day the session ran, entered by hand. Never defaulted from the insert time.
   lecture_date               date not null,
   session_type               session_type not null default 'online',
-  meeting_code               text,
+  -- The tutor who took the session; blank only where the batch has none.
+  tutor_id                   uuid references tutors(id) on delete set null,
   scheduled_duration_minutes int not null default 120,
   note                       text,
   -- Session start, entered by hand as a local date and time. Not the insert time.
@@ -370,14 +371,12 @@ create table if not exists uploads (
   attendance_stopped    timestamp,
   attended_duration_raw text,
   attended_minutes      numeric,
-  meeting_code          text,
   matched_student_id    uuid references students(id) on delete set null,
   processed             boolean default false,
   uploaded_at           timestamptz default now()
 );
 
 create index if not exists idx_uploads_lecture   on uploads(lecture_id);
-create index if not exists idx_uploads_meeting   on uploads(meeting_code);
 create index if not exists idx_uploads_processed on uploads(processed);
 
 create table if not exists attendance (
@@ -494,6 +493,8 @@ create table if not exists student_fees (
   paid_at_exit     numeric,
   -- Set once by transfer_student(); makes student_fee_dues judge instalments by payment logs.
   transferred      boolean not null default false,
+  -- Old fees had Rs 1,000 booked as a registration payment and judge instalments from it. New fees are two equal halves.
+  registration_included boolean not null default false,
   discount_type    discount_type not null default 'percentage',
   discount_value   numeric not null default 0 check (discount_value >= 0),
   -- 'terminated' wins over paid/due: expected_on_exit is set only by terminate_enrolment().
@@ -592,59 +593,6 @@ revoke all on function public.record_fee_payment(uuid, numeric, date, payment_me
 grant execute on function public.record_fee_payment(uuid, numeric, date, payment_method, text) to authenticated;
 
 
--- Every student pays 1000 on joining a batch. Booked as a payment against the fee,
--- not subtracted from the total, so the log and the balance agree.
--- Fires on insert only: re-adding a student reuses its fee row.
---
--- Nothing is logged for a student charged nothing — a 100% discount produces a
--- total_fee of 0, and a registration payment against 0 is not a fact. A fee
--- under 1000 logs only what was charged, so the log never exceeds the total.
---
--- Dated the day the student started (see set_join_date_from_batch), not the day the row was inserted.
-create or replace function log_registration_fee()
-returns trigger
-language plpgsql
-set search_path = public
-as $$
-declare
-  amount numeric;
-  paid_on date;
-begin
-  -- A transfer that carries payments brings its own registration fee
-  if current_setting('app.skip_registration', true) = 'on' then
-    return new;
-  end if;
-
-  if new.total_fee is null or new.total_fee <= 0 then
-    return new;
-  end if;
-
-  amount := least(1000, new.total_fee);
-
-  -- Dated the day they started, which the join rule already worked out
-  select m.joined_at into paid_on from batch_student_mapping m where m.batch_id = new.batch_id and m.student_id = new.student_id;
-  paid_on := coalesce(paid_on, current_date);
-
-  insert into fee_payment_logs (
-    student_fee_id, student_id, batch_id, amount, payment_date, payment_method, notes
-  ) values (
-    new.id, new.student_id, new.batch_id, amount, paid_on, 'upi', 'Registration fee'
-  );
-
-  update student_fees
-  set paid_amount = paid_amount + amount, updated_at = now()
-  where id = new.id;
-
-  return new;
-end;
-$$;
-
-drop trigger if exists student_fees_registration_fee on student_fees;
-create trigger student_fees_registration_fee
-  after insert on student_fees
-  for each row execute function log_registration_fee();
-
-
 -- 6. ASSIGNMENTS
 -- assigned_date is when the work was handed out; due_at is the deadline.
 create table if not exists assignments (
@@ -671,6 +619,8 @@ create table if not exists assignment_completions (
   submitted_via submission_channel default 'portal',
   submitted_at  timestamptz,
   mark          boolean default false not null,
+  -- The repo handed in with this submission. Each assignment keeps its own; the next one only prefills from the last.
+  repo_url      text,
   unique (assignment_id, student_id)
 );
 
@@ -694,10 +644,12 @@ begin
       new.submitted     := old.submitted;
       new.submitted_via := old.submitted_via;
       new.submitted_at  := old.submitted_at;
+      new.repo_url      := old.repo_url;
     else
       new.submitted     := false;
       new.submitted_via := null;
       new.submitted_at  := null;
+      new.repo_url      := null;
     end if;
     return new;
   end if;
@@ -887,6 +839,7 @@ create or replace function current_tutor_id()
 returns uuid
 language sql
 stable
+security definer
 set search_path = public
 as $$
   select id from tutors where auth_user_id = auth.uid();
@@ -1008,6 +961,9 @@ alter view batch_attendance_summary set (security_invoker = on);
 -- Column-level grants cannot express that, because admins and students are both
 -- the `authenticated` role. Reaching past RLS is the point, so it carries its own
 -- `where` on current_student_id() instead.
+-- Re-running this file on a database from before section 25: the view resolves
+-- registration_included now, so the column has to exist here, not only at the end.
+alter table student_fees add column if not exists registration_included boolean not null default true;
 create or replace view student_fee_dues as
 select
   sf.id,
@@ -1025,6 +981,7 @@ select
         select 1 from fee_payment_logs l
         where l.student_fee_id = sf.id and l.notes is distinct from 'Registration fee'
       ) then 1 else 0 end
+    when not sf.registration_included then case when sf.paid_amount >= round(sf.total_fee / 2.0) then 1 else 0 end
     when sf.paid_amount >= least(1000, sf.total_fee)
                          + round(greatest(sf.total_fee - 1000, 0) / 2.0) then 1
     else 0
@@ -1396,6 +1353,7 @@ declare
   m            batch_student_mapping%rowtype;
   batch_start  date;
   fee_row      student_fees%rowtype;
+  reg          numeric := 0;
   instalment   numeric;
   due_count    int := 0;
   expected     numeric := 0;
@@ -1420,7 +1378,8 @@ begin
 
   -- Also for a zero fee (expected 0), so every leaver's fee row reads 'terminated'.
   if found then
-    instalment := round(greatest(fee_row.total_fee - 1000, 0) / 2.0);
+    reg := case when fee_row.registration_included then 1000 else 0 end;
+    instalment := round(greatest(fee_row.total_fee - reg, 0) / 2.0);
 
     -- Due on the day itself, so `>=`, not `>`.
     if batch_start is not null then
@@ -1430,7 +1389,7 @@ begin
 
     -- Registration is collected at sign-up and always owed; instalments only
     -- once their date has been reached.
-    expected := least(fee_row.total_fee, least(1000, fee_row.total_fee) + instalment * due_count);
+    expected := least(fee_row.total_fee, least(reg, fee_row.total_fee) + instalment * due_count);
     void_amount := greatest(expected - fee_row.paid_amount, 0);
 
     update student_fees
@@ -1559,12 +1518,9 @@ begin
   returning id into new_map;
 
   if p_carry then
-    -- The carried payments already include the registration fee
-    perform set_config('app.skip_registration', 'on', true);
     insert into student_fees (student_id, batch_id, total_fee, paid_amount, transferred, discount_type, discount_value)
     values (m.student_id, p_to_batch, p_fee, 0, true, 'amount', greatest(coalesce(target.base_fee, p_fee) - p_fee, 0))
     returning * into new_fee;
-    perform set_config('app.skip_registration', 'off', true);
 
     insert into fee_payment_logs (student_fee_id, student_id, batch_id, amount, payment_date, payment_method, notes)
     select new_fee.id, l.student_id, p_to_batch, l.amount, l.payment_date, l.payment_method,
@@ -1584,7 +1540,6 @@ begin
     set paid_at_exit = old_fee.paid_amount, expected_on_exit = 0, paid_amount = 0, updated_at = now()
     where id = old_fee.id;
   else
-    -- The registration fee trigger books the Rs 1,000 on the new fee
     insert into student_fees (student_id, batch_id, total_fee, paid_amount, discount_type, discount_value)
     values (m.student_id, p_to_batch, p_fee, 0, 'amount', greatest(coalesce(target.base_fee, p_fee) - p_fee, 0));
 
@@ -3519,7 +3474,11 @@ declare
     when 'curriculum_nodes' then 'Curriculum'
     else 'Curriculum submission'
   end;
-  about     text := coalesce(doc->>'title', doc->>'name');
+  about     text := coalesce(
+    doc->>'title',
+    doc->>'name',
+    case when tg_table_name = 'lectures' then to_char((doc->>'lecture_date')::date, 'DD Mon YYYY') end
+  );
   batch     uuid;
 begin
   if not is_tutor() then
@@ -4336,7 +4295,14 @@ declare
     when 'app_settings' then 'Setting'
     else initcap(replace(tg_table_name, '_', ' '))
   end;
-  about     text := coalesce(doc ->> 'title', doc ->> 'name', doc ->> 'student_code', doc ->> 'email');
+  about     text := coalesce(
+    doc ->> 'title',
+    doc ->> 'name',
+    doc ->> 'student_code',
+    doc ->> 'email',
+    -- A deleted lecture has no name; its date is what the log can show.
+    case when tg_table_name = 'lectures' then to_char((doc ->> 'lecture_date')::date, 'DD Mon YYYY') end
+  );
   who       text := coalesce(nullif(auth.jwt() -> 'user_metadata' ->> 'full_name', ''), auth.jwt() ->> 'email', 'Unknown');
   batch     uuid := coalesce(nullif(doc ->> 'batch_id', '')::uuid, case when tg_table_name = 'batches' then (doc ->> 'id')::uuid end);
 begin
@@ -4615,3 +4581,102 @@ create policy tutor_read_batch_mates on tutor_batch_mapping for select using (ba
 drop policy if exists tutor_read_batch_tutors on tutors;
 create policy tutor_read_batch_tutors on tutors for select
   using (id in (select tutor_id from tutor_batch_mapping where batch_id in (select tutor_batch_ids())));
+
+-- 25. LECTURE TUTOR, MARKING TRAIL, FEES WITHOUT REGISTRATION, REPO PER SUBMISSION
+-- The tutor who takes a lecture replaces the meeting code, which is dropped with all its matching.
+alter table lectures add column if not exists tutor_id uuid references tutors(id) on delete set null;
+create index if not exists idx_lectures_tutor on lectures(tutor_id);
+
+-- Old lectures take their batch's first tutor; editable afterwards.
+update lectures l
+set tutor_id = (select m.tutor_id from tutor_batch_mapping m where m.batch_id = l.batch_id order by m.assigned_at, m.id limit 1)
+where l.tutor_id is null;
+
+drop index if exists idx_uploads_meeting;
+alter table uploads drop column if exists meeting_code;
+alter table lectures drop column if exists meeting_code;
+
+-- Who marked a lecture, and when. Stamped by the database from the login, so no screen can skip it.
+alter table attendance add column if not exists marked_at timestamptz;
+alter table attendance add column if not exists marked_by text[] not null default '{}';
+
+create or replace function stamp_attendance_mark()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  who text := auth.jwt() ->> 'email';
+begin
+  if who is null or new.status::text not in ('present', 'partial', 'absent') then
+    return new;
+  end if;
+  if tg_op = 'UPDATE' and old.status = new.status and old.total_attended_minutes is not distinct from new.total_attended_minutes then
+    return new;
+  end if;
+  new.marked_at := now();
+  if not (who = any(new.marked_by)) then
+    new.marked_by := array_append(new.marked_by, who);
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists attendance_mark_stamp on attendance;
+create trigger attendance_mark_stamp before insert or update on attendance for each row execute function stamp_attendance_mark();
+
+-- One row per lecture for the tables: attended of applicable (N/A rows left out), last marked, and by whom.
+-- Two aggregates joined once — a correlated subquery here is evaluated per attendance row and times out.
+create or replace view lecture_attendance_summary as
+with per_lecture as (
+  select
+    a.lecture_id,
+    count(*) filter (where a.status::text in ('present', 'partial'))::int as attended,
+    count(*) filter (where a.status::text <> 'no_appli')::int as applicable,
+    max(a.marked_at) as marked_at
+  from attendance a
+  group by a.lecture_id
+),
+editors as (
+  select a.lecture_id, array_agg(distinct m.email order by m.email) as marked_by
+  from attendance a
+  cross join lateral unnest(a.marked_by) as m(email)
+  group by a.lecture_id
+)
+select
+  p.lecture_id,
+  p.attended,
+  p.applicable,
+  p.marked_at,
+  coalesce(e.marked_by, '{}') as marked_by,
+  l.batch_id
+from per_lecture p
+join lectures l on l.id = p.lecture_id
+left join editors e on e.lecture_id = p.lecture_id;
+
+alter view lecture_attendance_summary set (security_invoker = on);
+grant select on lecture_attendance_summary to authenticated;
+
+-- No Rs 1,000 registration payment any more. Existing fees keep it (registration_included); new ones split in two halves.
+alter table student_fees add column if not exists registration_included boolean not null default true;
+alter table student_fees alter column registration_included set default false;
+drop trigger if exists student_fees_registration_fee on student_fees;
+drop function if exists log_registration_fee();
+
+-- One repo per submission. Existing submissions are frozen at the repo they show today.
+alter table assignment_completions add column if not exists repo_url text;
+-- The submission guard reads this update as a student edit and refuses a handed-in row,
+-- so it is switched off for the copy only. The DO block restores it even if the update fails.
+do $$
+begin
+  execute 'alter table assignment_completions disable trigger assignment_completions_guard';
+  update assignment_completions c
+  set repo_url = r.repo_url
+  from assignments a, student_repos r
+  where a.id = c.assignment_id and r.batch_id = a.batch_id and r.student_id = c.student_id and c.submitted and c.repo_url is null;
+  execute 'alter table assignment_completions enable trigger assignment_completions_guard';
+end $$;
+
+alter table assignment_completions drop constraint if exists assignment_completions_repo_url_github;
+alter table assignment_completions add constraint assignment_completions_repo_url_github
+  check (repo_url is null or (repo_url ~ '^https://github\.com/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$' and length(repo_url) <= 200));

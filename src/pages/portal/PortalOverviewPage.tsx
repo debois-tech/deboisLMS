@@ -289,7 +289,7 @@ function NextUp({
     const day = formatDayLabel(lecture.lecture_date);
     const relative = day === 'Today' || day === 'Tomorrow';
     const where = lecture.session_type === 'online'
-      ? ['Online', lecture.meeting_code].filter(Boolean).join(' · ')
+      ? ['Online', lecture.tutor?.name].filter(Boolean).join(' · ')
       : 'In person';
 
     return (

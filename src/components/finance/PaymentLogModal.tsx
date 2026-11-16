@@ -239,7 +239,7 @@ export function PaymentLogModal({
                               <Receipt size={14} />
                             </Button>
                           )}
-                          {/* The registration fee is written by a trigger, so nothing could put it back. */}
+                          {/* Old registration rows were system-written, so left undeletable. */}
                           {log.notes !== REGISTRATION_NOTE && (
                             <Button
                               variant="ghost"

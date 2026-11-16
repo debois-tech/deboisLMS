@@ -1,7 +1,7 @@
 import { lazy, Suspense, useState, useCallback, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { BackLink } from '@/components/ui/BackLink';
-import { Archive, ArrowRightLeft, Edit3, Eraser, X, Users, GraduationCap, Layers, ClipboardCheck, FileText, Plus, Trash2, ChevronRight, CalendarDays, Upload, Download } from 'lucide-react';
+import { Archive, ArrowRightLeft, Edit3, Eraser, X, Users, GraduationCap, Layers, ClipboardCheck, FileText, Plus, Trash2, Upload, Download } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { StatusPill } from '@/components/ui/StatusPill';
@@ -18,6 +18,7 @@ import { SearchFilterBar } from '@/components/ui/SearchFilterBar';
 import { SearchSelect } from '@/components/ui/SearchSelect';
 import { FormField } from '@/components/ui/FormField';
 import { AttendanceRecordsTable } from '@/components/attendance/AttendanceRecordsTable';
+import { LectureTable } from '@/components/attendance/LectureTable';
 import { DEFAULT_LECTURE_MINUTES } from '@/lib/attendance/types';
 import { exportBatchAttendanceCsv } from '@/lib/attendance/exportCsv';
 import { AssignmentSubmissionTable } from '@/components/assignments/AssignmentSubmissionTable';
@@ -37,11 +38,12 @@ import { getBatchStudents, getAllBatchStudentMappings, addStudentToBatch, termin
 import type { BulkLoginResult } from '@/lib/supabase';
 import { BulkLoginsModal } from '@/components/students/BulkLoginsModal';
 import { getBatchTutors, assignTutorToBatch, removeTutorFromBatch, clearTutorFromTestBatch, getTutors } from '@/lib/supabase';
-import { getLecturesByBatch, createLecture, deleteLecture } from '@/lib/supabase';
+import { getLecturesByBatch, createLecture, updateLecture, deleteLecture, getLectureSummaries } from '@/lib/supabase';
+import type { LectureAttendanceSummary } from '@/lib/supabase';
 import { getAttendanceByLecture } from '@/lib/supabase';
 import { getFeesByBatch, getFeePaymentLogs, addFeePaymentLog } from '@/lib/supabase';
 import { getAssignmentsByBatch } from '@/lib/supabase';
-import type { Batch, BatchProgramOption, Student, Tutor, Lecture, AttendanceRecord, StudentFee, FeeStatus, FeePaymentLog, Assignment, BatchStudentMapping, TutorBatchMapping } from '@/lib/types';
+import type { Batch, BatchProgramOption, Student, Tutor, Lecture, AttendanceRecord, StudentFee, FeeStatus, FeePaymentLog, Assignment, BatchStudentMapping, TutorBatchMapping, SessionType } from '@/lib/types';
 import { formatDate, formatCurrency, feeFromDiscount } from '@/lib/utils/format';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { StudentImportModal } from '@/components/students/StudentImportModal';
@@ -593,7 +595,7 @@ function StudentsTab({ batch }: { batch: Batch }) {
       </Modal>
 
       <TransferWizard
-        key={showTransfer ? 'open' : 'closed'}
+        key={showTransfer ? 'transfer-open' : 'transfer-closed'}
         open={showTransfer}
         onClose={() => setShowTransfer(false)}
         source={batch}
@@ -603,7 +605,7 @@ function StudentsTab({ batch }: { batch: Batch }) {
       />
 
       <RemoveWizard
-        key={showRemove ? 'open' : 'closed'}
+        key={showRemove ? 'remove-open' : 'remove-closed'}
         open={showRemove}
         onClose={() => setShowRemove(false)}
         batch={batch}
@@ -755,35 +757,110 @@ function TutorsCard({ batchId, isTest }: { batchId: string; isTest: boolean }) {
   );
 }
 
+type LectureForm = {
+  lecture_date: string;
+  start_time: string;
+  tutor_id: string;
+  note: string;
+  session_type: SessionType;
+  scheduled_duration_minutes: number;
+};
+
+const BLANK_LECTURE: LectureForm = {
+  lecture_date: '',
+  start_time: '09:00',
+  tutor_id: '',
+  note: '',
+  session_type: 'online',
+  scheduled_duration_minutes: DEFAULT_LECTURE_MINUTES,
+};
+
 export function LecturesTab({ batchId }: { batchId: string }) {
   const [lectures, setLectures] = useState<Lecture[]>([]);
+  const [summaries, setSummaries] = useState<Map<string, LectureAttendanceSummary>>(new Map());
+  const [tutors, setTutors] = useState<Tutor[]>([]);
   const [showNew, setShowNew] = useState(false);
-  const [form, setForm] = useState({ lecture_date: '', start_time: '09:00', meeting_code: '', note: '', session_type: 'online' as const, scheduled_duration_minutes: DEFAULT_LECTURE_MINUTES });
+  const [editing, setEditing] = useState<Lecture | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [form, setForm] = useState<LectureForm>(BLANK_LECTURE);
 
   const { showToast } = useToast();
   const confirm = useConfirm();
+  const { user } = useAuth();
 
   const fetchLectures = useCallback(async () => {
-    setLectures(await getLecturesByBatch(batchId));
+    const [list, batchTutors] = await Promise.all([getLecturesByBatch(batchId), getBatchTutors(batchId)]);
+    setLectures(list);
+    setSummaries(await getLectureSummaries(batchId));
+    setTutors(batchTutors);
   }, [batchId]);
 
   const { error: loadError, reload: reloadLectures } = useReloadableSection(fetchLectures);
 
-  const handleCreate = async () => {
+  // You, when you are one of the batch's tutors; otherwise its first.
+  const defaultTutor = tutors.find((tutor) => tutor.id === user?.tutor_id)?.id ?? tutors[0]?.id ?? '';
+
+  const openNew = () => {
+    setEditing(null);
+    setForm({ ...BLANK_LECTURE, tutor_id: defaultTutor });
+    setShowNew(true);
+  };
+
+  // The same dialog edits a lecture later — chiefly to correct the tutor.
+  const openEdit = (lecture: Lecture) => {
+    setEditing(lecture);
+    setForm({
+      lecture_date: lecture.lecture_date,
+      start_time: lecture.start_at ? new Date(lecture.start_at).toTimeString().slice(0, 5) : '09:00',
+      tutor_id: lecture.tutor_id ?? '',
+      note: lecture.note ?? '',
+      session_type: lecture.session_type,
+      scheduled_duration_minutes: lecture.scheduled_duration_minutes ?? DEFAULT_LECTURE_MINUTES,
+    });
+    setShowNew(true);
+  };
+
+  const closeForm = () => {
+    setShowNew(false);
+    setEditing(null);
+    setForm(BLANK_LECTURE);
+  };
+
+  const handleSave = async () => {
+    if (!form.lecture_date || saving) return;
+    const start = new Date(`${form.lecture_date}T${form.start_time}:00`);
+    const end = new Date(start.getTime() + form.scheduled_duration_minutes * 60_000);
+    const patch = {
+      lecture_date: form.lecture_date,
+      tutor_id: form.tutor_id || defaultTutor || null,
+      note: form.note || undefined,
+      session_type: form.session_type,
+      scheduled_duration_minutes: form.scheduled_duration_minutes,
+      start_at: start.toISOString(),
+      end_at: end.toISOString(),
+    };
+
+    setSaving(true);
     try {
-      const start = new Date(`${form.lecture_date}T${form.start_time}:00`);
-      const end = new Date(start.getTime() + form.scheduled_duration_minutes * 60_000);
-      await createLecture({ batch_id: batchId, lecture_date: form.lecture_date, meeting_code: form.meeting_code || undefined, note: form.note || undefined, session_type: form.session_type, scheduled_duration_minutes: form.scheduled_duration_minutes, start_at: start.toISOString(), end_at: end.toISOString() });
-      setShowNew(false);
-      setForm({ lecture_date: '', start_time: '09:00', meeting_code: '', note: '', session_type: 'online', scheduled_duration_minutes: DEFAULT_LECTURE_MINUTES });
+      if (editing) {
+        await updateLecture(editing.id, patch);
+      } else {
+        await createLecture({ batch_id: batchId, ...patch });
+      }
+      const wasEditing = Boolean(editing);
+      closeForm();
       void reloadLectures();
-      showToast('Lecture created');
+      showToast(wasEditing ? 'Lecture updated' : 'Lecture created');
     } catch (error) {
-      showToast(errorMessage(error, 'Failed to create lecture'), 'error');
+      showToast(errorMessage(error, 'Failed to save the lecture'), 'error');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleDelete = async (lectureId: string, label: string) => {
+  const handleDelete = async (lecture: Lecture) => {
+    const label = formatDate(lecture.lecture_date);
     const ok = await confirm({
       title: `Delete the lecture on ${label}?`,
       message: 'Attendance for this lecture is also deleted. This cannot be undone.',
@@ -792,12 +869,15 @@ export function LecturesTab({ batchId }: { batchId: string }) {
     });
     if (!ok) return;
 
+    setDeletingId(lecture.id);
     try {
-      await deleteLecture(lectureId);
+      await deleteLecture(lecture.id);
       void reloadLectures();
       showToast('Lecture deleted');
     } catch (error) {
       showToast(errorMessage(error, 'Failed to delete lecture'), 'error');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -805,36 +885,29 @@ export function LecturesTab({ batchId }: { batchId: string }) {
 
   return (
     <Card>
-      <CardHeader title="Lectures" action={<Button size="sm" className="action-button-compact" onClick={() => setShowNew(true)}><Plus size={14} /> Add Lecture</Button>} />
+      <CardHeader title="Lectures" action={<Button size="sm" className="action-button-compact" onClick={openNew}><Plus size={14} /> Add Lecture</Button>} />
       {lectures.length === 0 ? (
         <EmptyState icon={<Layers size={32} />} title="No lectures yet" />
       ) : (
-        <div className="batch-list">
-          {lectures.map((l) => (
-            <div key={l.id} className="batch-list-item flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium text-[var(--text-primary)]">{formatDate(l.lecture_date)}</p>
-                <p className="text-xs text-[var(--text-muted)]">
-                  {l.session_type} {l.meeting_code ? `• ${l.meeting_code}` : ''} {l.scheduled_duration_minutes ? `• ${l.scheduled_duration_minutes}min` : ''} {l.note ? `• ${l.note}` : ''}
-                </p>
-              </div>
-              <button onClick={() => handleDelete(l.id, formatDate(l.lecture_date))} aria-label={`Delete lecture on ${formatDate(l.lecture_date)}`} className="text-[var(--text-muted)] hover:text-[var(--danger-text)] p-1">
-                <Trash2 size={14} />
-              </button>
-            </div>
-          ))}
-        </div>
+        <LectureTable
+          lectures={lectures}
+          summaries={summaries}
+          variant="lectures"
+          onEdit={openEdit}
+          onDelete={(lecture) => void handleDelete(lecture)}
+          deletingId={deletingId}
+        />
       )}
 
       <Modal
         open={showNew}
-        onClose={() => setShowNew(false)}
-        title="New Lecture"
+        onClose={closeForm}
+        title={editing ? 'Edit Lecture' : 'New Lecture'}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setShowNew(false)}>Cancel</Button>
-            <Button className="action-button-compact" onClick={handleCreate} disabled={!form.lecture_date}>
-              Create Lecture
+            <Button variant="ghost" onClick={closeForm}>Cancel</Button>
+            <Button className="action-button-compact" onClick={handleSave} loading={saving} disabled={!form.lecture_date}>
+              {editing ? 'Save changes' : 'Create Lecture'}
             </Button>
           </>
         }
@@ -848,8 +921,16 @@ export function LecturesTab({ batchId }: { batchId: string }) {
               ariaLabel="Lecture date"
             />
           </FormField>
-          <FormField label="Meeting Code">
-            <input value={form.meeting_code} onChange={(e) => setForm({ ...form, meeting_code: e.target.value })} />
+          <FormField label="Tutor" required>
+            <SearchSelect
+              options={tutors.map((tutor) => ({ value: tutor.id, label: tutor.name }))}
+              value={form.tutor_id || defaultTutor || null}
+              onChange={(tutor_id) => setForm({ ...form, tutor_id })}
+              placeholder="Select a tutor"
+              searchPlaceholder="Search tutors"
+              emptyText="No tutors assigned to this batch"
+              showSearch={tutors.length > 6}
+            />
           </FormField>
           <div className="grid grid-cols-2 gap-4">
             <FormField label="Mode" required>
@@ -869,14 +950,19 @@ export function LecturesTab({ batchId }: { batchId: string }) {
 
 export function AttendanceTab({ batchId, batchName }: { batchId: string; batchName: string }) {
   const [lectures, setLectures] = useState<Lecture[]>([]);
+  const [summaries, setSummaries] = useState<Map<string, LectureAttendanceSummary>>(new Map());
   const [selectedLecture, setSelectedLecture] = useState<string | null>(null);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const { showToast } = useToast();
+  const confirm = useConfirm();
 
   const fetchLectures = useCallback(async () => {
-    setLectures(await getLecturesByBatch(batchId));
+    const list = await getLecturesByBatch(batchId);
+    setLectures(list);
+    setSummaries(await getLectureSummaries(batchId));
   }, [batchId]);
 
   const { error: loadError, reload: reloadLectures } = useReloadableSection(fetchLectures);
@@ -891,6 +977,32 @@ export function AttendanceTab({ batchId, batchName }: { batchId: string; batchNa
       showToast(errorMessage(err, 'Failed to load attendance records'), 'error');
     }
     setLoading(false);
+  };
+
+  const handleDelete = async (lecture: Lecture) => {
+    const label = formatDate(lecture.lecture_date);
+    const ok = await confirm({
+      title: `Delete the lecture on ${label}?`,
+      message: 'Attendance for this lecture is also deleted. This cannot be undone.',
+      confirmLabel: 'Delete lecture',
+      danger: true,
+    });
+    if (!ok) return;
+
+    setDeletingId(lecture.id);
+    try {
+      await deleteLecture(lecture.id);
+      if (selectedLecture === lecture.id) {
+        setSelectedLecture(null);
+        setRecords([]);
+      }
+      void reloadLectures();
+      showToast('Lecture deleted');
+    } catch (error) {
+      showToast(errorMessage(error, 'Failed to delete lecture'), 'error');
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const selectedLectureData = lectures.find((lecture) => lecture.id === selectedLecture);
@@ -911,7 +1023,7 @@ export function AttendanceTab({ batchId, batchName }: { batchId: string; batchNa
     <div className="space-y-4">
       <Card>
         <CardHeader
-          title="Select Lecture"
+          title="Attendance"
           action={lectures.length > 0 && (
             <Button size="sm" variant="secondary" className="action-button-compact" onClick={handleExportCsv} loading={exporting}>
               <Download size={14} /> Export CSV
@@ -921,30 +1033,15 @@ export function AttendanceTab({ batchId, batchName }: { batchId: string; batchNa
         {lectures.length === 0 ? (
           <EmptyState icon={<Layers size={32} />} title="No lectures yet" />
         ) : (
-          <div className="batch-list">
-            {lectures.map((l) => (
-              <button
-                key={l.id}
-                onClick={() => loadAttendance(l.id)}
-                className={`batch-list-item flex w-full items-center justify-between gap-4 text-left transition-colors ${
-                  selectedLecture === l.id
-                    ? 'border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--text-primary)]'
-                    : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]'
-                }`}
-              >
-                <span className="flex min-w-0 items-center gap-3">
-                  <CalendarDays size={18} className="shrink-0 text-[var(--primary)]" />
-                  <span className="min-w-0">
-                    <span className="block text-sm font-semibold text-[var(--text-primary)]">{formatDate(l.lecture_date)}</span>
-                    <span className="mt-1 block text-xs text-[var(--text-muted)]">
-                      {l.session_type ?? 'Lecture'}{l.meeting_code ? ` • ${l.meeting_code}` : ''}
-                    </span>
-                  </span>
-                </span>
-                <ChevronRight size={18} className="shrink-0 text-[var(--text-muted)]" />
-              </button>
-            ))}
-          </div>
+          <LectureTable
+            lectures={lectures}
+            summaries={summaries}
+            variant="attendance"
+            selectedId={selectedLecture}
+            onSelect={(lecture) => void loadAttendance(lecture.id)}
+            onDelete={(lecture) => void handleDelete(lecture)}
+            deletingId={deletingId}
+          />
         )}
       </Card>
 
@@ -952,7 +1049,7 @@ export function AttendanceTab({ batchId, batchName }: { batchId: string; batchNa
         open={Boolean(selectedLecture)}
         onClose={() => { setSelectedLecture(null); setRecords([]); }}
         title="Attendance Records"
-        description={selectedLectureData ? `${formatDate(selectedLectureData.lecture_date)}${selectedLectureData.meeting_code ? ` • ${selectedLectureData.meeting_code}` : ''}` : undefined}
+        description={selectedLectureData ? `${formatDate(selectedLectureData.lecture_date)}${selectedLectureData.tutor ? ` • ${selectedLectureData.tutor.name}` : ''}` : undefined}
         size="xl"
       >
         {loading ? (

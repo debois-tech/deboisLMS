@@ -8,7 +8,6 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { FormField } from '@/components/ui/FormField';
 import { Modal } from '@/components/ui/Modal';
 import { SearchBar } from '@/components/ui/SearchBar';
-import { SearchSelect } from '@/components/ui/SearchSelect';
 import { Spinner } from '@/components/ui/Spinner';
 import { useConfirm } from '@/lib/context/ConfirmContext';
 import { useToast } from '@/lib/context/ToastContext';
@@ -314,18 +313,14 @@ function GiveBadgeModal({ badge, batchId, onClose, onGiven }: {
       return next;
     });
 
-  // A one-off action, not a persisted mode — the trigger always reads "Bulk select"
-  // (never "stuck" on the last pick), and every checkbox stays individually togglable either way.
-  const bulkSelect = (action: string) => {
-    if (action === 'all') {
-      setPicked((current) => new Set([...current, ...visibleEligible.map((s) => s.id)]));
-    } else {
-      setPicked((current) => {
-        const next = new Set(current);
-        visibleEligible.forEach((s) => next.delete(s.id));
-        return next;
-      });
-    }
+  // Only the students on screen: a search narrows what Select all picks, like all the other pickers.
+  const allVisibleSelected = visibleEligible.length > 0 && visibleEligible.every((student) => picked.has(student.id));
+  const toggleAllVisible = () => {
+    setPicked((current) => {
+      const next = new Set(current);
+      visibleEligible.forEach((student) => (allVisibleSelected ? next.delete(student.id) : next.add(student.id)));
+      return next;
+    });
   };
 
   const give = async () => {
@@ -367,22 +362,16 @@ function GiveBadgeModal({ badge, batchId, onClose, onGiven }: {
           {/* Fixed to the top — search and the bulk-select toolbar never scroll away. */}
           <div className="badge-picker-toolbar">
             <SearchBar value={query} onChange={setQuery} placeholder="Search students" size="sm" />
-            <div className="table-toolbar text-xs text-[var(--text-muted)]">
-              <span>{picked.size} of {eligible.length} selected</span>
-              <SearchSelect
-                options={[
-                  { value: 'all', label: 'Select all' },
-                  { value: 'none', label: 'Select none' },
-                ]}
-                value={null}
-                onChange={bulkSelect}
-                placeholder="Bulk select"
-                triggerLabel="Bulk select"
-                searchPlaceholder=""
-                emptyText=""
-                showSearch={false}
-                className="!w-auto !max-w-none"
-              />
+            <div className="doc-picker-head">
+              <button
+                type="button"
+                className="doc-picker-all"
+                onClick={toggleAllVisible}
+                disabled={visibleEligible.length === 0 || saving}
+              >
+                {allVisibleSelected ? 'Deselect all' : 'Select all'}
+              </button>
+              <span className="doc-picker-count">{picked.size} of {eligible.length} selected</span>
             </div>
           </div>
           {/* The only scrolling surface in this modal — a fixed cap, not a flex-grow guess,

@@ -26,7 +26,7 @@ export async function loadProcessingContext(lectureId: string): Promise<Processi
   const [lectureRes, tutorsRes] = await Promise.all([
     supabase
       .from('lectures')
-      .select('id, batch_id, lecture_date, meeting_code, scheduled_duration_minutes')
+      .select('id, batch_id, lecture_date, scheduled_duration_minutes')
       .eq('id', lectureId)
       .maybeSingle(),
     supabase.from('tutors').select('id, name'),
@@ -62,7 +62,6 @@ export async function loadProcessingContext(lectureId: string): Promise<Processi
     batchId: lecture.batch_id,
     lectureDate: lecture.lecture_date,
     scheduledMinutes: lecture.scheduled_duration_minutes ?? DEFAULT_LECTURE_MINUTES,
-    meetingCode: lecture.meeting_code,
     roster,
     tutors,
     batchTutorIds,

@@ -86,7 +86,7 @@ export function TransferWizard({ open, onClose, source, students, targets, onDon
       message: (
         <>
           <span className="block">Old batch data stays, read-only</span>
-          <span className="block">{carry ? 'Payments copied here, no longer counted in the old batch' : 'Old payments stay frozen in the old batch, Rs 1,000 registration booked here'}</span>
+          <span className="block">{carry ? 'Payments copied here, no longer counted in the old batch' : 'Old payments stay frozen in the old batch'}</span>
           <span className="block">{joinedOn ? `Join date ${formatDate(joinedOn)}` : 'Join date by the first-week rule'}</span>
           <span className="block">Cannot be undone</span>
         </>

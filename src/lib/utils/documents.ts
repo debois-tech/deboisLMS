@@ -104,7 +104,7 @@ const SPECS: Record<DocumentKind, Spec> = {
     brBefore: 1,
     brAfter: 1,
     metaMargin: 16,
-    refLabel: 'Certificate No.:',
+    refLabel: 'Ref No.:',
     recipientMargin: 22,
     signatureMargin: 30,
     footBrInside: 0,

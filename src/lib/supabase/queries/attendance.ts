@@ -47,7 +47,6 @@ export async function getAttendanceByStudent(studentId: string): Promise<Attenda
 
 export async function insertUploadRows(
   lectureId: string,
-  meetingCode: string,
   lectureDate: string | undefined,
   rows: { sno: number; participant_name_raw: string; attendance_started?: string; joined_at?: string; attendance_stopped?: string; attended_duration_raw?: string; attended_minutes?: number }[]
 ): Promise<void> {
@@ -60,7 +59,6 @@ export async function insertUploadRows(
     attendance_stopped: normalizeTimestampForDb(r.attendance_stopped, lectureDate),
     attended_duration_raw: r.attended_duration_raw ?? null,
     attended_minutes: r.attended_minutes ?? null,
-    meeting_code: meetingCode,
     processed: false,
   }));
 
