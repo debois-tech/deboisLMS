@@ -4628,20 +4628,22 @@ create trigger attendance_mark_stamp before insert or update on attendance for e
 -- One row per lecture for the tables: attended of applicable (N/A rows left out), last marked, and by whom.
 -- Two aggregates joined once — a correlated subquery here is evaluated per attendance row and times out.
 create or replace view lecture_attendance_summary as
+-- batch_id is a grouping column in both aggregates, so a filter on it runs before the totalling, not after it.
 with per_lecture as (
   select
     a.lecture_id,
+    a.batch_id,
     count(*) filter (where a.status::text in ('present', 'partial'))::int as attended,
     count(*) filter (where a.status::text <> 'no_appli')::int as applicable,
     max(a.marked_at) as marked_at
   from attendance a
-  group by a.lecture_id
+  group by a.lecture_id, a.batch_id
 ),
 editors as (
-  select a.lecture_id, array_agg(distinct m.email order by m.email) as marked_by
+  select a.lecture_id, a.batch_id, array_agg(distinct m.email order by m.email) as marked_by
   from attendance a
   cross join lateral unnest(a.marked_by) as m(email)
-  group by a.lecture_id
+  group by a.lecture_id, a.batch_id
 )
 select
   p.lecture_id,
@@ -4649,10 +4651,9 @@ select
   p.applicable,
   p.marked_at,
   coalesce(e.marked_by, '{}') as marked_by,
-  l.batch_id
+  p.batch_id
 from per_lecture p
-join lectures l on l.id = p.lecture_id
-left join editors e on e.lecture_id = p.lecture_id;
+left join editors e on e.lecture_id = p.lecture_id and e.batch_id = p.batch_id;
 
 alter view lecture_attendance_summary set (security_invoker = on);
 grant select on lecture_attendance_summary to authenticated;
