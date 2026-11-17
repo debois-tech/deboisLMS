@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/context/AuthContext';
 import { profileFromUser } from '@/lib/context/AuthContext';
 import { useTheme } from '@/lib/context/ThemeContext';
 import { supabase } from '@/lib/supabase/client';
+import { markTutorIntroPending } from '@/lib/utils/tutorIntro';
 import type { Role } from '@/lib/types';
 
 export default function LoginPage() {
@@ -68,6 +69,8 @@ export function LoginPanel({ title, emailPlaceholder, expectedRole, hint }: Logi
       }
 
       setUser(profile);
+      // The tutor shell plays its opening greeting once, on this arrival only.
+      if (profile.role === 'tutor') markTutorIntroPending();
       navigate(HOME_FOR_ROLE[profile.role]);
     }
     setLoading(false);
