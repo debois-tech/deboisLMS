@@ -22,7 +22,7 @@ export interface RecentActivity {
   id: string;
   text: string;
   timestamp: string;
-  type: 'batch_created' | 'student_joined' | 'payment_made';
+  type: 'batch_created' | 'student_joined' | 'payment_made' | 'submission' | 'lecture_added';
 }
 
 export async function getDashboardStats(): Promise<DashboardStats> {
@@ -63,6 +63,50 @@ export async function getTutorDashboardStats(): Promise<TutorDashboardStats> {
     student_count: new Set(rows<{ student_id: string }>(rosterRes, 'Could not count students').map((r) => r.student_id)).size,
     pending_grading: count(gradingRes, 'Could not count pending grading'),
   };
+}
+
+type Embedded<T> = { data: T[] | null; error: PostgrestError | null };
+
+/** The tutor's latest submissions, joins and lectures; RLS keeps all three to their own batches. */
+export async function getTutorRecentActivity(): Promise<RecentActivity[]> {
+  type Submission = { id: string; submitted_at: string; students: { name: string } | null; assignments: { title: string; batches: { name: string } | null } | null };
+  type Joined = { id: string; joined_at: string; students: { name: string } | null; batches: { name: string } };
+  type Lecture = { id: string; created_at: string; batches: { name: string } };
+
+  const [submissions, joins, lectures] = await Promise.all([
+    supabase
+      .from('assignment_completions')
+      .select('id, submitted_at, students(name), assignments(title, batches(name))')
+      .eq('submitted', true)
+      .not('submitted_at', 'is', null)
+      .order('submitted_at', { ascending: false })
+      .limit(5),
+    supabase.from('batch_student_mapping').select('id, joined_at, students(name), batches!inner(name)').order('joined_at', { ascending: false }).limit(5),
+    supabase.from('lectures').select('id, created_at, batches!inner(name)').order('created_at', { ascending: false }).limit(5),
+  ]);
+
+  const results: RecentActivity[] = [
+    ...rows<Submission>(submissions as unknown as Embedded<Submission>, 'Could not load recent submissions').map((s) => ({
+      id: `act-sub-${s.id}`,
+      text: `${s.students?.name ?? 'A student'} submitted ${s.assignments?.title ?? 'an assignment'}${s.assignments?.batches ? ` in ${s.assignments.batches.name}` : ''}`,
+      timestamp: s.submitted_at,
+      type: 'submission' as const,
+    })),
+    ...rows<Joined>(joins as unknown as Embedded<Joined>, 'Could not load recent enrolments').map((m) => ({
+      id: `act-join-${m.id}`,
+      text: `${m.students?.name ?? 'A student'} joined ${m.batches.name}`,
+      timestamp: m.joined_at,
+      type: 'student_joined' as const,
+    })),
+    ...rows<Lecture>(lectures as unknown as Embedded<Lecture>, 'Could not load recent lectures').map((l) => ({
+      id: `act-lec-${l.id}`,
+      text: `Lecture added in ${l.batches.name}`,
+      timestamp: l.created_at,
+      type: 'lecture_added' as const,
+    })),
+  ];
+
+  return results.sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, 5);
 }
 
 export async function getRecentActivity(): Promise<RecentActivity[]> {

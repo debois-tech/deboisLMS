@@ -63,18 +63,6 @@ export function countBelow(byParent: Map<string | null, Linked[]>, id: string): 
   return (byParent.get(id) ?? []).reduce((sum, kid) => sum + 1 + countBelow(byParent, kid.id), 0);
 }
 
-// Each batch counts once, whatever its size; batches with no curriculum yet are left out.
-export function averageProgress(
-  progress: Map<string, { done: number; total: number }>,
-  batchIds: string[],
-): { percent: number; batches: number } | null {
-  const shares = batchIds.flatMap((id) => {
-    const entry = progress.get(id);
-    return entry && entry.total > 0 ? [entry.done / entry.total] : [];
-  });
-  return shares.length ? { percent: Math.round((100 * shares.reduce((sum, share) => sum + share, 0)) / shares.length), batches: shares.length } : null;
-}
-
 /** Skipped children are left out of the total: they never lower the bar and never raise it. */
 export function progressOf(kids: { status: CurriculumStatus }[]): { done: number; total: number } {
   const counted = kids.filter((kid) => kid.status !== 'skipped');
