@@ -40,7 +40,7 @@ export function AttendanceRecordsTable({ records, maxHeight = '24rem' }: Attenda
         onChange={setSearch}
         placeholder="Search by student name, email or phone"
         filterLabel="Status"
-        allLabel="All statuses"
+        allLabel="All"
         filterValue={statusFilter}
         filterOptions={STATUS_OPTIONS}
         onFilterChange={(value) => setStatusFilter(value as AttendanceStatus | null)}

@@ -19,7 +19,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import {
   CalendarDays, Check, ChevronDown, ChevronsDownUp, ChevronsUpDown, LibraryBig, Maximize2, Minimize2, Minus,
-  Pencil, Plus, Scan, SkipForward, Trash2, ZoomIn, ZoomOut,
+  PenLine, Plus, Scan, SkipForward, Trash2, ZoomIn, ZoomOut,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { QuizSegment } from '@/components/exams/QuizParts';
@@ -827,7 +827,7 @@ export function CurriculumCanvas({ batchId, batchName, role, height = 'calc(100v
         <Panel position="top-left" className="cv-toolbar">
             {canEdit && view === 'view' && (
               <Button variant="secondary" className="action-button-compact" onClick={startEdit} disabled={Boolean(pending) && role === 'tutor'}>
-                <Pencil size={14} /> Edit curriculum
+                <PenLine size={14} /> Edit
               </Button>
             )}
             {view === 'edit' && (

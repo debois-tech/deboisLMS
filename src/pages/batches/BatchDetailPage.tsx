@@ -1,7 +1,7 @@
 import { lazy, Suspense, useState, useCallback, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { BackLink } from '@/components/ui/BackLink';
-import { Archive, ArrowRightLeft, Edit3, X, Users, GraduationCap, Layers, ClipboardCheck, FileText, Plus, Trash2, Upload, Download } from 'lucide-react';
+import { Archive, ArrowRightLeft, PenLine, X, Users, GraduationCap, Layers, ClipboardCheck, FileText, Plus, Trash2, Upload, Download } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { StatusPill } from '@/components/ui/StatusPill';
@@ -184,7 +184,7 @@ export default function BatchDetailPage() {
             </Button>
           )}
           <Link to={`/batches/${batch.id}/edit`}>
-            <Button variant="outline" className="action-button-compact"><Edit3 size={14} /> Edit</Button>
+            <Button variant="outline" className="action-button-compact"><PenLine size={14} /> Edit</Button>
           </Link>
           <Button
             variant="outline"
@@ -661,10 +661,6 @@ function TutorsCard({ batch }: { batch: Batch }) {
     }
   };
 
-  const handleUnassign = (tutor: Tutor & { mapping: TutorBatchMapping }) => {
-    setUnassigning(tutor);
-  };
-
   const available = allTutors.filter((t) => !tutors.some((e) => e.id === t.id));
 
   if (loadError) return <Card><ErrorState message={loadError} onRetry={reloadTutors} /></Card>;
@@ -673,28 +669,38 @@ function TutorsCard({ batch }: { batch: Batch }) {
     <Card>
       <CardHeader
         title="Assigned Tutors"
+        className="card-header-gap"
         action={isAdmin && <Button size="sm" className="action-button-compact" onClick={() => setShowAdd(true)}><Plus size={14} /> Assign Tutor</Button>}
       />
       {tutors.length === 0 ? (
         <EmptyState icon={<GraduationCap size={32} />} title="No tutors assigned" />
       ) : (
-        <div className="batch-list">
-          {tutors.map((t) => (
-            <div key={t.id} className="batch-list-item flex items-center justify-between gap-4 hover:bg-[var(--bg-elevated)]">
-              <div>
-                <p className="text-sm font-medium text-[var(--text-primary)]">{t.name}</p>
-                <p className="text-xs text-[var(--text-muted)]">{t.email ?? t.phone ?? '—'}</p>
-              </div>
-              {isAdmin && (
-                <div className="flex items-center gap-1">
-                  <button onClick={() => handleUnassign(t)} aria-label={`Unassign ${t.name} from batch`} className="text-[var(--text-muted)] hover:text-[var(--danger-text)] p-1">
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+        <Table maxHeight="none" className="data-table-compact">
+          <THead>
+            <TR>
+              <TH>Tutor</TH>
+              <TH>Email</TH>
+              <TH>Assigned</TH>
+              {isAdmin && <TH align="center"><span className="sr-only">Actions</span></TH>}
+            </TR>
+          </THead>
+          <TBody>
+            {tutors.map((t) => (
+              <TR key={t.id}>
+                <TD className="font-medium text-[var(--text-primary)]">{t.name}</TD>
+                <TD className="cell-secondary">{t.email ?? t.phone ?? '—'}</TD>
+                <TD className="cell-muted whitespace-nowrap">{formatDate(t.mapping.assigned_at)}</TD>
+                {isAdmin && (
+                  <TD align="center">
+                    <Button size="sm" variant="ghost" className="action-button-icon" onClick={() => setUnassigning(t)} aria-label={`Unassign ${t.name} from batch`} title="Unassign">
+                      <Trash2 size={15} />
+                    </Button>
+                  </TD>
+                )}
+              </TR>
+            ))}
+          </TBody>
+        </Table>
       )}
 
       <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Assign Tutor">
@@ -1264,7 +1270,7 @@ export function AssignmentsTab({ batchId }: { batchId: string }) {
             <div className="flex gap-2">
               {selectedAssignment && (
                 <Button size="sm" variant="secondary" className="action-button-icon" onClick={() => setShowEdit(true)} aria-label="Edit assignment">
-                  <Edit3 size={14} />
+                  <PenLine size={14} />
                 </Button>
               )}
               <Button size="sm" className="action-button-compact" onClick={() => setShowNew(true)}><Plus size={14} />Create</Button>

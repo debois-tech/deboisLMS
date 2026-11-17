@@ -256,6 +256,11 @@ export default function AttendancePage() {
           title="Select batch & lecture"
           action={selectedBatch && (
             <div className="flex gap-2">
+              {selectedLecture && (
+                <Button size="sm" variant="secondary" className="action-button-icon action-button-danger" onClick={() => void handleDeleteLecture()} aria-label="Delete this lecture" title="Delete this lecture">
+                  <Trash2 size={16} />
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="secondary"
@@ -268,11 +273,6 @@ export default function AttendancePage() {
               <Button size="sm" className="action-button-compact" onClick={() => setShowNewLecture(true)}>
                 <Plus size={14} /> New
               </Button>
-              {selectedLecture && (
-                <Button size="sm" variant="secondary" className="action-button-icon action-button-danger" onClick={() => void handleDeleteLecture()} aria-label="Delete this lecture" title="Delete this lecture">
-                  <Trash2 size={16} />
-                </Button>
-              )}
             </div>
           )}
         />
@@ -297,14 +297,15 @@ export default function AttendancePage() {
           <Card>
             <CardHeader
               title="Attendance records"
-              titleAdornment={records.length > 0 && <Badge variant="info">{attended}/{applicable} attended</Badge>}
+              className="card-header-gap"
+              titleAdornment={records.length > 0 && <Badge variant={applicable > 0 && attended === applicable ? 'success' : 'default'}>{attended}/{applicable} attended</Badge>}
               action={
                 <div className="flex gap-2">
                   <Button size="sm" variant="secondary" className="action-button-compact" onClick={openImport}>
                     <Upload size={14} /> CSV
                   </Button>
                   <Button size="sm" variant="secondary" className="action-button-compact" onClick={() => setShowManual(true)}>
-                    <PenLine size={14} /> Mark manually
+                    <PenLine size={14} /> Edit
                   </Button>
                 </div>
               }

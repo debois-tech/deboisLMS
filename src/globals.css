@@ -1396,8 +1396,13 @@ html.light .glass {
   .student-identity-links { margin-left: auto; }
 }
 
+/* Two cards instead of three (the tutor view): half each, a little taller. */
+.student-summary-grid.is-pair { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.student-summary-grid.is-pair .student-summary-card { min-height: 9.5rem; }
+
 @media (max-width: 768px) {
-  .student-summary-grid { grid-template-columns: 1fr; }
+  .student-summary-grid,
+  .student-summary-grid.is-pair { grid-template-columns: 1fr; }
   .student-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
@@ -5345,7 +5350,7 @@ button.qz-dot:disabled { opacity: 0.45; cursor: not-allowed; }
 .qz-review { display: flex; flex-direction: column; gap: 1rem; padding: 1.125rem; }
 .qz-review-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
 .qz-review-title { font-size: 1rem; font-weight: 650; line-height: 1.4; }
-.qz-rule { height: 1px; background: var(--border); }
+.qz-divider { height: 1px; background: var(--border); }
 
 /* Tailwind spacing utilities never reach this app (the reset above them is unlayered), so spacing is named here. */
 .qz-lobby-caption { margin-top: 0.5rem; font-size: 1.125rem; font-weight: 600; }
@@ -6002,6 +6007,10 @@ button.qz-dot:disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* A card whose header sits right above a table needs a real gap: Tailwind margin utilities do nothing here. */
 .card-header-gap { margin-bottom: 1.25rem; }
+
+/* A table row that opens something when clicked. */
+.row-link { cursor: pointer; }
+.row-link:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
 
 /* Divides toolbar buttons into groups by how much they change. */
 .toolbar-sep { align-self: center; width: 1px; height: 1.5rem; margin-inline: 0.25rem; background: var(--border-strong); }

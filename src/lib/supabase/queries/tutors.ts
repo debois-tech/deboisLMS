@@ -20,7 +20,8 @@ export async function getTutorBatches(tutorId: string): Promise<(TutorBatchMappi
   return rows<TutorBatchMapping & { batch?: Batch }>(
     await supabase
       .from('tutor_batch_mapping')
-      .select('*, batch:batches(*)')
+      // !inner drops a batch the viewer cannot read, so an admin never sees a test batch.
+      .select('*, batch:batches!inner(*)')
       .eq('tutor_id', tutorId),
     'Could not load this tutor’s batches',
   );
@@ -29,7 +30,7 @@ export async function getTutorBatches(tutorId: string): Promise<(TutorBatchMappi
 // Every tutor's assignments, for the Tutors table.
 export async function getAllTutorBatches(): Promise<(TutorBatchMapping & { batch?: Batch })[]> {
   return rows<TutorBatchMapping & { batch?: Batch }>(
-    await supabase.from('tutor_batch_mapping').select('*, batch:batches(*)'),
+    await supabase.from('tutor_batch_mapping').select('*, batch:batches!inner(*)'),
     'Could not load tutor batches',
   );
 }

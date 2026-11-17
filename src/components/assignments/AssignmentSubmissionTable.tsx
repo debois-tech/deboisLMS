@@ -99,11 +99,9 @@ export function AssignmentSubmissionTable({
       <CardHeader
         title="Submission Status"
         titleAdornment={
-          <>
-            <Badge variant={submittedCount === rows.length && rows.length > 0 ? 'success' : 'default'}>
-              {submittedCount} of {rows.length} submitted
-            </Badge>
-          </>
+          <Badge variant={submittedCount === rows.length && rows.length > 0 ? 'success' : 'default'}>
+            {submittedCount}/{rows.length} submitted
+          </Badge>
         }
         action={
           <div className="flex gap-2">

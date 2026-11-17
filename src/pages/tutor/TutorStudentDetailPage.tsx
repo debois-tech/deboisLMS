@@ -6,6 +6,7 @@ import { Card, CardHeader } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import { NotFound } from '@/components/ui/NotFound';
 import { StatusPill } from '@/components/ui/StatusPill';
 import { EnrolmentSelect } from '@/components/ui/BatchSelect';
@@ -96,21 +97,18 @@ export default function TutorStudentDetailPage() {
       </Card>
 
       {current && (
-        <div className="student-summary-grid">
+        <div className="student-summary-grid is-pair">
           <Card padding="sm" className="student-summary-card">
-            <p className="student-summary-label">Current Batch</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="student-summary-label">Current Batch</p>
+              <StatusPill kind="enrollment" value={current.status} />
+            </div>
             {batchMappings.length > 1 ? (
               <EnrolmentSelect mappings={newestFirst} value={current.batch_id} onChange={setSelectedBatchId} />
             ) : (
               <p className="student-summary-value">{current.batch?.name}</p>
             )}
-          </Card>
-          <Card padding="sm" className="student-summary-card">
-            <p className="student-summary-label">Enrolment</p>
-            <div className="student-summary-lecture">
-              <StatusPill kind="enrollment" value={current.status} />
-              <p className="student-summary-meta">Joined {formatDate(current.joined_at)}</p>
-            </div>
+            <p className="student-summary-meta">Joined {formatDate(current.joined_at)}</p>
           </Card>
           <StudentAttendance
             key={current.batch_id}
@@ -139,21 +137,28 @@ export default function TutorStudentDetailPage() {
       )}
 
       <Card>
-        <CardHeader title="Batches" />
+        <CardHeader title="Batches" className="card-header-gap" />
         {batchMappings.length === 0 ? (
           <EmptyState icon={<Layers size={32} />} title="Not enrolled in any of your batches" />
         ) : (
-          <div className="batch-list">
-            {batchMappings.map((m) => (
-              <div key={m.id} className="batch-list-item flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <Layers size={18} className="shrink-0 text-[var(--primary)]" />
-                  <p className="text-sm font-semibold text-[var(--text-primary)]">{m.batch?.name ?? m.batch_id}</p>
-                </div>
-                <StatusPill kind="enrollment" value={m.status} />
-              </div>
-            ))}
-          </div>
+          <Table maxHeight="none" className="data-table-compact">
+            <THead>
+              <TR>
+                <TH>Batch</TH>
+                <TH>Joined</TH>
+                <TH>Status</TH>
+              </TR>
+            </THead>
+            <TBody>
+              {batchMappings.map((m) => (
+                <TR key={m.id}>
+                  <TD className="font-semibold text-[var(--text-primary)]">{m.batch?.name ?? m.batch_id}</TD>
+                  <TD className="cell-muted whitespace-nowrap">{formatDate(m.joined_at)}</TD>
+                  <TD><StatusPill kind="enrollment" value={m.status} /></TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
         )}
       </Card>
     </div>

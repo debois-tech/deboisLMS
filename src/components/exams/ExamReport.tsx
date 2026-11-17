@@ -235,7 +235,7 @@ function StudentAnswers({ row, asked, answers }: { row: QuizScoreRow; asked: Qui
             {question.image_path && <img className="qz-image" src={quizImageUrl(question.image_path)} alt="" />}
             {answer && (
               <>
-                <div className="qz-rule" />
+                <div className="qz-divider" />
                 <div className="qz-opts is-review">
                   {question.quiz_options.map((option, optionIndex) => {
                     const showingRight = flipped.has(question.id);

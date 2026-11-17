@@ -116,12 +116,14 @@ export function BatchMaterials({
               {batchId && materials.length > 0 && (
                 <Button
                   size="sm"
-                  variant="outline"
-                  className="action-button-compact action-button-danger"
+                  variant="secondary"
+                  className="action-button-icon action-button-danger"
                   onClick={handlePurge}
                   loading={purging}
+                  aria-label="Delete all files"
+                  title="Delete all files"
                 >
-                  <Trash2 size={14} /> Delete all
+                  <Trash2 size={16} />
                 </Button>
               )}
               <Button size="sm" className="action-button-compact" onClick={() => setShowUpload(true)}>

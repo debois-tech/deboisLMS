@@ -1,4 +1,4 @@
-import { Pencil, Trash2 } from 'lucide-react';
+import { PenLine, Trash2 } from 'lucide-react';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/Table';
 import type { LectureAttendanceSummary } from '@/lib/supabase';
 import type { Lecture } from '@/lib/types';
@@ -73,19 +73,10 @@ export function LectureTable({
             <TR
               key={lecture.id}
               className={attendance && selectedId === lecture.id ? 'bg-[var(--primary)]/10' : undefined}
+              onActivate={attendance ? () => onSelect?.(lecture) : undefined}
             >
               <TD className="whitespace-nowrap">
-                {attendance ? (
-                  <button
-                    type="button"
-                    onClick={() => onSelect?.(lecture)}
-                    className="font-medium text-[var(--text-primary)] hover:underline"
-                  >
-                    {date}
-                  </button>
-                ) : (
-                  <span className="font-medium text-[var(--text-primary)]">{date}</span>
-                )}
+                <span className="font-medium text-[var(--text-primary)]">{date}</span>
               </TD>
 
               {!attendance && (
@@ -126,12 +117,12 @@ export function LectureTable({
                       aria-label={`Edit the lecture on ${date}`}
                       className={iconButton}
                     >
-                      <Pencil size={15} />
+                      <PenLine size={15} />
                     </button>
                   )}
                   <button
                     type="button"
-                    onClick={() => onDelete(lecture)}
+                    onClick={(event) => { event.stopPropagation(); onDelete(lecture); }}
                     disabled={deletingId === lecture.id}
                     aria-label={`Delete the lecture on ${date}`}
                     className={iconButton}

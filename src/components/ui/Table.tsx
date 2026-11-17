@@ -33,9 +33,19 @@ export function TBody({ children, from = 1 }: { children: ReactNode; from?: numb
   return <tbody>{withSerial(children, (at) => Math.max(from, 1) + at)}</tbody>;
 }
 
-export function TR({ children, className, serial }: { children: ReactNode; className?: string; serial?: string | number }) {
+/** `onActivate` makes the whole row a control: click, or Enter / Space while the row itself is focused. */
+export function TR({ children, className, serial, onActivate }: { children: ReactNode; className?: string; serial?: string | number; onActivate?: () => void }) {
   return (
-    <tr className={className}>
+    <tr
+      className={onActivate ? `row-link ${className ?? ''}` : className}
+      onClick={onActivate}
+      tabIndex={onActivate ? 0 : undefined}
+      onKeyDown={onActivate ? (event) => {
+        if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return;
+        event.preventDefault();
+        onActivate();
+      } : undefined}
+    >
       {typeof serial === 'string' && <th className="serial-col text-center!">{serial}</th>}
       {typeof serial === 'number' && <td className="serial-col cell-muted text-center!">{serial}</td>}
       {children}

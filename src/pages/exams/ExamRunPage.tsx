@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Copy, Pencil, Play, Trash2 } from 'lucide-react';
+import { ArrowLeft, Copy, PenLine, Play, Trash2 } from 'lucide-react';
 import { ExamHost } from '@/components/exams/ExamHost';
 import { ExamReport } from '@/components/exams/ExamReport';
 import { QuizOption } from '@/components/exams/QuizParts';
@@ -70,7 +70,7 @@ export default function ExamRunPage() {
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Button className="action-button-compact" variant="ghost" size="sm" onClick={() => void remove()}><Trash2 size={14} /> Delete</Button>
             <Button className="action-button-compact" variant="secondary" size="sm" onClick={() => navigate(`${base}/new?from=${quiz.id}`)}><Copy size={14} /> {draft ? 'Duplicate' : 'Run again'}</Button>
-            {draft && <Button className="action-button-compact" variant="secondary" size="sm" onClick={() => navigate(`${base}/${quiz.id}/edit`)}><Pencil size={14} /> Edit</Button>}
+            {draft && <Button className="action-button-compact" variant="secondary" size="sm" onClick={() => navigate(`${base}/${quiz.id}/edit`)}><PenLine size={14} /> Edit</Button>}
             {draft && <Button className="action-button-compact" size="sm" loading={opening} onClick={() => void open()}><Play size={14} /> Open lobby</Button>}
           </div>
         }

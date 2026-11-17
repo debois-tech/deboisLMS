@@ -30,17 +30,24 @@ export function UnassignWizard({ open, onClose, tutorName, batches, onDone }: Pr
   const confirm = useConfirm();
   const { showToast } = useToast();
 
+  const [failed, setFailed] = useState(false);
+  // Keyed by the ids, not the array: callers pass a fresh array every render.
+  const ids = batches.map((batch) => batch.id).join(',');
+
   useEffect(() => {
-    if (!open) return;
+    if (!open || !ids) return;
     let live = true;
-    getTutorBatchFootprints(batches.map((batch) => batch.id))
+    getTutorBatchFootprints(ids.split(','))
       .then((rows) => live && setPrints(new Map(rows.map((row) => [row.mapping_id, row]))))
       .catch((err) => {
+        if (!live) return;
         showToast(errorMessage(err, 'Could not load what this tutor holds'), 'error');
-        onClose();
+        setFailed(true);
       });
     return () => { live = false; };
-  }, [open, batches, showToast, onClose]);
+  }, [open, ids, showToast]);
+
+  useEffect(() => { if (failed) onClose(); }, [failed, onClose]);
 
   const choiceOf = (batch: Row) => choices[batch.id] ?? 'keep';
 
