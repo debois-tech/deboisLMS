@@ -12,6 +12,7 @@ import { getMaintenanceMode } from '@/lib/supabase';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { Spinner } from '@/components/ui/Spinner';
 import { PortalBatchProvider, usePortalBatch } from '@/lib/context/PortalBatchContext';
+import { LoginIntro } from '@/components/layout/LoginIntro';
 import { useNow } from '@/lib/hooks/useNow';
 import { formatDate } from '@/lib/utils/format';
 
@@ -149,6 +150,7 @@ export default function PortalLayout() {
       <PortalNav open={navOpen} onClose={() => setNavOpen(false)} />
 
       <PortalMain />
+      <LoginIntro />
     </div>
     </PortalBatchProvider>
   );

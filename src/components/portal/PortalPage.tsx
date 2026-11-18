@@ -21,15 +21,17 @@ interface PortalPageProps {
   onRetry?: () => void;
   /** Shape of the loading placeholder — match it to what the page actually renders. */
   shape?: 'dashboard' | 'list';
+  /** Marks this page's heading as the login intro's landing point. */
+  intro?: boolean;
   children: ReactNode;
 }
 
 /** Frame for every portal section: title, optional control, loading placeholder, error state. */
-export function PortalPage({ title, action, meta, loading, error, onRetry, shape = 'dashboard', children }: PortalPageProps) {
+export function PortalPage({ title, action, meta, loading, error, onRetry, shape = 'dashboard', intro, children }: PortalPageProps) {
   return (
-    <div className="portal-page">
+    <div className="portal-page" data-intro-ready={intro && !loading ? '1' : undefined}>
       <div className="portal-page-head">
-        <h1 className="portal-page-title">{title}</h1>
+        <h1 className="portal-page-title" data-intro-target={intro ? '' : undefined}>{title}</h1>
         {meta}
         {action}
       </div>

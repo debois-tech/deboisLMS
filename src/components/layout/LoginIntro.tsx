@@ -2,24 +2,26 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '@/lib/context/AuthContext';
-import { finishTutorIntro, isTutorIntroPending, tutorGreeting } from '@/lib/utils/tutorIntro';
+import { finishIntro, greetingParts, isIntroPending } from '@/lib/utils/loginIntro';
 
 /** Gap between successive letters while typing. */
 const TYPE_MS = 54;
 /** The greeting is complete; leave a beat before the loading pop takes over. */
 const BEAT_MS = 420;
-/** Safety valve only: a page that never reports ready must not hold the tutor hostage. */
+/** Safety valve only: a page that never reports ready must not hold the user hostage. */
 const MAX_WAIT_MS = 9000;
+/** Time for the page's own entry animation to settle before we measure the header. */
+const SETTLE_MS = 160;
 const MORPH_MS = 680;
 const MORPH_EASE = 'cubic-bezier(0.22, 1, 0.36, 1)';
 
-const TARGET = '[data-tutor-intro-target]';
-const READY = '[data-tutor-intro-ready]';
+const TARGET = '[data-intro-target]';
+const READY = '[data-intro-ready]';
 
 /**
  * typing  — the greeting writes itself out, one letter at a time.
  * loading — every letter pops in a slow left-to-right ripple, so the wait for the
- *           dashboard reads as part of the intro instead of a frozen screen.
+ *           page reads as part of the intro instead of a frozen screen.
  * landing — the ripple stops and the line travels onto the real header.
  */
 type Phase = 'typing' | 'loading' | 'landing';
@@ -33,29 +35,32 @@ function fontSize(el: Element) {
 }
 
 /**
- * The tutor's first screen after signing in. Covers the whole viewport (navbar
- * included) while the dashboard loads, types the greeting, ripples it while it
- * waits, then morphs that same line onto the real header and gets out of the way.
- * Tutor-only and once per login by design.
+ * The first screen after signing in, for every role. Covers the whole viewport
+ * (navbar included) while the home page loads, types the greeting, ripples it
+ * while it waits, then morphs that same line onto the real header and gets out of
+ * the way. Once per login: the flag is written by the login form.
+ *
+ * The page contract is small: its header carries `data-intro-target`, and its root
+ * carries `data-intro-ready` once the initial load has settled (or failed).
  */
-export function TutorIntro() {
+export function LoginIntro() {
   const { user } = useAuth();
   const [prefersReduced] = useState(prefersReducedMotion);
-  const [playing, setPlaying] = useState(isTutorIntroPending);
+  const [playing, setPlaying] = useState(isIntroPending);
   const [phase, setPhase] = useState<Phase>(() => (prefersReduced ? 'loading' : 'typing'));
   const [typed, setTyped] = useState(() => (prefersReduced ? Number.MAX_SAFE_INTEGER : 0));
   const lineRef = useRef<HTMLSpanElement>(null);
   const veilRef = useRef<HTMLDivElement>(null);
   const doneRef = useRef(false);
 
-  const { lead, name } = tutorGreeting(new Date().getHours(), user?.full_name);
+  const { lead, name } = greetingParts(new Date().getHours(), user?.full_name);
   const text = name ? `${lead}, ${name}!` : `${lead}!`;
   const nameStart = name ? lead.length + 2 : -1;
 
   const finish = useCallback(() => {
     if (doneRef.current) return;
     doneRef.current = true;
-    finishTutorIntro();
+    finishIntro();
     setPlaying(false);
   }, []);
 
@@ -94,7 +99,7 @@ export function TutorIntro() {
     return () => window.clearTimeout(id);
   }, [playing, phase, typed, text.length]);
 
-  // Ripple runs while we wait for the dashboard to say the header is in place and loaded.
+  // Ripple runs while we wait for the page to say the header is in place and loaded.
   // Watched instead of polled per frame: the page may go quiet for a while before it
   // announces itself, and a stopped frame loop must never strand the intro.
   useEffect(() => {
@@ -108,8 +113,7 @@ export function TutorIntro() {
       const target = document.querySelector<HTMLElement>(TARGET);
       if (!target || !document.querySelector(READY) || target.getBoundingClientRect().width <= 0) return;
       landed = true;
-      // Let the page's own entry animation settle so we measure where the header rests.
-      settleId = window.setTimeout(() => setPhase('landing'), 120);
+      settleId = window.setTimeout(() => setPhase('landing'), SETTLE_MS);
     };
 
     const observer = new MutationObserver(check);
@@ -140,8 +144,8 @@ export function TutorIntro() {
     const from = line.getBoundingClientRect();
     const header = target.getBoundingClientRect();
 
-    // The h1 is a block: its box spans the page. A Range measures the glyphs, which is
-    // what the intro line has to land on.
+    // The header is a block: its box spans the page. A Range measures the glyphs, which
+    // is what the intro line has to land on.
     const range = document.createRange();
     range.selectNodeContents(target);
     const runs = Array.from(range.getClientRects());
@@ -187,11 +191,11 @@ export function TutorIntro() {
   const typing = phase === 'typing';
 
   return createPortal(
-    <div className={`tutor-intro is-${phase}`} role="status" aria-live="polite" aria-busy={phase !== 'landing'}>
-      <div className="tutor-intro-veil" ref={veilRef} aria-hidden="true" />
-      <div className="tutor-intro-stage">
+    <div className={`login-intro is-${phase}`} role="status" aria-live="polite" aria-busy={phase !== 'landing'}>
+      <div className="login-intro-veil" ref={veilRef} aria-hidden="true" />
+      <div className="login-intro-stage">
         <span
-          className="tutor-intro-line"
+          className="login-intro-line"
           ref={lineRef}
           style={{ fontSize: `clamp(0.9rem, ${Math.min(5.4, 160 / text.length).toFixed(2)}vw, 4rem)` }}
           aria-hidden="true"
@@ -202,7 +206,7 @@ export function TutorIntro() {
               <span
                 key={index}
                 className={[
-                  'tutor-intro-char',
+                  'login-intro-char',
                   index < shown ? 'is-in' : '',
                   inName ? 'is-name' : '',
                   typing && shown > 0 && index === shown - 1 ? 'is-caret' : '',
@@ -213,9 +217,9 @@ export function TutorIntro() {
               </span>
             );
           })}
-          {typing && shown === 0 && <span className="tutor-intro-seed" aria-hidden="true" />}
+          {typing && shown === 0 && <span className="login-intro-seed" aria-hidden="true" />}
         </span>
-        <span className="tutor-intro-sr">{text}</span>
+        <span className="login-intro-sr">{text}</span>
       </div>
     </div>,
     document.body,

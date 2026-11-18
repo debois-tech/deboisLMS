@@ -39,6 +39,7 @@ import type {
 import { StudentIdChip } from '@/components/students/StudentLink';
 import { EnrolmentSelect } from '@/components/ui/BatchSelect';
 import { useAuth } from '@/lib/context/AuthContext';
+import { greetingParts } from '@/lib/utils/loginIntro';
 import { usePortalBatch } from '@/lib/context/PortalBatchContext';
 import { useToast } from '@/lib/context/ToastContext';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
@@ -139,12 +140,12 @@ export default function PortalOverviewPage() {
     ? fees.find((fee) => fee.batch_id === currentBatch.id)?.amount_due ?? 0
     : 0;
 
-  const name = student?.name ?? user?.full_name ?? 'there';
-  const firstName = name.split(' ')[0];
+  const { lead: greetLead, name: greetName } = greetingParts(new Date().getHours(), user?.full_name);
 
   return (
     <PortalPage
-      title={`Hi, ${firstName}`}
+      intro
+      title={<>{greetLead}{greetName && <>, <span className="greeting-name">{greetName}</span></>}!</>}
       meta={<StudentIdChip code={student?.student_code} />}
       loading={loading}
       error={error}

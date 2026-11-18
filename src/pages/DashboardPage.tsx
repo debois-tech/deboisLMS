@@ -7,6 +7,8 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { useAuth } from '@/lib/context/AuthContext';
+import { greetingParts } from '@/lib/utils/loginIntro';
 import { getRecentActivity, type RecentActivity } from '@/lib/supabase';
 import { getBatches, getCurriculumProgress, processDocumentCleanup } from '@/lib/supabase';
 import { ProgressBar } from '@/components/ui/ProgressBar';
@@ -14,6 +16,7 @@ import type { Batch } from '@/lib/types';
 import { timeAgo } from '@/lib/utils/format';
 
 export default function DashboardPage() {
+  const { user } = useAuth();
   const [activity, setActivity] = useState<RecentActivity[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [progress, setProgress] = useState<Map<string, { done: number; total: number }>>(new Map());
@@ -31,16 +34,22 @@ export default function DashboardPage() {
     setProgress(p);
   });
 
-  if (loading) return <Spinner centered />;
-  if (error) return <ErrorState centered message={error} onRetry={retry} />;
-
   const ongoingBatches = batches.filter((b) => b.status === 'ongoing' && !b.is_test);
+  const { lead, name } = greetingParts(new Date().getHours(), user?.full_name);
 
   return (
-    <div className="page-section">
-      <PageHeader title="Dashboard" />
+    <div className="page-section" data-intro-ready={loading ? undefined : '1'}>
+      <PageHeader
+        intro
+        title={<>{lead}{name && <>, <span className="greeting-name">{name}</span></>}!</>}
+      />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {loading ? (
+        <Spinner centered />
+      ) : error ? (
+        <ErrorState centered message={error} onRetry={retry} />
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>
           <CardHeader title="Active Batches"/>
           <div className="dashboard-section-content">
@@ -91,7 +100,8 @@ export default function DashboardPage() {
           )}
           </div>
         </Card>
-      </div>
+        </div>
+      )}
     </div>
   );
 }

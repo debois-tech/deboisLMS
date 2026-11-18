@@ -13,7 +13,7 @@ import { getBatches, getCurriculumProgress, getTutorDashboardStats, getTutorRece
 import type { RecentActivity, TutorDashboardStats } from '@/lib/supabase';
 import type { Batch } from '@/lib/types';
 import { timeAgo } from '@/lib/utils/format';
-import { tutorGreeting } from '@/lib/utils/tutorIntro';
+import { greetingParts } from '@/lib/utils/loginIntro';
 
 function Stat({ icon, label, value, to, alert }: { icon: ReactNode; label: string; value: number; to?: string; alert?: boolean }) {
   const body = (
@@ -68,13 +68,13 @@ export default function TutorDashboardPage() {
       return { batch, done, total, percent: total > 0 ? `${Math.round((done / total) * 100)}%` : '—' };
     });
   const pending = stats?.pending_grading ?? 0;
-  const { lead, name } = tutorGreeting(new Date().getHours(), user?.full_name);
+  const { lead, name } = greetingParts(new Date().getHours(), user?.full_name);
 
   return (
-    <div className="page-section" data-tutor-intro-ready={loading ? undefined : '1'}>
+    <div className="page-section" data-intro-ready={loading ? undefined : '1'}>
       <div className="tdash-greeting">
-        <h1 data-tutor-intro-target>
-          {lead}{name && <>, <span>{name}</span></>}!
+        <h1 data-intro-target>
+          {lead}{name && <>, <span className="greeting-name">{name}</span></>}!
         </h1>
         <p>A quick overview of your batches</p>
       </div>
