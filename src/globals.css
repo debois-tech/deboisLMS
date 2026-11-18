@@ -1851,13 +1851,7 @@ html.light .glass {
   background: var(--bg-elevated);
 }
 
-/* The reason badge stays at full strength: it is why the row is off. */
-.doc-picker-row.is-off { cursor: not-allowed; }
-.doc-picker-row.is-off > :not(.ui-badge) { opacity: 0.55; }
-
-.doc-picker-row.is-off:hover {
-  background: transparent;
-}
+.doc-picker-empty { padding: 1rem; text-align: center; font-size: 0.875rem; color: var(--text-muted); }
 
 .doc-picker-copy {
   display: flex;

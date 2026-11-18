@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { clsx } from 'clsx';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { FilterTabs } from '@/components/ui/FilterTabs';
@@ -65,13 +64,6 @@ export function DocumentActionModal({ open, mode, kind, batch, rows, onClose, on
     // Giving access again would restamp its date and resurface the student's "Document ready" card.
     if (mode === 'access') return give ? hasDoc(row) && !hasAccess(row) : hasAccess(row);
     return !docLocked(row.mapping, batch);
-  };
-
-  const reason = (row: DocumentRow) => {
-    if (mode === 'generate') return docLocked(row.mapping, batch) ? 'Locked' : null;
-    if (!hasDoc(row)) return 'Not generated';
-    if (mode !== 'access') return null;
-    return give ? (hasAccess(row) ? 'Has access' : null) : (hasAccess(row) ? null : 'No access');
   };
 
   // What the badge reports: the document in Generate, access everywhere else.
@@ -184,25 +176,23 @@ export function DocumentActionModal({ open, mode, kind, batch, rows, onClose, on
         </div>
 
         <div className="doc-picker-list" role="group" aria-label={`${TITLES[mode]} ${label}`}>
-          {rows.map((row) => {
-            const off = !eligible(row);
-            return (
-              <label key={row.id} className={clsx('doc-picker-row', off && 'is-off')}>
-                <input
-                  type="checkbox"
-                  className="data-table-checkbox"
-                  checked={selected.has(row.id)}
-                  disabled={off || busy}
-                  onChange={() => toggle(row.id)}
-                />
-                <span className="doc-picker-copy">
-                  <span className="doc-picker-name">{row.name}</span>
-                  <span className="doc-picker-code">{row.student_code || '—'}</span>
-                </span>
-                <Badge variant={!off && on(row) ? 'success' : 'default'}>{reason(row) ?? state(row)}</Badge>
-              </label>
-            );
-          })}
+          {available.length === 0 && <p className="doc-picker-empty">No one to select</p>}
+          {available.map((row) => (
+            <label key={row.id} className="doc-picker-row">
+              <input
+                type="checkbox"
+                className="data-table-checkbox"
+                checked={selected.has(row.id)}
+                disabled={busy}
+                onChange={() => toggle(row.id)}
+              />
+              <span className="doc-picker-copy">
+                <span className="doc-picker-name">{row.name}</span>
+                <span className="doc-picker-code">{row.student_code || '—'}</span>
+              </span>
+              <Badge variant={on(row) ? 'success' : 'default'}>{state(row)}</Badge>
+            </label>
+          ))}
         </div>
       </div>
     </Modal>

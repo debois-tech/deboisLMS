@@ -239,6 +239,7 @@ export default function FeesPage() {
         onDelete={handleDeletePaymentLog}
         deletingId={deletingLogId}
         onClaimApproved={handleClaimApproved}
+        onLogUpdated={(log) => setPaymentLogs((prev) => prev.map((entry) => (entry.id === log.id ? log : entry)))}
       />
     </div>
   );

@@ -1,7 +1,7 @@
 import { lazy, Suspense, useState, useCallback, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { BackLink } from '@/components/ui/BackLink';
-import { Archive, ArrowRightLeft, PenLine, X, Users, GraduationCap, Layers, ClipboardCheck, FileText, Plus, Trash2, Upload, Download } from 'lucide-react';
+import { Archive, ArrowRightLeft, PenLine, X, Users, GraduationCap, Layers, ClipboardCheck, FileText, Plus, Trash2, Download } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { StatusPill } from '@/components/ui/StatusPill';
@@ -505,7 +505,7 @@ function StudentsTab({ batch }: { batch: Batch }) {
                 {!batch.ended_at && <Button size="sm" className="action-button-icon" variant="secondary" onClick={() => setSelecting('transfer')} aria-label="Transfer students" title="Transfer students"><ArrowRightLeft size={16} /></Button>}
                 {removable.length > 0 && <Button size="sm" className="action-button-icon" variant="secondary" onClick={() => setSelecting('remove')} aria-label="Remove students from this batch" title="Remove students from this batch"><X size={16} /></Button>}
                 <span className="toolbar-sep" aria-hidden="true" />
-                <Button size="sm" className="action-button-icon" variant="secondary" onClick={() => setShowImport(true)} aria-label="Import students" title="Import students"><Upload size={16} /></Button>
+                <Button size="sm" className="action-button-icon" variant="secondary" onClick={() => setShowImport(true)} aria-label="Import students" title="Import students"><Download size={16} /></Button>
                 <Button size="sm" className="action-button-compact" onClick={() => setShowAdd(true)}><Plus size={14} /> Students</Button>
               </>
             )}
@@ -1235,6 +1235,7 @@ function FinanceTab({ batchId, batchName }: { batchId: string; batchName: string
         submitting={logging}
         onDelete={handleDeletePaymentLog}
         deletingId={deletingLogId}
+        onLogUpdated={(log) => setPaymentLogs((prev) => prev.map((entry) => (entry.id === log.id ? log : entry)))}
         onClaimApproved={({ log, fee }) => {
           setLoggingFee(fee);
           setPaymentLogs((prev) => [log, ...prev]);
