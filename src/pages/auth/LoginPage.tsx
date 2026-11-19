@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Eye, EyeOff, LockKeyhole, Mail } from 'lucide-react';
+import { ArrowLeft, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { PasswordInput } from '@/components/ui/PasswordInput';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { FormField } from '@/components/ui/FormField';
 import { useAuth } from '@/lib/context/AuthContext';
@@ -35,7 +36,6 @@ const WRONG_DOOR: Record<Exclude<Role, 'developer'>, string> = {
 export function LoginPanel({ title, emailPlaceholder, expectedRole, hint }: LoginPanelProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const { setUser } = useAuth();
@@ -105,25 +105,7 @@ export function LoginPanel({ title, emailPlaceholder, expectedRole, hint }: Logi
             </div>
           </FormField>
           <FormField label="Password">
-            <div className="auth-input-wrap">
-              <LockKeyhole size={17} aria-hidden="true" />
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="Password"
-                autoComplete="current-password"
-                required
-              />
-              <button
-                type="button"
-                className="auth-input-action"
-                onClick={() => setShowPassword((visible) => !visible)}
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
-              >
-                {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
-              </button>
-            </div>
+            <PasswordInput value={password} onChange={setPassword} placeholder="Password" autoComplete="current-password" required />
           </FormField>
           <Button type="submit" loading={loading} className="w-full">
             Log in

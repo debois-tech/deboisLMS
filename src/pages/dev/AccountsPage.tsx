@@ -5,6 +5,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { FormField } from '@/components/ui/FormField';
 import { Modal } from '@/components/ui/Modal';
+import { PasswordInput } from '@/components/ui/PasswordInput';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Spinner } from '@/components/ui/Spinner';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/Table';
@@ -170,7 +171,7 @@ export default function AccountsPage() {
             <input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} autoComplete="off" />
           </FormField>
           <FormField label="Password" required>
-            <input type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} autoComplete="new-password" />
+            <PasswordInput value={form.password} onChange={(password) => setForm({ ...form, password })} />
           </FormField>
         </div>
       </Modal>
@@ -189,7 +190,7 @@ export default function AccountsPage() {
         }
       >
         <FormField label="New password" required>
-          <input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} autoComplete="new-password" />
+          <PasswordInput value={newPassword} onChange={setNewPassword} />
         </FormField>
       </Modal>
     </div>

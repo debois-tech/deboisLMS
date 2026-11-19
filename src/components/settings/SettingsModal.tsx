@@ -3,6 +3,7 @@ import { CalendarClock, Construction, KeyRound, Moon, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { FormField } from '@/components/ui/FormField';
 import { Modal } from '@/components/ui/Modal';
+import { PasswordInput } from '@/components/ui/PasswordInput';
 import { Switch } from '@/components/ui/Switch';
 import { useAuth } from '@/lib/context/AuthContext';
 import { useConfirm } from '@/lib/context/ConfirmContext';
@@ -152,10 +153,10 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
     >
       <div className="popup-form-spaced">
         <FormField label="New password" required>
-          <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" />
+          <PasswordInput value={password} onChange={setPassword} />
         </FormField>
         <FormField label="Confirm password" required>
-          <input type="password" value={again} onChange={(event) => setAgain(event.target.value)} autoComplete="new-password" aria-invalid={mismatch} />
+          <PasswordInput value={again} onChange={setAgain} invalid={mismatch} />
           {mismatch && <p className="field-flag">Does not match</p>}
         </FormField>
       </div>
