@@ -1,3 +1,4 @@
+import { techError } from '@/lib/utils/errors';
 import type { PostgrestError } from '@supabase/supabase-js';
 import { supabase } from '../client';
 import { maybeRow, ok, rows } from './result';
@@ -39,7 +40,7 @@ const typed = <T>(result: unknown) => result as { data: T | null; error: Postgre
 export async function uploadQuizImage(batchId: string | null, file: File): Promise<string> {
   const path = `quizzes/${batchId ?? 'all'}/${crypto.randomUUID()}.${extensionOf(file.name) || 'png'}`;
   const upload = await supabase.storage.from('assets').upload(path, file, { contentType: file.type });
-  if (upload.error) throw new Error(`Could not upload the image: ${upload.error.message}`);
+  if (upload.error) throw techError('Could not upload the image', upload.error.message);
   return path;
 }
 

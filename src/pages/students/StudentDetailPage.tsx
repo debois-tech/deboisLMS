@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { BackLink } from '@/components/ui/BackLink';
-import { Mail, Phone, Layers, CalendarDays, History, Edit3, ExternalLink, UserMinus, Trash2, Pencil } from 'lucide-react';
+import { Mail, Phone, Layers, History, PenLine, ExternalLink, UserMinus, Trash2 } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { StatusPill } from '@/components/ui/StatusPill';
@@ -234,7 +234,7 @@ export default function StudentDetailPage() {
         <BackLink fallback="/students" />
         <div className="flex items-center gap-2">
           <Link to={`/students/${student.id}/edit`}>
-            <Button variant="outline" className="action-button-compact"><Edit3 size={14} /> Edit</Button>
+            <Button variant="outline" className="action-button-compact"><PenLine size={14} /> Edit</Button>
           </Link>
           {isActive && (
             <Button
@@ -318,7 +318,7 @@ export default function StudentDetailPage() {
                   aria-label="Change join date"
                   className="flex h-6 w-6 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-overlay)] hover:text-[var(--text-primary)]"
                 >
-                  <Pencil size={12} />
+                  <PenLine size={12} />
                 </button>
               )}
             </p>
@@ -340,7 +340,7 @@ export default function StudentDetailPage() {
                 aria-label="Edit fee"
                 className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-overlay)] hover:text-[var(--text-primary)]"
               >
-                <Pencil size={14} />
+                <PenLine size={14} />
               </button>
             )}
           </div>
@@ -425,28 +425,32 @@ export default function StudentDetailPage() {
       </Card>
 
       <Card>
-        <CardHeader title="Batch History" />
+        <CardHeader title="Batch History" className="card-header-gap" />
         {batchMappings.length === 0 ? (
           <EmptyState icon={<Layers size={32} />} title="Not enrolled in any batches" />
         ) : (
-          <div className="batch-list">
-            {batchMappings.map((m) => (
-              <Link
-                key={m.id}
-                to={`/batches/${m.batch_id}`}
-                className={`batch-list-item flex items-center justify-between gap-4 hover:bg-[var(--bg-elevated)] transition-colors${m.status === 'transferred' ? ' opacity-60' : ''}`}
-              >
-                <div className="flex items-center gap-3">
-                  <Layers size={18} className="shrink-0 text-[var(--primary)]" />
-                  <div>
-                    <p className="text-sm font-semibold text-[var(--text-primary)]">{m.batch?.name ?? m.batch_id}</p>
-                    <p className="mt-1 flex items-center gap-1 text-xs text-[var(--text-muted)]"><CalendarDays size={12} /> Joined {formatDate(m.joined_at)}</p>
-                  </div>
-                </div>
-                <StatusPill kind="enrollment" value={m.status} />
-              </Link>
-            ))}
-          </div>
+          <Table maxHeight="none" className="data-table-compact">
+            <THead>
+              <TR>
+                <TH>Batch</TH>
+                <TH>Joined</TH>
+                <TH>Status</TH>
+              </TR>
+            </THead>
+            <TBody>
+              {batchMappings.map((m) => (
+                <TR key={m.id} className={m.status === 'transferred' ? 'opacity-60' : undefined}>
+                  <TD>
+                    <Link to={`/batches/${m.batch_id}`} className="font-semibold text-[var(--text-primary)] hover:text-[var(--primary)]">
+                      {m.batch?.name ?? m.batch_id}
+                    </Link>
+                  </TD>
+                  <TD className="cell-muted whitespace-nowrap">{formatDate(m.joined_at)}</TD>
+                  <TD><StatusPill kind="enrollment" value={m.status} /></TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
         )}
       </Card>
 

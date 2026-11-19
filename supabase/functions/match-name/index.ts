@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
       { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } } },
     );
     const { data: { user: caller } } = await callerClient.auth.getUser();
-    if (!caller || caller.app_metadata?.role !== 'admin') {
+    if (!caller || !['admin', 'developer'].includes(caller.app_metadata?.role)) {
       return json(req, { error: 'Admin only' }, 403);
     }
 

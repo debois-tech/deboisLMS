@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/Button';
 import { CardHeader } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
-import { ExpandableSearch } from '@/components/ui/ExpandableSearch';
+import { AssignmentFilesButton } from '@/components/assignments/AssignmentFiles';
+import { SearchFilterBar } from '@/components/ui/SearchFilterBar';
 import { Spinner } from '@/components/ui/Spinner';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import { NOTICES_CHANGED, getAssignmentSubmissions, setAssignmentMark } from '@/lib/supabase';
@@ -98,34 +99,35 @@ export function AssignmentSubmissionTable({
       <CardHeader
         title="Submission Status"
         titleAdornment={
-          <>
-            <Badge variant={submittedCount === rows.length && rows.length > 0 ? 'success' : 'default'}>
-              {submittedCount} of {rows.length} submitted
-            </Badge>
-            <ExpandableSearch
-              value={search}
-              onChange={setSearch}
-              placeholder="Search by student name"
-              filterLabel="Status"
-              allLabel="All"
-              filterValue={statusFilter}
-              filterOptions={[{ value: 'submitted', label: 'Submitted' }, { value: 'pending', label: 'Pending' }]}
-              onFilterChange={(value) => setStatusFilter(value as SubmissionFilter | null)}
-              onClose={() => { setSearch(''); setStatusFilter(null); }}
-            />
-          </>
+          <Badge variant={submittedCount === rows.length && rows.length > 0 ? 'success' : 'default'}>
+            {submittedCount}/{rows.length} submitted
+          </Badge>
         }
         action={
-          <Button
-            size="sm"
-            variant="secondary"
-            className="action-button-compact"
-            onClick={handleExport}
-            disabled={loading || rows.length === 0}
-          >
-            <Download size={14} /> Export CSV
-          </Button>
+          <div className="flex gap-2">
+            <AssignmentFilesButton assignmentId={assignmentId} batchId={batchId} />
+            <Button
+              size="sm"
+              variant="secondary"
+              className="action-button-compact"
+              onClick={handleExport}
+              disabled={loading || rows.length === 0}
+            >
+              <Download size={14} /> Export
+            </Button>
+          </div>
         }
+      />
+
+      <SearchFilterBar
+        value={search}
+        onChange={setSearch}
+        placeholder="Search by student name"
+        filterLabel="Status"
+        allLabel="All"
+        filterValue={statusFilter}
+        filterOptions={[{ value: 'submitted', label: 'Submitted' }, { value: 'pending', label: 'Pending' }]}
+        onFilterChange={(value) => setStatusFilter(value as SubmissionFilter | null)}
       />
 
       {loading ? (
@@ -140,7 +142,6 @@ export function AssignmentSubmissionTable({
         <Table maxHeight="none">
           <THead>
             <TR>
-              <TH align="center" className="w-12">#</TH>
               <TH>Student</TH>
               <TH align="center">Submitted</TH>
               <TH align="center">Mark</TH>
@@ -149,9 +150,8 @@ export function AssignmentSubmissionTable({
             </TR>
           </THead>
           <TBody>
-            {filteredRows.map((row, index) => (
+            {filteredRows.map((row) => (
               <TR key={row.student_id}>
-                <TD align="center" className="cell-muted">{index + 1}</TD>
                 <TD className="font-medium text-[var(--text-primary)]">{row.student_name}</TD>
                 <TD align="center">
                   <span

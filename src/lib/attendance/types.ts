@@ -19,7 +19,6 @@ export interface RawUploadRow {
   attendance_stopped?: string | null;
   attended_duration_raw?: string | null;
   attended_minutes?: number | null;
-  meeting_code?: string | null;
 }
 
 /** One participant after merging sessions and deduping multi-device rows. */
@@ -64,7 +63,6 @@ export interface ProcessingContext {
   batchId: string;
   lectureDate: string;
   scheduledMinutes: number;
-  meetingCode?: string;
   roster: RosterEntry[];
   tutors: { id: string; name: string }[];
   /** Tutor ids assigned to this lecture's batch. */

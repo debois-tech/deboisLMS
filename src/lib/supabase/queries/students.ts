@@ -3,7 +3,7 @@ import { processDocumentCleanup, removeStoredDocuments } from './documents';
 import { logFailures } from './notices';
 import { invokeLoginFunction, maybeRow, ok, row, rows } from './result';
 import type { Batch, Student, BatchStudentMapping, StudentCredentials } from '@/lib/types';
-import { errorMessage } from '@/lib/utils/errors';
+import { errorMessage, techError } from '@/lib/utils/errors';
 import { planImportRows, toStudentInput, type ImportFailure } from '@/lib/utils/studentImport';
 
 export async function getStudents(): Promise<Student[]> {
@@ -275,7 +275,6 @@ export async function addStudentToBatch(
   );
 
   // Upsert: a mapping can go without its fee row, so a re-add finds a stale one.
-  // The registration fee is logged by a trigger on insert — see schema.sql.
   ok(
     await supabase
       .from('student_fees')
@@ -333,7 +332,7 @@ export async function getStudentDeletionCounts(studentId: string): Promise<Stude
       .from(table)
       .select('*', { count: 'exact', head: true })
       .eq('student_id', studentId);
-    if (error) throw new Error(`Could not count ${table}: ${error.message}`);
+    if (error) throw techError(`Could not count ${table}`, error.message);
     return total ?? 0;
   };
 
@@ -378,4 +377,26 @@ export async function terminateEnrolment(mappingId: string, leftOn?: string): Pr
   // Their documents were queued for removal by the database
   await processDocumentCleanup().catch((err) => console.error('[terminate] file clean-up', err));
   return result;
+}
+
+export interface EnrolmentFootprint {
+  mapping_id: string;
+  student_id: string;
+  total_fee: number;
+  paid: number;
+  payments: number;
+  attendance: number;
+  submissions: number;
+  badges: number;
+}
+
+/** What each enrolment holds, so the remove flow can say what Delete would erase. */
+export async function getEnrolmentFootprints(mappingIds: string[]): Promise<EnrolmentFootprint[]> {
+  return rows<EnrolmentFootprint>(await supabase.rpc('enrolment_footprints', { p_mappings: mappingIds }), 'Could not load what these students hold');
+}
+
+/** Takes one student out of one batch they share with another. Keep leaves a hidden record; delete erases it. */
+export async function removeEnrolment(mappingId: string, erase: boolean): Promise<void> {
+  ok(await supabase.rpc('remove_enrolment', { p_mapping_id: mappingId, p_delete: erase }), 'Could not remove this student');
+  await processDocumentCleanup().catch((err) => console.error('[remove] file clean-up', err));
 }

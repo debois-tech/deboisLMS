@@ -94,7 +94,7 @@ Deno.serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } },
     );
     const { data: { user: caller } } = await callerClient.auth.getUser();
-    if (!caller || caller.app_metadata?.role !== 'admin') {
+    if (!caller || !['admin', 'developer'].includes(caller.app_metadata?.role)) {
       return json({ error: 'Admin only' }, 403);
     }
 
@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
     const ids = [...new Set(recipients.map((entry) => entry.student_id).filter(Boolean))];
     const { data: students, error: studentsError } = await adminClient
       .from('students')
-      .select('id, name, email')
+      .select('id, name, email, is_test')
       .in('id', ids);
 
     if (studentsError) throw studentsError;
@@ -138,6 +138,11 @@ Deno.serve(async (req) => {
       const student = byId.get(entry.student_id);
       if (!student) {
         failed.push({ studentId: entry.student_id, reason: 'Student not found' });
+        continue;
+      }
+      // This runs with the service key, so a developer is held to test students here.
+      if (caller.app_metadata?.role === 'developer' && !student.is_test) {
+        failed.push({ studentId: entry.student_id, reason: 'Developers can only email test students' });
         continue;
       }
       if (!student.email) {

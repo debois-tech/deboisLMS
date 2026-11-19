@@ -1,6 +1,8 @@
-import { useCallback, useRef, useState } from 'react';
-import { Loader2, Trash2, Upload } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Loader2, Paperclip, Trash2, Upload } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 import { CardHeader } from '@/components/ui/Card';
+import { Modal } from '@/components/ui/Modal';
 import { MaterialViewer } from '@/components/portal/MaterialViewer';
 import {
   MATERIAL_MAX_BYTES,
@@ -42,11 +44,8 @@ export function AssignmentFiles({ assignmentId, batchId, readOnly }: AssignmentF
 
   const { error, reload } = useReloadableSection(load);
 
-  const pick = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const chosen = [...(event.target.files ?? [])].filter((file) =>
-      ACCEPTED_TYPES.has(extensionOf(file.name)),
-    );
-    if (inputRef.current) inputRef.current.value = '';
+  const attach = async (picked: File[]) => {
+    const chosen = picked.filter((file) => ACCEPTED_TYPES.has(extensionOf(file.name)));
     if (chosen.length === 0) return;
 
     const tooBig = chosen.find((file) => file.size > MATERIAL_MAX_BYTES);
@@ -83,6 +82,12 @@ export function AssignmentFiles({ assignmentId, batchId, readOnly }: AssignmentF
     }
   };
 
+  const pick = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const picked = [...(event.target.files ?? [])];
+    if (inputRef.current) inputRef.current.value = '';
+    void attach(picked);
+  };
+
   const remove = async (file: Material) => {
     const ok = await confirm({
       title: `Remove “${file.title}”?`,
@@ -106,7 +111,11 @@ export function AssignmentFiles({ assignmentId, batchId, readOnly }: AssignmentF
   if (readOnly && files.length === 0) return null;
 
   return (
-    <div className="assignment-files">
+    <div
+      className="assignment-files"
+      onDragOver={readOnly ? undefined : (event) => event.preventDefault()}
+      onDrop={readOnly ? undefined : (event) => { event.preventDefault(); void attach([...event.dataTransfer.files]); }}
+    >
       <CardHeader
         title={readOnly ? 'Files for this assignment' : 'Files'}
         action={!readOnly && (
@@ -130,7 +139,7 @@ export function AssignmentFiles({ assignmentId, batchId, readOnly }: AssignmentF
         <p className="assignment-files-empty">{error}</p>
       ) : files.length === 0 ? (
         <p className="assignment-files-empty">
-          Nothing attached yet. A brief, a starter file, the commands to run.
+          Nothing attached yet. Drop files here: a brief, a starter file, the commands to run.
         </p>
       ) : (
         <ul className="assignment-files-list">
@@ -167,5 +176,30 @@ export function AssignmentFiles({ assignmentId, batchId, readOnly }: AssignmentF
 
       <MaterialViewer material={open} onClose={() => setOpen(null)} />
     </div>
+  );
+}
+
+/** The paperclip beside Export: a count of what is attached, and a popup to add and remove files. */
+export function AssignmentFilesButton({ assignmentId, batchId }: { assignmentId: string; batchId: string }) {
+  const [open, setOpen] = useState(false);
+  const [count, setCount] = useState(0);
+
+  const refresh = useCallback(() => {
+    getMaterialsByAssignment(assignmentId).then((files) => setCount(files.length)).catch(() => undefined);
+  }, [assignmentId]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const close = () => { setOpen(false); refresh(); };
+
+  return (
+    <>
+      <Button size="sm" variant="secondary" className="action-button-compact" onClick={() => setOpen(true)} aria-label="Attach files" title="Attach files">
+        <Paperclip size={14} /> {count > 0 ? count : 'Files'}
+      </Button>
+      <Modal open={open} onClose={close} title="Attached files" size="lg">
+        <AssignmentFiles assignmentId={assignmentId} batchId={batchId} />
+      </Modal>
+    </>
   );
 }

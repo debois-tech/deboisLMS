@@ -15,8 +15,8 @@ export function formatCurrency(amount: number): string {
 /**
  * A batch's fee less one student's discount — the one formula, used by the CSV
  * importer and by both hand-entry forms so a student costs the same however they
- * were added. A missing discount is full price; 100% is nothing, which is what
- * suppresses their registration fee log (see log_registration_fee in schema.sql).
+ * were added. A missing discount is full price; 100% is nothing, so the fee can be
+ * zero without being a special case.
  */
 export function feeFromDiscount(baseFee: number, discount: number | undefined): number {
   const percent = Math.min(Math.max(discount ?? 0, 0), 100);
@@ -49,6 +49,11 @@ export function formatDayLabel(iso: string): string {
   if (days === 1) return 'Tomorrow';
   if (days === -1) return 'Yesterday';
   return date.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+/** Clock time only, for a lecture's start and end. */
+export function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
 export function formatDateTime(iso: string): string {

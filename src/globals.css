@@ -256,8 +256,12 @@ select option {
   border-radius: var(--radius-md);
 }
 
+/* Button sizes: the label always gets the same room, whether or not an action-button class follows. */
+.btn-sm { min-height: 2.75rem; padding-inline: 0.875rem; font-size: 0.75rem; }
+.btn-md { min-height: 3rem; padding-inline: 1.125rem; font-size: 0.875rem; }
+.btn-lg { min-height: 3rem; padding-inline: 1.25rem; font-size: 1rem; }
+
 .action-button { min-width: 10rem; }
-.action-button-import { min-width: 8.5rem; }
 .action-button-compact { min-width: 6rem; padding-left: 0.875rem; padding-right: 0.875rem; }
 
 /* Icon only, no label — square, no forced min-width. */
@@ -745,17 +749,7 @@ html.light .glass {
   white-space: normal;
 }
 
-/* ── Feedback form ───────────────────────────────────────────── */
-.feedback-form {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  padding: 1.25rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--bg-surface);
-}
-
+/* ── Report bug form ─────────────────────────────────────────── */
 .feedback-kinds {
   display: flex;
   flex-wrap: wrap;
@@ -1402,8 +1396,13 @@ html.light .glass {
   .student-identity-links { margin-left: auto; }
 }
 
+/* Two cards instead of three (the tutor view): half each, a little taller. */
+.student-summary-grid.is-pair { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.student-summary-grid.is-pair .student-summary-card { min-height: 9.5rem; }
+
 @media (max-width: 768px) {
-  .student-summary-grid { grid-template-columns: 1fr; }
+  .student-summary-grid,
+  .student-summary-grid.is-pair { grid-template-columns: 1fr; }
   .student-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
@@ -1697,6 +1696,9 @@ html.light .glass {
   vertical-align: middle;
 }
 
+/* Dense rows for long rosters. */
+.data-table.data-table-compact tbody td { padding-block: 0.375rem; }
+
 .data-table tbody tr:last-child td {
   border-bottom: none;
 }
@@ -1709,22 +1711,55 @@ html.light .glass {
   color: var(--text-muted);
 }
 
+/* Sr No.: as narrow as its content. */
+.data-table .serial-col {
+  width: 1%;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 .data-table .cell-secondary {
   color: var(--text-secondary);
 }
 
+/* Native checkboxes carry the OS palette; draw them from the theme instead. */
 .data-table-checkbox {
   width: 1.125rem;
   height: 1.125rem;
+  flex: none;
   margin: 0;
   padding: 0;
-  border: none;
-  border-radius: 0;
-  background: none;
-  accent-color: var(--primary);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--bg-elevated);
   cursor: pointer;
-  -webkit-appearance: checkbox;
-  appearance: auto;
+  appearance: none;
+  -webkit-appearance: none;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.data-table-checkbox:hover:not(:disabled) {
+  border-color: var(--primary);
+}
+
+.data-table-checkbox:checked {
+  /* The darker green keeps the white tick above 3:1 in both themes. */
+  border-color: var(--primary-dark);
+  background-color: var(--primary-dark);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23fff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-6'/%3E%3C/svg%3E");
+  background-size: 0.85rem 0.85rem;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.data-table-checkbox:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.data-table-checkbox:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 /* ── Table block — a toolbar sitting above a data table ──────── */
@@ -1751,33 +1786,103 @@ html.light .glass {
   margin-left: auto;
 }
 
-/* Bulk generate: the documents block stays lit, the rest of the app greys out. */
-#root :has(.docs-bulk-active) > :not(:has(.docs-bulk-active)):not(.docs-bulk-active):not(.toast-stack) {
-  opacity: 0.35;
-  filter: grayscale(1);
-  pointer-events: none;
-  transition: opacity 0.2s;
-}
-
-.docs-bulk-panel {
+/* The Access / Email / Generate popups: a ticked roster, greyed rows carry the reason. */
+.doc-picker {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  padding: 1.25rem;
+}
+
+/* Inset to the rows' own 0.875rem padding, so Select all sits over the checkbox column. */
+.doc-picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0 0.875rem;
+}
+
+.doc-picker-count {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.doc-picker-all {
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--primary-light);
+}
+
+.doc-picker-all:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.doc-picker-all:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.doc-picker-list {
+  display: flex;
+  flex-direction: column;
+  max-height: min(50vh, 20rem);
+  overflow-y: auto;
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--bg-surface);
+  border-radius: var(--radius-md);
+}
+
+.doc-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 0.875rem;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.doc-picker-row:last-child {
+  border-bottom: none;
+}
+
+.doc-picker-row:hover {
+  background: var(--bg-elevated);
+}
+
+.doc-picker-empty { padding: 1rem; text-align: center; font-size: 0.875rem; color: var(--text-muted); }
+
+.doc-picker-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.doc-picker-name {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doc-picker-code {
+  color: var(--text-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+}
+
+.doc-picker-row .ui-badge {
+  flex: none;
 }
 
 .docs-dates {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
   gap: 1rem;
-}
-
-.docs-bulk-actions {
-  display: flex;
-  justify-content: flex-end;
 }
 
 .submission-toggle {
@@ -1989,42 +2094,6 @@ html.light .glass {
 .action-button-danger:hover:not(:disabled) {
   border-color: var(--danger-text);
   background: color-mix(in srgb, var(--danger-text) 10%, transparent);
-}
-
-/* ── Roster row actions ──────────────────────────────────────── */
-/* Both destroy something, and they used to be two bare glyphs hovering to the
-   same red — the only difference between deleting a login and detaching a row
-   was which 14px icon you happened to hit. Chrome, separate hover identities and
-   a real target instead. */
-.roster-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-}
-
-.roster-action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--bg-surface);
-  color: var(--text-muted);
-  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
-}
-
-/* Red: the login is deleted and the fees settled. Nothing here comes back. */
-.roster-action.is-terminate:hover {
-  color: var(--danger-text);
-  border-color: color-mix(in srgb, var(--danger-text) 45%, var(--border));
-  background: color-mix(in srgb, var(--danger-text) 10%, var(--bg-surface));
-}
-
-.roster-action:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
 }
 
 /* ── Filter tabs ─────────────────────────────────────────────── */
@@ -2244,6 +2313,40 @@ html.light .glass {
   width: 100%;
 }
 
+/* Page-level search: one width everywhere. Pages never size it; in a .search-row it shares the line. */
+.searchbar-md { max-width: 28rem; }
+
+/* Only in a row: a flex-basis in a column container is a height, which left a gap above tables. */
+.search-row > .searchbar-md { flex: 1 1 16rem; }
+
+.batch-filter {
+  flex: none;
+  width: 15rem;
+  max-width: 100%;
+}
+
+/* A student's batches: pills the size of the nav switch, up to three a line, lines centred. */
+.batch-pills { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; }
+.batch-pills-row { display: flex; justify-content: center; gap: 0.25rem; }
+.batch-pill {
+  padding: 0.25rem 0.625rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+/* Search, then the page's own controls beside it (e.g. a batch filter). */
+.search-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
 .searchbar-field {
   display: flex;
   align-items: center;
@@ -2318,58 +2421,6 @@ html.light .glass {
 .searchbar-lg .searchbar-field { min-height: 3.25rem; gap: 0.75rem; padding: 0 0.625rem 0 1.0625rem; }
 .searchbar-lg input { font-size: 0.9375rem; }
 .searchbar-lg .searchbar-action { width: 2.25rem; height: 2.25rem; }
-
-/* ── Expandable search ───────────────────────────────────────── */
-/* Collapsed to an icon so it can sit right in a card header without competing
-   with the title. Clicking it swaps the icon for the real search+filter bar —
-   the grow keyframe below is what sells that as the button becoming the bar,
-   not a second element appearing next to it. */
-.expandable-search-trigger {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.75rem;
-  height: 2.75rem;
-  flex-shrink: 0;
-  color: var(--text-secondary);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  transition: color 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
-}
-
-.expandable-search-trigger:hover {
-  color: var(--text-primary);
-  border-color: var(--border-strong);
-}
-
-.expandable-search-open {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  transform-origin: left center;
-  animation: expandable-search-grow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@keyframes expandable-search-grow {
-  from { opacity: 0; transform: scaleX(0.9); }
-  to { opacity: 1; transform: scaleX(1); }
-}
-
-.expandable-search-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.75rem;
-  height: 2.75rem;
-  flex-shrink: 0;
-  color: var(--text-muted);
-  transition: color 0.18s ease;
-}
-
-.expandable-search-close:hover {
-  color: var(--text-primary);
-}
 
 /* ── Dropdown trigger ────────────────────────────────────────── */
 /* Holds its open state visibly: while the panel is down, the control is lit and
@@ -3095,83 +3146,7 @@ body:has([role="dialog"]) .notice-chip { display: none; }
   }
 }
 
-.material-admin-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.material-admin-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.75rem 1rem;
-  padding: 0.875rem 1rem;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
-}
-
-
-.material-admin-icon {
-  display: grid;
-  place-items: center;
-  flex: 0 0 auto;
-  width: 2.25rem;
-  height: 2.25rem;
-  color: var(--primary);
-  border-radius: var(--radius-md);
-  background: var(--primary-glow-soft);
-}
-
-.material-admin-body {
-  flex: 1 1 12rem;
-  min-width: 0;
-}
-
-.material-admin-title {
-  overflow: hidden;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.material-admin-meta {
-  margin-top: 0.15rem;
-  font-size: 0.75rem;
-  color: var(--text-muted);
-}
-
-.material-admin-actions {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 0.625rem;
-}
-
-/* Row actions are compact by nature. The shared Button `sm` size is tuned for
-   page-level actions (min-h-11, px-6) and reads as bloated three-across inside a
-   list row — overridden here rather than adding a fourth size to Button, since
-   nothing else needs it. */
-.material-admin-actions > button {
-  min-width: 0;
-  min-height: 2.375rem;
-  padding: 0 0.9375rem;
-  font-size: 0.8125rem;
-  gap: 0.4375rem;
-}
-
-/* Icon-only, so it gets a square target instead of the wide text padding — which
-   is what made the bin look undersized inside an oversized box. */
-.material-admin-actions > .material-admin-delete {
-  width: 2.375rem;
-  padding: 0;
-}
-
-.material-admin-actions > .material-admin-delete:hover {
+.material-admin-delete:hover {
   color: var(--danger-text);
   background: color-mix(in srgb, var(--danger) 12%, transparent);
 }
@@ -3612,18 +3587,6 @@ body:has([role="dialog"]) .notice-chip { display: none; }
 @media (max-width: 480px) {
   .material-viewer-logo { height: 1.375rem; }
   .material-viewer-title { font-size: 0.875rem; }
-}
-
-/* ── Portal search ───────────────────────────────────────────── */
-/* Sits in `PortalPage`'s action slot on any portal page with enough rows to be
-   worth searching. Narrower than the list it filters. */
-.portal-search {
-  width: 100%;
-  max-width: 20rem;
-}
-
-@media (max-width: 640px) {
-  .portal-search { max-width: none; }
 }
 
 /* ── Portal tabs ─────────────────────────────────────────────── */
@@ -4573,7 +4536,6 @@ html.light .cv-canvas {
   color: var(--text-primary);
 }
 .cv-title.is-skipped { color: var(--text-muted); text-decoration: line-through; }
-.cv-kind-icon { flex-shrink: 0; color: var(--text-muted); }
 .cv-muted { font-size: 0.75rem; color: var(--text-muted); }
 .cv-new {
   flex-shrink: 0;
@@ -4617,6 +4579,7 @@ html.light .cv-canvas {
   transition: color 0.15s ease, background-color 0.15s ease;
 }
 .cv-icon-btn:hover { color: var(--text-primary); background: var(--bg-elevated); }
+.cv-icon-btn[aria-pressed='true'] { color: var(--primary); background: var(--primary-glow-soft); }
 .cv-icon-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
 
 /* Empty, done (filled) or skipped (red with a dash): three clear states, not colour alone. */
@@ -4973,6 +4936,8 @@ button.badge-admin-holders:hover { color: var(--primary); }
 /* Give-badge picker: inset the scroll surface so rows do not collide with the modal edges or footer. */
 .modal-body.modal-body-badge-picker { padding: 0.75rem 1rem 0.5rem; overflow: hidden; }
 .badge-picker-toolbar { display: flex; flex-direction: column; gap: 0.75rem; padding: 0 0.5rem 0.75rem; }
+/* Inside the badge popup the toolbar already insets; keep Select all over the checkboxes. */
+.badge-picker-toolbar .doc-picker-head { padding-inline: 0.5rem; }
 .badge-picker-list { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-base); }
 .badge-picker-row + .badge-picker-row { border-top: 1px solid var(--border); }
 .badge-picker-option { display: flex; align-items: center; gap: 0.875rem; min-height: 4.25rem; padding: 0.75rem 1rem; font-size: 0.875rem; transition: background-color 0.15s ease; }
@@ -5379,7 +5344,7 @@ button.qz-dot:disabled { opacity: 0.45; cursor: not-allowed; }
 .qz-review { display: flex; flex-direction: column; gap: 1rem; padding: 1.125rem; }
 .qz-review-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
 .qz-review-title { font-size: 1rem; font-weight: 650; line-height: 1.4; }
-.qz-rule { height: 1px; background: var(--border); }
+.qz-divider { height: 1px; background: var(--border); }
 
 /* Tailwind spacing utilities never reach this app (the reset above them is unlayered), so spacing is named here. */
 .qz-lobby-caption { margin-top: 0.5rem; font-size: 1.125rem; font-weight: 600; }
@@ -5559,7 +5524,6 @@ button.qz-dot:disabled { opacity: 0.45; cursor: not-allowed; }
   overflow-y: auto;
   scrollbar-width: thin;
 }
-.nav2-bottom { padding: 0.5rem; }
 
 /* A hub row: the icon never moves; the label slides from under it to its right (transform only, no reflow). */
 .nav2-row {
@@ -5639,8 +5603,8 @@ button.qz-dot:disabled { opacity: 0.45; cursor: not-allowed; }
 /* Collapse toggle: same row, always short, its label only shows when wide. */
 .nav2-toggle, .nav2.is-wide .nav2-toggle { height: 2.75rem; }
 .nav2-toggle .nav2-ico { translate: 0 0; }
-.nav2-toggle .nav2-label, .nav2-new .nav2-label { translate: 0 0; scale: 1; opacity: 0; }
-.nav2.is-wide .nav2-toggle .nav2-label, .nav2.is-wide .nav2-new .nav2-label { opacity: 1; transition-delay: 0s, 0s, 0.08s; }
+.nav2-toggle .nav2-label { translate: 0 0; scale: 1; opacity: 0; }
+.nav2.is-wide .nav2-toggle .nav2-label { opacity: 1; transition-delay: 0s, 0s, 0.08s; }
 
 /* Tiles under a hub (wide only): the group slides open by animating its row from 0fr. */
 .nav2-kids {
@@ -5681,27 +5645,6 @@ button.qz-dot:disabled { opacity: 0.45; cursor: not-allowed; }
 }
 .nav2-kids[data-open='true'] .nav2-tile { opacity: 1; translate: 0 0; }
 .nav2-tile.is-active { border-color: var(--primary); background: var(--primary-glow-soft); color: var(--primary-light); }
-
-/* New Batch: the icon square widens into a full button. No lift: overflow clips the hover strip. */
-.nav2-new {
-  position: relative;
-  display: block;
-  width: 2.75rem;
-  height: 2.75rem;
-  margin-left: 0.5rem;
-  overflow: hidden;
-  border-radius: var(--radius-md);
-  background: var(--primary);
-  color: #fff;
-  box-shadow: 0 0 18px var(--primary-glow);
-  transition: width var(--nav2-t) var(--nav2-ease), margin-left var(--nav2-t) var(--nav2-ease),
-    background-color 0.15s, scale 0.15s var(--nav2-pop);
-}
-.nav2.is-wide .nav2-new { width: 100%; margin-left: 0; }
-.nav2-new:hover { background: var(--primary-light); }
-.nav2-new:active { scale: 0.97; }
-.nav2-new .nav2-ico { top: 0.8125rem; translate: -0.5rem 0; }
-.nav2-new .nav2-label { font-weight: 600; }
 
 /* The second sidebar: slides out from behind the rail while a hub is hovered. */
 .nav2-fly-clip { display: none; }
@@ -5878,7 +5821,7 @@ button.qz-dot:disabled { opacity: 0.45; cursor: not-allowed; }
   justify-content: center;
   padding: 1rem;
 }
-.nav4-row { display: flex; justify-content: center; }
+.nav4-row { display: flex; justify-content: center; translate: calc(var(--shift, 0) * (var(--hex) + var(--g))) 0; }
 .nav4-row + .nav4-row { margin-top: calc(var(--hex) * -0.2887 + var(--g) * 0.866); }
 
 /* Empty cells: outline hexagons on the same lattice as the tiles, centred on the mosaic. */
@@ -5978,8 +5921,6 @@ button.qz-dot:disabled { opacity: 0.45; cursor: not-allowed; }
 .hx.is-current .hx-face { background: var(--primary); }
 .hx.is-current { color: var(--primary-light); }
 .hx.is-current .hx-in { background: color-mix(in srgb, var(--primary) 16%, var(--bg-surface)); }
-.hx.is-action { color: #fff; }
-.hx.is-action .hx-in { background: var(--primary); }
 
 /* Hover: the tile floats up a little over its neighbours, with electric static in the socket behind it. It stays there until the pointer leaves or it is pressed. */
 .hx:hover .hx-face, .hx:focus-visible .hx-face, .hx-cell.is-solo .hx-face {
@@ -5987,7 +5928,6 @@ button.qz-dot:disabled { opacity: 0.45; cursor: not-allowed; }
   background: linear-gradient(180deg, var(--primary-light), var(--primary));
 }
 .hx:hover, .hx:focus-visible, .hx-cell.is-solo .hx { color: var(--text-primary); }
-.hx.is-action:hover, .hx.is-action:focus-visible { color: #fff; }
 .hx:hover .hx-in::after, .hx:focus-visible .hx-in::after, .hx-cell.is-solo .hx-in::after { opacity: 0.5; }
 .hx:active .hx-face { transform: scale(0.97); transition-duration: 0.12s; }
 .hx-cell:has(.hx:hover, .hx:focus-visible), .hx-cell.is-solo {
@@ -6031,3 +5971,253 @@ button.qz-dot:disabled { opacity: 0.45; cursor: not-allowed; }
 .nav-switch-bar { display: none; }
 @media (min-width: 40rem) { .nav-switch-bar { display: inline-flex; } .nav-switch-menu { display: none; } }
 .nav-switch-menu { margin: 0.5rem 0.75rem; }
+
+/* Report bug popup: the reporter's earlier reports and where each one stands. */
+.report-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 12rem;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.report-row { display: flex; align-items: center; gap: 0.75rem; padding: 0.625rem 0.875rem; }
+.report-row + .report-row { border-top: 1px solid var(--border); }
+.report-copy { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+.report-message { overflow: hidden; color: var(--text-primary); font-size: 0.875rem; text-overflow: ellipsis; white-space: nowrap; }
+.report-meta { color: var(--text-muted); font-size: 0.75rem; }
+
+/* Remove students: one card per student with its keep / delete choice. */
+.remove-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+/* A card whose header sits right above a table needs a real gap: Tailwind margin utilities do nothing here. */
+.card-header-gap { margin-bottom: 1.25rem; }
+
+/* A table row that opens something when clicked. */
+.row-link { cursor: pointer; }
+.row-link:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+
+/* Divides toolbar buttons into groups by how much they change. */
+.toolbar-sep { align-self: center; width: 1px; height: 1.5rem; margin-inline: 0.25rem; background: var(--border-strong); }
+
+/* Drop zone for the attendance CSV. */
+.csv-drop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5rem; padding: 1.5rem; border: 2px dashed var(--border-strong); border-radius: var(--radius-lg); background: var(--bg-elevated); color: var(--text-secondary); font-size: 0.875rem; cursor: pointer; text-align: center; transition: border-color 0.15s, background-color 0.15s; }
+.csv-drop:hover, .csv-drop.is-over { border-color: var(--primary); background: var(--primary-glow-soft); color: var(--primary); }
+
+/* ── Tutor dashboard ─────────────────────────────────────────── */
+.tdash-greeting h1 { font-size: clamp(1.5rem, 5.5vw, 2rem); font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; color: var(--text-primary); }
+/* The greeted name, wherever the greeting appears. */
+.greeting-name { color: var(--primary); }
+.tdash-greeting p { margin-top: 0.375rem; color: var(--text-muted); }
+
+.tdash-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.tdash-stat { display: flex; align-items: center; gap: 1.25rem; padding: 1.25rem 1.5rem; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-surface); box-shadow: var(--shadow-sm); transition: border-color 0.15s, background-color 0.15s; }
+a.tdash-stat:hover { border-color: var(--border-strong); background: var(--bg-elevated); }
+.tdash-stat.is-alert { border-color: color-mix(in srgb, var(--primary) 55%, var(--border)); background: var(--primary-glow-soft); }
+.tdash-icon { display: flex; flex: none; align-items: center; justify-content: center; width: 3.5rem; height: 3.5rem; color: var(--primary); }
+.tdash-stat-text { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+.tdash-stat-label { font-size: 0.875rem; color: var(--text-secondary); }
+.tdash-stat-value { font-size: 1.875rem; font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; color: var(--text-primary); }
+.tdash-chevron { display: flex; flex: none; align-items: center; justify-content: center; width: 2.25rem; height: 2.25rem; border-radius: 999px; background: var(--bg-elevated); color: var(--text-muted); }
+
+.tdash-main { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 1rem; align-items: stretch; }
+
+.tdash-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1.5rem; }
+.tdash-head-title { display: flex; align-items: center; gap: 0.75rem; font-size: 1.0625rem; font-weight: 600; color: var(--text-primary); }
+.tdash-head-title svg { color: var(--text-muted); }
+.tdash-link { display: inline-flex; align-items: center; gap: 0.375rem; font-size: 0.875rem; color: var(--text-muted); transition: color 0.15s; }
+.tdash-link:hover { color: var(--primary); }
+
+.tdash-progress-list { display: flex; flex-direction: column; gap: 1.5rem; }
+.tdash-progress-row { display: grid; grid-template-columns: minmax(7rem, 13rem) minmax(0, 1fr) 3rem; align-items: center; gap: 1.25rem; }
+.tdash-progress-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.9375rem; color: var(--text-primary); }
+.tdash-progress-row:hover .tdash-progress-name { color: var(--primary); }
+.tdash-progress-percent { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-primary); }
+
+.tdash-actions { display: flex; flex-direction: column; gap: 0.75rem; }
+.tdash-action { display: flex; align-items: center; gap: 1rem; padding: 0.875rem 1rem; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-elevated); font-weight: 500; color: var(--text-primary); transition: border-color 0.15s; }
+.tdash-action:hover { border-color: var(--border-strong); }
+.tdash-action-icon { flex: none; color: var(--primary); }
+.tdash-action span { flex: 1; min-width: 0; }
+.tdash-action-chevron { flex: none; color: var(--text-muted); }
+
+.tdash-activity { display: flex; flex-direction: column; list-style: none; margin: 0; padding: 0; }
+.tdash-activity li { display: flex; align-items: center; gap: 1rem; padding: 0.875rem 0; border-top: 1px solid var(--border); }
+.tdash-activity li:first-child { border-top: 0; padding-top: 0; }
+.tdash-activity li:last-child { padding-bottom: 0; }
+.tdash-dot { flex: none; width: 0.625rem; height: 0.625rem; border-radius: 999px; background: var(--primary); }
+.tdash-dot.is-info { background: var(--info-text); }
+.tdash-activity-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-primary); }
+.tdash-activity-time { flex: none; font-size: 0.8125rem; color: var(--text-muted); }
+
+@media (max-width: 64rem) {
+  .tdash-main { grid-template-columns: 1fr; }
+}
+@media (max-width: 40rem) {
+  .tdash-stats { grid-template-columns: 1fr; }
+  .tdash-progress-row { grid-template-columns: minmax(0, 1fr) 3rem; }
+  .tdash-progress-row .cv-progress { grid-column: 1 / -1; grid-row: 2; }
+}
+
+/* ── Login opening intro ─────────────────────────────────────── */
+/* Every role, once per login. Covers the viewport — navbar included — while the
+   home page loads. Letters type in one at a time, then ripple while the page is
+   still loading; the finished line is morphed onto the real header by
+   LoginIntro.tsx (WAAPI, transform only). */
+.login-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  overflow: hidden;
+  user-select: none;
+}
+
+.login-intro-veil {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-base);
+}
+
+/* A single soft emerald bloom behind the type — light, not a gradient effect. */
+.login-intro-veil::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(52rem 34rem at 50% 46%, var(--primary-glow-soft), transparent 68%);
+}
+
+.login-intro-stage {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  max-width: 100%;
+}
+
+.login-intro-line {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  white-space: pre;
+  transform-origin: left top;
+  color: var(--text-primary);
+  font-size: clamp(1.25rem, 5.4vw, 4rem);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  will-change: transform;
+}
+
+/* An inline-block per character keeps all the width reserved from the first frame,
+   so the line never re-centres as it types. Hidden = laid out, not painted. */
+.login-intro-char {
+  position: relative;
+  display: inline-block;
+  visibility: hidden;
+  white-space: pre;
+  transform-origin: 50% 100%;
+}
+
+/* Typing is the letter simply arriving — no movement — so the pop that follows
+   reads as a separate, deliberate state. */
+.login-intro-char.is-in {
+  visibility: visible;
+  animation: lintro-type 140ms linear both;
+  will-change: opacity;
+}
+
+/* Waiting on the dashboard: one hop per letter, staggered into a ripple that
+   keeps moving for as long as the page takes. */
+.login-intro.is-loading .login-intro-char {
+  animation: lintro-pop 1500ms cubic-bezier(0.33, 1, 0.68, 1) infinite;
+  animation-delay: calc(var(--i, 0) * 55ms);
+  will-change: transform;
+}
+
+.login-intro-char.is-name {
+  color: var(--primary);
+  text-shadow: 0 0 0.55em var(--primary-glow);
+}
+
+/* Typewriter caret: rides the last letter that landed, so it tracks the typing
+   point without taking up layout width. */
+.login-intro-char.is-caret::after {
+  content: '';
+  position: absolute;
+  top: 0.16em;
+  right: -0.06em;
+  width: 0.055em;
+  height: 0.92em;
+  border-radius: 1px;
+  background: var(--primary);
+  animation: lintro-caret 900ms steps(1, end) infinite;
+}
+
+/* Before the first letter. */
+.login-intro-seed {
+  position: absolute;
+  left: 0;
+  top: 0.16em;
+  width: 0.055em;
+  height: 0.92em;
+  border-radius: 1px;
+  background: var(--primary);
+  animation: lintro-caret 900ms steps(1, end) infinite;
+}
+
+.login-intro-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+/* Typewriter arrival: opacity only. */
+@keyframes lintro-type {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* A hop on a surface: up, land, one smaller bounce, then rest for the rest of the
+   cycle. With the per-letter delay, those rests overlap into a travelling ripple. */
+@keyframes lintro-pop {
+  0%, 6%    { transform: translate3d(0, 0, 0) scale(1); }
+  16%       { transform: translate3d(0, -0.15em, 0) scale(1.035); }
+  26%       { transform: translate3d(0, 0.01em, 0) scale(0.997); }
+  34%       { transform: translate3d(0, -0.04em, 0) scale(1.01); }
+  44%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@keyframes lintro-caret {
+  0%, 49%   { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-intro-char.is-in {
+    animation: none;
+    visibility: visible;
+  }
+  .login-intro.is-loading .login-intro-char {
+    animation: none;
+  }
+  .login-intro-char.is-caret::after,
+  .login-intro-seed {
+    animation: none;
+    opacity: 1;
+  }
+}

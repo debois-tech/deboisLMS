@@ -1,3 +1,4 @@
+import { techError } from '@/lib/utils/errors';
 import type { PostgrestError } from '@supabase/supabase-js';
 import { supabase } from '../client';
 import type { StudentCredentials } from '@/lib/types';
@@ -12,9 +13,10 @@ interface Result<T> {
 const NO_ROWS = 'PGRST116';
 
 function fail(error: PostgrestError, what: string): never {
+  // P0001 is a `raise exception` written for people ("This batch has ended"): everyone reads it.
+  if (error.code === 'P0001') throw new Error(`${what}: ${error.message}`);
   // `details` carries the useful part for RLS and constraint violations.
-  const detail = error.details ? ` (${error.details})` : '';
-  throw new Error(`${what}: ${error.message}${detail}`);
+  throw techError(what, `${error.message}${error.details ? ` (${error.details})` : ''}`);
 }
 
 /** A list query. Throws on failure; `[]` means the table really had no matches. */

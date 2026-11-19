@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Edit3, Plus, Trash2 } from 'lucide-react';
+import { PenLine, Plus, Trash2 } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
@@ -11,7 +11,6 @@ import { AssignmentSelect } from '@/components/ui/AssignmentSelect';
 import { FormField } from '@/components/ui/FormField';
 import { FieldNotice } from '@/components/ui/FieldNotice';
 import { AssignmentSubmissionTable } from '@/components/assignments/AssignmentSubmissionTable';
-import { AssignmentFiles } from '@/components/assignments/AssignmentFiles';
 import { NewAssignmentModal } from '@/components/assignments/NewAssignmentModal';
 import { getBatches, getAssignmentsByBatch, deleteAssignment } from '@/lib/supabase';
 import type { Batch, Assignment } from '@/lib/types';
@@ -83,15 +82,15 @@ export default function AssignmentsPage() {
             <div className="flex gap-2">
               {selectedAssignment && (
                 <>
-                  <Button size="sm" variant="secondary" className="action-button-icon" onClick={() => setShowEdit(true)} aria-label="Edit assignment">
-                    <Edit3 size={14} />
+                  <Button size="sm" variant="secondary" className="action-button-icon action-button-danger" onClick={handleDelete} loading={deleting} aria-label="Delete assignment" title="Delete this assignment">
+                    <Trash2 size={16} />
                   </Button>
-                  <Button size="sm" variant="secondary" className="action-button-icon action-button-danger" onClick={handleDelete} loading={deleting} aria-label="Delete assignment">
-                    <Trash2 size={14} />
+                  <Button size="sm" variant="secondary" className="action-button-compact" onClick={() => setShowEdit(true)}>
+                    <PenLine size={14} /> Edit
                   </Button>
                 </>
               )}
-              <Button size="sm" className="action-button-compact" onClick={() => setShowNew(true)}><Plus size={14} /> New Assignment</Button>
+              <Button size="sm" className="action-button-compact" onClick={() => setShowNew(true)}><Plus size={14} /> New</Button>
             </div>
           )}
         />
@@ -110,12 +109,6 @@ export default function AssignmentsPage() {
           </FormField>
         </div>
       </Card>
-
-      {selectedBatch && selectedAsgn && (
-        <Card>
-          <AssignmentFiles key={selectedAsgn} assignmentId={selectedAsgn} batchId={selectedBatch} />
-        </Card>
-      )}
 
       {selectedBatch && selectedAsgn && (
         <Card>

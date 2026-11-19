@@ -10,24 +10,36 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Avatar } from '@/components/ui/Avatar';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
-import { getTutors } from '@/lib/supabase';
-import type { Tutor } from '@/lib/types';
+import { BatchPills } from '@/components/ui/BatchSelect';
+import { getTutors, getAllTutorBatches } from '@/lib/supabase';
+import type { Tutor, Batch } from '@/lib/types';
 
 export default function TutorsPage() {
   const [tutors, setTutors] = useState<Tutor[]>([]);
+  const [batchesByTutor, setBatchesByTutor] = useState<Map<string, Batch[]>>(new Map());
   const [search, setSearch] = useState('');
 
   const { loading, error, retry } = useInitialLoad(async () => {
-    setTutors(await getTutors());
+    const [tutorData, mappings] = await Promise.all([getTutors(), getAllTutorBatches()]);
+    setTutors(tutorData);
+    // Ongoing and upcoming only: the column shows who teaches what now.
+    const byTutor = new Map<string, Batch[]>();
+    for (const { tutor_id, batch } of mappings) {
+      if (!batch || batch.status === 'completed') continue;
+      byTutor.set(tutor_id, [...(byTutor.get(tutor_id) ?? []), batch]);
+    }
+    setBatchesByTutor(byTutor);
   });
 
   const filteredTutors = useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) return tutors;
-    return tutors.filter((t) =>
-      `${t.name} ${t.phone ?? ''} ${t.email ?? ''}`.toLowerCase().includes(term),
-    );
-  }, [tutors, search]);
+    // Batch-wise: the names and programme codes shown in the Batches column are searchable too.
+    return tutors.filter((t) => {
+      const batches = (batchesByTutor.get(t.id) ?? []).map((b) => `${b.name} ${b.program ?? ''}`).join(' ');
+      return `${t.name} ${t.phone ?? ''} ${t.email ?? ''} ${batches}`.toLowerCase().includes(term);
+    });
+  }, [tutors, search, batchesByTutor]);
 
   if (loading) return <Spinner centered />;
   if (error) return <ErrorState centered message={error} onRetry={retry} />;
@@ -43,11 +55,11 @@ export default function TutorsPage() {
         <EmptyState icon={<GraduationCap size={32} />} title="No tutors yet" />
       ) : (
         <>
-          <div className="mb-4 max-w-md">
+          <div className="mb-4">
             <SearchBar
               value={search}
               onChange={setSearch}
-              placeholder="Search by name, phone, or email"
+              placeholder="Search by name, phone, email or batch"
             />
           </div>
 
@@ -60,6 +72,7 @@ export default function TutorsPage() {
                   <TH>Tutor</TH>
                   <TH>Email</TH>
                   <TH>Phone</TH>
+                  <TH align="center">Batches</TH>
                 </TR>
               </THead>
               <TBody>
@@ -73,6 +86,7 @@ export default function TutorsPage() {
                     </TD>
                     <TD className="cell-secondary">{t.email || '—'}</TD>
                     <TD className="cell-muted">{t.phone || '—'}</TD>
+                    <TD align="center" className="cell-secondary"><BatchPills batches={batchesByTutor.get(t.id) ?? []} /></TD>
                   </TR>
                 ))}
               </TBody>

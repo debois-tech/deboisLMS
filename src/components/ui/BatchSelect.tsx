@@ -30,14 +30,15 @@ interface BatchSelectProps {
   placeholder?: string;
   /** Override the row text where the name alone cannot tell two batches apart. */
   label?: (batch: Batch) => string;
+  className?: string;
 }
 
 export function BatchSelect({
-  batches, value, onChange, extraOptions = [], placeholder = 'Select a batch', label,
+  batches, value, onChange, extraOptions = [], placeholder = 'Select a batch', label, className,
 }: BatchSelectProps) {
-  const { isAdmin } = useAuth();
-  // Only admins know about test batches.
-  const text = label ?? ((batch: Batch) => (isAdmin && batch.is_test ? `${batch.name} (Test)` : batch.name));
+  const { isDeveloper } = useAuth();
+  // Only the developer works with test batches.
+  const text = label ?? ((batch: Batch) => (isDeveloper && batch.is_test ? `${batch.name} (Test)` : batch.name));
   return (
     <SearchSelect
       options={[
@@ -49,6 +50,43 @@ export function BatchSelect({
       placeholder={placeholder}
       searchPlaceholder="Search batches"
       emptyText="No batches found"
+      className={className}
+    />
+  );
+}
+
+// 1–3 pills on one line; more split over two lines, longer line first.
+export function BatchPills({ batches }: { batches: Batch[] }) {
+  if (batches.length === 0) return <>—</>;
+  const split = batches.length > 3 ? Math.ceil(batches.length / 2) : batches.length;
+  return (
+    <div className="batch-pills">
+      {[batches.slice(0, split), batches.slice(split)].filter((row) => row.length > 0).map((row, at) => (
+        <div key={at} className="batch-pills-row">
+          {row.map((batch) => <span key={batch.id} className="batch-pill" title={batch.name}>{batch.program}</span>)}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const ALL = 'all';
+
+/** Page-level batch filter, sat beside the search bar. `null` means every batch. */
+export function BatchFilter({ batches, value, onChange, extraOptions = [], allLabel = 'All batches' }: {
+  batches: Batch[];
+  value: string | null;
+  onChange: (batchId: string | null) => void;
+  extraOptions?: { id: string; name: string }[];
+  allLabel?: string;
+}) {
+  return (
+    <BatchSelect
+      className="batch-filter"
+      batches={batches}
+      value={value ?? ALL}
+      onChange={(id) => onChange(id === ALL ? null : id)}
+      extraOptions={[{ id: ALL, name: allLabel }, ...extraOptions]}
     />
   );
 }

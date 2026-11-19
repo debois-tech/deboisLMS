@@ -339,7 +339,8 @@ create table if not exists lectures (
   -- The day the session ran, entered by hand. Never defaulted from the insert time.
   lecture_date               date not null,
   session_type               session_type not null default 'online',
-  meeting_code               text,
+  -- The tutor who took the session; blank only where the batch has none.
+  tutor_id                   uuid references tutors(id) on delete set null,
   scheduled_duration_minutes int not null default 120,
   note                       text,
   -- Session start, entered by hand as a local date and time. Not the insert time.
@@ -370,14 +371,12 @@ create table if not exists uploads (
   attendance_stopped    timestamp,
   attended_duration_raw text,
   attended_minutes      numeric,
-  meeting_code          text,
   matched_student_id    uuid references students(id) on delete set null,
   processed             boolean default false,
   uploaded_at           timestamptz default now()
 );
 
 create index if not exists idx_uploads_lecture   on uploads(lecture_id);
-create index if not exists idx_uploads_meeting   on uploads(meeting_code);
 create index if not exists idx_uploads_processed on uploads(processed);
 
 create table if not exists attendance (
@@ -494,6 +493,8 @@ create table if not exists student_fees (
   paid_at_exit     numeric,
   -- Set once by transfer_student(); makes student_fee_dues judge instalments by payment logs.
   transferred      boolean not null default false,
+  -- Old fees had Rs 1,000 booked as a registration payment and judge instalments from it. New fees are two equal halves.
+  registration_included boolean not null default false,
   discount_type    discount_type not null default 'percentage',
   discount_value   numeric not null default 0 check (discount_value >= 0),
   -- 'terminated' wins over paid/due: expected_on_exit is set only by terminate_enrolment().
@@ -592,59 +593,6 @@ revoke all on function public.record_fee_payment(uuid, numeric, date, payment_me
 grant execute on function public.record_fee_payment(uuid, numeric, date, payment_method, text) to authenticated;
 
 
--- Every student pays 1000 on joining a batch. Booked as a payment against the fee,
--- not subtracted from the total, so the log and the balance agree.
--- Fires on insert only: re-adding a student reuses its fee row.
---
--- Nothing is logged for a student charged nothing — a 100% discount produces a
--- total_fee of 0, and a registration payment against 0 is not a fact. A fee
--- under 1000 logs only what was charged, so the log never exceeds the total.
---
--- Dated the day the student started (see set_join_date_from_batch), not the day the row was inserted.
-create or replace function log_registration_fee()
-returns trigger
-language plpgsql
-set search_path = public
-as $$
-declare
-  amount numeric;
-  paid_on date;
-begin
-  -- A transfer that carries payments brings its own registration fee
-  if current_setting('app.skip_registration', true) = 'on' then
-    return new;
-  end if;
-
-  if new.total_fee is null or new.total_fee <= 0 then
-    return new;
-  end if;
-
-  amount := least(1000, new.total_fee);
-
-  -- Dated the day they started, which the join rule already worked out
-  select m.joined_at into paid_on from batch_student_mapping m where m.batch_id = new.batch_id and m.student_id = new.student_id;
-  paid_on := coalesce(paid_on, current_date);
-
-  insert into fee_payment_logs (
-    student_fee_id, student_id, batch_id, amount, payment_date, payment_method, notes
-  ) values (
-    new.id, new.student_id, new.batch_id, amount, paid_on, 'upi', 'Registration fee'
-  );
-
-  update student_fees
-  set paid_amount = paid_amount + amount, updated_at = now()
-  where id = new.id;
-
-  return new;
-end;
-$$;
-
-drop trigger if exists student_fees_registration_fee on student_fees;
-create trigger student_fees_registration_fee
-  after insert on student_fees
-  for each row execute function log_registration_fee();
-
-
 -- 6. ASSIGNMENTS
 -- assigned_date is when the work was handed out; due_at is the deadline.
 create table if not exists assignments (
@@ -671,6 +619,8 @@ create table if not exists assignment_completions (
   submitted_via submission_channel default 'portal',
   submitted_at  timestamptz,
   mark          boolean default false not null,
+  -- The repo handed in with this submission. Each assignment keeps its own; the next one only prefills from the last.
+  repo_url      text,
   unique (assignment_id, student_id)
 );
 
@@ -694,10 +644,12 @@ begin
       new.submitted     := old.submitted;
       new.submitted_via := old.submitted_via;
       new.submitted_at  := old.submitted_at;
+      new.repo_url      := old.repo_url;
     else
       new.submitted     := false;
       new.submitted_via := null;
       new.submitted_at  := null;
+      new.repo_url      := null;
     end if;
     return new;
   end if;
@@ -861,7 +813,8 @@ language sql
 stable
 set search_path = public
 as $$
-  select coalesce((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin', false);
+  -- The developer passes every admin check; section 22 is what keeps them off live data.
+  select coalesce((auth.jwt() -> 'app_metadata' ->> 'role') in ('admin', 'developer'), false);
 $$;
 
 create or replace function current_student_id()
@@ -886,6 +839,7 @@ create or replace function current_tutor_id()
 returns uuid
 language sql
 stable
+security definer
 set search_path = public
 as $$
   select id from tutors where auth_user_id = auth.uid();
@@ -1007,6 +961,9 @@ alter view batch_attendance_summary set (security_invoker = on);
 -- Column-level grants cannot express that, because admins and students are both
 -- the `authenticated` role. Reaching past RLS is the point, so it carries its own
 -- `where` on current_student_id() instead.
+-- Re-running this file on a database from before section 25: the view resolves
+-- registration_included now, so the column has to exist here, not only at the end.
+alter table student_fees add column if not exists registration_included boolean not null default true;
 create or replace view student_fee_dues as
 select
   sf.id,
@@ -1024,6 +981,7 @@ select
         select 1 from fee_payment_logs l
         where l.student_fee_id = sf.id and l.notes is distinct from 'Registration fee'
       ) then 1 else 0 end
+    when not sf.registration_included then case when sf.paid_amount >= round(sf.total_fee / 2.0) then 1 else 0 end
     when sf.paid_amount >= least(1000, sf.total_fee)
                          + round(greatest(sf.total_fee - 1000, 0) / 2.0) then 1
     else 0
@@ -1395,6 +1353,7 @@ declare
   m            batch_student_mapping%rowtype;
   batch_start  date;
   fee_row      student_fees%rowtype;
+  reg          numeric := 0;
   instalment   numeric;
   due_count    int := 0;
   expected     numeric := 0;
@@ -1419,7 +1378,8 @@ begin
 
   -- Also for a zero fee (expected 0), so every leaver's fee row reads 'terminated'.
   if found then
-    instalment := round(greatest(fee_row.total_fee - 1000, 0) / 2.0);
+    reg := case when fee_row.registration_included then 1000 else 0 end;
+    instalment := round(greatest(fee_row.total_fee - reg, 0) / 2.0);
 
     -- Due on the day itself, so `>=`, not `>`.
     if batch_start is not null then
@@ -1429,7 +1389,7 @@ begin
 
     -- Registration is collected at sign-up and always owed; instalments only
     -- once their date has been reached.
-    expected := least(fee_row.total_fee, least(1000, fee_row.total_fee) + instalment * due_count);
+    expected := least(fee_row.total_fee, least(reg, fee_row.total_fee) + instalment * due_count);
     void_amount := greatest(expected - fee_row.paid_amount, 0);
 
     update student_fees
@@ -1558,12 +1518,9 @@ begin
   returning id into new_map;
 
   if p_carry then
-    -- The carried payments already include the registration fee
-    perform set_config('app.skip_registration', 'on', true);
     insert into student_fees (student_id, batch_id, total_fee, paid_amount, transferred, discount_type, discount_value)
     values (m.student_id, p_to_batch, p_fee, 0, true, 'amount', greatest(coalesce(target.base_fee, p_fee) - p_fee, 0))
     returning * into new_fee;
-    perform set_config('app.skip_registration', 'off', true);
 
     insert into fee_payment_logs (student_fee_id, student_id, batch_id, amount, payment_date, payment_method, notes)
     select new_fee.id, l.student_id, p_to_batch, l.amount, l.payment_date, l.payment_method,
@@ -1583,7 +1540,6 @@ begin
     set paid_at_exit = old_fee.paid_amount, expected_on_exit = 0, paid_amount = 0, updated_at = now()
     where id = old_fee.id;
   else
-    -- The registration fee trigger books the Rs 1,000 on the new fee
     insert into student_fees (student_id, batch_id, total_fee, paid_amount, discount_type, discount_value)
     values (m.student_id, p_to_batch, p_fee, 0, 'amount', greatest(coalesce(target.base_fee, p_fee) - p_fee, 0));
 
@@ -1719,8 +1675,9 @@ end $$;
 revoke all on function delete_tutor(uuid) from public;
 grant execute on function delete_tutor(uuid) to authenticated;
 
--- Test batches only: unassigns a tutor and deletes what carries their id there. Returns the file paths for the client to remove.
-create or replace function unassign_tutor_from_test_batch(p_mapping uuid)
+-- Unassigns a tutor from one batch. p_delete false only drops the link; true also erases what
+-- carries their id there and returns the file paths for the client to remove. Admin only.
+create or replace function remove_tutor_from_batch(p_mapping uuid, p_delete boolean)
 returns jsonb
 language plpgsql
 security definer
@@ -1735,8 +1692,10 @@ begin
 
   select * into m from tutor_batch_mapping where id = p_mapping;
   if not found then raise exception 'That assignment no longer exists'; end if;
-  if not exists (select 1 from batches where id = m.batch_id and is_test) then
-    raise exception 'Only a test batch can be cleared this way';
+
+  if not p_delete then
+    delete from tutor_batch_mapping where id = m.id;
+    return jsonb_build_object('materials', '[]'::jsonb, 'images', '[]'::jsonb);
   end if;
 
   select coalesce(array_agg(storage_path), '{}') into mats from materials where tutor_id = m.tutor_id and batch_id = m.batch_id;
@@ -1755,6 +1714,26 @@ begin
   -- A copied quiz shares its pictures: keep any that another quiz still shows.
   select coalesce(array_agg(p), '{}') into imgs from unnest(imgs) p where not exists (select 1 from quiz_questions where image_path = p);
   return jsonb_build_object('materials', to_jsonb(mats), 'images', to_jsonb(imgs));
+end $$;
+
+revoke all on function remove_tutor_from_batch(uuid, boolean) from public, anon;
+grant execute on function remove_tutor_from_batch(uuid, boolean) to authenticated;
+
+-- Kept for older clients: the old test-batch button, same erase, test batches only.
+create or replace function unassign_tutor_from_test_batch(p_mapping uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare is_test boolean;
+begin
+  select b.is_test into is_test
+  from tutor_batch_mapping m join batches b on b.id = m.batch_id
+  where m.id = p_mapping;
+  if not found then raise exception 'That assignment no longer exists'; end if;
+  if not is_test then raise exception 'Only a test batch can be cleared this way'; end if;
+  return remove_tutor_from_batch(p_mapping, true);
 end $$;
 
 revoke all on function unassign_tutor_from_test_batch(uuid) from public;
@@ -1850,6 +1829,10 @@ begin
 
   -- Read notifications are kept 30 days
   delete from notifications where read_at < now() - interval '30 days';
+
+  -- Tutor and admin log entries are kept 90 days
+  delete from tutor_actions where created_at < now() - interval '90 days';
+  delete from admin_actions where created_at < now() - interval '90 days';
 
   for expired in
     select s.id as student_id, s.auth_user_id
@@ -2362,6 +2345,10 @@ begin
     select 1 from tutor_batch_mapping where tutor_id = current_tutor_id() and batch_id = b
   )) then
     raise exception 'Not your batch';
+  end if;
+  -- A card with children follows them (refresh_curriculum_parents); only the ones without any are set by hand.
+  if exists (select 1 from curriculum_nodes where parent_id = p_node) then
+    raise exception 'This follows what is under it';
   end if;
   update curriculum_nodes
   set status = p_status,
@@ -3514,7 +3501,11 @@ declare
     when 'curriculum_nodes' then 'Curriculum'
     else 'Curriculum submission'
   end;
-  about     text := coalesce(doc->>'title', doc->>'name');
+  about     text := coalesce(
+    doc->>'title',
+    doc->>'name',
+    case when tg_table_name = 'lectures' then to_char((doc->>'lecture_date')::date, 'DD Mon YYYY') end
+  );
   batch     uuid;
 begin
   if not is_tutor() then
@@ -4140,3 +4131,665 @@ end $$;
 
 revoke all on function verify_document(text, text, text) from public, anon, authenticated;
 grant execute on function verify_document(text, text, text) to service_role;
+
+-- 22. DEVELOPER ROLE
+-- is_admin() admits the developer too, so every admin policy and function keeps working for them. What stops a
+-- developer changing live data is guard_developer(), a trigger on every table below: it refuses any write to a
+-- row that is not test data. Triggers fire inside security definer functions as well, so the RPCs are covered.
+-- Whatever a developer inserts is born test.
+create or replace function is_dev()
+returns boolean
+language sql
+stable
+set search_path = public
+as $$
+  select coalesce((auth.jwt() -> 'app_metadata' ->> 'role') = 'developer', false);
+$$;
+
+-- Is this batch a test batch? Reads past RLS, so a policy can use it on a batch the caller cannot see.
+create or replace function batch_is_test(b uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce((select is_test from batches where id = b), false);
+$$;
+
+-- Is a row test data? Follows whichever key it carries to its batch or student. Rows with no such key (tutors,
+-- settings, programmes) are never test. Null = the parent is already gone, which only happens in a cascade.
+create or replace function row_is_test(doc jsonb)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select case
+    when doc ? 'is_test' then (doc ->> 'is_test')::boolean
+    when nullif(doc ->> 'batch_id', '') is not null then (select is_test from batches where id = (doc ->> 'batch_id')::uuid)
+    when nullif(doc ->> 'student_id', '') is not null then (select is_test from students where id = (doc ->> 'student_id')::uuid)
+    when nullif(doc ->> 'lecture_id', '') is not null then
+      (select b.is_test from lectures l join batches b on b.id = l.batch_id where l.id = (doc ->> 'lecture_id')::uuid)
+    when nullif(doc ->> 'assignment_id', '') is not null then
+      (select b.is_test from assignments a join batches b on b.id = a.batch_id where a.id = (doc ->> 'assignment_id')::uuid)
+    when nullif(doc ->> 'quiz_id', '') is not null then
+      (select coalesce(b.is_test, false) from quizzes q left join batches b on b.id = q.batch_id where q.id = (doc ->> 'quiz_id')::uuid)
+    when nullif(doc ->> 'question_id', '') is not null then
+      (select coalesce(b.is_test, false) from quiz_questions qq join quizzes q on q.id = qq.quiz_id left join batches b on b.id = q.batch_id
+        where qq.id = (doc ->> 'question_id')::uuid)
+    when nullif(doc ->> 'badge_id', '') is not null then
+      (select b.is_test from batch_badges bb join batches b on b.id = bb.batch_id where bb.id = (doc ->> 'badge_id')::uuid)
+    when nullif(doc ->> 'node_id', '') is not null then
+      (select b.is_test from curriculum_nodes n join batches b on b.id = n.batch_id where n.id = (doc ->> 'node_id')::uuid)
+    when nullif(doc ->> 'material_id', '') is not null then
+      (select b.is_test from materials m join batches b on b.id = m.batch_id where m.id = (doc ->> 'material_id')::uuid)
+    else false
+  end;
+$$;
+
+-- A developer's new batch or student is test from the first insert; nobody has to flag it.
+create or replace function dev_born_test()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if is_dev() then
+    new.is_test := true;
+    if tg_table_name = 'students' then
+      new.student_code := next_test_student_code();
+      -- The default already drew a live ref; hand it back.
+      perform resync_student_code_seq();
+    end if;
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists aa_dev_born_test on batches;
+create trigger aa_dev_born_test before insert on batches for each row execute function dev_born_test();
+drop trigger if exists aa_dev_born_test on students;
+create trigger aa_dev_born_test before insert on students for each row execute function dev_born_test();
+
+create or replace function guard_developer()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  mine boolean;
+begin
+  if not is_dev() then
+    return case when tg_op = 'DELETE' then old else new end;
+  end if;
+
+  if tg_op <> 'INSERT' then
+    mine := row_is_test(to_jsonb(old));
+    if mine is not null and not mine then
+      raise exception 'Developer accounts can only change test data';
+    end if;
+  end if;
+  if tg_op <> 'DELETE' then
+    if row_is_test(to_jsonb(new)) is not true then
+      raise exception 'Developer accounts can only change test data';
+    end if;
+  end if;
+  return case when tg_op = 'DELETE' then old else new end;
+end $$;
+
+-- Files follow the same rule: a developer writes only into a test batch's folder or a test enrolment's documents.
+create or replace function dev_may_write_file(p_bucket text, p_name text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select not is_dev() or case p_bucket
+    when 'materials' then batch_is_test(safe_uuid(split_part(p_name, '/', 1)))
+    when 'documents' then coalesce(
+      (select b.is_test from batch_student_mapping m join batches b on b.id = m.batch_id where m.id = safe_uuid(split_part(p_name, '/', 1))),
+      false)
+    else false
+  end;
+$$;
+
+drop policy if exists dev_files_insert on storage.objects;
+create policy dev_files_insert on storage.objects as restrictive for insert with check (dev_may_write_file(bucket_id, name));
+drop policy if exists dev_files_update on storage.objects;
+create policy dev_files_update on storage.objects as restrictive for update using (dev_may_write_file(bucket_id, name));
+drop policy if exists dev_files_delete on storage.objects;
+create policy dev_files_delete on storage.objects as restrictive for delete using (dev_may_write_file(bucket_id, name));
+
+-- ADMIN LOG: every write by an admin or developer account, folded the way the tutor log is.
+do $$ begin create type admin_actor_role as enum ('admin', 'developer'); exception when duplicate_object then null; end $$;
+
+create table if not exists admin_actions (
+  id         uuid primary key default gen_random_uuid(),
+  -- No foreign key: the history outlives the account.
+  admin_id   uuid,
+  admin_name text not null,
+  actor_role admin_actor_role not null,
+  op         tutor_action_op not null,
+  item       text not null,
+  detail     text,
+  batch_id   uuid,
+  times      int not null default 1,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_admin_actions_created on admin_actions(created_at desc);
+
+alter table admin_actions enable row level security;
+-- An admin reads admin entries; the developer reads everyone's. Only the developer deletes.
+drop policy if exists read_admin_actions on admin_actions;
+create policy read_admin_actions on admin_actions
+  for select using (is_admin() and (is_dev() or actor_role = 'admin'));
+drop policy if exists dev_deletes_admin_actions on admin_actions;
+create policy dev_deletes_admin_actions on admin_actions
+  for delete using (is_dev());
+
+-- The tutor log: same split. Test-batch entries are the developer's.
+drop policy if exists admin_full_access on tutor_actions;
+drop policy if exists read_tutor_actions on tutor_actions;
+create policy read_tutor_actions on tutor_actions
+  for select using (is_admin() and (is_dev() or not batch_is_test(batch_id)));
+drop policy if exists dev_deletes_tutor_actions on tutor_actions;
+create policy dev_deletes_tutor_actions on tutor_actions
+  for delete using (is_dev());
+
+create or replace function log_admin_action()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  doc       jsonb := case when tg_op = 'DELETE' then to_jsonb(old) else to_jsonb(new) end;
+  action_op tutor_action_op := case tg_op when 'INSERT' then 'created' when 'UPDATE' then 'updated' else 'deleted' end;
+  label     text := case tg_table_name
+    when 'students' then 'Student'
+    when 'batches' then 'Batch'
+    when 'tutors' then 'Tutor'
+    when 'batch_student_mapping' then 'Enrolment'
+    when 'tutor_batch_mapping' then 'Tutor assignment'
+    when 'student_fees' then 'Fee'
+    when 'fee_payment_logs' then 'Payment'
+    when 'payment_claims' then 'Payment claim'
+    when 'app_settings' then 'Setting'
+    else initcap(replace(tg_table_name, '_', ' '))
+  end;
+  about     text := coalesce(
+    doc ->> 'title',
+    doc ->> 'name',
+    doc ->> 'student_code',
+    doc ->> 'email',
+    -- A deleted lecture has no name; its date is what the log can show.
+    case when tg_table_name = 'lectures' then to_char((doc ->> 'lecture_date')::date, 'DD Mon YYYY') end
+  );
+  who       text := coalesce(nullif(auth.jwt() -> 'user_metadata' ->> 'full_name', ''), auth.jwt() ->> 'email', 'Unknown');
+  batch     uuid := coalesce(nullif(doc ->> 'batch_id', '')::uuid, case when tg_table_name = 'batches' then (doc ->> 'id')::uuid end);
+begin
+  if not is_admin() then
+    return null;
+  end if;
+
+  update admin_actions
+  set times = times + 1
+  where admin_id = auth.uid() and op = action_op and item = label
+    and batch_id is not distinct from batch
+    and detail is not distinct from about
+    and created_at > now() - interval '1 minute';
+
+  if not found then
+    insert into admin_actions (admin_id, admin_name, actor_role, op, item, detail, batch_id)
+    values (auth.uid(), who, (case when is_dev() then 'developer' else 'admin' end)::admin_actor_role, action_op, label, about, batch);
+  end if;
+
+  return null;
+end $$;
+
+-- Test data is the developer's alone: an admin never sees a test batch, student or quiz.
+drop policy if exists hide_test_from_admin on batches;
+create policy hide_test_from_admin on batches as restrictive for select using (is_dev() or not is_admin() or not is_test);
+drop policy if exists hide_test_from_admin on students;
+create policy hide_test_from_admin on students as restrictive for select using (is_dev() or not is_admin() or not is_test);
+drop policy if exists hide_test_from_admin on quizzes;
+create policy hide_test_from_admin on quizzes as restrictive for select using (is_dev() or not is_admin() or not batch_is_test(batch_id));
+
+do $$
+declare t text;
+begin
+  -- Every table an admin or developer can change. The guard covers all of them; the log skips what students write.
+  foreach t in array array[
+    'tutors', 'batch_programs', 'batches', 'students', 'batch_student_mapping', 'tutor_batch_mapping',
+    'lectures', 'uploads', 'attendance', 'student_fees', 'fee_payment_logs', 'assignments',
+    'assignment_completions', 'student_repos', 'materials', 'material_views', 'app_settings',
+    'payment_claims', 'curriculum_nodes', 'curriculum_requests', 'batch_badges', 'student_badges', 'badge_codes',
+    'curriculum_node_badges', 'quizzes', 'quiz_questions', 'quiz_options', 'quiz_participants', 'quiz_answers'
+  ] loop
+    execute format('drop trigger if exists zz_guard_developer on %I', t);
+    execute format('create trigger zz_guard_developer before insert or update or delete on %I for each row execute function guard_developer()', t);
+  end loop;
+
+  foreach t in array array[
+    'tutors', 'batch_programs', 'batches', 'students', 'batch_student_mapping', 'tutor_batch_mapping',
+    'lectures', 'uploads', 'attendance', 'student_fees', 'fee_payment_logs', 'assignments',
+    'assignment_completions', 'materials', 'feedback', 'app_settings', 'payment_claims', 'curriculum_nodes',
+    'curriculum_requests', 'batch_badges', 'student_badges', 'quizzes', 'quiz_questions'
+  ] loop
+    execute format('drop trigger if exists log_admin_action on %I', t);
+    execute format('create trigger log_admin_action after insert or update or delete on %I for each row execute function log_admin_action()', t);
+  end loop;
+end $$;
+
+-- Test status was only ever set by this, back when no account could be trusted with test data.
+drop function if exists convert_batch_to_test(uuid);
+
+-- 23. BUG REPORTS FROM EVERY ROLE
+-- Anyone signed in reports a bug and sees their own reports; only the developer sees all of them and resolves them.
+do $$ begin create type feedback_reporter_role as enum ('student', 'tutor', 'admin', 'developer'); exception when duplicate_object then null; end $$;
+
+alter table feedback add column if not exists reporter_id   uuid;
+alter table feedback add column if not exists reporter_name text;
+alter table feedback add column if not exists reporter_role feedback_reporter_role;
+alter table feedback alter column student_id drop not null;
+
+update feedback f
+set reporter_id = s.auth_user_id, reporter_name = s.name, reporter_role = 'student'
+from students s
+where s.id = f.student_id and f.reporter_role is null;
+
+-- Who is reporting is read from the login, never taken from the client.
+create or replace function stamp_feedback_reporter()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  role_claim text := coalesce(auth.jwt() -> 'app_metadata' ->> 'role', 'student');
+begin
+  new.reporter_id := auth.uid();
+  new.reporter_role := case when role_claim in ('tutor', 'admin', 'developer') then role_claim else 'student' end::feedback_reporter_role;
+  new.student_id := case when new.reporter_role = 'student' then current_student_id() end;
+  new.reporter_name := coalesce(
+    case new.reporter_role
+      when 'student' then (select name from students where id = new.student_id)
+      when 'tutor' then (select name from tutors where id = current_tutor_id())
+    end,
+    nullif(auth.jwt() -> 'user_metadata' ->> 'full_name', ''),
+    auth.jwt() ->> 'email',
+    'Unknown');
+  return new;
+end $$;
+
+drop trigger if exists feedback_reporter_stamp on feedback;
+create trigger feedback_reporter_stamp before insert on feedback for each row execute function stamp_feedback_reporter();
+
+drop policy if exists admin_full_access on feedback;
+drop policy if exists student_read_own on feedback;
+drop policy if exists student_insert_own on feedback;
+drop policy if exists report_own on feedback;
+create policy report_own on feedback for insert with check (reporter_id = auth.uid());
+drop policy if exists read_own_reports on feedback;
+create policy read_own_reports on feedback for select using (reporter_id = auth.uid() or is_dev());
+drop policy if exists dev_resolves_reports on feedback;
+create policy dev_resolves_reports on feedback for update using (is_dev()) with check (is_dev());
+
+-- The inbox is the developer's own work, live reporters included.
+drop trigger if exists zz_guard_developer on feedback;
+
+create or replace function developer_users()
+returns uuid[]
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(array_agg(u.id), '{}') from auth.users u where u.raw_app_meta_data ->> 'role' = 'developer';
+$$;
+
+create or replace function notify_feedback()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if tg_op = 'INSERT' then
+    perform notify_users(developer_users(), 'feedback_new', null, coalesce(new.reporter_name, 'Someone'), '/dev/bug-reports');
+  elsif new.status = 'resolved' and old.status is distinct from new.status and new.reporter_id is not null then
+    perform notify_users(array[new.reporter_id], 'feedback_resolved', null, left(new.message, 60),
+      case new.reporter_role when 'student' then '/portal' when 'tutor' then '/tutor' else '/' end);
+  end if;
+  return null;
+end $$;
+
+-- 24. REMOVE A STUDENT FROM ONE BATCH
+-- For a student who is in another batch too and decides not to stay in this one. Keep: the enrolment stays as a
+-- hidden 'removed' record with its payments and data. Delete: this batch's footprint is erased. Never the student.
+alter type mapping_status add value if not exists 'removed';
+
+-- Removed enrolments leave the head-count and the amounts owed, as transferred ones do; money banked stays counted.
+create or replace view batch_fee_summary as
+select
+  b.id as batch_id,
+  b.name as batch_name,
+  count(distinct bsm.student_id) filter (where bsm.status::text not in ('terminated', 'transferred', 'removed')) as total_students,
+  coalesce(sum(sf.total_fee) filter (where bsm.status::text not in ('terminated', 'transferred', 'removed')), 0) as total_fees,
+  coalesce(sum(sf.paid_amount), 0) as total_collected,
+  coalesce(sum(greatest(sf.total_fee - sf.paid_amount, 0)) filter (where bsm.status::text not in ('terminated', 'transferred', 'removed')), 0) as total_outstanding,
+  b.is_test
+from batches b
+left join batch_student_mapping bsm on bsm.batch_id = b.id
+left join student_fees sf on sf.batch_id = b.id and sf.student_id = bsm.student_id
+group by b.id, b.name;
+
+create or replace view earning_breakdown as
+select
+  b.id   as batch_id,
+  b.name as batch_name,
+  count(bsm.id) filter (where bsm.status::text not in ('terminated', 'transferred', 'removed')) as active_students,
+  count(bsm.id) filter (where bsm.status =  'terminated') as terminated_students,
+  coalesce(sum(sf.paid_amount), 0) as collected,
+  coalesce(sum(sf.paid_amount) filter (where bsm.status::text not in ('terminated', 'transferred', 'removed')), 0) as collected_active,
+  coalesce(sum(sf.paid_amount) filter (where bsm.status =  'terminated'), 0) as collected_terminated,
+  coalesce(sum(greatest(sf.total_fee - sf.paid_amount, 0))
+    filter (where bsm.status::text not in ('terminated', 'transferred', 'removed')), 0) as pending,
+  coalesce(sum(greatest(coalesce(sf.expected_on_exit, 0) - sf.paid_amount, 0))
+    filter (where bsm.status = 'terminated'), 0) as void_amount,
+  coalesce(sum(greatest(sf.total_fee - coalesce(sf.expected_on_exit, 0), 0))
+    filter (where bsm.status = 'terminated'), 0) as never_due,
+  coalesce(sum(greatest(sf.paid_amount - coalesce(sf.paid_at_exit, sf.paid_amount), 0))
+    filter (where bsm.status = 'terminated'), 0) as recovered,
+  b.is_test
+from batches b
+left join batch_student_mapping bsm on bsm.batch_id = b.id
+left join student_fees sf on sf.batch_id = b.id and sf.student_id = bsm.student_id
+group by b.id, b.name;
+
+-- What an enrolment holds, so the admin sees what Delete would erase.
+create or replace function enrolment_footprints(p_mappings uuid[])
+returns table (mapping_id uuid, student_id uuid, total_fee numeric, paid numeric, payments int, attendance int, submissions int, badges int)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select m.id, m.student_id,
+    coalesce((select sf.total_fee from student_fees sf where sf.student_id = m.student_id and sf.batch_id = m.batch_id), 0),
+    coalesce((select sf.paid_amount from student_fees sf where sf.student_id = m.student_id and sf.batch_id = m.batch_id), 0),
+    (select count(*) from fee_payment_logs p where p.student_id = m.student_id and p.batch_id = m.batch_id)::int,
+    (select count(*) from attendance a where a.student_id = m.student_id and a.batch_id = m.batch_id)::int,
+    (select count(*) from assignment_completions c join assignments x on x.id = c.assignment_id
+      where c.student_id = m.student_id and x.batch_id = m.batch_id)::int,
+    (select count(*) from student_badges sb join batch_badges bb on bb.id = sb.badge_id
+      where sb.student_id = m.student_id and bb.batch_id = m.batch_id)::int
+  from batch_student_mapping m
+  where m.id = any(p_mappings) and is_admin();
+$$;
+
+revoke all on function enrolment_footprints(uuid[]) from public, anon;
+grant execute on function enrolment_footprints(uuid[]) to authenticated;
+
+-- What a tutor holds in each batch, so the unassign flow can say what Delete would erase.
+create or replace function tutor_batch_footprints(p_mappings uuid[])
+returns table (mapping_id uuid, materials int, quizzes int, images int, badges int, curriculum int, actions int)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select m.id,
+    (select count(*) from materials x where x.tutor_id = m.tutor_id and x.batch_id = m.batch_id)::int,
+    (select count(*) from quizzes z where z.created_by = m.tutor_id and z.batch_id = m.batch_id)::int,
+    (select count(distinct qq.image_path) from quiz_questions qq join quizzes z on z.id = qq.quiz_id
+      where z.created_by = m.tutor_id and z.batch_id = m.batch_id and qq.image_path is not null)::int,
+    (select count(*) from student_badges sb join batch_badges bb on bb.id = sb.badge_id
+      where sb.issued_by = m.tutor_id and bb.batch_id = m.batch_id)::int,
+    (select count(*) from curriculum_requests c where c.proposed_by = m.tutor_id and c.batch_id = m.batch_id)::int,
+    (select count(*) from tutor_actions a where a.tutor_id = m.tutor_id and a.batch_id = m.batch_id)::int
+  from tutor_batch_mapping m
+  where m.id = any(p_mappings) and is_admin();
+$$;
+
+revoke all on function tutor_batch_footprints(uuid[]) from public, anon;
+grant execute on function tutor_batch_footprints(uuid[]) to authenticated;
+
+create or replace function remove_enrolment(p_mapping_id uuid, p_delete boolean)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  m batch_student_mapping%rowtype;
+begin
+  if not is_admin() then
+    raise exception 'Admin only';
+  end if;
+
+  select * into m from batch_student_mapping where id = p_mapping_id;
+  if not found then
+    raise exception 'Enrolment not found';
+  end if;
+  if m.status <> 'active' then
+    raise exception 'Only an active enrolment can be removed';
+  end if;
+  if not exists (
+    select 1 from batch_student_mapping o
+    where o.student_id = m.student_id and o.id <> m.id and o.status = 'active'
+  ) then
+    raise exception 'Only a student who is in another batch can be removed';
+  end if;
+
+  -- Their documents for this batch go either way
+  insert into document_cleanup (path)
+  select p from unnest(array[m.offer_letter_path, m.cert_path]) as p where p is not null
+  on conflict do nothing;
+
+  if not p_delete then
+    update batch_student_mapping
+    set status = 'removed', left_on = current_date,
+        offer_letter_path = null, cert_path = null, offer_letter_shared = false, cert_shared = false
+    where id = p_mapping_id;
+    return;
+  end if;
+
+  delete from attendance where student_id = m.student_id and batch_id = m.batch_id;
+  delete from assignment_completions where student_id = m.student_id and assignment_id in (select id from assignments where batch_id = m.batch_id);
+  delete from student_repos where student_id = m.student_id and batch_id = m.batch_id;
+  delete from student_badges where student_id = m.student_id and badge_id in (select id from batch_badges where batch_id = m.batch_id);
+  delete from badge_codes where student_id = m.student_id and badge_id in (select id from batch_badges where batch_id = m.batch_id);
+  delete from material_views where student_id = m.student_id and material_id in (select id from materials where batch_id = m.batch_id);
+  delete from quiz_answers where student_id = m.student_id and quiz_id in (select id from quizzes where batch_id = m.batch_id);
+  delete from quiz_participants where student_id = m.student_id and quiz_id in (select id from quizzes where batch_id = m.batch_id);
+  delete from payment_claims where student_id = m.student_id and batch_id = m.batch_id;
+  delete from student_fees where student_id = m.student_id and batch_id = m.batch_id;
+  delete from batch_student_mapping where id = p_mapping_id;
+end $$;
+
+revoke all on function remove_enrolment(uuid, boolean) from public, anon;
+grant execute on function remove_enrolment(uuid, boolean) to authenticated;
+
+-- A tutor sees the other tutors of their own batches (the Tutors card on the batch overview), nothing wider.
+create or replace function tutor_batch_ids()
+returns setof uuid
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select batch_id from tutor_batch_mapping where tutor_id = current_tutor_id();
+$$;
+
+drop policy if exists tutor_read_batch_mates on tutor_batch_mapping;
+create policy tutor_read_batch_mates on tutor_batch_mapping for select using (batch_id in (select tutor_batch_ids()));
+drop policy if exists tutor_read_batch_tutors on tutors;
+create policy tutor_read_batch_tutors on tutors for select
+  using (id in (select tutor_id from tutor_batch_mapping where batch_id in (select tutor_batch_ids())));
+
+-- 25. LECTURE TUTOR, MARKING TRAIL, FEES WITHOUT REGISTRATION, REPO PER SUBMISSION
+-- The tutor who takes a lecture replaces the meeting code, which is dropped with all its matching.
+alter table lectures add column if not exists tutor_id uuid references tutors(id) on delete set null;
+create index if not exists idx_lectures_tutor on lectures(tutor_id);
+
+-- Old lectures take their batch's first tutor; editable afterwards.
+update lectures l
+set tutor_id = (select m.tutor_id from tutor_batch_mapping m where m.batch_id = l.batch_id order by m.assigned_at, m.id limit 1)
+where l.tutor_id is null;
+
+drop index if exists idx_uploads_meeting;
+alter table uploads drop column if exists meeting_code;
+alter table lectures drop column if exists meeting_code;
+
+-- Who marked a lecture, and when. Stamped by the database from the login, so no screen can skip it.
+alter table attendance add column if not exists marked_at timestamptz;
+alter table attendance add column if not exists marked_by text[] not null default '{}';
+
+create or replace function stamp_attendance_mark()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  who text := auth.jwt() ->> 'email';
+begin
+  if who is null or new.status::text not in ('present', 'partial', 'absent') then
+    return new;
+  end if;
+  if tg_op = 'UPDATE' and old.status = new.status and old.total_attended_minutes is not distinct from new.total_attended_minutes then
+    return new;
+  end if;
+  new.marked_at := now();
+  if not (who = any(new.marked_by)) then
+    new.marked_by := array_append(new.marked_by, who);
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists attendance_mark_stamp on attendance;
+create trigger attendance_mark_stamp before insert or update on attendance for each row execute function stamp_attendance_mark();
+
+-- One row per lecture for the tables: attended of applicable (N/A rows left out), last marked, and by whom.
+-- Two aggregates joined once — a correlated subquery here is evaluated per attendance row and times out.
+create or replace view lecture_attendance_summary as
+-- batch_id is a grouping column in both aggregates, so a filter on it runs before the totalling, not after it.
+with per_lecture as (
+  select
+    a.lecture_id,
+    a.batch_id,
+    count(*) filter (where a.status::text in ('present', 'partial'))::int as attended,
+    count(*) filter (where a.status::text <> 'no_appli')::int as applicable,
+    max(a.marked_at) as marked_at
+  from attendance a
+  group by a.lecture_id, a.batch_id
+),
+editors as (
+  select a.lecture_id, a.batch_id, array_agg(distinct m.email order by m.email) as marked_by
+  from attendance a
+  cross join lateral unnest(a.marked_by) as m(email)
+  group by a.lecture_id, a.batch_id
+)
+select
+  p.lecture_id,
+  p.attended,
+  p.applicable,
+  p.marked_at,
+  coalesce(e.marked_by, '{}') as marked_by,
+  p.batch_id
+from per_lecture p
+left join editors e on e.lecture_id = p.lecture_id and e.batch_id = p.batch_id;
+
+alter view lecture_attendance_summary set (security_invoker = on);
+grant select on lecture_attendance_summary to authenticated;
+
+-- No Rs 1,000 registration payment any more. Existing fees keep it (registration_included); new ones split in two halves.
+alter table student_fees add column if not exists registration_included boolean not null default true;
+alter table student_fees alter column registration_included set default false;
+drop trigger if exists student_fees_registration_fee on student_fees;
+drop function if exists log_registration_fee();
+
+-- One repo per submission. Existing submissions are frozen at the repo they show today.
+alter table assignment_completions add column if not exists repo_url text;
+-- The submission guard reads this update as a student edit and refuses a handed-in row,
+-- so it is switched off for the copy only. The DO block restores it even if the update fails.
+do $$
+begin
+  execute 'alter table assignment_completions disable trigger assignment_completions_guard';
+  update assignment_completions c
+  set repo_url = r.repo_url
+  from assignments a, student_repos r
+  where a.id = c.assignment_id and r.batch_id = a.batch_id and r.student_id = c.student_id and c.submitted and c.repo_url is null;
+  execute 'alter table assignment_completions enable trigger assignment_completions_guard';
+end $$;
+
+alter table assignment_completions drop constraint if exists assignment_completions_repo_url_github;
+alter table assignment_completions add constraint assignment_completions_repo_url_github
+  check (repo_url is null or (repo_url ~ '^https://github\.com/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$' and length(repo_url) <= 200));
+
+-- 26. BUG REPORTS KEPT 30 DAYS
+-- Daily at 02:15 India time, after the student clean-up. Needs pg_cron; without it, run the delete by hand.
+do $$ begin
+  create extension if not exists pg_cron;
+  perform cron.schedule('clear-old-bug-reports', '45 20 * * *', 'delete from public.feedback where created_at < now() - interval ''30 days''');
+exception when others then
+  raise notice 'pg_cron not available (%), clear old bug reports by hand', sqlerrm;
+end $$;
+
+-- 27. CURRICULUM PARENTS FOLLOW THEIR CHILDREN
+-- A topic with subtopics, or a module with topics, is finished once every child is done or skipped and at least one is done;
+-- skipped when all are skipped; otherwise open. Its date is its last done child's. Cards with no children are set by hand.
+create or replace function refresh_curriculum_parents(p_batch uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare lvl text;
+begin
+  -- Subtopics settle their topics first, then topics settle their modules
+  foreach lvl in array array['subtopic', 'topic'] loop
+    update curriculum_nodes p
+    set status = d.status, done_on = d.done_on
+    from (
+      select c.parent_id,
+        (case when bool_or(c.status = 'todo') then 'todo'
+              when bool_or(c.status = 'done') then 'done'
+              else 'skipped' end)::curriculum_status as status,
+        case when not bool_or(c.status = 'todo') and bool_or(c.status = 'done')
+             then max(c.done_on) filter (where c.status = 'done') end as done_on
+      from curriculum_nodes c
+      where c.batch_id = p_batch and c.kind::text = lvl
+      group by c.parent_id
+    ) d
+    where p.id = d.parent_id and (p.status, p.done_on) is distinct from (d.status, d.done_on);
+  end loop;
+end $$;
+
+revoke all on function refresh_curriculum_parents(uuid) from public, anon, authenticated;
+
+create or replace function curriculum_parents_trigger()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform refresh_curriculum_parents(coalesce(new.batch_id, old.batch_id));
+  return null;
+end $$;
+
+drop trigger if exists curriculum_parents_refresh on curriculum_nodes;
+create trigger curriculum_parents_refresh
+  after insert or update of status, parent_id or delete on curriculum_nodes
+  for each row when (pg_trigger_depth() = 0)
+  execute function curriculum_parents_trigger();
+
+-- Settle every existing batch once
+select refresh_curriculum_parents(id) from batches;

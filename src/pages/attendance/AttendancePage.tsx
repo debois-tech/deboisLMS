@@ -1,12 +1,14 @@
 import { useState, useRef } from 'react';
-import { ClipboardCheck, Upload, Loader2, Plus, AlertTriangle, PenLine, Download } from 'lucide-react';
+import { ClipboardCheck, Upload, Loader2, Plus, PenLine, Download, Trash2 } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
+import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useInFlight, useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { Modal } from '@/components/ui/Modal';
+import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { BatchSelect } from '@/components/ui/BatchSelect';
 import { LectureSelect } from '@/components/ui/LectureSelect';
@@ -18,12 +20,14 @@ import { AttendanceRecordsTable } from '@/components/attendance/AttendanceRecord
 import { ManualAttendance } from '@/components/attendance/ManualAttendance';
 import { DEFAULT_LECTURE_MINUTES } from '@/lib/attendance/types';
 import { exportBatchAttendanceCsv } from '@/lib/attendance/exportCsv';
-import { clearUploads, createLecture, getAttendanceByLecture, getBatches, getLecturesByBatch, insertUploadRows, processAttendance, updateLecture } from '@/lib/supabase';
+import { clearUploads, createLecture, deleteLecture, getAttendanceByLecture, getBatches, getBatchTutors, getLecturesByBatch, insertUploadRows, processAttendance } from '@/lib/supabase';
 import type { ProcessingReport } from '@/lib/supabase';
-import type { Batch, Lecture, AttendanceRecord } from '@/lib/types';
-import { meetingCodesMatch, parseCsv } from '@/lib/utils/csvParser';
+import type { Batch, Lecture, AttendanceRecord, Tutor } from '@/lib/types';
+import { parseCsv } from '@/lib/utils/csvParser';
 import type { CsvRow } from '@/lib/utils/csvParser';
 import { useToast } from '@/lib/context/ToastContext';
+import { useConfirm } from '@/lib/context/ConfirmContext';
+import { useAuth } from '@/lib/context/AuthContext';
 import { errorMessage } from '@/lib/utils/errors';
 import { formatDate } from '@/lib/utils/format';
 
@@ -37,13 +41,14 @@ export default function AttendancePage() {
 
   const [csvRows, setCsvRows] = useState<CsvRow[]>([]);
   const [csvFileName, setCsvFileName] = useState('');
-  const [csvMeetingCode, setCsvMeetingCode] = useState('');
-  const [forceUpload, setForceUpload] = useState(false);
   const [showManual, setShowManual] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const [showNewLecture, setShowNewLecture] = useState(false);
   const [newLectureDate, setNewLectureDate] = useState('');
   const [newLectureTime, setNewLectureTime] = useState('09:00');
-  const [newLectureMeeting, setNewLectureMeeting] = useState('');
+  const [batchTutors, setBatchTutors] = useState<Tutor[]>([]);
+  const [newLectureTutor, setNewLectureTutor] = useState('');
   const [newLectureNote, setNewLectureNote] = useState('');
   const [newLectureMode, setNewLectureMode] = useState<'online' | 'offline'>('online');
   const [newLectureDuration, setNewLectureDuration] = useState(DEFAULT_LECTURE_MINUTES);
@@ -54,6 +59,8 @@ export default function AttendancePage() {
   const creatingLecture = busy.has('create');
   const fileRef = useRef<HTMLInputElement>(null);
   const { showToast } = useToast();
+  const confirm = useConfirm();
+  const { user } = useAuth();
 
   const [lastReport, setLastReport] = useState<ProcessingReport | null>(null);
 
@@ -70,6 +77,7 @@ export default function AttendancePage() {
     resetCsv();
     try {
       setLectures(await getLecturesByBatch(batchId));
+      setBatchTutors(await getBatchTutors(batchId));
     } catch (err) {
       setLectures([]);
       showToast(errorMessage(err, 'Failed to load lectures for this batch'), 'error');
@@ -100,66 +108,50 @@ export default function AttendancePage() {
   const resetCsv = () => {
     setCsvRows([]);
     setCsvFileName('');
-    setCsvMeetingCode('');
-    setForceUpload(false);
     if (fileRef.current) fileRef.current.value = '';
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const readCsv = (file: File | undefined) => {
     if (!file) return;
-
     setCsvFileName(file.name);
-    setForceUpload(false);
 
     const reader = new FileReader();
     reader.onload = (ev) => {
       const text = ev.target?.result as string;
       const parsed = parseCsv(text);
       setCsvRows(parsed.rows);
-      setCsvMeetingCode(parsed.meetingCode ?? '');
     };
     reader.readAsText(file);
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => readCsv(e.target.files?.[0]);
+
+  const openImport = () => {
+    resetCsv();
+    setLastReport(null);
+    setShowImport(true);
+  };
+
+  const closeImport = () => {
+    if (processing) return;
+    setShowImport(false);
+    resetCsv();
+    setLastReport(null);
+  };
+
   const lecture = lectures.find((l) => l.id === selectedLecture);
-
-  // Only a lecture that already knows its code can disagree with the export.
-  const meetingCodeMismatch = Boolean(
-    csvRows.length > 0 &&
-    lecture?.session_type === 'online' &&
-    lecture.meeting_code &&
-    !meetingCodesMatch(lecture.meeting_code, csvMeetingCode),
-  );
-
-  // Re-upload guard: the pipeline upserts, so a duplicate would rewrite hand-corrected records. A warning, not a wall.
-  const looksAlreadyUploaded = Boolean(
-    records.length > 0 &&
-    csvRows.length > 0 &&
-    csvMeetingCode &&
-    lecture?.meeting_code &&
-    meetingCodesMatch(lecture.meeting_code, csvMeetingCode),
-  );
 
   // Uploads the CSV into the `uploads` table, then immediately processes it into
   // attendance records and clears the uploads — one action end-to-end for the admin.
   const handleUploadAndProcess = async () => {
-    if (!selectedLecture || csvRows.length === 0 || meetingCodeMismatch || !begin('upload')) return;
+    if (!selectedLecture || csvRows.length === 0 || !begin('upload')) return;
     setLastReport(null);
 
     try {
-      const code = lecture?.meeting_code || csvMeetingCode;
       // Anything still in `uploads` is left over from a run that failed; a clean run clears it.
       await clearUploads(selectedLecture);
-      await insertUploadRows(selectedLecture, code, lecture?.lecture_date, csvRows);
+      await insertUploadRows(selectedLecture, lecture?.lecture_date, csvRows);
       const report = await processAttendance(selectedLecture);
-
-      // Remember the code the export came with, so the next upload of the same
-      // file has something to be recognised against.
-      if (!lecture?.meeting_code && csvMeetingCode) {
-        await updateLecture(selectedLecture, { meeting_code: csvMeetingCode });
-        setLectures(await getLecturesByBatch(selectedBatch!));
-      }
 
       setLastReport(report);
       loadRecords(selectedLecture);
@@ -179,6 +171,34 @@ export default function AttendancePage() {
     finish('upload');
   };
 
+  // The tutor taking a new lecture: you, if you are one of the batch's tutors, else the first.
+  const defaultTutor = batchTutors.find((t) => t.id === user?.tutor_id)?.id ?? batchTutors[0]?.id ?? '';
+
+  // Present or partial, out of the students who applied (N/A rows left out).
+  const applicable = records.filter((r) => r.status !== 'no_appli').length;
+  const attended = records.filter((r) => r.status === 'present' || r.status === 'partial').length;
+
+  const handleDeleteLecture = async () => {
+    if (!selectedLecture || !lecture) return;
+    const accepted = await confirm({
+      title: `Delete the lecture on ${formatDate(lecture.lecture_date)}?`,
+      message: 'Attendance for this lecture is also deleted. This cannot be undone.',
+      confirmLabel: 'Delete lecture',
+      danger: true,
+    });
+    if (!accepted) return;
+    try {
+      await deleteLecture(selectedLecture);
+      setSelectedLecture(null);
+      setRecords([]);
+      resetCsv();
+      setLectures(await getLecturesByBatch(selectedBatch!));
+      showToast('Lecture deleted');
+    } catch (err) {
+      showToast(errorMessage(err, 'Failed to delete lecture'), 'error');
+    }
+  };
+
   const handleCreateLecture = async () => {
     if (!selectedBatch || !newLectureDate || !begin('create')) return;
     try {
@@ -187,7 +207,7 @@ export default function AttendancePage() {
       await createLecture({
         batch_id: selectedBatch,
         lecture_date: newLectureDate,
-        meeting_code: newLectureMeeting || undefined,
+        tutor_id: newLectureTutor || defaultTutor || null,
         note: newLectureNote || undefined,
         session_type: newLectureMode,
         scheduled_duration_minutes: newLectureDuration,
@@ -197,7 +217,7 @@ export default function AttendancePage() {
       setShowNewLecture(false);
       setNewLectureDate('');
       setNewLectureTime('09:00');
-      setNewLectureMeeting('');
+      setNewLectureTutor('');
       setNewLectureNote('');
       setNewLectureMode('online');
       setNewLectureDuration(DEFAULT_LECTURE_MINUTES);
@@ -236,6 +256,11 @@ export default function AttendancePage() {
           title="Select batch & lecture"
           action={selectedBatch && (
             <div className="flex gap-2">
+              {selectedLecture && (
+                <Button size="sm" variant="secondary" className="action-button-icon action-button-danger" onClick={() => void handleDeleteLecture()} aria-label="Delete this lecture" title="Delete this lecture">
+                  <Trash2 size={16} />
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="secondary"
@@ -243,10 +268,10 @@ export default function AttendancePage() {
                 onClick={handleExportCsv}
                 loading={exporting}
               >
-                <Download size={14} /> Export CSV
+                <Download size={14} /> Export
               </Button>
               <Button size="sm" className="action-button-compact" onClick={() => setShowNewLecture(true)}>
-                <Plus size={14} /> New Lecture
+                <Plus size={14} /> New
               </Button>
             </div>
           )}
@@ -270,87 +295,19 @@ export default function AttendancePage() {
       {selectedLecture && (
         <>
           <Card>
-            <CardHeader title="Upload CSV" />
-            <div className="space-y-4">
-              <input
-                ref={fileRef}
-                type="file"
-                accept=".csv"
-                onChange={handleFileChange}
-                className="block w-full text-sm text-[var(--text-muted)] file:mr-4 file:py-2 file:px-4 file:rounded-[var(--radius-md)] file:border-0 file:text-sm file:font-semibold file:bg-[var(--primary)] file:text-white hover:file:bg-[var(--primary-light)] file:cursor-pointer"
-              />
-
-              {csvFileName && (
-                <div className="p-3 rounded-[var(--radius-md)] bg-[var(--bg-elevated)]/50 text-sm">
-                  <span className="text-[var(--text-primary)] font-medium">{csvFileName}</span>
-                  <span className="text-[var(--text-muted)] ml-2">— {csvRows.length} participants parsed</span>
-                </div>
-              )}
-
-              {lastReport && lastReport.unmatched.length > 0 && (
-                <div className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-elevated)]/50 border border-[var(--border)] text-sm space-y-1.5">
-                  <p className="text-xs font-bold uppercase tracking-widest text-amber-500">Unmatched names</p>
-                  {lastReport.unmatched.map((u) => (
-                    <p key={u.name} className="text-[var(--text-secondary)]">
-                      <span className="font-semibold text-[var(--text-primary)]">{u.name}</span>
-                      <span className="text-[var(--text-muted)]"> — {u.reason}</span>
-                    </p>
-                  ))}
-                </div>
-              )}
-
-              {looksAlreadyUploaded && (
-                <div className="repo-notice is-warning">
-                  <AlertTriangle size={14} className="shrink-0" />
-                  <span>
-                    This lecture already has attendance from meeting code{' '}
-                    <strong>{lecture?.meeting_code}</strong>, and this file carries the same one —
-                    it looks like it has been uploaded already. Re-processing rewrites automated
-                    records; hand-edited ones stay.
-                  </span>
-                </div>
-              )}
-
-              {meetingCodeMismatch && (
-                <div className="repo-notice is-warning">
-                  <AlertTriangle size={14} className="shrink-0" />
-                  <span>
-                    Meet code mismatch. Lecture: <strong>{lecture?.meeting_code || 'missing'}</strong> · CSV: <strong>{csvMeetingCode || 'missing'}</strong>
-                  </span>
-                </div>
-              )}
-
-              {showUploadAction && (
-                meetingCodeMismatch ? null : looksAlreadyUploaded && !forceUpload ? (
-                  <div className="flex flex-wrap gap-2">
-                    <Button variant="secondary" onClick={() => setForceUpload(true)}>
-                      Upload anyway
-                    </Button>
-                    <Button variant="ghost" onClick={resetCsv}>Choose another file</Button>
-                  </div>
-                ) : (
-                  <Button onClick={handleUploadAndProcess} loading={processing}>
-                    <Upload size={16} /> Upload &amp; Process Attendance
-                  </Button>
-                )
-              )}
-
-              {processing && (
-                <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
-                  <Loader2 size={16} className="animate-spin" />
-                  Processing attendance — matching students and calculating status...
-                </div>
-              )}
-            </div>
-          </Card>
-
-          <Card>
             <CardHeader
               title="Attendance records"
+              className="card-header-gap"
+              titleAdornment={records.length > 0 && <Badge variant={applicable > 0 && attended === applicable ? 'success' : 'default'}>{attended}/{applicable} attended</Badge>}
               action={
-                <Button size="sm" variant="secondary" className="action-button-compact" onClick={() => setShowManual(true)}>
-                  <PenLine size={14} /> Mark manually
-                </Button>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="secondary" className="action-button-compact" onClick={openImport}>
+                    <Upload size={14} /> CSV
+                  </Button>
+                  <Button size="sm" variant="secondary" className="action-button-compact" onClick={() => setShowManual(true)}>
+                    <PenLine size={14} /> Edit
+                  </Button>
+                </div>
               }
             />
             {loadingRecords ? (
@@ -365,10 +322,90 @@ export default function AttendancePage() {
       )}
 
       <Modal
+        open={showImport}
+        onClose={closeImport}
+        title="Import attendance CSV"
+        size="lg"
+        footer={
+          <>
+            <Button variant="ghost" onClick={closeImport} disabled={processing}>{lastReport && csvRows.length === 0 ? 'Done' : 'Cancel'}</Button>
+            {showUploadAction && (
+              <Button className="action-button-compact" onClick={handleUploadAndProcess} loading={processing}>
+                <Upload size={16} /> Upload &amp; Process
+              </Button>
+            )}
+          </>
+        }
+      >
+        {lastReport && csvRows.length === 0 ? (
+          <div className="flex flex-col gap-3 text-sm text-[var(--text-secondary)]">
+            <p>
+              {lastReport.attendanceInserted} attendance records created
+              {lastReport.duplicateRowsIgnored > 0 ? ` · ${lastReport.duplicateRowsIgnored} duplicate rows merged` : ''}
+              {lastReport.existingKept > 0 ? ` · ${lastReport.existingKept} manual records kept` : ''}
+            </p>
+            {lastReport.unmatched.length > 0 && (
+              <div className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-elevated)]/50 border border-[var(--border)] space-y-1.5">
+                <p className="text-xs font-bold uppercase tracking-widest text-amber-500">Unmatched names</p>
+                {lastReport.unmatched.map((u) => (
+                  <p key={u.name}>
+                    <span className="font-semibold text-[var(--text-primary)]">{u.name}</span>
+                    <span className="text-[var(--text-muted)]"> — {u.reason}</span>
+                  </p>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4">
+            <label
+              className={`csv-drop ${dragging ? 'is-over' : ''}`}
+              onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={(event) => { event.preventDefault(); setDragging(false); readCsv(event.dataTransfer.files[0]); }}
+            >
+              <Upload size={22} aria-hidden="true" />
+              <span>{csvFileName ? csvFileName : 'Drop the CSV here, or choose a file'}</span>
+              <input ref={fileRef} type="file" accept=".csv" onChange={handleFileChange} className="hidden" disabled={processing} />
+            </label>
+
+            {csvRows.length > 0 && (
+              <>
+                <p className="text-sm text-[var(--text-muted)]">{csvRows.length} participants found</p>
+                <Table maxHeight="16rem" className="data-table-compact">
+                  <THead>
+                    <TR>
+                      <TH>Participant</TH>
+                      <TH>Attended</TH>
+                    </TR>
+                  </THead>
+                  <TBody>
+                    {csvRows.map((row) => (
+                      <TR key={row.sno}>
+                        <TD className="font-medium text-[var(--text-primary)]">{row.participant_name_raw}</TD>
+                        <TD className="cell-secondary">{row.attended_minutes != null ? `${row.attended_minutes} min` : row.attended_duration_raw || '—'}</TD>
+                      </TR>
+                    ))}
+                  </TBody>
+                </Table>
+              </>
+            )}
+
+            {processing && (
+              <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
+                <Loader2 size={16} className="animate-spin" />
+                Processing attendance — matching students and calculating status...
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+
+      <Modal
         open={showManual}
         onClose={() => setShowManual(false)}
         title="Mark attendance"
-        description={lecture ? `${formatDate(lecture.lecture_date)}${lecture.meeting_code ? ` · ${lecture.meeting_code}` : ''}` : undefined}
+        description={lecture ? `${formatDate(lecture.lecture_date)}${lecture.tutor ? ` · ${lecture.tutor.name}` : ''}` : undefined}
         size="xl"
       >
         {selectedLecture && selectedBatch && (
@@ -404,8 +441,16 @@ export default function AttendancePage() {
               ariaLabel="Lecture date"
             />
           </FormField>
-          <FormField label="Meeting Code">
-            <input value={newLectureMeeting} onChange={(e) => setNewLectureMeeting(e.target.value)} />
+          <FormField label="Tutor" required>
+            <SearchSelect
+              options={batchTutors.map((tutor) => ({ value: tutor.id, label: tutor.name }))}
+              value={newLectureTutor || defaultTutor || null}
+              onChange={setNewLectureTutor}
+              placeholder="Select a tutor"
+              searchPlaceholder="Search tutors"
+              emptyText="No tutors assigned to this batch"
+              showSearch={batchTutors.length > 6}
+            />
           </FormField>
           <div className="grid grid-cols-2 gap-4">
             <FormField label="Mode" required>

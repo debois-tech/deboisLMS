@@ -1,3 +1,4 @@
+import { techError } from '@/lib/utils/errors';
 import { supabase } from '@/lib/supabase/client';
 import type { ExistingRecord } from './consolidate';
 import { DEFAULT_LECTURE_MINUTES } from './types';
@@ -16,7 +17,7 @@ export async function loadUploadRows(lectureId: string): Promise<RawUploadRow[]>
     .eq('lecture_id', lectureId)
     .order('sno');
 
-  if (error) throw new Error(`Failed to read uploads: ${error.message}`);
+  if (error) throw techError('Failed to read uploads', error.message);
   return (data ?? []) as RawUploadRow[];
 }
 
@@ -25,13 +26,13 @@ export async function loadProcessingContext(lectureId: string): Promise<Processi
   const [lectureRes, tutorsRes] = await Promise.all([
     supabase
       .from('lectures')
-      .select('id, batch_id, lecture_date, meeting_code, scheduled_duration_minutes')
+      .select('id, batch_id, lecture_date, scheduled_duration_minutes')
       .eq('id', lectureId)
       .maybeSingle(),
     supabase.from('tutors').select('id, name'),
   ]);
 
-  if (lectureRes.error) throw new Error(`Failed to load lecture: ${lectureRes.error.message}`);
+  if (lectureRes.error) throw techError('Failed to load lecture', lectureRes.error.message);
   const lecture = lectureRes.data;
   if (!lecture) throw new Error(`Lecture ${lectureId} not found`);
 
@@ -43,7 +44,7 @@ export async function loadProcessingContext(lectureId: string): Promise<Processi
     .eq('batch_id', lecture.batch_id)
     .eq('status', 'active');
 
-  if (rosterRes.error) throw new Error(`Failed to load roster: ${rosterRes.error.message}`);
+  if (rosterRes.error) throw techError('Failed to load roster', rosterRes.error.message);
 
   type RosterRow = { student_id: string; joined_at: string | null; students: { id: string; name: string } | null };
 
@@ -61,7 +62,6 @@ export async function loadProcessingContext(lectureId: string): Promise<Processi
     batchId: lecture.batch_id,
     lectureDate: lecture.lecture_date,
     scheduledMinutes: lecture.scheduled_duration_minutes ?? DEFAULT_LECTURE_MINUTES,
-    meetingCode: lecture.meeting_code,
     roster,
     tutors,
     batchTutorIds,
@@ -75,7 +75,7 @@ export async function loadExistingAttendance(lectureId: string): Promise<Existin
     .select('student_id, source')
     .eq('lecture_id', lectureId);
 
-  if (error) throw new Error(`Failed to read existing attendance: ${error.message}`);
+  if (error) throw techError('Failed to read existing attendance', error.message);
   return (data ?? []) as ExistingRecord[];
 }
 
@@ -88,12 +88,12 @@ export async function insertAttendance(payloads: AttendanceInsertPayload[]): Pro
     .upsert(payloads, { onConflict: 'student_id,lecture_id' })
     .select('id');
 
-  if (error) throw new Error(`Failed to insert attendance: ${error.message}`);
+  if (error) throw techError('Failed to insert attendance', error.message);
   return (data ?? []).length;
 }
 
 /** Delete all upload rows for a lecture. Only called after the attendance insert succeeded. */
 export async function clearUploads(lectureId: string): Promise<void> {
   const { error } = await supabase.from('uploads').delete().eq('lecture_id', lectureId);
-  if (error) throw new Error(`Failed to clear uploads: ${error.message}`);
+  if (error) throw techError('Failed to clear uploads', error.message);
 }

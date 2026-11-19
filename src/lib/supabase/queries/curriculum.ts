@@ -51,7 +51,7 @@ export async function setCurriculumStatus(nodeId: string, status: CurriculumStat
   window.dispatchEvent(new Event(NOTICES_CHANGED));
 }
 
-// Topics done over topics, per batch (just one when given). A batch without topics is absent.
+// Topics done over topics (skipped ones left out), per batch (just one when given). A batch without topics is absent.
 // Paged, because the API hands back at most 1000 rows a call.
 export async function getCurriculumProgress(batchId?: string): Promise<Map<string, { done: number; total: number }>> {
   const PAGE = 1000;
@@ -64,7 +64,8 @@ export async function getCurriculumProgress(batchId?: string): Promise<Map<strin
     );
     for (const { batch_id, status } of page) {
       const entry = progress.get(batch_id) ?? { done: 0, total: 0 };
-      entry.total += 1;
+      // Skipped topics are left out of the total.
+      if (status !== 'skipped') entry.total += 1;
       if (status === 'done') entry.done += 1;
       progress.set(batch_id, entry);
     }

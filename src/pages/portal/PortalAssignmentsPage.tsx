@@ -13,7 +13,7 @@ import {
   type StudentAssignment,
   usePortalStudentId,
 } from '@/components/portal';
-import { NOTICES_CHANGED, getAssignmentsForStudent, getStudentRepo, submitAssignmentFromPortal } from '@/lib/supabase';
+import { NOTICES_CHANGED, getAssignmentsForStudent, getLatestSubmissionRepo, submitAssignmentFromPortal } from '@/lib/supabase';
 import { assignmentState, formatDueLabel, isDueSoon, isOverdue, type AssignmentState } from '@/lib/utils/deadline';
 import { formatDate } from '@/lib/utils/format';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
@@ -43,22 +43,22 @@ export default function PortalAssignmentsPage() {
   const now = useNow();
   const { current, batchId } = usePortalBatch();
 
-  // The saved repo loads with the assignments, so the submit view can prefill the link immediately.
+  // The last link they handed in loads with the assignments, so the submit view can prefill it immediately.
   const load = useCallback(async () => {
     if (!studentId || !batchId) return;
     const [data, repo] = await Promise.all([
       getAssignmentsForStudent(studentId),
-      getStudentRepo(studentId, batchId),
+      getLatestSubmissionRepo(studentId),
     ]);
     setAssignments(data.filter((item) => item.batch_id === batchId));
-    setRepoUrl(repo?.repo_url);
+    setRepoUrl(repo);
   }, [studentId, batchId]);
 
   const { loading, error, retry } = useInitialLoad(load, true);
 
   const handleSubmit = async (url: string) => {
     if (!studentId || !open) return;
-    await submitAssignmentFromPortal(open.id, studentId, open.batch_id, url);
+    await submitAssignmentFromPortal(open.id, studentId, url);
     window.dispatchEvent(new Event(NOTICES_CHANGED));
     // Already saved, so a failed refresh must not surface as "Could not submit".
     try {
@@ -141,7 +141,6 @@ export default function PortalAssignmentsPage() {
       action={
         assignments.length > 0 ? (
           <SearchBar
-            className="portal-search"
             value={query}
             onChange={handleQuery}
             placeholder="Search assignments"
@@ -188,7 +187,8 @@ export default function PortalAssignmentsPage() {
 
       <AssignmentModal
         assignment={open}
-        repoUrl={repoUrl}
+        // A handed-in assignment shows its own link; an open one starts from the last one used.
+        repoUrl={open?.completion?.repo_url ?? repoUrl}
         now={now}
         closed={Boolean(current?.batch?.ended_at)}
         onClose={() => setOpen(null)}

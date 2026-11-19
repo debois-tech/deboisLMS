@@ -1,3 +1,4 @@
+import { techError } from '@/lib/utils/errors';
 import { supabase } from '../client';
 import { rows as unwrapRows } from './result';
 import type { AttendanceRecord, AttendanceStatus, AttendanceSource } from '@/lib/types';
@@ -46,7 +47,6 @@ export async function getAttendanceByStudent(studentId: string): Promise<Attenda
 
 export async function insertUploadRows(
   lectureId: string,
-  meetingCode: string,
   lectureDate: string | undefined,
   rows: { sno: number; participant_name_raw: string; attendance_started?: string; joined_at?: string; attendance_stopped?: string; attended_duration_raw?: string; attended_minutes?: number }[]
 ): Promise<void> {
@@ -59,12 +59,11 @@ export async function insertUploadRows(
     attendance_stopped: normalizeTimestampForDb(r.attendance_stopped, lectureDate),
     attended_duration_raw: r.attended_duration_raw ?? null,
     attended_minutes: r.attended_minutes ?? null,
-    meeting_code: meetingCode,
     processed: false,
   }));
 
   const { error } = await supabase.from('uploads').insert(records);
-  if (error) throw new Error(`Failed to upload rows: ${error.message}`);
+  if (error) throw techError('Failed to upload rows', error.message);
 }
 
 /** One student's rows in one batch, with their lectures, for staff. Unlike the portal's, this keeps the not-marked ones. */
@@ -96,5 +95,5 @@ export async function saveAttendance(batchId: string, lectureId: string, marks: 
     })),
     { onConflict: 'student_id,lecture_id' },
   );
-  if (error) throw new Error(`Could not save the attendance: ${error.message}`);
+  if (error) throw techError('Could not save the attendance', error.message);
 }

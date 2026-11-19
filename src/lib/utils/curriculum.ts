@@ -14,9 +14,34 @@ export function childMap<T extends Linked>(nodes: T[]): Map<string | null, T[]> 
   return map;
 }
 
-/** Empty, then done, then skipped, then back to empty. */
-export function nextStatus(status: CurriculumStatus): CurriculumStatus {
-  return status === 'todo' ? 'done' : status === 'done' ? 'skipped' : 'todo';
+/** The tick box flips todo and done; the Skip button flips todo and skipped. Pressing the one you are in clears it. */
+export function toggled(status: CurriculumStatus, target: 'done' | 'skipped'): CurriculumStatus {
+  return status === target ? 'todo' : target;
+}
+
+/**
+ * A card with children follows them: finished once every child is done or skipped and at least one is done,
+ * skipped when all are skipped, otherwise empty. Its date is the last child's. Cards without children keep their own.
+ * The database does the same (refresh_curriculum_parents), so this only makes the screen answer before it does.
+ */
+export function deriveStatuses<T extends Linked & { status: CurriculumStatus; done_on: string | null }>(nodes: T[]): T[] {
+  const kids = childMap(nodes);
+  const settled = new Map<string, Pick<T, 'status' | 'done_on'>>();
+  const resolve = (node: T): Pick<T, 'status' | 'done_on'> => {
+    const cached = settled.get(node.id);
+    if (cached) return cached;
+    const below = (kids.get(node.id) ?? []).map(resolve);
+    let result: Pick<T, 'status' | 'done_on'> = { status: node.status, done_on: node.done_on } as Pick<T, 'status' | 'done_on'>;
+    if (below.length > 0) {
+      const done = below.filter((kid) => kid.status === 'done');
+      const status: CurriculumStatus = below.some((kid) => kid.status === 'todo') ? 'todo' : done.length > 0 ? 'done' : 'skipped';
+      const done_on = status === 'done' ? done.reduce<string | null>((latest, kid) => (kid.done_on && (!latest || kid.done_on > latest) ? kid.done_on : latest), null) : null;
+      result = { status, done_on } as Pick<T, 'status' | 'done_on'>;
+    }
+    settled.set(node.id, result);
+    return result;
+  };
+  return nodes.map((node) => ({ ...node, ...resolve(node) }));
 }
 
 export type CurriculumFilter = 'all' | 'done' | 'todo';
@@ -38,21 +63,10 @@ export function countBelow(byParent: Map<string | null, Linked[]>, id: string): 
   return (byParent.get(id) ?? []).reduce((sum, kid) => sum + 1 + countBelow(byParent, kid.id), 0);
 }
 
-// Each batch counts once, whatever its size; batches with no curriculum yet are left out.
-export function averageProgress(
-  progress: Map<string, { done: number; total: number }>,
-  batchIds: string[],
-): { percent: number; batches: number } | null {
-  const shares = batchIds.flatMap((id) => {
-    const entry = progress.get(id);
-    return entry && entry.total > 0 ? [entry.done / entry.total] : [];
-  });
-  return shares.length ? { percent: Math.round((100 * shares.reduce((sum, share) => sum + share, 0)) / shares.length), batches: shares.length } : null;
-}
-
-/** Only done counts: a skipped child keeps the bar below full. */
+/** Skipped children are left out of the total: they never lower the bar and never raise it. */
 export function progressOf(kids: { status: CurriculumStatus }[]): { done: number; total: number } {
-  return { done: kids.filter((kid) => kid.status === 'done').length, total: kids.length };
+  const counted = kids.filter((kid) => kid.status !== 'skipped');
+  return { done: counted.filter((kid) => kid.status === 'done').length, total: counted.length };
 }
 
 export function doneByDate(nodes: CurriculumNode[]): Map<string, CurriculumNode[]> {

@@ -22,6 +22,7 @@ const enrollment: Record<MappingStatus, [string, Tone]> = {
   active: ['Ongoing', 'success'],
   archived: ['Finished', 'default'],
   transferred: ['Moved', 'default'],
+  removed: ['Ended', 'default'],
   terminated: ['Ended', 'default'],
 };
 

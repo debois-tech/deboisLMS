@@ -50,6 +50,7 @@ export default function ExamsPage() {
 }
 
 function LiveQuizzes({ base }: { base: string }) {
+  const { isDeveloper } = useAuth();
   const navigate = useNavigate();
   const deleteWithConfirm = useDeleteQuiz();
   const [quizzes, setQuizzes] = useState<QuizListItem[]>([]);
@@ -92,16 +93,18 @@ function LiveQuizzes({ base }: { base: string }) {
           ]}
         />
         <div className="flex items-center gap-3">
-          <SearchSelect
-            options={VIEW_OPTIONS}
-            value={view}
-            onChange={setView}
-            placeholder="Original"
-            searchPlaceholder=""
-            emptyText=""
-            showSearch={false}
-            className="!w-auto !max-w-none"
-          />
+          {isDeveloper && (
+            <SearchSelect
+              options={VIEW_OPTIONS}
+              value={view}
+              onChange={setView}
+              placeholder="Original"
+              searchPlaceholder=""
+              emptyText=""
+              showSearch={false}
+              className="!w-auto !max-w-none"
+            />
+          )}
           <Button className="action-button-compact" onClick={() => navigate(`${base}/new`)}>
             <Plus size={16} /> New quiz
           </Button>

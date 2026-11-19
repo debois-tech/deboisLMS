@@ -1,93 +1,55 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, ArrowUpRight, Layers } from 'lucide-react';
+import { ArrowUpRight, Layers } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { StatCard } from '@/components/ui/StatCard';
-import { getDashboardStats, getRecentActivity, type DashboardStats, type RecentActivity } from '@/lib/supabase';
-import { getBatches, getCurriculumProgress, getEarningBreakdown, processDocumentCleanup } from '@/lib/supabase';
-import { CurriculumAverage } from '@/components/curriculum/CurriculumAverage';
+import { useAuth } from '@/lib/context/AuthContext';
+import { greetingParts } from '@/lib/utils/loginIntro';
+import { getRecentActivity, type RecentActivity } from '@/lib/supabase';
+import { getBatches, getCurriculumProgress, processDocumentCleanup } from '@/lib/supabase';
 import { ProgressBar } from '@/components/ui/ProgressBar';
-import { averageProgress } from '@/lib/utils/curriculum';
-import { EarningBreakdownModal } from '@/components/finance/EarningBreakdownModal';
-import type { Batch, EarningBreakdown } from '@/lib/types';
-import { timeAgo, formatCurrency } from '@/lib/utils/format';
+import type { Batch } from '@/lib/types';
+import { timeAgo } from '@/lib/utils/format';
 
 export default function DashboardPage() {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const { user } = useAuth();
   const [activity, setActivity] = useState<RecentActivity[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
-  const [breakdown, setBreakdown] = useState<EarningBreakdown[]>([]);
-  const [breakdownOpen, setBreakdownOpen] = useState(false);
   const [progress, setProgress] = useState<Map<string, { done: number; total: number }>>(new Map());
 
   const { loading, error, retry } = useInitialLoad(async () => {
     // Files queued for removal by terminate and the 90-day clean-up
     void processDocumentCleanup().catch(console.error);
-    const [s, a, b, e, p] = await Promise.all([
-      getDashboardStats(),
+    const [a, b, p] = await Promise.all([
       getRecentActivity(),
       getBatches(),
-      getEarningBreakdown(),
       getCurriculumProgress(),
     ]);
-    setStats(s);
     setActivity(a);
     setBatches(b);
-    setBreakdown(e);
     setProgress(p);
   });
 
-  if (loading) return <Spinner centered />;
-  if (error) return <ErrorState centered message={error} onRetry={retry} />;
-
   const ongoingBatches = batches.filter((b) => b.status === 'ongoing' && !b.is_test);
-  const average = averageProgress(progress, ongoingBatches.map((batch) => batch.id));
+  const { lead, name } = greetingParts(new Date().getHours(), user?.full_name);
 
   return (
-    <div className="page-section">
-      <PageHeader title="Dashboard" />
-
-      <div className="fluid-grid">
-        <StatCard label="Total Batches" value={stats?.total_batches ?? 0} />
-        <StatCard label="Active Batches" value={stats?.active_batches ?? 0} />
-        <StatCard label="Total Students" value={stats?.total_students ?? 0} />
-        <StatCard
-          label="Fees Collected"
-          value={formatCurrency(stats?.total_fees_collected ?? 0)}
-          valueClassName="text-[var(--success-text)]"
-          onClick={() => setBreakdownOpen(true)}
-          actionLabel="Fees collected — open the earning breakdown"
-        />
-        <StatCard
-          label="Pending Due"
-          value={formatCurrency(stats?.total_fees_outstanding ?? 0)}
-          valueClassName="text-[var(--danger-text)]"
-          onClick={() => setBreakdownOpen(true)}
-          actionLabel="Pending due — open the earning breakdown"
-        />
-        <StatCard
-          label="Earning breakdown"
-          value={<ArrowRight size={18} />}
-          valueClassName="text-[var(--text-muted)]"
-          onClick={() => setBreakdownOpen(true)}
-          actionLabel="Open the earning breakdown"
-        />
-      </div>
-
-      <CurriculumAverage average={average} outOf={ongoingBatches.length} />
-
-      <EarningBreakdownModal
-        open={breakdownOpen}
-        onClose={() => setBreakdownOpen(false)}
-        breakdown={breakdown}
+    <div className="page-section" data-intro-ready={loading ? undefined : '1'}>
+      <PageHeader
+        intro
+        title={<>{lead}{name && <>, <span className="greeting-name">{name}</span></>}!</>}
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {loading ? (
+        <Spinner centered />
+      ) : error ? (
+        <ErrorState centered message={error} onRetry={retry} />
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>
           <CardHeader title="Active Batches"/>
           <div className="dashboard-section-content">
@@ -138,7 +100,8 @@ export default function DashboardPage() {
           )}
           </div>
         </Card>
-      </div>
+        </div>
+      )}
     </div>
   );
 }

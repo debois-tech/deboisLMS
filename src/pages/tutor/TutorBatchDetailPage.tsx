@@ -55,7 +55,7 @@ export default function TutorBatchDetailPage() {
             <StatusPill kind="batch" value={batch.status} />
           </div>
           <p className="text-sm text-[var(--text-muted)] mt-0.5">
-            {programLabel ?? 'No programme'} • Started {batch.start_date ? formatDate(batch.start_date) : 'N/A'}
+            {programLabel ?? 'No programme'} • Started {batch.start_date ? formatDate(batch.start_date) : 'N/A'}{batch.ended_at && <> • Ended {formatDate(batch.ended_at)}</>}
           </p>
         </div>
       </div>
@@ -71,7 +71,7 @@ export default function TutorBatchDetailPage() {
           { label: 'Badges', value: 'badges' },
           { label: 'Material', value: 'material' },
         ]}
-        defaultValue={searchParams.get('tab') ?? 'overview'}
+        defaultValue="overview"
       >
         {(active) => (
           <>
@@ -99,7 +99,8 @@ function TutorBatchStudentsTab({ batchId }: { batchId: string }) {
   const [students, setStudents] = useState<(Student & { mapping: BatchStudentMapping })[]>([]);
 
   const load = useCallback(async () => {
-    setStudents(await getBatchStudents(batchId));
+    // A removed student is a hidden record
+    setStudents((await getBatchStudents(batchId)).filter((s) => s.mapping.status !== 'removed'));
   }, [batchId]);
 
   const { error, reload } = useReloadableSection(load);

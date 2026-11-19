@@ -4,6 +4,7 @@ import { ChevronDown, LogOut, Menu, Moon, Sun } from 'lucide-react';
 import { PortalNav } from '@/components/layout/PortalNav';
 import { MaintenancePage } from '@/components/portal';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
+import { ReportBug } from '@/components/feedback/ReportBug';
 import { useAuth } from '@/lib/context/AuthContext';
 import { useTheme } from '@/lib/context/ThemeContext';
 import { supabase } from '@/lib/supabase/client';
@@ -11,6 +12,7 @@ import { getMaintenanceMode } from '@/lib/supabase';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { Spinner } from '@/components/ui/Spinner';
 import { PortalBatchProvider, usePortalBatch } from '@/lib/context/PortalBatchContext';
+import { LoginIntro } from '@/components/layout/LoginIntro';
 import { useNow } from '@/lib/hooks/useNow';
 import { formatDate } from '@/lib/utils/format';
 
@@ -87,6 +89,7 @@ export default function PortalLayout() {
         </div>
 
         <div className="flex items-center gap-1">
+        <ReportBug />
         <NotificationBell />
         <div className="relative" ref={menuRef}>
           <button
@@ -147,6 +150,7 @@ export default function PortalLayout() {
       <PortalNav open={navOpen} onClose={() => setNavOpen(false)} />
 
       <PortalMain />
+      <LoginIntro />
     </div>
     </PortalBatchProvider>
   );

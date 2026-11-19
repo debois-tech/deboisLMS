@@ -36,12 +36,11 @@ export function AttendanceRecordsTable({ records, maxHeight = '24rem' }: Attenda
   return (
     <div className="table-block">
       <SearchFilterBar
-        className="max-w-sm"
         value={search}
         onChange={setSearch}
         placeholder="Search by student name, email or phone"
         filterLabel="Status"
-        allLabel="All statuses"
+        allLabel="All"
         filterValue={statusFilter}
         filterOptions={STATUS_OPTIONS}
         onFilterChange={(value) => setStatusFilter(value as AttendanceStatus | null)}
@@ -53,7 +52,6 @@ export function AttendanceRecordsTable({ records, maxHeight = '24rem' }: Attenda
         <Table maxHeight={maxHeight}>
           <THead>
             <TR>
-              <TH align="center" className="w-12">#</TH>
               <TH>Student</TH>
               <TH>Status</TH>
               <TH>Minutes</TH>
@@ -61,10 +59,9 @@ export function AttendanceRecordsTable({ records, maxHeight = '24rem' }: Attenda
             </TR>
           </THead>
           <TBody>
-            {filtered.map((r, index) => (
+            {filtered.map((r) => (
               <TR key={r.id}>
-                <TD align="center" className="cell-muted">{index + 1}</TD>
-                <TD>
+                  <TD>
                   <p className="font-medium text-[var(--text-primary)]">{r.student?.name ?? 'Unknown student'}</p>
                   {(r.student?.email || r.student?.phone) && (
                     <p className="cell-muted mt-0.5 text-xs">{r.student.email ?? r.student.phone}</p>

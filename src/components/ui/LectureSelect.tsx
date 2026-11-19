@@ -10,7 +10,7 @@ interface LectureSelectProps {
 }
 
 function lectureLabel(lecture: Lecture) {
-  return `${formatDate(lecture.lecture_date)}${lecture.meeting_code ? ` (${lecture.meeting_code})` : ''}`;
+  return `${formatDate(lecture.lecture_date)}${lecture.tutor ? ` (${lecture.tutor.name})` : ''}`;
 }
 
 export function LectureSelect({ lectures, value, onChange }: LectureSelectProps) {
@@ -19,12 +19,13 @@ export function LectureSelect({ lectures, value, onChange }: LectureSelectProps)
       options={lectures.map((lecture) => ({
         value: lecture.id,
         label: lectureLabel(lecture),
+        searchText: `${lectureLabel(lecture)} ${lecture.lecture_date}`,
         icon: <CalendarDays size={15} className="shrink-0 text-[var(--primary)]" />,
       }))}
       value={value}
       onChange={onChange}
       placeholder="Select a lecture"
-      searchPlaceholder="Search lectures"
+      searchPlaceholder="Search by date or tutor"
       emptyText="No lectures found"
       renderOption={(option) => (
         <span className="flex min-w-0 items-center gap-2">

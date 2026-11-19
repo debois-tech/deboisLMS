@@ -3,8 +3,7 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 /**
  * Mails a certificate or offer letter that an admin already generated and stored (see
  * generateAndStoreDocument in queries/documents.ts). The client sends only ids — this
- * function reads the stored path and the release flag itself, so a client showing a stale
- * "Shared" state cannot mail a document that was never actually released.
+ * function reads the stored path itself. Emailing is independent of LMS access.
  */
 
 const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') ?? '')
@@ -73,7 +72,7 @@ Deno.serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } },
     );
     const { data: { user: caller } } = await callerClient.auth.getUser();
-    if (!caller || caller.app_metadata?.role !== 'admin') {
+    if (!caller || !['admin', 'developer'].includes(caller.app_metadata?.role)) {
       return json({ error: 'Admin only' }, 403);
     }
 
@@ -83,28 +82,27 @@ Deno.serve(async (req) => {
     );
 
     const pathColumn = doc_type === 'offer_letter' ? 'offer_letter_path' : 'cert_path';
-    const sharedColumn = doc_type === 'offer_letter' ? 'offer_letter_shared' : 'cert_shared';
 
     const { data: mapping, error: mappingError } = await adminClient
       .from('batch_student_mapping')
-      .select(`${pathColumn}, ${sharedColumn}`)
+      .select(pathColumn)
       .eq('student_id', student_id)
       .eq('batch_id', batch_id)
-      .maybeSingle<Record<string, string | boolean | null>>();
+      .maybeSingle<Record<string, string | null>>();
     if (mappingError) throw mappingError;
 
-    if (!mapping?.[sharedColumn]) {
-      return json({ error: 'This document has not been released to the student yet.' }, 403);
-    }
-    const path = mapping[pathColumn] as string | null;
+    const path = mapping?.[pathColumn] ?? null;
     if (!path) return json({ error: 'This document has not been generated yet.' }, 404);
 
     const { data: student, error: studentError } = await adminClient
       .from('students')
-      .select('name, email')
+      .select('name, email, is_test')
       .eq('id', student_id)
       .single();
     if (studentError || !student) return json({ error: 'Student not found' }, 404);
+    if (caller.app_metadata?.role === 'developer' && !student.is_test) {
+      return json({ error: 'Developers can only email test students' }, 403);
+    }
     if (!student.email) return json({ error: 'No email on file for this student' }, 400);
 
     const { data: file, error: downloadError } = await adminClient.storage.from('documents').download(path);

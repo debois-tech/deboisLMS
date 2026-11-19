@@ -9,8 +9,7 @@ import { SearchBar } from '@/components/ui/SearchBar';
 import { FilterTabs } from '@/components/ui/FilterTabs';
 import { StatusPill } from '@/components/ui/StatusPill';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
-import { StudentLink } from '@/components/students/StudentLink';
-import { getAllFeedback, setFeedbackStatus } from '@/lib/supabase';
+import { getFeedback, setFeedbackStatus } from '@/lib/supabase';
 import type { Feedback, FeedbackStatus } from '@/lib/types';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
 import { useToast } from '@/lib/context/ToastContext';
@@ -30,13 +29,13 @@ export default function FeedbackPage() {
   const { showToast } = useToast();
 
   const { loading, error, retry } = useInitialLoad(async () => {
-    setReports(await getAllFeedback());
+    setReports(await getFeedback());
   });
 
   const term = search.trim().toLowerCase();
   const matches = (report: Feedback) =>
     !term ||
-    `${report.message} ${report.student?.name ?? ''} ${report.student?.student_code ?? ''}`
+    `${report.message} ${report.reporter_name ?? ''} ${report.reporter_role ?? ''}`
       .toLowerCase()
       .includes(term);
 
@@ -65,27 +64,28 @@ export default function FeedbackPage() {
 
   return (
     <div className="page-section">
-      <PageHeader title="Feedback" />
+      <PageHeader title="Bug report" />
 
       {reports.length === 0 ? (
-        <EmptyState icon={<MessageSquare size={32} />} title="No feedback yet" />
+        <EmptyState icon={<MessageSquare size={32} />} title="No reports yet" />
       ) : (
         <>
-          <div className="mb-4 max-w-md">
-            <SearchBar value={search} onChange={setSearch} placeholder="Search by student or text" />
-          </div>
-
           <div className="mb-4">
             <FilterTabs tabs={tabs} value={status} onChange={setStatus} label="Feedback status" />
           </div>
 
+          <div className="mb-4">
+            <SearchBar value={search} onChange={setSearch} placeholder="Search by name, role or text" />
+          </div>
+
           {visible.length === 0 ? (
-            <EmptyState icon={<MessageSquare size={32} />} title={`No ${status} feedback`} />
+            <EmptyState icon={<MessageSquare size={32} />} title={`No ${status} reports`} />
           ) : (
             <Table maxHeight="none">
               <THead>
                 <TR>
-                  <TH>Student</TH>
+                  <TH>From</TH>
+                  <TH>Role</TH>
                   <TH>Type</TH>
                   <TH>Message</TH>
                   <TH>Page</TH>
@@ -97,11 +97,8 @@ export default function FeedbackPage() {
               <TBody>
                 {visible.map((report) => (
                   <TR key={report.id}>
-                    <TD>
-                      {report.student
-                        ? <StudentLink studentId={report.student.id} name={report.student.name} />
-                        : '—'}
-                    </TD>
+                    <TD className="font-medium">{report.reporter_name || '—'}</TD>
+                    <TD className="cell-secondary capitalize">{report.reporter_role || '—'}</TD>
                     <TD className="cell-secondary">{report.kind === 'bug' ? 'Bug' : 'Request'}</TD>
                     <TD className="feedback-message">{report.message}</TD>
                     <TD className="cell-muted font-mono">{report.page || '—'}</TD>

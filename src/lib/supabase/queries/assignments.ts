@@ -1,6 +1,7 @@
+import { techError } from '@/lib/utils/errors';
 import { supabase } from '../client';
 import { deleteMaterial, getMaterialsByAssignment } from './materials';
-import type { Assignment, AssignmentCompletion, StudentRepo, SubmissionChannel } from '@/lib/types';
+import type { Assignment, AssignmentCompletion, SubmissionChannel } from '@/lib/types';
 
 /** One row per active student in the batch — exactly the admin submission table (and its CSV). */
 export interface AssignmentSubmissionRow {
@@ -73,7 +74,7 @@ export async function deleteAssignment(id: string): Promise<void> {
   await Promise.all(materials.map((material) => deleteMaterial(material)));
 
   const { error } = await supabase.from('assignments').delete().eq('id', id);
-  if (error) throw new Error(`Could not delete the assignment: ${error.message}`);
+  if (error) throw techError('Could not delete the assignment', error.message);
 }
 
 // Every active student and their submission. The CSV export ships these same rows.
@@ -93,17 +94,13 @@ export async function getAssignmentSubmissions(
     .map((m) => ({ id: m.student_id, name: m.students?.name ?? 'Unknown' }));
   if (roster.length === 0) return [];
 
-  const studentIds = roster.map((s) => s.id);
-  const [{ data: completions }, { data: repos }] = await Promise.all([
-    supabase.from('assignment_completions').select('*').eq('assignment_id', assignmentId),
-    supabase.from('student_repos').select('*').eq('batch_id', batchId).in('student_id', studentIds),
-  ]);
+  const { data: completions } = await supabase
+    .from('assignment_completions')
+    .select('*')
+    .eq('assignment_id', assignmentId);
 
   const completionByStudent = new Map(
     ((completions ?? []) as AssignmentCompletion[]).map((c) => [c.student_id, c]),
-  );
-  const repoByStudent = new Map(
-    ((repos ?? []) as StudentRepo[]).map((r) => [r.student_id, r.repo_url]),
   );
 
   return roster
@@ -114,42 +111,32 @@ export async function getAssignmentSubmissions(
         student_name: student.name,
         submitted: completion?.submitted ?? false,
         mark: completion?.mark ?? false,
-        repo_url: repoByStudent.get(student.id),
+        // This assignment's own link, never the shared latest one.
+        repo_url: completion?.repo_url ?? undefined,
         submitted_at: completion?.submitted_at,
       };
     })
     .sort((a, b) => a.student_name.localeCompare(b.student_name));
 }
 
-export async function getStudentRepo(studentId: string, batchId: string): Promise<StudentRepo | undefined> {
+/** The link the student handed in last time, to prefill the next submit form. */
+export async function getLatestSubmissionRepo(studentId: string): Promise<string | undefined> {
   const { data } = await supabase
-    .from('student_repos')
-    .select('*')
+    .from('assignment_completions')
+    .select('repo_url')
     .eq('student_id', studentId)
-    .eq('batch_id', batchId)
-    .maybeSingle();
-  return (data ?? undefined) as StudentRepo | undefined;
-}
-
-async function saveStudentRepo(studentId: string, batchId: string, repoUrl: string): Promise<StudentRepo> {
-  const { data, error } = await supabase
-    .from('student_repos')
-    .upsert({ student_id: studentId, batch_id: batchId, repo_url: repoUrl }, { onConflict: 'student_id,batch_id' })
-    .select()
-    .single();
-  if (error) throw error;
-  return data as StudentRepo;
+    .not('repo_url', 'is', null)
+    .order('submitted_at', { ascending: false, nullsFirst: false })
+    .limit(1);
+  return (data?.[0]?.repo_url as string | undefined) ?? undefined;
 }
 
 /** submitted_at and submitted_via are not sent — the guard trigger sets them. */
 export async function submitAssignmentFromPortal(
   assignmentId: string,
   studentId: string,
-  batchId: string,
   repoUrl: string,
 ): Promise<AssignmentCompletion> {
-  await saveStudentRepo(studentId, batchId, repoUrl);
-
   const existing = await supabase
     .from('assignment_completions')
     .select('*')
@@ -157,7 +144,12 @@ export async function submitAssignmentFromPortal(
     .eq('student_id', studentId)
     .maybeSingle();
 
-  const patch = { submitted: true, submitted_via: 'portal' as SubmissionChannel, submitted_at: new Date().toISOString() };
+  const patch = {
+    submitted: true,
+    submitted_via: 'portal' as SubmissionChannel,
+    submitted_at: new Date().toISOString(),
+    repo_url: repoUrl,
+  };
 
   if (existing.data) {
     const { data, error } = await supabase

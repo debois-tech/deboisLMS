@@ -4,6 +4,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { BatchSelect } from '@/components/ui/BatchSelect';
+import { FormField } from '@/components/ui/FormField';
 import { BatchMaterials } from '@/components/materials/BatchMaterials';
 import { getBatches } from '@/lib/supabase';
 import type { Batch } from '@/lib/types';
@@ -36,14 +37,17 @@ export default function MaterialsPage({ allowEveryone = true }: MaterialsPagePro
       <PageHeader title="Study Material" />
 
       <Card className="step-card sticky top-[calc(var(--navbar-h)_+_1rem)] z-20">
-        <CardHeader title="Select Batch" />
-        <BatchSelect
-          batches={batches}
-          value={audience}
-          onChange={setAudience}
-          placeholder="Select a Batch"
-          extraOptions={allowEveryone ? [{ id: ALL_STUDENTS, name: 'All students' }] : []}
-        />
+        <CardHeader title="Select batch" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <FormField label="Batch">
+            <BatchSelect
+              batches={batches}
+              value={audience}
+              onChange={setAudience}
+              extraOptions={allowEveryone ? [{ id: ALL_STUDENTS, name: 'All students' }] : []}
+            />
+          </FormField>
+        </div>
       </Card>
 
       {audience && (

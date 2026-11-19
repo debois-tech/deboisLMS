@@ -1,12 +1,12 @@
-export type Role = 'admin' | 'student' | 'tutor';
+export type Role = 'admin' | 'student' | 'tutor' | 'developer';
 
 export type BatchStatus = 'upcoming' | 'ongoing' | 'completed';
 export type SessionType = 'online' | 'offline';
 /** no_appli is N/A (outside the student's dates); no_mark is a lecture nobody has marked yet. */
 export type AttendanceStatus = 'present' | 'partial' | 'absent' | 'no_appli' | 'no_mark';
 export type AttendanceSource = 'manual' | 'automated';
-// archived = 90 days after the batch ended, account closed; terminated = left mid-batch; transferred = moved to another batch
-export type MappingStatus = 'active' | 'archived' | 'terminated' | 'transferred';
+// archived = 90 days after the batch ended, account closed; terminated = left mid-batch; transferred = moved to another batch; removed = taken out of one batch while in another, record kept
+export type MappingStatus = 'active' | 'archived' | 'terminated' | 'transferred' | 'removed';
 /** Students only hand work in through the portal now. */
 export type SubmissionChannel = 'portal';
 /** Open, not a union: admins mint new codes and the valid set lives in `batch_programs`. */
@@ -130,7 +130,9 @@ export interface Lecture {
   batch_id: string;
   lecture_date: string;
   session_type: SessionType;
-  meeting_code?: string;
+  tutor_id?: string | null;
+  /** Joined name of the tutor taking it. */
+  tutor?: { id: string; name: string } | null;
   note?: string;
   scheduled_duration_minutes?: number;
   start_at?: string;
@@ -147,6 +149,10 @@ export interface AttendanceRecord {
   total_attended_minutes?: number;
   raw_upload_ids?: string[];
   source: AttendanceSource;
+  /** Stamped by the database when a person marks the row. */
+  marked_at?: string | null;
+  /** Every person who has marked it, as login emails. */
+  marked_by?: string[];
   created_at: string;
   student?: Student;
   lecture?: Lecture;
@@ -180,7 +186,9 @@ export interface FeePaymentLog {
 
 export interface Feedback {
   id: string;
-  student_id: string;
+  /** Stamped by the database from the login; null on old rows whose account is gone. */
+  reporter_name?: string | null;
+  reporter_role?: Role | null;
   kind: FeedbackKind;
   message: string;
   page?: string;
@@ -188,7 +196,6 @@ export interface Feedback {
   status: FeedbackStatus;
   created_at: string;
   resolved_at?: string | null;
-  student?: Student;
 }
 
 export interface Assignment {
@@ -209,6 +216,8 @@ export interface AssignmentCompletion {
   submitted_via: SubmissionChannel;
   submitted_at?: string;
   mark: boolean;
+  /** The repo handed in with this submission; each assignment keeps its own. */
+  repo_url?: string | null;
   student?: Student;
   assignment?: Assignment;
 }

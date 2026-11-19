@@ -1,7 +1,7 @@
 import { lazy, Suspense, useState, useCallback, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { BackLink } from '@/components/ui/BackLink';
-import { Archive, ArrowRightLeft, Edit3, Eraser, UserMinus, Users, GraduationCap, Layers, ClipboardCheck, FileText, Plus, Trash2, ChevronRight, CalendarDays, Upload, Download } from 'lucide-react';
+import { Archive, ArrowRightLeft, PenLine, X, Users, GraduationCap, Layers, ClipboardCheck, FileText, Plus, Trash2, Download } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { StatusPill } from '@/components/ui/StatusPill';
@@ -18,16 +18,17 @@ import { SearchFilterBar } from '@/components/ui/SearchFilterBar';
 import { SearchSelect } from '@/components/ui/SearchSelect';
 import { FormField } from '@/components/ui/FormField';
 import { AttendanceRecordsTable } from '@/components/attendance/AttendanceRecordsTable';
+import { LectureTable } from '@/components/attendance/LectureTable';
 import { DEFAULT_LECTURE_MINUTES } from '@/lib/attendance/types';
 import { exportBatchAttendanceCsv } from '@/lib/attendance/exportCsv';
 import { AssignmentSubmissionTable } from '@/components/assignments/AssignmentSubmissionTable';
 import { NewAssignmentModal } from '@/components/assignments/NewAssignmentModal';
-import { AssignmentFiles } from '@/components/assignments/AssignmentFiles';
 import { BatchMaterials } from '@/components/materials/BatchMaterials';
 import { BatchBadges } from '@/components/badges/BatchBadges';
 import { BatchDocuments } from '@/components/documents/BatchDocuments';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { StudentLink } from '@/components/students/StudentLink';
+import { BatchPills } from '@/components/ui/BatchSelect';
 import { PaymentLogModal, type PaymentLogFormState } from '@/components/finance/PaymentLogModal';
 import { getBatchById, getBatches, getBatchPrograms, endBatch, deleteBatch, getBatchDeletionCounts, getBatchFeeSummary, getCurriculumProgress } from '@/lib/supabase';
 import type { BatchDeletionCounts } from '@/lib/supabase';
@@ -35,22 +36,28 @@ import { ProgressBar } from '@/components/ui/ProgressBar';
 import { getBatchStudents, getAllBatchStudentMappings, addStudentToBatch, terminateEnrolment, getStudents, createStudentLoginsBulk, importStudentsIntoBatch, deleteFeePayment } from '@/lib/supabase';
 import type { BulkLoginResult } from '@/lib/supabase';
 import { BulkLoginsModal } from '@/components/students/BulkLoginsModal';
-import { getBatchTutors, assignTutorToBatch, removeTutorFromBatch, clearTutorFromTestBatch, getTutors } from '@/lib/supabase';
-import { getLecturesByBatch, createLecture, deleteLecture } from '@/lib/supabase';
+import { getBatchTutors, assignTutorToBatch, getTutors } from '@/lib/supabase';
+import { getLecturesByBatch, createLecture, updateLecture, deleteLecture, getLectureSummaries } from '@/lib/supabase';
+import type { LectureAttendanceSummary } from '@/lib/supabase';
 import { getAttendanceByLecture } from '@/lib/supabase';
 import { getFeesByBatch, getFeePaymentLogs, addFeePaymentLog } from '@/lib/supabase';
 import { getAssignmentsByBatch } from '@/lib/supabase';
-import type { Batch, BatchProgramOption, Student, Tutor, Lecture, AttendanceRecord, StudentFee, FeeStatus, FeePaymentLog, Assignment, BatchStudentMapping, TutorBatchMapping } from '@/lib/types';
+import type { Batch, BatchProgramOption, Student, Tutor, Lecture, AttendanceRecord, StudentFee, FeeStatus, FeePaymentLog, Assignment, BatchStudentMapping, TutorBatchMapping, SessionType } from '@/lib/types';
 import { formatDate, formatCurrency, feeFromDiscount } from '@/lib/utils/format';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { StudentImportModal } from '@/components/students/StudentImportModal';
 import { EarlierWorkTick } from '@/components/batches/EarlierWorkTick';
 import { TransferWizard } from '@/components/batches/TransferWizard';
+import { RemoveWizard } from '@/components/batches/RemoveWizard';
+import { UnassignWizard } from '@/components/tutors/UnassignWizard';
 import { useToast } from '@/lib/context/ToastContext';
 import { useConfirm } from '@/lib/context/ConfirmContext';
+import { useAuth } from '@/lib/context/AuthContext';
 import { errorMessage } from '@/lib/utils/errors';
 import { toDateValue } from '@/lib/utils/date';
 import { useInitialLoad, useReloadableSection } from '@/lib/hooks/useInitialLoad';
+
+const MODE_LABEL = { terminate: 'Terminate', transfer: 'Transfer', remove: 'Remove' } as const;
 
 const BATCH_DELETION_LABELS: [keyof BatchDeletionCounts, string][] = [
   ['students', 'Enrolments'],
@@ -163,7 +170,7 @@ export default function BatchDetailPage() {
             {batch.is_test && <Badge variant="warning">Test</Badge>}
           </div>
           <p className="text-sm text-[var(--text-muted)] mt-0.5">
-            {programLabel ?? 'No programme'} • Started {batch.start_date ? formatDate(batch.start_date) : 'N/A'}
+            {programLabel ?? 'No programme'} • Started {batch.start_date ? formatDate(batch.start_date) : 'N/A'}{batch.ended_at && <> • Ended {formatDate(batch.ended_at)}</>}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -177,7 +184,7 @@ export default function BatchDetailPage() {
             </Button>
           )}
           <Link to={`/batches/${batch.id}/edit`}>
-            <Button variant="outline" className="action-button-compact"><Edit3 size={14} /> Edit</Button>
+            <Button variant="outline" className="action-button-compact"><PenLine size={14} /> Edit</Button>
           </Link>
           <Button
             variant="outline"
@@ -194,7 +201,6 @@ export default function BatchDetailPage() {
         tabs={[
           { label: 'Overview', value: 'overview' },
           { label: 'Students', value: 'students' },
-          { label: 'Tutors', value: 'tutors' },
           { label: 'Lectures', value: 'lectures' },
           { label: 'Attendance', value: 'attendance' },
           { label: 'Finance', value: 'finance' },
@@ -210,7 +216,6 @@ export default function BatchDetailPage() {
           <>
             {active === 'overview' && <OverviewTab batch={batch} programLabel={programLabel} />}
             {active === 'students' && <StudentsTab batch={batch} />}
-            {active === 'tutors' && <TutorsTab batchId={batch.id} isTest={Boolean(batch.is_test)} />}
             {active === 'lectures' && <LecturesTab batchId={batch.id} />}
             {active === 'attendance' && <AttendanceTab batchId={batch.id} batchName={batch.name} />}
             {active === 'finance' && <FinanceTab batchId={batch.id} batchName={batch.name} />}
@@ -316,6 +321,7 @@ export function OverviewTab({ batch, programLabel, showFees = true }: { batch: B
           )}
         </div>
       </Card>
+      <TutorsCard batch={batch} />
     </div>
   );
 }
@@ -333,10 +339,14 @@ function StudentsTab({ batch }: { batch: Batch }) {
   const [showImport, setShowImport] = useState(false);
   const [bulkLogins, setBulkLogins] = useState<BulkLoginResult | null>(null);
   const [allBatches, setAllBatches] = useState<Batch[]>([]);
-  const [selecting, setSelecting] = useState(false);
+  // Tick mode: students get a checkbox column, for a transfer or a removal.
+  const [selecting, setSelecting] = useState<'terminate' | 'transfer' | 'remove' | null>(null);
   // Mapping ids, since that is what the transfer takes.
   const [picked, setPicked] = useState<string[]>([]);
   const [showTransfer, setShowTransfer] = useState(false);
+  const [showRemove, setShowRemove] = useState(false);
+  // Student id -> the other batches they are active in. Only these students can be removed from this one.
+  const [otherBatches, setOtherBatches] = useState<Map<string, Batch[]>>(new Map());
   const { showToast } = useToast();
   const confirm = useConfirm();
 
@@ -350,35 +360,56 @@ function StudentsTab({ batch }: { batch: Batch }) {
     setStudents(batchRows);
     setAllStudents(allRows.filter((s) => !closed.has(s.id)));
     setAllBatches(batchList);
+    const byId = new Map(batchList.map((b) => [b.id, b]));
+    const others = new Map<string, Batch[]>();
+    for (const m of allMappings) {
+      const other = byId.get(m.batch_id);
+      if (m.batch_id === batchId || m.status !== 'active' || !other) continue;
+      others.set(m.student_id, [...(others.get(m.student_id) ?? []), other]);
+    }
+    setOtherBatches(others);
   }, [batchId]);
 
   const { error: loadError, reload: reloadStudents } = useReloadableSection(fetchStudents);
 
   const payable = baseFee === null ? null : feeFromDiscount(baseFee, Number(discount) || 0);
 
-  // Left mid-batch: settle what came due, kill the login now, keep the record.
-  const handleTerminate = async (mappingId: string, name: string) => {
+  // Removed students are a hidden record; the roster is everyone else.
+  const roster = students.filter((s) => s.mapping.status !== 'removed');
+  const removable = roster.filter((s) => s.mapping.status === 'active' && otherBatches.has(s.id));
+
+  // Left mid-batch: settle what came due, kill the login now, keep the record. One confirm for everyone ticked.
+  const handleTerminate = async () => {
+    const leavers = roster.filter((s) => picked.includes(s.mapping.id));
+    if (leavers.length === 0) return;
     const ok = await confirm({
-      title: `Terminate ${name}?`,
+      title: `Terminate ${leavers.length === 1 ? leavers[0].name : `${leavers.length} students`}?`,
       message: 'Their login is deleted immediately and any instalment already due is settled. Records stay.',
       confirmLabel: 'Terminate',
       danger: true,
-      requireCheck: 'Yes, this student has left',
+      requireCheck: 'Yes, they have left',
       requireText: 'TERMINATE',
     });
     if (!ok) return;
 
-    try {
-      const result = await terminateEnrolment(mappingId);
-      void reloadStudents();
-      showToast(
-        result.void_amount > 0
-          ? `${name} terminated — ${formatCurrency(result.void_amount)} void`
-          : `${name} terminated`,
-      );
-    } catch (error) {
-      showToast(errorMessage(error, 'Failed to terminate student'), 'error');
+    const failures: string[] = [];
+    let voided = 0;
+    for (const student of leavers) {
+      try {
+        voided += (await terminateEnrolment(student.mapping.id)).void_amount;
+      } catch (error) {
+        failures.push(`${student.name}: ${errorMessage(error, 'failed')}`);
+      }
     }
+    exitSelecting();
+    void reloadStudents();
+    const done = leavers.length - failures.length;
+    showToast(
+      failures.length === 0
+        ? `${done} terminated${voided > 0 ? ` — ${formatCurrency(voided)} void` : ''}`
+        : `Terminated ${done} of ${leavers.length}. ${failures[0]}`,
+      failures.length === 0 ? 'success' : 'error',
+    );
   };
 
   const handleAdd = async () => {
@@ -413,9 +444,10 @@ function StudentsTab({ batch }: { batch: Batch }) {
   );
 
   const exitSelecting = () => {
-    setSelecting(false);
+    setSelecting(null);
     setPicked([]);
     setShowTransfer(false);
+    setShowRemove(false);
   };
 
   const togglePicked = (mappingId: string) =>
@@ -447,69 +479,81 @@ function StudentsTab({ batch }: { batch: Batch }) {
     <Card>
       <CardHeader
         title="Enrolled Students"
+        className="card-header-gap"
         action={
           <div className="flex flex-wrap justify-end gap-2">
             {selecting ? (
               <>
                 <Button size="sm" variant="ghost" onClick={exitSelecting}>Cancel</Button>
-                <Button size="sm" className="action-button-compact" disabled={picked.length === 0} onClick={() => setShowTransfer(true)}>
-                  <ArrowRightLeft size={14} /> Transfer{picked.length > 0 ? ` (${picked.length})` : ''}
+                <Button
+                  size="sm"
+                  variant={selecting === 'terminate' ? 'danger' : 'primary'}
+                  className="action-button-compact"
+                  disabled={picked.length === 0}
+                  onClick={() => (selecting === 'transfer' ? setShowTransfer(true) : selecting === 'remove' ? setShowRemove(true) : void handleTerminate())}
+                >
+                  {selecting === 'transfer' ? <ArrowRightLeft size={14} /> : selecting === 'remove' ? <X size={14} /> : <Trash2 size={14} />} {MODE_LABEL[selecting]}{picked.length > 0 ? ` (${picked.length})` : ''}
                 </Button>
               </>
             ) : (
               <>
-                <Button size="sm" className="action-button-import" variant="secondary" onClick={() => setShowImport(true)}><Upload size={14} />Import</Button>
-                {!batch.ended_at && <Button size="sm" className="action-button-import" variant="secondary" onClick={() => setSelecting(true)}><ArrowRightLeft size={14} />Transfer</Button>}
-                <Button size="sm" className="action-button-compact" onClick={() => setShowAdd(true)}><Plus size={14} /> Add Students</Button>
+                {/* Three levels of change, mildest last: a login deleted, then a student moved or taken out, then just adding. */}
+                {roster.some((s) => s.mapping.status === 'active') && (
+                  <Button size="sm" className="action-button-icon action-button-danger" variant="secondary" onClick={() => setSelecting('terminate')} aria-label="Terminate students" title="Terminate: settles fees and deletes the login"><Trash2 size={16} /></Button>
+                )}
+                <span className="toolbar-sep" aria-hidden="true" />
+                {!batch.ended_at && <Button size="sm" className="action-button-icon" variant="secondary" onClick={() => setSelecting('transfer')} aria-label="Transfer students" title="Transfer students"><ArrowRightLeft size={16} /></Button>}
+                {removable.length > 0 && <Button size="sm" className="action-button-icon" variant="secondary" onClick={() => setSelecting('remove')} aria-label="Remove students from this batch" title="Remove students from this batch"><X size={16} /></Button>}
+                <span className="toolbar-sep" aria-hidden="true" />
+                <Button size="sm" className="action-button-icon" variant="secondary" onClick={() => setShowImport(true)} aria-label="Import students" title="Import students"><Download size={16} /></Button>
+                <Button size="sm" className="action-button-compact" onClick={() => setShowAdd(true)}><Plus size={14} /> Students</Button>
               </>
             )}
           </div>
         }
       />
-      {students.length === 0 ? (
+      {roster.length === 0 ? (
         <EmptyState icon={<Users size={32} />} title="No students enrolled" />
       ) : (
-        <div className="batch-list">
-          {students.map((s) => (
-            <div key={s.id} className={`batch-list-item flex items-center justify-between gap-4 hover:bg-[var(--bg-elevated)]${s.mapping.status === 'transferred' ? ' opacity-60' : ''}`}>
-              <div className="flex items-center gap-3">
+        <Table maxHeight="none" className="data-table-compact">
+          <THead>
+            <TR>
+              {selecting && <TH align="center"><span className="sr-only">Select</span></TH>}
+              <TH>Student</TH>
+              <TH>ID</TH>
+              <TH>Join date</TH>
+              <TH>Status</TH>
+              {selecting === 'remove' && <TH align="center">Other batches</TH>}
+            </TR>
+          </THead>
+          <TBody>
+            {/* Remove mode lists only the students who can be removed. */}
+            {(selecting === 'remove' ? removable : roster).map((s) => (
+              <TR key={s.id} className={s.mapping.status === 'transferred' ? 'opacity-60' : undefined}>
                 {selecting && (
-                  s.mapping.status === 'active' ? (
-                    <input
-                      type="checkbox"
-                      className="data-table-checkbox"
-                      checked={picked.includes(s.mapping.id)}
-                      onChange={() => togglePicked(s.mapping.id)}
-                      aria-label={`Select ${s.name}`}
-                    />
-                  ) : (
-                    <span className="data-table-checkbox inline-block" aria-hidden="true" />
-                  )
+                  <TD align="center">
+                    {(selecting === 'remove' ? removable.includes(s) : s.mapping.status === 'active') && (
+                      <input
+                        type="checkbox"
+                        className="data-table-checkbox"
+                        checked={picked.includes(s.mapping.id)}
+                        onChange={() => togglePicked(s.mapping.id)}
+                        aria-label={`Select ${s.name}`}
+                      />
+                    )}
+                  </TD>
                 )}
-                <div>
-                  <p className="text-sm font-medium"><StudentLink studentId={s.id} name={s.name} /></p>
-                  <p className="text-xs text-[var(--text-muted)]">{s.email ?? s.phone ?? '—'}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <StatusPill kind="enrollment" value={s.mapping.status} />
-                <div className="roster-actions">
-                  {!selecting && s.mapping.status === 'active' && (
-                    <button
-                      type="button"
-                      onClick={() => handleTerminate(s.mapping.id, s.name)}
-                      className="roster-action is-terminate"
-                      title="Terminate — settles fees and deletes the login"
-                      aria-label={`Terminate ${s.name}`}
-                    >
-                      <UserMinus size={16} aria-hidden="true" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+                <TD>
+                  <StudentLink studentId={s.id} name={s.name} className="font-semibold text-[var(--text-primary)] hover:text-[var(--primary)]" />
+                </TD>
+                <TD className="cell-secondary font-mono">{s.student_code || '—'}</TD>
+                <TD className="cell-muted">{s.mapping.joined_at ? formatDate(s.mapping.joined_at) : '—'}</TD>
+                <TD><StatusPill kind="enrollment" value={s.mapping.status} /></TD>
+                {selecting === 'remove' && <TD align="center"><BatchPills batches={otherBatches.get(s.id) ?? []} /></TD>}
+              </TR>
+            ))}
+          </TBody>
+        </Table>
       )}
 
       <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Add Student">
@@ -553,13 +597,22 @@ function StudentsTab({ batch }: { batch: Batch }) {
       </Modal>
 
       <TransferWizard
-        key={showTransfer ? 'open' : 'closed'}
+        key={showTransfer ? 'transfer-open' : 'transfer-closed'}
         open={showTransfer}
         onClose={() => setShowTransfer(false)}
         source={batch}
         students={students.filter((s) => picked.includes(s.mapping.id))}
         targets={transferTargets}
         onDone={() => { exitSelecting(); void reloadStudents(); }}
+      />
+
+      <RemoveWizard
+        key={showRemove ? 'remove-open' : 'remove-closed'}
+        open={showRemove}
+        onClose={() => setShowRemove(false)}
+        batch={batch}
+        students={removable.filter((s) => picked.includes(s.mapping.id))}
+        onDone={() => { setShowRemove(false); exitSelecting(); void reloadStudents(); }}
       />
 
       <StudentImportModal
@@ -574,20 +627,24 @@ function StudentsTab({ batch }: { batch: Batch }) {
   );
 }
 
-function TutorsTab({ batchId, isTest }: { batchId: string; isTest: boolean }) {
+// The batch's tutors, in the overview. Everyone reads it; only admin and developer get the buttons.
+function TutorsCard({ batch }: { batch: Batch }) {
+  const { isAdmin } = useAuth();
+  const batchId = batch.id;
   const [tutors, setTutors] = useState<(Tutor & { mapping: TutorBatchMapping })[]>([]);
   const [allTutors, setAllTutors] = useState<Tutor[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [selectedTutor, setSelectedTutor] = useState('');
+  const [unassigning, setUnassigning] = useState<(Tutor & { mapping: TutorBatchMapping }) | null>(null);
 
   const { showToast } = useToast();
-  const confirm = useConfirm();
 
   const fetchTutors = useCallback(async () => {
-    const [batchRows, allRows] = await Promise.all([getBatchTutors(batchId), getTutors()]);
+    // A tutor only reads the list, so the full tutor roster is for the people who can assign.
+    const [batchRows, allRows] = await Promise.all([getBatchTutors(batchId), isAdmin ? getTutors() : Promise.resolve([] as Tutor[])]);
     setTutors(batchRows);
     setAllTutors(allRows);
-  }, [batchId]);
+  }, [batchId, isAdmin]);
 
   const { error: loadError, reload: reloadTutors } = useReloadableSection(fetchTutors);
 
@@ -604,49 +661,6 @@ function TutorsTab({ batchId, isTest }: { batchId: string; isTest: boolean }) {
     }
   };
 
-  const handleRemove = async (mappingId: string, name: string) => {
-    const ok = await confirm({
-      title: `Unassign ${name} from this batch?`,
-      message: 'The tutor record stays. Only this assignment is removed.',
-      confirmLabel: 'Unassign',
-      danger: true,
-    });
-    if (!ok) return;
-
-    try {
-      await removeTutorFromBatch(mappingId);
-      void reloadTutors();
-      showToast('Tutor removed from batch');
-    } catch (error) {
-      showToast(errorMessage(error, 'Failed to remove tutor'), 'error');
-    }
-  };
-
-  const handleClear = async (mappingId: string, name: string) => {
-    const ok = await confirm({
-      title: `Unassign ${name} and delete their data?`,
-      message: (
-        <>
-          <span className="block">Only in this test batch</span>
-          <span className="block">Their materials, quizzes, badges given and log entries go, files too</span>
-          <span className="block">Cannot be undone</span>
-        </>
-      ),
-      confirmLabel: 'Unassign and delete',
-      danger: true,
-      requireText: 'Confirm',
-    });
-    if (!ok) return;
-
-    try {
-      await clearTutorFromTestBatch(mappingId);
-      showToast('Tutor cleared from batch');
-    } catch (error) {
-      showToast(errorMessage(error, 'Failed to clear tutor'), 'error');
-    }
-    void reloadTutors();
-  };
-
   const available = allTutors.filter((t) => !tutors.some((e) => e.id === t.id));
 
   if (loadError) return <Card><ErrorState message={loadError} onRetry={reloadTutors} /></Card>;
@@ -655,34 +669,38 @@ function TutorsTab({ batchId, isTest }: { batchId: string; isTest: boolean }) {
     <Card>
       <CardHeader
         title="Assigned Tutors"
-        action={
-            <Button size="sm" className="action-button-compact" onClick={() => setShowAdd(true)}><Plus size={14} /> Assign Tutor</Button>
-         
-        }
-      /> 
+        className="card-header-gap"
+        action={isAdmin && <Button size="sm" className="action-button-compact" onClick={() => setShowAdd(true)}><Plus size={14} /> Assign Tutor</Button>}
+      />
       {tutors.length === 0 ? (
         <EmptyState icon={<GraduationCap size={32} />} title="No tutors assigned" />
       ) : (
-        <div className="batch-list">
-          {tutors.map((t) => (
-            <div key={t.id} className="batch-list-item flex items-center justify-between gap-4 hover:bg-[var(--bg-elevated)]">
-              <div>
-                <p className="text-sm font-medium text-[var(--text-primary)]">{t.name}</p>
-                <p className="text-xs text-[var(--text-muted)]">{t.email ?? t.phone ?? '—'}</p>
-              </div>
-              <div className="flex items-center gap-1">
-                {isTest && (
-                  <button onClick={() => handleClear(t.mapping.id, t.name)} aria-label={`Unassign ${t.name} and delete their data`} className="text-[var(--text-muted)] hover:text-[var(--danger-text)] p-1">
-                    <Eraser size={14} />
-                  </button>
+        <Table maxHeight="none" className="data-table-compact">
+          <THead>
+            <TR>
+              <TH>Tutor</TH>
+              <TH>Email</TH>
+              <TH>Assigned</TH>
+              {isAdmin && <TH align="center"><span className="sr-only">Actions</span></TH>}
+            </TR>
+          </THead>
+          <TBody>
+            {tutors.map((t) => (
+              <TR key={t.id}>
+                <TD className="font-medium text-[var(--text-primary)]">{t.name}</TD>
+                <TD className="cell-secondary">{t.email ?? t.phone ?? '—'}</TD>
+                <TD className="cell-muted whitespace-nowrap">{formatDate(t.mapping.assigned_at)}</TD>
+                {isAdmin && (
+                  <TD align="center">
+                    <Button size="sm" variant="ghost" className="action-button-icon" onClick={() => setUnassigning(t)} aria-label={`Unassign ${t.name} from batch`} title="Unassign">
+                      <Trash2 size={15} />
+                    </Button>
+                  </TD>
                 )}
-                <button onClick={() => handleRemove(t.mapping.id, t.name)} aria-label={`Unassign ${t.name} from batch`} className="text-[var(--text-muted)] hover:text-[var(--danger-text)] p-1">
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+              </TR>
+            ))}
+          </TBody>
+        </Table>
       )}
 
       <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Assign Tutor">
@@ -700,39 +718,123 @@ function TutorsTab({ batchId, isTest }: { batchId: string; isTest: boolean }) {
           <Button className="action-button" onClick={handleAdd} disabled={!selectedTutor}>Assign</Button>
         </div>
       </Modal>
+
+      <UnassignWizard
+        key={unassigning ? `unassign-${unassigning.mapping.id}` : 'unassign-closed'}
+        open={unassigning !== null}
+        onClose={() => setUnassigning(null)}
+        tutorName={unassigning?.name ?? ''}
+        batches={unassigning ? [{ ...unassigning.mapping, batch }] : []}
+        onDone={() => { setUnassigning(null); void reloadTutors(); }}
+      />
     </Card>
   );
 }
 
+type LectureForm = {
+  lecture_date: string;
+  start_time: string;
+  tutor_id: string;
+  note: string;
+  session_type: SessionType;
+  scheduled_duration_minutes: number;
+};
+
+const BLANK_LECTURE: LectureForm = {
+  lecture_date: '',
+  start_time: '09:00',
+  tutor_id: '',
+  note: '',
+  session_type: 'online',
+  scheduled_duration_minutes: DEFAULT_LECTURE_MINUTES,
+};
+
 export function LecturesTab({ batchId }: { batchId: string }) {
   const [lectures, setLectures] = useState<Lecture[]>([]);
+  const [summaries, setSummaries] = useState<Map<string, LectureAttendanceSummary>>(new Map());
+  const [tutors, setTutors] = useState<Tutor[]>([]);
   const [showNew, setShowNew] = useState(false);
-  const [form, setForm] = useState({ lecture_date: '', start_time: '09:00', meeting_code: '', note: '', session_type: 'online' as const, scheduled_duration_minutes: DEFAULT_LECTURE_MINUTES });
+  const [editing, setEditing] = useState<Lecture | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [form, setForm] = useState<LectureForm>(BLANK_LECTURE);
 
   const { showToast } = useToast();
   const confirm = useConfirm();
+  const { user } = useAuth();
 
   const fetchLectures = useCallback(async () => {
-    setLectures(await getLecturesByBatch(batchId));
+    const [list, batchTutors] = await Promise.all([getLecturesByBatch(batchId), getBatchTutors(batchId)]);
+    setLectures(list);
+    setSummaries(await getLectureSummaries(batchId));
+    setTutors(batchTutors);
   }, [batchId]);
 
   const { error: loadError, reload: reloadLectures } = useReloadableSection(fetchLectures);
 
-  const handleCreate = async () => {
+  // You, when you are one of the batch's tutors; otherwise its first.
+  const defaultTutor = tutors.find((tutor) => tutor.id === user?.tutor_id)?.id ?? tutors[0]?.id ?? '';
+
+  const openNew = () => {
+    setEditing(null);
+    setForm({ ...BLANK_LECTURE, tutor_id: defaultTutor });
+    setShowNew(true);
+  };
+
+  // The same dialog edits a lecture later — chiefly to correct the tutor.
+  const openEdit = (lecture: Lecture) => {
+    setEditing(lecture);
+    setForm({
+      lecture_date: lecture.lecture_date,
+      start_time: lecture.start_at ? new Date(lecture.start_at).toTimeString().slice(0, 5) : '09:00',
+      tutor_id: lecture.tutor_id ?? '',
+      note: lecture.note ?? '',
+      session_type: lecture.session_type,
+      scheduled_duration_minutes: lecture.scheduled_duration_minutes ?? DEFAULT_LECTURE_MINUTES,
+    });
+    setShowNew(true);
+  };
+
+  const closeForm = () => {
+    setShowNew(false);
+    setEditing(null);
+    setForm(BLANK_LECTURE);
+  };
+
+  const handleSave = async () => {
+    if (!form.lecture_date || saving) return;
+    const start = new Date(`${form.lecture_date}T${form.start_time}:00`);
+    const end = new Date(start.getTime() + form.scheduled_duration_minutes * 60_000);
+    const patch = {
+      lecture_date: form.lecture_date,
+      tutor_id: form.tutor_id || defaultTutor || null,
+      note: form.note || undefined,
+      session_type: form.session_type,
+      scheduled_duration_minutes: form.scheduled_duration_minutes,
+      start_at: start.toISOString(),
+      end_at: end.toISOString(),
+    };
+
+    setSaving(true);
     try {
-      const start = new Date(`${form.lecture_date}T${form.start_time}:00`);
-      const end = new Date(start.getTime() + form.scheduled_duration_minutes * 60_000);
-      await createLecture({ batch_id: batchId, lecture_date: form.lecture_date, meeting_code: form.meeting_code || undefined, note: form.note || undefined, session_type: form.session_type, scheduled_duration_minutes: form.scheduled_duration_minutes, start_at: start.toISOString(), end_at: end.toISOString() });
-      setShowNew(false);
-      setForm({ lecture_date: '', start_time: '09:00', meeting_code: '', note: '', session_type: 'online', scheduled_duration_minutes: DEFAULT_LECTURE_MINUTES });
+      if (editing) {
+        await updateLecture(editing.id, patch);
+      } else {
+        await createLecture({ batch_id: batchId, ...patch });
+      }
+      const wasEditing = Boolean(editing);
+      closeForm();
       void reloadLectures();
-      showToast('Lecture created');
+      showToast(wasEditing ? 'Lecture updated' : 'Lecture created');
     } catch (error) {
-      showToast(errorMessage(error, 'Failed to create lecture'), 'error');
+      showToast(errorMessage(error, 'Failed to save the lecture'), 'error');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleDelete = async (lectureId: string, label: string) => {
+  const handleDelete = async (lecture: Lecture) => {
+    const label = formatDate(lecture.lecture_date);
     const ok = await confirm({
       title: `Delete the lecture on ${label}?`,
       message: 'Attendance for this lecture is also deleted. This cannot be undone.',
@@ -741,12 +843,15 @@ export function LecturesTab({ batchId }: { batchId: string }) {
     });
     if (!ok) return;
 
+    setDeletingId(lecture.id);
     try {
-      await deleteLecture(lectureId);
+      await deleteLecture(lecture.id);
       void reloadLectures();
       showToast('Lecture deleted');
     } catch (error) {
       showToast(errorMessage(error, 'Failed to delete lecture'), 'error');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -754,36 +859,29 @@ export function LecturesTab({ batchId }: { batchId: string }) {
 
   return (
     <Card>
-      <CardHeader title="Lectures" action={<Button size="sm" className="action-button-compact" onClick={() => setShowNew(true)}><Plus size={14} /> Add Lecture</Button>} />
+      <CardHeader title="Lectures" className="card-header-gap" action={<Button size="sm" className="action-button-compact" onClick={openNew}><Plus size={14} /> Add Lecture</Button>} />
       {lectures.length === 0 ? (
         <EmptyState icon={<Layers size={32} />} title="No lectures yet" />
       ) : (
-        <div className="batch-list">
-          {lectures.map((l) => (
-            <div key={l.id} className="batch-list-item flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium text-[var(--text-primary)]">{formatDate(l.lecture_date)}</p>
-                <p className="text-xs text-[var(--text-muted)]">
-                  {l.session_type} {l.meeting_code ? `• ${l.meeting_code}` : ''} {l.scheduled_duration_minutes ? `• ${l.scheduled_duration_minutes}min` : ''} {l.note ? `• ${l.note}` : ''}
-                </p>
-              </div>
-              <button onClick={() => handleDelete(l.id, formatDate(l.lecture_date))} aria-label={`Delete lecture on ${formatDate(l.lecture_date)}`} className="text-[var(--text-muted)] hover:text-[var(--danger-text)] p-1">
-                <Trash2 size={14} />
-              </button>
-            </div>
-          ))}
-        </div>
+        <LectureTable
+          lectures={lectures}
+          summaries={summaries}
+          variant="lectures"
+          onEdit={openEdit}
+          onDelete={(lecture) => void handleDelete(lecture)}
+          deletingId={deletingId}
+        />
       )}
 
       <Modal
         open={showNew}
-        onClose={() => setShowNew(false)}
-        title="New Lecture"
+        onClose={closeForm}
+        title={editing ? 'Edit' : 'New'}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setShowNew(false)}>Cancel</Button>
-            <Button className="action-button-compact" onClick={handleCreate} disabled={!form.lecture_date}>
-              Create Lecture
+            <Button variant="ghost" onClick={closeForm}>Cancel</Button>
+            <Button className="action-button-compact" onClick={handleSave} loading={saving} disabled={!form.lecture_date}>
+              {editing ? 'Save changes' : 'Create Lecture'}
             </Button>
           </>
         }
@@ -797,8 +895,16 @@ export function LecturesTab({ batchId }: { batchId: string }) {
               ariaLabel="Lecture date"
             />
           </FormField>
-          <FormField label="Meeting Code">
-            <input value={form.meeting_code} onChange={(e) => setForm({ ...form, meeting_code: e.target.value })} />
+          <FormField label="Tutor" required>
+            <SearchSelect
+              options={tutors.map((tutor) => ({ value: tutor.id, label: tutor.name }))}
+              value={form.tutor_id || defaultTutor || null}
+              onChange={(tutor_id) => setForm({ ...form, tutor_id })}
+              placeholder="Select a tutor"
+              searchPlaceholder="Search tutors"
+              emptyText="No tutors assigned to this batch"
+              showSearch={tutors.length > 6}
+            />
           </FormField>
           <div className="grid grid-cols-2 gap-4">
             <FormField label="Mode" required>
@@ -818,14 +924,19 @@ export function LecturesTab({ batchId }: { batchId: string }) {
 
 export function AttendanceTab({ batchId, batchName }: { batchId: string; batchName: string }) {
   const [lectures, setLectures] = useState<Lecture[]>([]);
+  const [summaries, setSummaries] = useState<Map<string, LectureAttendanceSummary>>(new Map());
   const [selectedLecture, setSelectedLecture] = useState<string | null>(null);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const { showToast } = useToast();
+  const confirm = useConfirm();
 
   const fetchLectures = useCallback(async () => {
-    setLectures(await getLecturesByBatch(batchId));
+    const list = await getLecturesByBatch(batchId);
+    setLectures(list);
+    setSummaries(await getLectureSummaries(batchId));
   }, [batchId]);
 
   const { error: loadError, reload: reloadLectures } = useReloadableSection(fetchLectures);
@@ -840,6 +951,32 @@ export function AttendanceTab({ batchId, batchName }: { batchId: string; batchNa
       showToast(errorMessage(err, 'Failed to load attendance records'), 'error');
     }
     setLoading(false);
+  };
+
+  const handleDelete = async (lecture: Lecture) => {
+    const label = formatDate(lecture.lecture_date);
+    const ok = await confirm({
+      title: `Delete the lecture on ${label}?`,
+      message: 'Attendance for this lecture is also deleted. This cannot be undone.',
+      confirmLabel: 'Delete lecture',
+      danger: true,
+    });
+    if (!ok) return;
+
+    setDeletingId(lecture.id);
+    try {
+      await deleteLecture(lecture.id);
+      if (selectedLecture === lecture.id) {
+        setSelectedLecture(null);
+        setRecords([]);
+      }
+      void reloadLectures();
+      showToast('Lecture deleted');
+    } catch (error) {
+      showToast(errorMessage(error, 'Failed to delete lecture'), 'error');
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const selectedLectureData = lectures.find((lecture) => lecture.id === selectedLecture);
@@ -860,40 +997,26 @@ export function AttendanceTab({ batchId, batchName }: { batchId: string; batchNa
     <div className="space-y-4">
       <Card>
         <CardHeader
-          title="Select Lecture"
+          title="Attendance"
+          className="card-header-gap"
           action={lectures.length > 0 && (
             <Button size="sm" variant="secondary" className="action-button-compact" onClick={handleExportCsv} loading={exporting}>
-              <Download size={14} /> Export CSV
+              <Download size={14} /> Export
             </Button>
           )}
         />
         {lectures.length === 0 ? (
           <EmptyState icon={<Layers size={32} />} title="No lectures yet" />
         ) : (
-          <div className="batch-list">
-            {lectures.map((l) => (
-              <button
-                key={l.id}
-                onClick={() => loadAttendance(l.id)}
-                className={`batch-list-item flex w-full items-center justify-between gap-4 text-left transition-colors ${
-                  selectedLecture === l.id
-                    ? 'border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--text-primary)]'
-                    : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]'
-                }`}
-              >
-                <span className="flex min-w-0 items-center gap-3">
-                  <CalendarDays size={18} className="shrink-0 text-[var(--primary)]" />
-                  <span className="min-w-0">
-                    <span className="block text-sm font-semibold text-[var(--text-primary)]">{formatDate(l.lecture_date)}</span>
-                    <span className="mt-1 block text-xs text-[var(--text-muted)]">
-                      {l.session_type ?? 'Lecture'}{l.meeting_code ? ` • ${l.meeting_code}` : ''}
-                    </span>
-                  </span>
-                </span>
-                <ChevronRight size={18} className="shrink-0 text-[var(--text-muted)]" />
-              </button>
-            ))}
-          </div>
+          <LectureTable
+            lectures={lectures}
+            summaries={summaries}
+            variant="attendance"
+            selectedId={selectedLecture}
+            onSelect={(lecture) => void loadAttendance(lecture.id)}
+            onDelete={(lecture) => void handleDelete(lecture)}
+            deletingId={deletingId}
+          />
         )}
       </Card>
 
@@ -901,7 +1024,7 @@ export function AttendanceTab({ batchId, batchName }: { batchId: string; batchNa
         open={Boolean(selectedLecture)}
         onClose={() => { setSelectedLecture(null); setRecords([]); }}
         title="Attendance Records"
-        description={selectedLectureData ? `${formatDate(selectedLectureData.lecture_date)}${selectedLectureData.meeting_code ? ` • ${selectedLectureData.meeting_code}` : ''}` : undefined}
+        description={selectedLectureData ? `${formatDate(selectedLectureData.lecture_date)}${selectedLectureData.tutor ? ` • ${selectedLectureData.tutor.name}` : ''}` : undefined}
         size="xl"
       >
         {loading ? (
@@ -1039,7 +1162,6 @@ function FinanceTab({ batchId, batchName }: { batchId: string; batchName: string
         ) : (
           <div className="table-block" style={{ marginTop: '0.75rem' }}>
             <SearchFilterBar
-              className="max-w-sm"
               value={search}
               onChange={setSearch}
               placeholder="Search by student name"
@@ -1056,7 +1178,6 @@ function FinanceTab({ batchId, batchName }: { batchId: string; batchName: string
               <Table maxHeight="none">
               <THead>
                 <TR>
-                  <TH align="center" className="w-12">#</TH>
                   <TH>Student</TH>
                   <TH>Total Fee</TH>
                   <TH>Paid</TH>
@@ -1066,9 +1187,8 @@ function FinanceTab({ batchId, batchName }: { batchId: string; batchName: string
                 </TR>
               </THead>
               <TBody>
-                {filteredFeeRows.map(({ fee, student, remaining, status }, index) => (
+                {filteredFeeRows.map(({ fee, student, remaining, status }) => (
                   <TR key={fee.id}>
-                    <TD align="center" className="cell-muted">{index + 1}</TD>
                     <TD className="font-medium">
                       <StudentLink studentId={fee.student_id} name={student?.name ?? 'Unknown'} />
                     </TD>
@@ -1115,6 +1235,7 @@ function FinanceTab({ batchId, batchName }: { batchId: string; batchName: string
         submitting={logging}
         onDelete={handleDeletePaymentLog}
         deletingId={deletingLogId}
+        onLogUpdated={(log) => setPaymentLogs((prev) => prev.map((entry) => (entry.id === log.id ? log : entry)))}
         onClaimApproved={({ log, fee }) => {
           setLoggingFee(fee);
           setPaymentLogs((prev) => [log, ...prev]);
@@ -1150,7 +1271,7 @@ export function AssignmentsTab({ batchId }: { batchId: string }) {
             <div className="flex gap-2">
               {selectedAssignment && (
                 <Button size="sm" variant="secondary" className="action-button-icon" onClick={() => setShowEdit(true)} aria-label="Edit assignment">
-                  <Edit3 size={14} />
+                  <PenLine size={14} />
                 </Button>
               )}
               <Button size="sm" className="action-button-compact" onClick={() => setShowNew(true)}><Plus size={14} />Create</Button>
@@ -1178,10 +1299,6 @@ export function AssignmentsTab({ batchId }: { batchId: string }) {
 
       {selectedAsgn ? (
         <div className="space-y-4">
-          <Card>
-            <AssignmentFiles key={selectedAsgn} assignmentId={selectedAsgn} batchId={batchId} />
-          </Card>
-
           <Card>
             <AssignmentSubmissionTable
               key={selectedAsgn}

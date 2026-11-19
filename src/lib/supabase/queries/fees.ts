@@ -49,6 +49,17 @@ export async function addFeePaymentLog(input: {
   );
 }
 
+/** Date, method and notes only: the amount never changes, so the balance needs no maths. */
+export async function updateFeePaymentLog(
+  logId: string,
+  patch: { payment_date: string; payment_method: PaymentMethod; notes: string },
+): Promise<FeePaymentLog> {
+  return row<FeePaymentLog>(
+    await supabase.from('fee_payment_logs').update(patch).eq('id', logId).select().single(),
+    'Could not update this payment',
+  );
+}
+
 /** Removes a payment and hands the balance back. Pending or void, whichever it came from. */
 export async function deleteFeePayment(logId: string): Promise<StudentFee> {
   return row<StudentFee>(

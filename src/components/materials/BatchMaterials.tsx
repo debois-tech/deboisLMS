@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import { BookOpen, Eye, FileText, FolderUp, Trash2, Upload, Users } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
@@ -109,17 +110,20 @@ export function BatchMaterials({
       <Card className="material-card">
         <CardHeader
           title={title}
+          className="card-header-gap"
           action={
             <div className="flex flex-wrap justify-end gap-2">
               {batchId && materials.length > 0 && (
                 <Button
                   size="sm"
-                  variant="outline"
-                  className="action-button-compact action-button-danger"
+                  variant="secondary"
+                  className="action-button-icon action-button-danger"
                   onClick={handlePurge}
                   loading={purging}
+                  aria-label="Delete all files"
+                  title="Delete all files"
                 >
-                  <Trash2 size={14} /> Delete all
+                  <Trash2 size={16} />
                 </Button>
               )}
               <Button size="sm" className="action-button-compact" onClick={() => setShowUpload(true)}>
@@ -132,44 +136,53 @@ export function BatchMaterials({
         {materials.length === 0 ? (
           <EmptyState icon={<BookOpen size={32} />} title="No material uploaded" />
         ) : (
-          <div className="material-admin-list">
-            {materials.map((material) => (
-              <div key={material.id} className="material-admin-row">
-                <span className="material-admin-icon">
-                  {material.batch_id ? <FileText size={16} /> : <Users size={16} />}
-                </span>
-
-                <div className="material-admin-body">
-                  <p className="material-admin-title">{material.title}</p>
-                  <p className="material-admin-meta">
-                    {fileTypeLabel(material.mime_type, material.storage_path)} ·{' '}
-                    {material.folder ? `${material.folder} · ` : ''}
-                    {formatDateTime(material.created_at)}
-                    {material.tutor?.name ? ` · ${material.tutor.name}` : ''}
-                    {material.size_bytes ? ` · ${formatFileSize(Number(material.size_bytes))}` : ''}
-                  </p>
-                </div>
-
-                <div className="material-admin-actions">
-                  <Button size="sm" variant="ghost" onClick={() => setViewsFor(material)}>
-                    <Eye size={15} /> Opens
-                  </Button>
-                  <Button size="sm" variant="secondary" onClick={() => setPreview(material)}>
-                    Preview
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="material-admin-delete"
-                    onClick={() => handleDelete(material)}
-                    aria-label={`Delete ${material.title}`}
-                  >
-                    <Trash2 size={17} />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
+          <Table maxHeight="none" className="data-table-compact">
+            <THead>
+              <TR>
+                <TH>Title</TH>
+                <TH>Type</TH>
+                <TH>Uploaded</TH>
+                <TH>Tutor</TH>
+                <TH>Size</TH>
+                <TH><span className="sr-only">Actions</span></TH>
+              </TR>
+            </THead>
+            <TBody>
+              {materials.map((material) => (
+                <TR key={material.id}>
+                  <TD>
+                    <span className="flex items-center gap-2 font-medium text-[var(--text-primary)]">
+                      <span className="text-[var(--text-muted)]">{material.batch_id ? <FileText size={16} /> : <Users size={16} />}</span>
+                      {material.title}
+                    </span>
+                  </TD>
+                  <TD className="cell-secondary">{fileTypeLabel(material.mime_type, material.storage_path)}</TD>
+                  <TD className="cell-muted whitespace-nowrap">{formatDateTime(material.created_at)}</TD>
+                  <TD className="cell-secondary">{material.tutor?.name ?? '—'}</TD>
+                  <TD className="cell-muted whitespace-nowrap">{material.size_bytes ? formatFileSize(Number(material.size_bytes)) : '—'}</TD>
+                  <TD align="right">
+                    <div className="flex items-center justify-end gap-1">
+                      <Button size="sm" variant="ghost" onClick={() => setViewsFor(material)}>
+                        <Eye size={15} /> Opens
+                      </Button>
+                      <Button size="sm" variant="secondary" onClick={() => setPreview(material)}>
+                        Preview
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="material-admin-delete"
+                        onClick={() => handleDelete(material)}
+                        aria-label={`Delete ${material.title}`}
+                      >
+                        <Trash2 size={17} />
+                      </Button>
+                    </div>
+                  </TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
         )}
       </Card>
 

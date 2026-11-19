@@ -91,7 +91,7 @@ export function StudentAttendance({ studentId, studentName, batchId, batchName, 
         size="lg"
         footer={
           <Button variant="secondary" className="action-button-compact" onClick={exportCsv} disabled={records.length === 0}>
-            <Download size={14} /> Export CSV
+            <Download size={14} /> Export
           </Button>
         }
       >

@@ -113,6 +113,7 @@ export function BulkLoginsModal({ result, onClose }: { result: BulkLoginResult |
             <table>
               <thead>
                 <tr>
+                  <th>Sr No.</th>
                   <th>Student</th>
                   <th>Email</th>
                   <th>Password</th>
@@ -120,13 +121,14 @@ export function BulkLoginsModal({ result, onClose }: { result: BulkLoginResult |
                 </tr>
               </thead>
               <tbody>
-                {pager.slice.map((row) => {
+                {pager.slice.map((row, at) => {
                   const isSent = sent.has(row.studentId);
                   const isBusy = busy.has(row.studentId);
                   const failed = failures.get(row.studentId);
 
                   return (
                     <tr key={row.studentId}>
+                      <td>{pager.from + at}</td>
                       <td>{row.name}</td>
                       <td>{row.email}</td>
                       <td className="font-mono">{row.password}</td>

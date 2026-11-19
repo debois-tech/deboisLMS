@@ -47,7 +47,7 @@ interface CardHeaderProps {
 }
 export function CardHeader({ title, subtitle, action, titleAdornment, className }: CardHeaderProps) {
   return (
-    <div className={`flex items-start justify-between gap-4 mb-6 ${className ?? ''}`}>
+    <div className={`flex items-center justify-between gap-4 mb-6 ${className ?? ''}`}>
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="text-base font-bold text-[var(--text-primary)]">{title}</h3>

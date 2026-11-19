@@ -103,26 +103,6 @@ function toNaiveLocal(date: Date): string {
 
 interface ParsedAttendanceCsv {
   rows: CsvRow[];
-  /** The export's meeting code, used to spot a CSV already processed for this lecture. */
-  meetingCode?: string;
-}
-
-// Case-insensitive, hyphens ignored, and a pasted Meet link reduced to its code.
-function normalizeMeetingCode(code: string | undefined | null): string {
-  const raw = (code ?? '').trim();
-  if (!raw) return '';
-
-  // Drop any query or fragment, then keep the last path segment of a full URL.
-  const path = raw.split(/[?#]/)[0].replace(/\/+$/, '');
-  const segment = path.slice(path.lastIndexOf('/') + 1);
-  return segment.replace(/-/g, '').trim().toLowerCase();
-}
-
-// Both must be present: an absent code is unknown, not a mismatch.
-export function meetingCodesMatch(expected: string | undefined | null, actual: string | undefined | null): boolean {
-  const expectedCode = normalizeMeetingCode(expected);
-  const actualCode = normalizeMeetingCode(actual);
-  return expectedCode.length > 0 && expectedCode === actualCode;
 }
 
 export function parseCsv(text: string): ParsedAttendanceCsv {
@@ -139,22 +119,14 @@ export function parseCsv(text: string): ParsedAttendanceCsv {
     if (c.includes('joined') || c.includes('join')) colMap.joined = i;
     if (c.includes('stopped') || c.includes('stop')) colMap.stopped = i;
     if (c.includes('duration')) colMap.duration = i;
-    if (c.includes('meeting') || c.includes('code')) colMap.meeting = i;
   });
 
   const rows: CsvRow[] = [];
-  let meetingCode: string | undefined;
 
   for (let i = 1; i < lines.length; i++) {
     const cols = parseCsvLine(lines[i]);
     const name = cols[colMap.name]?.trim().replace(/^"(.*)"$/, '$1') ?? '';
     if (!name) continue;
-
-    // Every row repeats the same code; the first non-empty one is the meeting.
-    if (!meetingCode && colMap.meeting !== undefined) {
-      const code = cols[colMap.meeting]?.trim().replace(/^"(.*)"$/, '$1');
-      if (code) meetingCode = code;
-    }
 
     rows.push({
       sno: i,
@@ -167,5 +139,5 @@ export function parseCsv(text: string): ParsedAttendanceCsv {
     });
   }
 
-  return { rows, meetingCode };
+  return { rows };
 }

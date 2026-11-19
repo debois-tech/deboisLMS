@@ -183,6 +183,7 @@ export function StudentImportModal({ open, onClose, batches, batch, onImport }: 
               <table>
                 <thead>
                   <tr>
+                    <th>Sr No.</th>
                     {headers.map((header) => <th key={header}>{header}</th>)}
                     <th className="import-preview-derived">Fee</th>
                   </tr>
@@ -190,6 +191,7 @@ export function StudentImportModal({ open, onClose, batches, batch, onImport }: 
                 <tbody>
                   {pager.slice.map((row, index) => (
                     <tr key={pager.from + index}>
+                      <td>{pager.from + index}</td>
                       {headers.map((header) => <td key={header}>{row[header] || '—'}</td>)}
                       <td className="import-preview-derived">
                         {feeOf.has(row) ? formatCurrency(feeOf.get(row) ?? 0) : '—'}
@@ -264,7 +266,7 @@ export function StudentImportModal({ open, onClose, batches, batch, onImport }: 
         <div className="flex justify-end gap-3">
           <Button variant="ghost" onClick={close} disabled={importing}>Cancel</Button>
           <Button
-            className="action-button-import"
+            className="action-button-compact"
             onClick={handleImport}
             loading={importing}
             disabled={incomplete}

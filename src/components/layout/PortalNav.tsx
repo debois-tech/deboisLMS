@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
-import { BookOpen, CalendarCheck, FileText, LayoutDashboard, LibraryBig, MessageSquare, User, X, Zap } from 'lucide-react';
+import { BookOpen, CalendarCheck, FileText, LayoutDashboard, LibraryBig, User, X, Zap } from 'lucide-react';
 
 interface PortalNavItem {
   label: string;
@@ -20,7 +20,6 @@ const portalNavItems: PortalNavItem[] = [
   { label: 'Quizzes', to: '/portal/quizzes', icon: Zap },
   { label: 'Material', to: '/portal/materials', icon: BookOpen },
   { label: 'Profile', to: '/portal/profile', icon: User },
-  { label: 'Feedback', to: '/portal/feedback', icon: MessageSquare },
 ];
 
 interface PortalNavProps {

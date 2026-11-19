@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { Plus, Receipt, Trash2 } from 'lucide-react';
+import { Check, PenLine, Plus, Receipt, Trash2 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { ClaimActions } from '@/components/finance/ClaimActions';
-import { downloadFeeReceipt, getPendingClaims } from '@/lib/supabase';
+import { downloadFeeReceipt, getPendingClaims, updateFeePaymentLog } from '@/lib/supabase';
 import { useToast } from '@/lib/context/ToastContext';
 import { errorMessage } from '@/lib/utils/errors';
 import { fromDateValue } from '@/lib/utils/date';
@@ -43,14 +43,51 @@ interface PaymentLogModalProps {
   deletingId?: string | null;
   /** A pending claim was verified: the new log and updated fee, for the parent to fold in. */
   onClaimApproved: (result: { log: FeePaymentLog; fee: StudentFee }) => void;
+  /** An edited log, for the parent to swap into its list. */
+  onLogUpdated: (log: FeePaymentLog) => void;
 }
 
+const blankForm = (): PaymentLogFormState => ({ amount: '', payment_date: new Date().toISOString().slice(0, 10), payment_method: 'upi', notes: '' });
+
 export function PaymentLogModal({
-  fee, studentName, student, batchName, paymentLogs, form, onFormChange, onClose, onSubmit, submitting, onDelete, deletingId, onClaimApproved,
+  fee, studentName, student, batchName, paymentLogs, form, onFormChange, onClose, onSubmit, submitting, onDelete, deletingId, onClaimApproved, onLogUpdated,
 }: PaymentLogModalProps) {
   const [claims, setClaims] = useState<PaymentClaim[]>([]);
   const [printing, setPrinting] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const { showToast } = useToast();
+
+  // The top form doubles as the editor: a pen fills it, Save writes the changes back.
+  const editing = paymentLogs.find((log) => log.id === editingId);
+  const locked = editing?.notes === REGISTRATION_NOTE;
+
+  const startEdit = (log: FeePaymentLog) => {
+    setEditingId(log.id);
+    onFormChange({ amount: String(log.amount), payment_date: log.payment_date, payment_method: log.payment_method ?? 'other', notes: log.notes ?? '' });
+  };
+  const stopEdit = () => {
+    setEditingId(null);
+    onFormChange(blankForm());
+  };
+  const close = () => {
+    setEditingId(null);
+    onClose();
+  };
+
+  const saveEdit = async () => {
+    if (!editing) return;
+    setSaving(true);
+    try {
+      onLogUpdated(await updateFeePaymentLog(editing.id, { payment_date: form.payment_date, payment_method: form.payment_method, notes: form.notes.trim() }));
+      stopEdit();
+      showToast('Payment updated');
+    } catch (err) {
+      showToast(errorMessage(err, 'Could not update this payment'), 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const studentId = fee?.student_id;
 
@@ -114,10 +151,10 @@ export function PaymentLogModal({
   // Instalments themselves are flexible — 6k then 4k settles the same 10k — so the
   // ceiling is the balance, never one instalment. Nobody pays past what they owe:
   // for a student who left that is the void, not the fee they never reached.
-  const overpaying = Number(form.amount) > remaining;
+  const overpaying = !editing && Number(form.amount) > remaining;
 
   return (
-    <Modal open={!!fee} onClose={onClose} title="Payment Log" size="xl">
+    <Modal open={!!fee} onClose={close} title="Payment Log" size="xl">
       {fee && (
         <div className="space-y-6">
           <div className="payment-log-form popup-form-spaced">
@@ -142,6 +179,7 @@ export function PaymentLogModal({
                   min="1"
                   max={remaining}
                   value={form.amount}
+                  disabled={Boolean(editing)}
                   onChange={(event) => onFormChange({ ...form, amount: event.target.value })}
                 />
                 {overpaying && <InlineAlert>Max {formatCurrency(remaining)}</InlineAlert>}
@@ -171,13 +209,22 @@ export function PaymentLogModal({
                 emptyText="No payment methods found"
               />
             </FormField>
-            <FormField label="Notes">
-              <textarea value={form.notes} onChange={(event) => onFormChange({ ...form, notes: event.target.value })} />
+            <FormField label="Notes" required>
+              <textarea value={form.notes} readOnly={locked} onChange={(event) => onFormChange({ ...form, notes: event.target.value })} />
             </FormField>
-            <div className="flex justify-end">
-              <Button className="action-button-compact" onClick={onSubmit} loading={submitting} disabled={!form.amount || Number(form.amount) <= 0 || overpaying}>
-                <Plus size={14} /> Add Log
-              </Button>
+            <div className="flex justify-end gap-2">
+              {editing ? (
+                <>
+                  <Button variant="ghost" onClick={stopEdit} disabled={saving}>Cancel</Button>
+                  <Button className="action-button-compact" onClick={() => void saveEdit()} loading={saving} disabled={!form.notes.trim()}>
+                    <Check size={14} /> Save changes
+                  </Button>
+                </>
+              ) : (
+                <Button className="action-button-compact" onClick={onSubmit} loading={submitting} disabled={!form.amount || Number(form.amount) <= 0 || overpaying || !form.notes.trim()}>
+                  <Plus size={14} /> Add Log
+                </Button>
+              )}
             </div>
           </div>
 
@@ -220,7 +267,7 @@ export function PaymentLogModal({
                     </TR>
                   ))}
                   {paymentLogs.map((log) => (
-                    <TR key={log.id}>
+                    <TR key={log.id} className={editingId === log.id ? 'bg-[var(--primary)]/10' : undefined}>
                       <TD className="font-semibold text-[var(--success-text)]">{formatCurrency(Number(log.amount))}</TD>
                       <TD className="cell-secondary">{log.payment_date}</TD>
                       <TD className="cell-muted capitalize">{(log.payment_method ?? '—').replace('_', ' ')}</TD>
@@ -239,7 +286,16 @@ export function PaymentLogModal({
                               <Receipt size={14} />
                             </Button>
                           )}
-                          {/* The registration fee is written by a trigger, so nothing could put it back. */}
+                          <Button
+                            variant="ghost"
+                            className="action-button-compact"
+                            onClick={() => startEdit(log)}
+                            disabled={editingId === log.id}
+                            aria-label={`Edit the ${formatCurrency(Number(log.amount))} payment from ${log.payment_date}`}
+                          >
+                            <PenLine size={14} />
+                          </Button>
+                          {/* Old registration rows were system-written, so left undeletable. */}
                           {log.notes !== REGISTRATION_NOTE && (
                             <Button
                               variant="ghost"

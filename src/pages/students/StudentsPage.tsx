@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Plus, Users, Upload, Search } from 'lucide-react';
 import { SearchFilterBar } from '@/components/ui/SearchFilterBar';
 import { FilterTabs } from '@/components/ui/FilterTabs';
+import { BatchFilter, BatchPills } from '@/components/ui/BatchSelect';
 import { SearchSelect } from '@/components/ui/SearchSelect';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
@@ -18,6 +19,7 @@ import { getStudents, getBatches, getAllBatchStudentMappings, createStudentLogin
 import type { BulkLoginResult } from '@/lib/supabase';
 import type { Student, Batch, BatchStudentMapping, MappingStatus } from '@/lib/types';
 import { useToast } from '@/lib/context/ToastContext';
+import { useAuth } from '@/lib/context/AuthContext';
 
 const NO_BATCH = 'none';
 
@@ -32,10 +34,14 @@ type SortKey = 'newest' | 'az' | 'za' | 'idasc' | 'iddesc';
 
 const DEFAULT_SORT: SortKey = 'idasc';
 
-const ENROLMENT_TABS: { value: MappingStatus; label: string }[] = [
+// 'archived' is the database name for completed: the batch ended 90+ days ago and the login is gone.
+type EnrolmentTab = MappingStatus | 'all';
+
+const ENROLMENT_TABS: { value: EnrolmentTab; label: string }[] = [
   { value: 'active', label: 'Active' },
-  { value: 'archived', label: 'Archived' },
   { value: 'terminated', label: 'Terminated' },
+  { value: 'archived', label: 'Completed' },
+  { value: 'all', label: 'All' },
 ];
 
 const SORT_OPTIONS = [
@@ -64,11 +70,12 @@ export default function StudentsPage() {
   const [search, setSearch] = useState('');
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [sort, setSort] = useState<SortKey>(DEFAULT_SORT);
-  const [enrolment, setEnrolment] = useState<MappingStatus>('active');
+  const [enrolment, setEnrolment] = useState<EnrolmentTab>('active');
   const [view, setView] = useState<StudentView>('live');
   const [showImport, setShowImport] = useState(false);
   const [bulkLogins, setBulkLogins] = useState<BulkLoginResult | null>(null);
   const { showToast } = useToast();
+  const { isDeveloper } = useAuth();
 
   const { loading, error, retry } = useInitialLoad(async () => {
     const [studentData, batchData, mappingData] = await Promise.all([
@@ -116,14 +123,12 @@ export default function StudentsPage() {
   // Test students live in their own view, with their own batches to filter by.
   const isTest = view === 'test';
   const searched = students.filter((s) => Boolean(s.is_test) === isTest).filter(matches);
-  const batchNames = (studentId: string) =>
-    mappings.filter((m) => m.student_id === studentId).map((m) => batches.find((b) => b.id === m.batch_id)?.name).filter(Boolean).join(', ');
-  const tabs = ENROLMENT_TABS.map((tab) => ({
-    ...tab,
-    count: searched.filter((s) => enrolmentOf(s.id) === tab.value).length,
-  }));
+  const batchesOf = (studentId: string) =>
+    (studentBatchIds.get(studentId) ?? []).map((id) => batches.find((b) => b.id === id)).filter((b): b is Batch => Boolean(b));
+  const inTab = (s: Student, tab: EnrolmentTab) => tab === 'all' || enrolmentOf(s.id) === tab;
+  const tabs = ENROLMENT_TABS.map((tab) => ({ ...tab, count: searched.filter((s) => inTab(s, tab.value)).length }));
 
-  const filteredStudents = searched.filter((s) => enrolmentOf(s.id) === enrolment);
+  const filteredStudents = searched.filter((s) => inTab(s, enrolment));
 
   if (sort === 'az' || sort === 'za') {
     const direction = sort === 'az' ? 1 : -1;
@@ -137,10 +142,6 @@ export default function StudentsPage() {
       return direction * compareRef(a.student_code, b.student_code);
     });
   }
-
-  const selectBatch = (batchId: string | null) => {
-    setSelectedBatchId(batchId);
-  };
 
   const selectView = (value: string) => {
     setView(value as StudentView);
@@ -186,7 +187,7 @@ export default function StudentsPage() {
         title="Students"
         action={
           <div className="flex flex-wrap justify-end gap-2">
-            <Button className="action-button-import" variant="secondary" onClick={() => setShowImport(true)}><Upload size={16} />Import</Button>
+            <Button className="action-button-compact" variant="secondary" onClick={() => setShowImport(true)}><Upload size={16} />Import</Button>
             <Link to="/students/new"><Button className="action-button-compact"><Plus size={16} />Add Student</Button></Link>
           </div>
         }
@@ -196,52 +197,52 @@ export default function StudentsPage() {
         <EmptyState icon={<Users size={32} />} title="No students yet" />
       ) : (
         <>
-          <div className="mb-4 max-w-md">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <FilterTabs tabs={tabs} value={enrolment} onChange={setEnrolment} label="Enrolment" />
+            {isDeveloper && (
+              <SearchSelect
+                options={VIEW_OPTIONS}
+                value={view}
+                onChange={selectView}
+                placeholder="Original"
+                searchPlaceholder=""
+                emptyText=""
+                showSearch={false}
+                className="!w-auto !max-w-none"
+              />
+            )}
+          </div>
+
+          <div className="search-row mb-4">
             <SearchFilterBar
               value={search}
               onChange={setSearch}
               placeholder="Search by ref ID, name, phone, or email"
-              filterLabel="Batch"
-              allLabel="All batches"
-              filterValue={selectedBatchId}
-              filterOptions={[
-                ...batches.filter((batch) => Boolean(batch.is_test) === isTest).map((batch) => ({ value: batch.id, label: batch.name })),
-                { value: NO_BATCH, label: 'No batch' },
-              ]}
-              onFilterChange={selectBatch}
               sortLabel="Sort"
               sortValue={sort}
               sortOptions={SORT_OPTIONS}
               onSortChange={(value) => setSort(value as SortKey)}
               defaultSortValue={DEFAULT_SORT}
             />
-          </div>
-
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <FilterTabs tabs={tabs} value={enrolment} onChange={setEnrolment} label="Enrolment" />
-            <SearchSelect
-              options={VIEW_OPTIONS}
-              value={view}
-              onChange={selectView}
-              placeholder="Original"
-              searchPlaceholder=""
-              emptyText=""
-              showSearch={false}
-              className="!w-auto !max-w-none"
+            <BatchFilter
+              batches={batches.filter((batch) => Boolean(batch.is_test) === isTest)}
+              value={selectedBatchId}
+              onChange={setSelectedBatchId}
+              extraOptions={[{ id: NO_BATCH, name: 'No batch' }]}
             />
           </div>
 
           {filteredStudents.length === 0 ? (
-            <EmptyState icon={<Search size={32} />} title={`No ${enrolment} students`} />
+            <EmptyState icon={<Search size={32} />} title={enrolment === 'all' ? 'No students' : `No ${ENROLMENT_TABS.find((tab) => tab.value === enrolment)!.label.toLowerCase()} students`} />
           ) : (
             <Table maxHeight="none">
               <THead>
                 <TR>
                   <TH>Student</TH>
                   <TH>ID</TH>
-                  {isTest && <TH>Batch</TH>}
                   <TH>Phone</TH>
                   <TH>Email</TH>
+                  <TH align="center">Batches</TH>
                 </TR>
               </THead>
               <TBody>
@@ -254,9 +255,9 @@ export default function StudentsPage() {
                       </Link>
                     </TD>
                     <TD className="cell-secondary font-mono">{s.student_code || '—'}</TD>
-                    {isTest && <TD className="cell-secondary">{batchNames(s.id) || '—'}</TD>}
                     <TD className="cell-secondary">{s.phone || '—'}</TD>
                     <TD className="cell-muted">{s.email || '—'}</TD>
+                    <TD align="center" className="cell-secondary"><BatchPills batches={batchesOf(s.id)} /></TD>
                   </TR>
                 ))}
               </TBody>

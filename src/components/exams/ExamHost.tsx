@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, ChevronLeft, ChevronRight, Flag, Pencil, Play, Plus, Timer, Trash2, Users } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Flag, PenLine, Play, Plus, Timer, Trash2, Users } from 'lucide-react';
 import { QuizBoard, QuizOption, QuizSegment, QuizTimer } from '@/components/exams/QuizParts';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -293,7 +293,7 @@ export function ExamHost({ quizId, onLeave, onEnded, onEdit }: ExamHostProps) {
 
       <footer className="qz-stage-foot">
         {lobby ? (
-          <Button className="action-button-compact" variant="secondary" onClick={onEdit} disabled={busy}><Pencil size={16} /> Edit questions</Button>
+          <Button className="action-button-compact" variant="secondary" onClick={onEdit} disabled={busy}><PenLine size={16} /> Edit questions</Button>
         ) : (
           <nav className="qz-nav" aria-label="Questions">
             {questions.map((question, index) => {

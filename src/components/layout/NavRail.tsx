@@ -3,8 +3,8 @@ import { Link, useLocation } from 'react-router-dom';
 import { clsx } from 'clsx';
 import type { LucideIcon } from 'lucide-react';
 import {
-  ChevronDown, ClipboardCheck, ClipboardList, DollarSign, FileText, GraduationCap, History, BookOpen,
-  Layers, LayoutDashboard, LibraryBig, MessageSquare, PanelLeft, Plus, ScrollText, Users, X,
+  Bug, ChevronDown, ClipboardCheck, ClipboardList, Code2, DollarSign, FileText, GraduationCap, History, BookOpen,
+  KeyRound, Layers, LayoutDashboard, LibraryBig, PanelLeft, ScrollText, Users, X,
 } from 'lucide-react';
 
 export interface Leaf {
@@ -28,7 +28,7 @@ export const ADMIN_GROUPS: Group[] = [
     id: 'people', label: 'People', icon: Users, items: [
       { label: 'Students', to: '/students', icon: Users },
       { label: 'Tutors', to: '/tutors', icon: GraduationCap },
-      { label: 'Tutor Log', to: '/tutor-log', icon: History },
+      { label: 'Logs', to: '/logs', icon: History },
       { label: 'Documents', to: '/documents', icon: ScrollText },
     ],
   },
@@ -38,7 +38,6 @@ export const ADMIN_GROUPS: Group[] = [
       { label: 'Attendance', to: '/attendance', icon: ClipboardCheck },
       { label: 'Assignments', to: '/assignments', icon: FileText },
       { label: 'Exams', to: '/exams', icon: ClipboardList },
-      { label: 'Feedback', to: '/feedback', icon: MessageSquare },
     ],
   },
   {
@@ -49,7 +48,17 @@ export const ADMIN_GROUPS: Group[] = [
   },
   { id: 'money', label: 'Money', icon: DollarSign, items: [{ label: 'Finance', to: '/fees', icon: DollarSign }] },
 ];
-export const ADMIN_NEW = { label: 'New Batch', to: '/batches/new' };
+
+// The developer sees every admin page, plus these.
+export const DEV_GROUPS: Group[] = [
+  ...ADMIN_GROUPS,
+  {
+    id: 'dev', label: 'Developer', icon: Code2, items: [
+      { label: 'Bug report', to: '/dev/bug-reports', icon: Bug },
+      { label: 'Accounts', to: '/dev/accounts', icon: KeyRound },
+    ],
+  },
+];
 
 export const TUTOR_GROUPS: Group[] = [
   { id: 'home', label: 'Dashboard', icon: LayoutDashboard, items: [{ label: 'Dashboard', to: '/tutor', icon: LayoutDashboard, end: true }] },
@@ -79,8 +88,6 @@ const useDesktop = () => useSyncExternalStore(watchDesktop, () => window.matchMe
 
 interface NavRailProps {
   groups: Group[];
-  /** The bottom "+ New" shortcut; none for a role that has nothing to create. */
-  newAction?: { label: string; to: string } | null;
   /** Mobile drawer. */
   open: boolean;
   /** Desktop rail (true) or wide (false). The drawer is always wide. */
@@ -90,7 +97,7 @@ interface NavRailProps {
 }
 
 // Icon rail with a hover flyout, or a wide sidebar with tiles under each hub.
-export function NavRail({ groups, newAction, open, collapsed, onClose, onToggle }: NavRailProps) {
+export function NavRail({ groups, open, collapsed, onClose, onToggle }: NavRailProps) {
   const { pathname } = useLocation();
   const desktop = useDesktop();
   const wide = !desktop || !collapsed;
@@ -227,15 +234,6 @@ export function NavRail({ groups, newAction, open, collapsed, onClose, onToggle 
             );
           })}
         </nav>
-
-        {newAction && (
-          <div className="nav2-bottom">
-            <Link to={newAction.to} onClick={pick} onMouseEnter={hide} className="nav2-new" aria-label={newAction.label}>
-              <span className="nav2-ico"><Plus size={18} /></span>
-              <span className="nav2-label">{newAction.label}</span>
-            </Link>
-          </div>
-        )}
 
         <div className="nav2-fly-clip">
           <div ref={panel} className={clsx('nav2-fly', flyoutOpen && 'is-open')} aria-hidden={!flyoutOpen}>
