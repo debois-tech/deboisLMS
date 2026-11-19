@@ -6,6 +6,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Pager, usePager } from '@/components/ui/Pager';
+import { Modal } from '@/components/ui/Modal';
 import { SearchFilterBar } from '@/components/ui/SearchFilterBar';
 import { SearchSelect } from '@/components/ui/SearchSelect';
 import { Spinner } from '@/components/ui/Spinner';
@@ -30,6 +31,10 @@ const CLEAR_OPTIONS = [7, 30, 60, 90].map((days) => ({ value: String(days), labe
 
 const WHO: Record<LogKind, string> = { tutor: 'Tutor', admin: 'Admin' };
 
+// One line per entry; the sentence about it opens on click.
+const titleOf = (action: LogAction) =>
+  `${action.op[0].toUpperCase()}${action.op.slice(1)} ${action.item.toLowerCase()}${action.detail ? ` · ${action.detail}` : ''}${action.times > 1 ? ` ×${action.times}` : ''}`;
+
 // Tutor and admin logs side by side; the nightly job keeps 90 days, only the developer can clear sooner.
 export default function LogsPage() {
   return (
@@ -53,6 +58,7 @@ function LogTable({ kind }: { kind: LogKind }) {
   const [actor, setActor] = useState<string | null>(null);
   const [view, setView] = useState('live');
   const [days, setDays] = useState('90');
+  const [opened, setOpened] = useState<LogAction | null>(null);
 
   const { loading, error, retry } = useInitialLoad(async () => {
     const [rows, batches] = await Promise.all([getLogActions(kind), getBatches()]);
@@ -73,7 +79,7 @@ function LogTable({ kind }: { kind: LogKind }) {
     const term = search.trim().toLowerCase();
     return inView.filter((action) =>
       (!actor || action.actor === actor) &&
-      (!term || `${action.item} ${action.detail ?? ''} ${batchNames.get(action.batch_id ?? '') ?? ''}`.toLowerCase().includes(term)),
+      (!term || `${action.item} ${action.detail ?? ''} ${action.description ?? ''} ${batchNames.get(action.batch_id ?? '') ?? ''}`.toLowerCase().includes(term)),
     );
   }, [inView, actor, search, batchNames]);
 
@@ -158,22 +164,18 @@ function LogTable({ kind }: { kind: LogKind }) {
                   <TR>
                     <TH>When</TH>
                     <TH>{WHO[kind]}</TH>
-                    <TH>Action</TH>
-                    <TH>Detail</TH>
+                    <TH>Title</TH>
                     <TH>Batch</TH>
                   </TR>
                 </THead>
                 <TBody from={pager.from}>
                   {pager.slice.map((action) => (
-                    <TR key={action.id}>
+                    <TR key={action.id} onActivate={() => setOpened(action)}>
                       <TD className="cell-muted">{formatDateTime(action.created_at)}</TD>
                       <TD className="font-semibold text-[var(--text-primary)]">
                         {action.actor} {action.role === 'developer' && <Badge variant="warning">Developer</Badge>}
                       </TD>
-                      <TD className="cell-secondary capitalize">
-                        {action.op} {action.item.toLowerCase()}{action.times > 1 ? ` ×${action.times}` : ''}
-                      </TD>
-                      <TD className="cell-secondary">{action.detail || '—'}</TD>
+                      <TD className="cell-secondary">{titleOf(action)}</TD>
                       <TD className="cell-secondary">{batchNames.get(action.batch_id ?? '') ?? '—'}</TD>
                     </TR>
                   ))}
@@ -184,6 +186,16 @@ function LogTable({ kind }: { kind: LogKind }) {
           )}
         </>
       )}
+
+      <Modal open={opened !== null} onClose={() => setOpened(null)} title={opened ? titleOf(opened) : ''} size="md">
+        {opened && (
+          <dl className="log-facts">
+            <div><dt className="student-fact-label">Time</dt><dd className="student-fact-value">{formatDateTime(opened.created_at)}</dd></div>
+            <div><dt className="student-fact-label">Account</dt><dd className="student-fact-value">{opened.account ?? opened.actor}</dd></div>
+            <div><dt className="student-fact-label">Description</dt><dd className="log-description">{opened.description ?? 'Not recorded'}</dd></div>
+          </dl>
+        )}
+      </Modal>
     </div>
   );
 }

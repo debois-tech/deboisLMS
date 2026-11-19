@@ -6221,3 +6221,7 @@ a.tdash-stat:hover { border-color: var(--border-strong); background: var(--bg-el
     opacity: 1;
   }
 }
+
+/* A log entry's popup: label over value, the sentence in plain weight. */
+.log-facts { display: flex; flex-direction: column; gap: 1.25rem; }
+.log-description { font-size: 0.9375rem; line-height: 1.55; color: var(--text-secondary); overflow-wrap: anywhere; }

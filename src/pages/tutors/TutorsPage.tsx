@@ -11,17 +11,26 @@ import { Avatar } from '@/components/ui/Avatar';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
 import { BatchPills } from '@/components/ui/BatchSelect';
+import { Badge } from '@/components/ui/Badge';
+import { FilterTabs } from '@/components/ui/FilterTabs';
+import { useAuth } from '@/lib/context/AuthContext';
 import { getTutors, getAllTutorBatches } from '@/lib/supabase';
 import type { Tutor, Batch } from '@/lib/types';
 
+type View = 'active' | 'archived';
+
 export default function TutorsPage() {
-  const [tutors, setTutors] = useState<Tutor[]>([]);
+  const { isDeveloper } = useAuth();
+  const [active, setActive] = useState<Tutor[]>([]);
+  const [archived, setArchived] = useState<Tutor[]>([]);
+  const [view, setView] = useState<View>('active');
   const [batchesByTutor, setBatchesByTutor] = useState<Map<string, Batch[]>>(new Map());
   const [search, setSearch] = useState('');
 
   const { loading, error, retry } = useInitialLoad(async () => {
-    const [tutorData, mappings] = await Promise.all([getTutors(), getAllTutorBatches()]);
-    setTutors(tutorData);
+    const [activeRows, archivedRows, mappings] = await Promise.all([getTutors('active'), getTutors('archived'), getAllTutorBatches()]);
+    setActive(activeRows);
+    setArchived(archivedRows);
     // Ongoing and upcoming only: the column shows who teaches what now.
     const byTutor = new Map<string, Batch[]>();
     for (const { tutor_id, batch } of mappings) {
@@ -30,6 +39,8 @@ export default function TutorsPage() {
     }
     setBatchesByTutor(byTutor);
   });
+
+  const tutors = view === 'active' ? active : archived;
 
   const filteredTutors = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -51,10 +62,16 @@ export default function TutorsPage() {
         action={<Link to="/tutors/new"><Button className="action-button-compact"><Plus size={16} />Add Tutor</Button></Link>}
       />
 
-      {tutors.length === 0 ? (
+      {active.length === 0 && archived.length === 0 ? (
         <EmptyState icon={<GraduationCap size={32} />} title="No tutors yet" />
       ) : (
         <>
+          <FilterTabs
+            tabs={[{ value: 'active', label: 'Active', count: active.length }, { value: 'archived', label: 'Archived', count: archived.length }]}
+            value={view}
+            onChange={setView}
+            label="Tutors"
+          />
           <div className="mb-4">
             <SearchBar
               value={search}
@@ -72,7 +89,7 @@ export default function TutorsPage() {
                   <TH>Tutor</TH>
                   <TH>Email</TH>
                   <TH>Phone</TH>
-                  <TH align="center">Batches</TH>
+                  {view === 'active' && <TH align="center">Batches</TH>}
                 </TR>
               </THead>
               <TBody>
@@ -82,11 +99,12 @@ export default function TutorsPage() {
                       <Link to={`/tutors/${t.id}`} className="flex items-center gap-3 group">
                         <Avatar name={t.name} size="md" />
                         <span className="font-semibold text-[var(--text-primary)] group-hover:text-[var(--primary)]">{t.name}</span>
+                        {isDeveloper && t.is_test && <Badge variant="warning">Test</Badge>}
                       </Link>
                     </TD>
                     <TD className="cell-secondary">{t.email || '—'}</TD>
                     <TD className="cell-muted">{t.phone || '—'}</TD>
-                    <TD align="center" className="cell-secondary"><BatchPills batches={batchesByTutor.get(t.id) ?? []} /></TD>
+                    {view === 'active' && <TD align="center" className="cell-secondary"><BatchPills batches={batchesByTutor.get(t.id) ?? []} /></TD>}
                   </TR>
                 ))}
               </TBody>

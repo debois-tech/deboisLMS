@@ -2,9 +2,10 @@ import { supabase } from '../client';
 import { invokeLoginFunction, maybeRow, ok, row, rows } from './result';
 import type { Batch, StudentCredentials, Tutor, TutorBatchMapping } from '@/lib/types';
 
-export async function getTutors(): Promise<Tutor[]> {
+/** Active tutors by default: the pickers must never offer an archived one. */
+export async function getTutors(status: Tutor['status'] = 'active'): Promise<Tutor[]> {
   return rows<Tutor>(
-    await supabase.from('tutors').select('*').order('created_at', { ascending: false }),
+    await supabase.from('tutors').select('*').eq('status', status).order('created_at', { ascending: false }),
     'Could not load tutors',
   );
 }
@@ -35,7 +36,7 @@ export async function getAllTutorBatches(): Promise<(TutorBatchMapping & { batch
   );
 }
 
-export async function createTutor(input: Omit<Tutor, 'id' | 'created_at'>): Promise<Tutor> {
+export async function createTutor(input: Pick<Tutor, 'name' | 'email' | 'phone'>): Promise<Tutor> {
   return row<Tutor>(
     await supabase.from('tutors').insert(input).select().single(),
     'Could not create the tutor',
@@ -100,7 +101,12 @@ export async function removeTutorFromBatch(mappingId: string, erase = false): Pr
   if (results.some((result) => result?.error)) throw new Error('The data is deleted but some files could not be removed');
 }
 
-// Removes the tutor, their batch links and their login — see delete_tutor() in schema.sql.
+/** Deletes the login, takes the tutor off every batch and archives them; their work stays. See archive_tutor(). */
+export async function archiveTutor(id: string): Promise<void> {
+  ok(await supabase.rpc('archive_tutor', { p_tutor_id: id }), 'Could not delete this login');
+}
+
+// Removes an archived tutor for good — see delete_tutor() in schema.sql.
 export async function deleteTutor(id: string): Promise<void> {
   ok(await supabase.rpc('delete_tutor', { p_tutor_id: id }), 'Could not delete this tutor');
 }

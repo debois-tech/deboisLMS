@@ -13,6 +13,9 @@ export interface LogAction {
   detail: string | null;
   batch_id: string | null;
   times: number;
+  /** The signed-in email and one sentence about the change; entries from before they existed have neither. */
+  account: string | null;
+  description: string | null;
   created_at: string;
 }
 

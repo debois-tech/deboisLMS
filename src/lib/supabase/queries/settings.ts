@@ -61,3 +61,17 @@ export async function listAdminAccounts(): Promise<AdminAccount[]> {
 export async function createAdminAccount(input: { full_name: string; email: string; password: string }): Promise<void> {
   await manageAdmins({ action: 'create', ...input });
 }
+
+export async function deleteAdminAccount(userId: string): Promise<void> {
+  await manageAdmins({ action: 'delete', user_id: userId });
+}
+
+export async function resetAdminPassword(userId: string, password: string): Promise<void> {
+  await manageAdmins({ action: 'reset', user_id: userId, password });
+}
+
+/** The signed-in person's own password; the admin Settings popup is the only caller. */
+export async function changeMyPassword(password: string): Promise<void> {
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) throw error;
+}

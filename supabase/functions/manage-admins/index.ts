@@ -18,7 +18,7 @@ function corsFor(req: Request): Record<string, string> {
   };
 }
 
-// The developer lists and creates admin accounts. Nobody else can: admins do not create each other.
+// The developer lists, creates, resets and deletes admin accounts. Nobody else can: admins do not create each other.
 Deno.serve(async (req) => {
   const corsHeaders = { ...corsFor(req), 'Content-Type': 'application/json' };
   const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: corsHeaders });
@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
     if (!caller || caller.app_metadata?.role !== 'developer') return json({ error: 'Developer only' }, 403);
 
     const adminClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SECRET_SERVICE_ROLE_KEY')!);
-    const { action, email, password, full_name } = await req.json().catch(() => ({}));
+    const { action, email, password, full_name, user_id } = await req.json().catch(() => ({}));
 
     if (action === 'list') {
       // ponytail: first 1000 users only; page it if the account list ever outgrows that
@@ -66,6 +66,22 @@ Deno.serve(async (req) => {
         user_metadata: { full_name: name },
       });
       if (error?.code === 'email_exists') return json({ error: 'An account with this email already exists' }, 409);
+      if (error) throw error;
+      return json({ ok: true });
+    }
+
+    if (action === 'delete' || action === 'reset') {
+      // Only an admin login can be touched here, never the developer's own.
+      const { data: found } = await adminClient.auth.admin.getUserById(String(user_id ?? ''));
+      if (found?.user?.app_metadata?.role !== 'admin') return json({ error: 'That is not an admin account' }, 404);
+
+      if (action === 'delete') {
+        const { error } = await adminClient.auth.admin.deleteUser(found.user.id);
+        if (error) throw error;
+        return json({ ok: true });
+      }
+      if (String(password ?? '').length < 8) return json({ error: 'A password of 8 or more characters is required' }, 400);
+      const { error } = await adminClient.auth.admin.updateUserById(found.user.id, { password: String(password) });
       if (error) throw error;
       return json({ ok: true });
     }

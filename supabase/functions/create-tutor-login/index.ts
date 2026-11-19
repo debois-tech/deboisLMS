@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     );
     const { data: { user: caller } } = await callerClient.auth.getUser();
-    if (!caller || caller.app_metadata?.role !== 'admin') {
+    if (!caller || !['admin', 'developer'].includes(caller.app_metadata?.role)) {
       return new Response(JSON.stringify({ error: 'Admin only' }), {
         status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -73,13 +73,26 @@ Deno.serve(async (req) => {
 
     const { data: tutor, error: tutorError } = await adminClient
       .from('tutors')
-      .select('id, email, phone, auth_user_id, password_rotated')
+      .select('id, email, phone, auth_user_id, password_rotated, is_test, status')
       .eq('id', tutor_id)
       .single();
 
     if (tutorError || !tutor) {
       return new Response(JSON.stringify({ error: 'Tutor not found' }), {
         status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    // A developer works on test tutors only; this runs with the service key, so the database cannot stop it.
+    if (caller.app_metadata?.role === 'developer' && !tutor.is_test) {
+      return new Response(JSON.stringify({ error: 'Developers can only change test data' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    if (tutor.status === 'archived') {
+      return new Response(JSON.stringify({ error: 'This tutor is archived' }), {
+        status: 409,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }

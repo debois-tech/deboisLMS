@@ -122,6 +122,10 @@ export interface Tutor {
   auth_user_id?: string;
   /** True once the password was reset to a random one — the derived rule no longer applies. */
   password_rotated?: boolean;
+  /** Archived once the login is deleted: off every batch, work kept. */
+  status: 'active' | 'archived';
+  /** A developer's tutor: hidden from admins. */
+  is_test: boolean;
   created_at: string;
 }
 

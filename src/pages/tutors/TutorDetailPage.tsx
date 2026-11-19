@@ -16,7 +16,8 @@ import { NotFound } from '@/components/ui/NotFound';
 import { TutorLoginCard } from '@/components/tutors/TutorLoginCard';
 import { UnassignWizard } from '@/components/tutors/UnassignWizard';
 import { useInitialLoad } from '@/lib/hooks/useInitialLoad';
-import { getTutorById, getTutorBatches, getBatches, assignTutorToBatch, deleteTutor } from '@/lib/supabase';
+import { getTutorById, getTutorBatches, getBatches, assignTutorToBatch, archiveTutor, deleteTutor } from '@/lib/supabase';
+import { Badge } from '@/components/ui/Badge';
 import type { Tutor, TutorBatchMapping, Batch } from '@/lib/types';
 import { formatDate } from '@/lib/utils/format';
 import { useToast } from '@/lib/context/ToastContext';
@@ -78,11 +79,43 @@ export default function TutorDetailPage() {
   const togglePicked = (id: string) =>
     setPicked((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
 
+  // The login goes, the tutor is archived and leaves every batch; their work stays.
+  const handleArchive = async () => {
+    if (!tutor) return;
+    const ok = await confirm({
+      title: `Delete ${tutor.name}'s login?`,
+      message: (
+        <>
+          <span className="block">Login deleted, cannot sign in</span>
+          <span className="block">Removed from every batch</span>
+          <span className="block">Their work and history stay</span>
+          <span className="block">Moves to Archived</span>
+        </>
+      ),
+      confirmLabel: 'Delete login',
+      danger: true,
+      requireCheck: 'Yes, delete this login',
+    });
+    if (!ok) return;
+
+    setDeleting(true);
+    try {
+      await archiveTutor(tutor.id);
+      setTutor((await getTutorById(tutor.id)) ?? tutor);
+      setBatchMappings([]);
+      showToast('Login deleted');
+    } catch (err) {
+      showToast(errorMessage(err, 'Could not delete this login'), 'error');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!tutor) return;
     const ok = await confirm({
       title: `Delete ${tutor.name}?`,
-      message: 'Their batch assignments and portal login are deleted for good. This cannot be undone.',
+      message: 'The tutor record is deleted for good. This cannot be undone.',
       confirmLabel: 'Delete forever',
       danger: true,
     });
@@ -117,7 +150,10 @@ export default function TutorDetailPage() {
             {tutor.name.split(' ').map((n) => n[0]).slice(0, 2).join('')}
           </div>
           <div className="min-w-0 flex-1">
-            <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)] break-words">{tutor.name}</h1>
+            <h1 className="flex flex-wrap items-center gap-3 text-2xl font-bold tracking-tight text-[var(--text-primary)] break-words">
+              {tutor.name}
+              {tutor.status === 'archived' && <Badge>Archived</Badge>}
+            </h1>
             <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[var(--text-muted)]">
               {tutor.email && <span className="flex min-w-0 items-center gap-2"><Mail size={15} className="shrink-0 text-[var(--primary)]" /> <span className="break-all">{tutor.email}</span></span>}
               {tutor.email && tutor.phone && <span className="text-[var(--border-strong)]">|</span>}
@@ -127,14 +163,15 @@ export default function TutorDetailPage() {
           <Button
             variant="outline"
             className="action-button-compact action-button-danger"
-            onClick={handleDelete}
+            onClick={tutor.status === 'active' ? handleArchive : handleDelete}
             loading={deleting}
           >
-            <Trash2 size={14} /> Delete
+            <Trash2 size={14} /> {tutor.status === 'active' ? 'Delete login' : 'Delete'}
           </Button>
         </div>
       </Card>
 
+      {tutor.status === 'active' && (<>
       <Card className="portal-login-card">
         <CardHeader title="Portal Login" className="portal-login-header" />
         <TutorLoginCard
@@ -214,6 +251,7 @@ export default function TutorDetailPage() {
           </Table>
         )}
       </Card>
+      </>)}
 
       <Modal
         open={showAssign}
