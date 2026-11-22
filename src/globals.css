@@ -3844,9 +3844,9 @@ body:has([role="dialog"]) .notice-chip { display: none; }
 
 .payment-qr-image {
   display: block;
-  aspect-ratio: 1;
+  width: auto;
+  height: 20rem;
   border-radius: var(--radius-md);
-  object-fit: contain;
   background: white;
 }
 
@@ -3855,9 +3855,14 @@ body:has([role="dialog"]) .notice-chip { display: none; }
     flex-direction: column;
   }
 
-  .payment-qr-placeholder,
-  .payment-qr-image {
+  .payment-qr-placeholder {
     width: 100%;
+    max-width: 18rem;
+    margin: 0 auto;
+  }
+
+  .payment-qr-image {
+    height: auto;
     max-width: 18rem;
     margin: 0 auto;
   }
