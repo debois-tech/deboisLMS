@@ -17,7 +17,7 @@ export async function loadUploadRows(lectureId: string): Promise<RawUploadRow[]>
     .eq('lecture_id', lectureId)
     .order('sno');
 
-  if (error) throw techError('Failed to read uploads', error.message);
+  if (error) throw techError('Could not read the attendance uploads', error.message);
   return (data ?? []) as RawUploadRow[];
 }
 
@@ -32,9 +32,9 @@ export async function loadProcessingContext(lectureId: string): Promise<Processi
     supabase.from('tutors').select('id, name'),
   ]);
 
-  if (lectureRes.error) throw techError('Failed to load lecture', lectureRes.error.message);
+  if (lectureRes.error) throw techError('Could not load the lecture', lectureRes.error.message);
   const lecture = lectureRes.data;
-  if (!lecture) throw new Error(`Lecture ${lectureId} not found`);
+  if (!lecture) throw new Error('Lecture not found');
 
   const tutorMapRes = await supabase.from('tutor_batch_mapping').select('tutor_id').eq('batch_id', lecture.batch_id);
 
@@ -44,7 +44,7 @@ export async function loadProcessingContext(lectureId: string): Promise<Processi
     .eq('batch_id', lecture.batch_id)
     .eq('status', 'active');
 
-  if (rosterRes.error) throw techError('Failed to load roster', rosterRes.error.message);
+  if (rosterRes.error) throw techError('Could not load the class list', rosterRes.error.message);
 
   type RosterRow = { student_id: string; joined_at: string | null; students: { id: string; name: string } | null };
 
@@ -75,7 +75,7 @@ export async function loadExistingAttendance(lectureId: string): Promise<Existin
     .select('student_id, source')
     .eq('lecture_id', lectureId);
 
-  if (error) throw techError('Failed to read existing attendance', error.message);
+  if (error) throw techError('Could not read the saved attendance', error.message);
   return (data ?? []) as ExistingRecord[];
 }
 
@@ -88,12 +88,12 @@ export async function insertAttendance(payloads: AttendanceInsertPayload[]): Pro
     .upsert(payloads, { onConflict: 'student_id,lecture_id' })
     .select('id');
 
-  if (error) throw techError('Failed to insert attendance', error.message);
+  if (error) throw techError('Could not save the attendance', error.message);
   return (data ?? []).length;
 }
 
 /** Delete all upload rows for a lecture. Only called after the attendance insert succeeded. */
 export async function clearUploads(lectureId: string): Promise<void> {
   const { error } = await supabase.from('uploads').delete().eq('lecture_id', lectureId);
-  if (error) throw techError('Failed to clear uploads', error.message);
+  if (error) throw techError('Could not clear the attendance uploads', error.message);
 }

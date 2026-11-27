@@ -70,7 +70,7 @@ export async function getBatchDeletionCounts(batchId: string): Promise<BatchDele
       .from(table)
       .select('*', { count: 'exact', head: true })
       .eq('batch_id', batchId);
-    if (error) throw techError(`Could not count ${table}`, error.message);
+    if (error) throw techError('Could not count this batch’s records', `${table}: ${error.message}`);
     return total ?? 0;
   };
 
@@ -120,9 +120,9 @@ export async function saveBatchProgram(
 ): Promise<BatchProgramOption> {
   const normalized = code.trim().toUpperCase();
   if (!PROGRAM_CODE_PATTERN.test(normalized)) {
-    throw new Error('An abbreviation is 2 to 6 capital letters, e.g. PHR.');
+    throw new Error('Use 2 to 6 capital letters for the abbreviation, e.g. PHR');
   }
-  if (!name.trim()) throw new Error('Give the programme a full name.');
+  if (!name.trim()) throw new Error('Give the programme a full name');
 
   return row<BatchProgramOption>(
     await supabase

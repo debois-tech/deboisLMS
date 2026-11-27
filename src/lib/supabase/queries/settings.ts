@@ -48,7 +48,7 @@ async function manageAdmins<T>(body: Record<string, unknown>): Promise<T> {
     const detail = response && typeof response.json === 'function'
       ? await response.json().then((reply: { error?: string } | null) => reply?.error).catch(() => undefined)
       : undefined;
-    throw new Error(detail ?? error.message);
+    throw detail ? new Error(detail) : techError('Could not update the admin account', error.message);
   }
   if (data?.error) throw new Error(data.error);
   return data as T;
@@ -73,5 +73,8 @@ export async function resetAdminPassword(userId: string, password: string): Prom
 /** The signed-in person's own password; the admin Settings popup is the only caller. */
 export async function changeMyPassword(password: string): Promise<void> {
   const { error } = await supabase.auth.updateUser({ password });
-  if (error) throw error;
+  if (!error) return;
+  const reasons: Record<string, string> = { same_password: 'Choose a different password', weak_password: 'Password is too weak' };
+  const reason = reasons[error.code ?? ''];
+  throw reason ? new Error(reason) : techError('Could not change the password', error.message);
 }

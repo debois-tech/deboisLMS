@@ -66,11 +66,12 @@ export function NewAssignmentModal({ open, onClose, batchId, assignment, onSaved
     const accepted = chosen.filter((file) => ACCEPTED_TYPES.has(extensionOf(file.name)));
     const tooBig = accepted.find((file) => file.size > MATERIAL_MAX_BYTES);
     if (tooBig) {
-      showToast(`${tooBig.name} is ${formatFileSize(tooBig.size)}. The limit is 50 MB.`, 'error');
+      showToast(`${tooBig.name} is ${formatFileSize(tooBig.size)}, over the 50 MB limit`, 'error');
       return;
     }
     if (accepted.length < chosen.length) {
-      showToast(`${chosen.length - accepted.length} unsupported file(s) skipped`, 'error');
+      const skipped = chosen.length - accepted.length;
+      showToast(`${skipped} unsupported ${skipped === 1 ? 'file' : 'files'} skipped`, 'error');
     }
 
     // Re-picking the same file twice is a slip, not an intent to attach it twice.
@@ -133,7 +134,7 @@ export function NewAssignmentModal({ open, onClose, batchId, assignment, onSaved
           await onSaved();
           close();
           showToast(
-            `Assignment created, but ${result.failed.length} file(s) failed: ${result.failed[0].reason}`,
+            `Assignment created, ${result.failed.length} ${result.failed.length === 1 ? 'file' : 'files'} failed: ${result.failed[0].reason}`,
             'error',
           );
           return;

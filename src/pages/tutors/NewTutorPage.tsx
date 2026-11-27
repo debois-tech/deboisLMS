@@ -32,7 +32,7 @@ export default function NewTutorPage() {
         setCredentials(await createTutorLogin(tutor.id));
       } catch (loginError) {
         // The record is saved; a failed login just needs a retry from the detail page.
-        showToast(errorMessage(loginError, 'Tutor saved. Login not created.'), 'warning');
+        showToast(errorMessage(loginError, 'Login not created'), 'warning');
         navigate(`/tutors/${tutor.id}`, { replace: true });
       }
     } catch (error) {

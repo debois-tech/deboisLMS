@@ -87,7 +87,7 @@ export default function NewStudentPage() {
       return;
     }
     if (payable === null) {
-      showToast(`${batch?.name ?? 'This batch'} has no base fee. Set one on the batch first.`, 'error');
+      showToast(`${batch?.name ?? 'This batch'} has no base fee, set one first`, 'error');
       return;
     }
     setLoading(true);
@@ -112,7 +112,7 @@ export default function NewStudentPage() {
         setCredentials(await createStudentLogin(student.id));
       } catch (loginError) {
         // The record is saved; a failed login just needs a retry from the detail page.
-        showToast(errorMessage(loginError, 'Student saved. Login not created.'), 'warning');
+        showToast(errorMessage(loginError, 'Login not created'), 'warning');
         navigate(`/students/${student.id}`, { replace: true });
       }
     } catch (error) {
@@ -186,8 +186,7 @@ export default function NewStudentPage() {
 
           {batchId && baseFee === null && (
             <InlineAlert>
-              {batch?.name ?? 'This batch'} has no base fee, so a discount has nothing to come off.
-              Set one on the batch, then add the student.
+              {batch?.name ?? 'This batch'} has no base fee, set one first
             </InlineAlert>
           )}
           <div className="grid gap-4 md:grid-cols-2">

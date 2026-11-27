@@ -124,7 +124,7 @@ export function DocumentActionModal({ open, mode, kind, batch, rows, onClose, on
     showToast(
       failures.length === 0
         ? `${verb} ${done}`
-        : `${verb} ${done} of ${picked.length}. ${failures[0]}${failures.length > 1 ? ` (+${failures.length - 1} more)` : ''}`,
+        : `${verb} ${done} of ${picked.length} · ${failures[0]}${failures.length > 1 ? ` (+${failures.length - 1} more)` : ''}`,
       failures.length === 0 ? 'success' : 'error',
     );
 

@@ -102,7 +102,7 @@ export function UnassignWizard({ open, onClose, tutorName, batches, onDone }: Pr
     setBusy(false);
     const done = batches.length - failures.length;
     showToast(
-      failures.length === 0 ? `${done} ${done === 1 ? 'batch' : 'batches'} unassigned` : `Unassigned ${done} of ${batches.length}. ${failures[0]}`,
+      failures.length === 0 ? `${done} ${done === 1 ? 'batch' : 'batches'} unassigned` : `Unassigned ${done} of ${batches.length} · ${failures[0]}`,
       failures.length === 0 ? 'success' : 'error',
     );
     onDone();

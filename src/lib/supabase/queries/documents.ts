@@ -30,7 +30,7 @@ const NAMES: Record<DocumentKind, string> = { offer_letter: 'Offer-Letter', cert
 
 const fetchBytes = async (url: string) => {
   const response = await fetch(url);
-  if (!response.ok) throw new Error(`Could not load ${url.split('/').pop()}`);
+  if (!response.ok) throw new Error('Could not load the document files');
   return new Uint8Array(await response.arrayBuffer());
 };
 
@@ -82,12 +82,12 @@ export async function generateAndStoreDocument(
 ): Promise<Pick<BatchStudentMapping, 'offer_letter_path' | 'cert_path'>> {
   // A batch with no role yet falls back to the student's
   const role = batch.internship_role ?? student.internship_role;
-  if (!role) throw new Error(`Set ${batch.name}'s internship role first (Edit batch).`);
+  if (!role) throw new Error(`Set the internship role for ${batch.name} first`);
   const startOn = fromDateValue(dates.start);
   const endOn = fromDateValue(dates.end);
   const letterOn = fromDateValue(dates.letter);
-  if (!startOn || !endOn || !letterOn) throw new Error('Pick the start, end and letter dates first.');
-  if (endOn < startOn) throw new Error('The end date is before the start date.');
+  if (!startOn || !endOn || !letterOn) throw new Error('Pick the start, end and letter dates first');
+  if (endOn < startOn) throw new Error('The end date is before the start date');
 
   const bytes = await buildDocumentPdf(
     kind,
@@ -127,7 +127,7 @@ export async function setDocumentShared(mappingId: string, kind: DocumentKind, s
 /** RLS enforces the shared flag on the bucket too — this is not the only gate, just the UI's. */
 export async function downloadStoredDocument(path: string, filename: string): Promise<void> {
   const { data, error } = await supabase.storage.from(BUCKET).download(path);
-  if (error || !data) throw new Error('The file is missing from storage.');
+  if (error || !data) throw new Error('The file is missing from storage');
   saveBlob(data, filename);
 }
 
@@ -161,7 +161,7 @@ export async function processDocumentCleanup(): Promise<void> {
 /** Opens the stored copy in a new tab, shared or not. */
 export async function viewStoredDocument(path: string): Promise<void> {
   const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, 60);
-  if (error || !data) throw new Error('The file is missing from storage.');
+  if (error || !data) throw new Error('The file is missing from storage');
   window.open(data.signedUrl, '_blank', 'noopener');
 }
 
@@ -176,7 +176,7 @@ export async function sendDocumentEmail(studentId: string, batchId: string, kind
     const detail = response && typeof response.json === 'function'
       ? await response.json().then((body: { error?: string } | null) => body?.error).catch(() => undefined)
       : undefined;
-    throw new Error(detail ?? error.message ?? 'Could not send the email');
+    throw detail ? new Error(detail) : techError('Could not send the email', error.message);
   }
   if (data?.error) throw new Error(data.error);
 }

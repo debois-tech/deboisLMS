@@ -54,7 +54,7 @@ export function StudentImportModal({ open, onClose, batches, batch, onImport }: 
   const target = batch ?? options.find((b) => b.id === pickedId) ?? null;
   const base = target?.base_fee ?? null;
   const blocker = target && base === null
-    ? `${target.name} has no base fee, so the discounts have nothing to come off. Set one on the batch, then import.`
+    ? `${target.name} has no base fee, set one first`
     : '';
 
   const mismatches = useMemo(
@@ -109,7 +109,7 @@ export function StudentImportModal({ open, onClose, batches, batch, onImport }: 
   const handleImport = async () => {
     if (!rows.length) return;
     if (!target) {
-      setError('Choose the batch these students join.');
+      setError('Choose the batch these students join');
       return;
     }
     if (base === null) {
@@ -131,7 +131,7 @@ export function StudentImportModal({ open, onClose, batches, batch, onImport }: 
       pager.reset();
       setImporting(false);
     } catch (err) {
-      setError(errorMessage(err, 'Import failed. Some rows may already exist.'));
+      setError(errorMessage(err, 'Import failed, some rows may already exist'));
       setImporting(false);
     }
   };
@@ -239,8 +239,8 @@ export function StudentImportModal({ open, onClose, batches, batch, onImport }: 
           <InlineAlert>
             {mismatches.length} {mismatches.length === 1 ? 'row belongs' : 'rows belong'} to another
             programme — {mismatches.slice(0, 3).map((r) => `${r.name} (${r.found})`).join(', ')}
-            {mismatches.length > 3 ? `, and ${mismatches.length - 3} more` : ''}. Import that
-            programme separately, or remove those rows.
+            {mismatches.length > 3 ? `, and ${mismatches.length - 3} more` : ''} · import
+            them separately or remove them
           </InlineAlert>
         )}
 

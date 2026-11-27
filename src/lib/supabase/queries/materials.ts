@@ -221,10 +221,10 @@ interface OpenedMaterial {
 // Plain storage read — RLS on the bucket gates it, nothing stamps it on the way out.
 export async function openMaterial(materialId: string): Promise<OpenedMaterial> {
   const material = await getMaterialById(materialId);
-  if (!material) throw new Error('Could not open this material.');
+  if (!material) throw new Error('Could not open this material');
 
   const { data, error } = await supabase.storage.from(BUCKET).download(material.storage_path);
-  if (error || !data) throw new Error('The file is missing from storage.');
+  if (error || !data) throw new Error('The file is missing from storage');
 
   // student_id comes from a column default; best-effort, never blocks the open.
   void supabase.from('material_views').insert({ material_id: materialId }).then(

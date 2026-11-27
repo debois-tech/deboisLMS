@@ -37,7 +37,7 @@ export function maybeRow<T>(result: Result<T>, what: string): T | undefined {
 /** An insert or update that must have produced a row. */
 export function row<T>(result: Result<T>, what: string): T {
   if (result.error) fail(result.error, what);
-  if (!result.data) throw new Error(`${what}: the database returned no row.`);
+  if (!result.data) throw techError(what, 'no row returned');
   return result.data;
 }
 
@@ -60,7 +60,7 @@ export async function invokeLoginFunction(name: string, body: Record<string, unk
         .then((responseBody: { error?: string } | null) => responseBody?.error)
         .catch(() => undefined);
     }
-    throw new Error(detail ?? error.message ?? 'Failed to create login');
+    throw detail ? new Error(detail) : techError('Could not create the login', error.message);
   }
   if (data?.error) throw new Error(data.error);
 

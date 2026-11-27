@@ -38,7 +38,7 @@ export function linkedInAddToProfileUrl(badgeName: string, issuedAt: string): st
 /** The badge as a file. With the student's `code` it is their stamped copy, named just the code; without, the plain artwork. */
 export async function getBadgeCopy(badge: BatchBadge, code?: string): Promise<File> {
   const { data, error } = await supabase.storage.from('assets').download(badge.image_path);
-  if (error || !data) throw new Error('Could not download the badge image.');
+  if (error || !data) throw new Error('Could not download the badge image');
   if (!code) return new File([data], `${badge.name}.${extensionOf(badge.image_path) || 'png'}`, { type: data.type });
   const stamped = await stampBadgeImage(data, code);
   return new File([stamped], `${code}.png`, { type: 'image/png' });
@@ -70,7 +70,7 @@ export function canShareBadgeImage(): boolean {
 export async function shareBadgeImage(badge: BatchBadge, code?: string): Promise<void> {
   const file = await getBadgeCopy(badge, code);
   const share = { files: [file], title: badge.name, text: `I just earned my ${badge.name} badge from deboistech!` };
-  if (!navigator.canShare(share)) throw new Error('Sharing isn’t supported on this device.');
+  if (!navigator.canShare(share)) throw new Error('Sharing isn’t supported on this device');
   await navigator.share(share);
 }
 

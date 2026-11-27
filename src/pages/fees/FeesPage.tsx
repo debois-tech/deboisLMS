@@ -114,6 +114,13 @@ export default function FeesPage() {
     setDeletingLogId(null);
   };
 
+  const handleLogUpdated = ({ log, fee }: { log: FeePaymentLog; fee: StudentFee }) => {
+    setLoggingFee(fee);
+    setPaymentLogs((prev) => prev.map((entry) => (entry.id === log.id ? log : entry)));
+    setFees((prev) => prev.map((f) => (f.id === fee.id ? fee : f)));
+    getBatchFeeSummary().then(setSummary);
+  };
+
   const handleClaimApproved = ({ log, fee }: { log: FeePaymentLog; fee: StudentFee }) => {
     setLoggingFee(fee);
     setPaymentLogs((prev) => [log, ...prev]);
@@ -239,7 +246,7 @@ export default function FeesPage() {
         onDelete={handleDeletePaymentLog}
         deletingId={deletingLogId}
         onClaimApproved={handleClaimApproved}
-        onLogUpdated={(log) => setPaymentLogs((prev) => prev.map((entry) => (entry.id === log.id ? log : entry)))}
+        onLogUpdated={handleLogUpdated}
       />
     </div>
   );

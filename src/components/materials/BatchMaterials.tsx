@@ -282,12 +282,12 @@ function UploadModal({
       return;
     }
     if (accepted.length === 0) {
-      setError(chosen.length > 0 ? 'Nothing in that selection can be uploaded.' : '');
+      setError(chosen.length > 0 ? 'Nothing in that selection can be uploaded' : '');
       setFiles([]);
       return;
     }
     if (skipped > 0) {
-      setError(`${skipped} unsupported ${skipped === 1 ? 'file was' : 'files were'} skipped.`);
+      setError(`${skipped} unsupported ${skipped === 1 ? 'file was' : 'files were'} skipped`);
     }
 
     setFiles(accepted);
@@ -317,7 +317,7 @@ function UploadModal({
   const submit = async () => {
     if (files.length === 0) return;
     if (!folder && !suffix.trim()) {
-      setError(batchCode ? 'Add the rest of the name.' : 'Add a title.');
+      setError(batchCode ? 'Add the rest of the name' : 'Add a title');
       return;
     }
 
@@ -345,7 +345,7 @@ function UploadModal({
       onClose();
       onUploaded(result.uploaded.length);
     } catch (err) {
-      setError(errorMessage(err, 'Upload failed.'));
+      setError(errorMessage(err, 'Upload failed'));
       setBusy(false);
     }
   };

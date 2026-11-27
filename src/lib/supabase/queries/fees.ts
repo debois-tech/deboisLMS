@@ -49,13 +49,19 @@ export async function addFeePaymentLog(input: {
   );
 }
 
-/** Date, method and notes only: the amount never changes, so the balance needs no maths. */
-export async function updateFeePaymentLog(
+// The log and the fee's paid total change in one database transaction.
+export async function editFeePayment(
   logId: string,
-  patch: { payment_date: string; payment_method: PaymentMethod; notes: string },
-): Promise<FeePaymentLog> {
-  return row<FeePaymentLog>(
-    await supabase.from('fee_payment_logs').update(patch).eq('id', logId).select().single(),
+  patch: { amount: number; payment_date: string; payment_method: PaymentMethod; notes: string },
+): Promise<{ log: FeePaymentLog; fee: StudentFee }> {
+  return row<{ log: FeePaymentLog; fee: StudentFee }>(
+    await supabase.rpc('edit_fee_payment', {
+      p_log_id: logId,
+      p_amount: patch.amount,
+      p_payment_date: patch.payment_date,
+      p_payment_method: patch.payment_method,
+      p_notes: patch.notes,
+    }),
     'Could not update this payment',
   );
 }

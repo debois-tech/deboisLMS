@@ -28,7 +28,7 @@ export function useInitialLoad(load: () => Promise<void>, generic = false) {
         if (active) {
           // generic: student-facing, so never surface table or policy names.
           if (generic) console.error(err);
-          setError(generic ? "We couldn't load this page." : errorMessage(err, "We couldn't load this page."));
+          setError(generic ? 'Check your connection and retry' : errorMessage(err, 'Could not load this page'));
           setLoading(false);
         }
       }
@@ -78,7 +78,7 @@ export function useReloadableSection(load: () => Promise<void>) {
       await load();
       setError(null);
     } catch (err) {
-      setError(errorMessage(err, "We couldn't load this section."));
+      setError(errorMessage(err, 'Could not load this section'));
     }
   }, [load]);
 

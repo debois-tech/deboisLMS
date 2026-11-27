@@ -57,7 +57,7 @@ export function ExamHost({ quizId, onLeave, onEnded, onEdit }: ExamHostProps) {
       getQuiz(quizId), getQuizParticipants(quizId), getQuizAnswers(quizId), getQuizScoreboard(quizId),
     ]);
     if (!fresh()) return;
-    if (!next) throw new Error('This quiz no longer exists.');
+    if (!next) throw new Error('This quiz no longer exists');
     setQuiz(next);
     setPeople(joined);
     setAnswers(given);
@@ -171,7 +171,7 @@ export function ExamHost({ quizId, onLeave, onEnded, onEdit }: ExamHostProps) {
   }, [autoDue, busy, offset, position, quizId, run]);
 
   if (loading) return createPortal(<div className="qz-stage"><Spinner centered /></div>, document.body);
-  if (error || !quiz) return createPortal(<div className="qz-stage"><ErrorState centered message={error ?? 'Could not load the quiz.'} onRetry={retry} /></div>, document.body);
+  if (error || !quiz) return createPortal(<div className="qz-stage"><ErrorState centered message={error ?? 'Could not load the quiz'} onRetry={retry} /></div>, document.body);
 
   const here = answers.filter((answer) => current && answer.question_id === current.id);
   const counts = (id: string) => here.filter((answer) => answer.option_ids.includes(id)).length;

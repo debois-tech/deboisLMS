@@ -122,7 +122,7 @@ function MaterialViewerBody({ material, onClose }: MaterialViewerProps) {
       } catch (err) {
         if (cancelled) return;
         console.error(err);
-        setError('Could not open this material.');
+        setError('Could not open this material');
         setLoading(false);
       } finally {
         // Revoked once drawn: after this the document exists only as pixels.
@@ -161,7 +161,7 @@ function MaterialViewerBody({ material, onClose }: MaterialViewerProps) {
       await downloadMaterial(material);
     } catch (err) {
       console.error(err);
-      setError('Could not download this file.');
+      setError('Could not download this file');
     } finally {
       setSaving(false);
     }

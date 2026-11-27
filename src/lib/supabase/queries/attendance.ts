@@ -63,7 +63,7 @@ export async function insertUploadRows(
   }));
 
   const { error } = await supabase.from('uploads').insert(records);
-  if (error) throw techError('Failed to upload rows', error.message);
+  if (error) throw techError('Could not upload the attendance rows', error.message);
 }
 
 /** One student's rows in one batch, with their lectures, for staff. Unlike the portal's, this keeps the not-marked ones. */

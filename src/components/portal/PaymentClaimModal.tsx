@@ -44,9 +44,9 @@ export function PaymentClaimModal({ open, studentId, batchId, dueAmount, onClose
   const handleSubmit = async () => {
     const trimmedId = transactionId.trim();
     const parsedAmount = Number(amount);
-    if (!trimmedId) return setError('Enter the transaction ID.');
-    if (!(parsedAmount > 0)) return setError('Enter a valid amount.');
-    if (dueAmount && parsedAmount > dueAmount) return setError('Amount can’t exceed what you owe.');
+    if (!trimmedId) return setError('Enter the transaction ID');
+    if (!(parsedAmount > 0)) return setError('Enter a valid amount');
+    if (dueAmount && parsedAmount > dueAmount) return setError('Amount can’t exceed what you owe');
 
     setSubmitting(true);
     setError('');
@@ -56,7 +56,7 @@ export function PaymentClaimModal({ open, studentId, batchId, dueAmount, onClose
       onSubmitted();
     } catch (err) {
       console.error(err);
-      setError('Could not submit. Try again.');
+      setError('Could not submit, try again');
     } finally {
       setSubmitting(false);
     }

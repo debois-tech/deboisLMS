@@ -156,7 +156,7 @@ export default function StudentsPage() {
     batch: Batch,
   ) => {
     if (batch.base_fee == null) {
-      throw new Error(`${batch.name} has no base fee. Set one on the batch, then import.`);
+      throw new Error(`${batch.name} has no base fee, set one first`);
     }
 
     const { imported, failed } = await importStudentsIntoBatch(rows, batch.id, batch.base_fee);

@@ -131,7 +131,7 @@ export async function prepareImageForUpload(file: File): Promise<File> {
   const context = canvas.getContext('2d');
   if (!context) {
     bitmap.close();
-    throw new Error('Could not read that image.');
+    throw new Error('Could not read that image');
   }
   context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
   bitmap.close();
@@ -141,7 +141,7 @@ export async function prepareImageForUpload(file: File): Promise<File> {
   const blob = await new Promise<Blob | null>((resolve) =>
     canvas.toBlob(resolve, outType, outType === 'image/jpeg' ? 0.92 : undefined),
   );
-  if (!blob) throw new Error(`Could not convert ${file.name}.`);
+  if (!blob) throw new Error(`Could not convert ${file.name}`);
 
   const name = outType === 'image/png' ? file.name.replace(/\.webp$/i, '.png') : file.name;
   return new File([blob], name, { type: outType });
@@ -208,7 +208,7 @@ export async function docxToPdf(file: File): Promise<File> {
   }
 
   if (lines.every((line) => !line)) {
-    throw new Error('That document has no readable text.');
+    throw new Error('That document has no readable text');
   }
 
   const bytes = await pdf.save();

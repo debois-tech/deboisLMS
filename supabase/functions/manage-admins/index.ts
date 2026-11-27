@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
     if (action === 'create') {
       const name = String(full_name ?? '').trim();
       if (!name || !String(email ?? '').includes('@') || String(password ?? '').length < 8) {
-        return json({ error: 'A name, an email and a password of 8 or more characters are required' }, 400);
+        return json({ error: 'Name, email and a password of 8 or more characters needed' }, 400);
       }
       const { error } = await adminClient.auth.admin.createUser({
         email: String(email).trim(),
@@ -80,7 +80,7 @@ Deno.serve(async (req) => {
         if (error) throw error;
         return json({ ok: true });
       }
-      if (String(password ?? '').length < 8) return json({ error: 'A password of 8 or more characters is required' }, 400);
+      if (String(password ?? '').length < 8) return json({ error: 'Password needs 8 or more characters' }, 400);
       const { error } = await adminClient.auth.admin.updateUserById(found.user.id, { password: String(password) });
       if (error) throw error;
       return json({ ok: true });
@@ -89,6 +89,6 @@ Deno.serve(async (req) => {
     return json({ error: 'Unknown action' }, 400);
   } catch (err) {
     console.error('[manage-admins]', err);
-    return json({ error: 'Could not complete that. Try again.' }, 500);
+    return json({ error: 'Could not complete that, try again' }, 500);
   }
 });

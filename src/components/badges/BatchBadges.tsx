@@ -185,9 +185,9 @@ function AddBadgeModal({ open, batchId, onClose, onSaved }: {
   const takeFile = (chosen?: File) => {
     if (!chosen) return;
     if (!(BADGE_EXTENSIONS as readonly string[]).includes(extensionOf(chosen.name))) {
-      showToast('Use a PNG, JPEG or WebP image.', 'error');
+      showToast('Use a PNG, JPEG or WebP image', 'error');
     } else if (chosen.size > BADGE_MAX_BYTES) {
-      showToast(`${formatFileSize(chosen.size)} is too big. The limit is 5 MB.`, 'error');
+      showToast(`${formatFileSize(chosen.size)} is over the 5 MB limit`, 'error');
     } else {
       setFile(chosen);
     }

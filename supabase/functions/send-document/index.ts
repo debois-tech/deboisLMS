@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
     const missing = [!apiKey && 'RESEND_API_KEY', !from && 'CREDENTIALS_FROM_EMAIL'].filter(Boolean);
     if (missing.length > 0) {
       console.error('[send-document] missing secrets:', missing.join(', '));
-      return json({ error: `Email is not configured yet (${missing.join(', ')}).` }, 500);
+      return json({ error: 'Email is not set up' }, 500);
     }
 
     const body = await req.json().catch(() => null);
@@ -92,7 +92,7 @@ Deno.serve(async (req) => {
     if (mappingError) throw mappingError;
 
     const path = mapping?.[pathColumn] ?? null;
-    if (!path) return json({ error: 'This document has not been generated yet.' }, 404);
+    if (!path) return json({ error: 'This document has not been generated yet' }, 404);
 
     const { data: student, error: studentError } = await adminClient
       .from('students')
@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
     if (!student.email) return json({ error: 'No email on file for this student' }, 400);
 
     const { data: file, error: downloadError } = await adminClient.storage.from('documents').download(path);
-    if (downloadError || !file) return json({ error: 'The document is missing from storage.' }, 404);
+    if (downloadError || !file) return json({ error: 'The document is missing from storage' }, 404);
     const pdfBase64 = toBase64(new Uint8Array(await file.arrayBuffer()));
 
     const label = LABELS[doc_type];
@@ -141,6 +141,6 @@ Deno.serve(async (req) => {
     return json({ sent: true });
   } catch (err) {
     console.error('[send-document]', err);
-    return json({ error: 'Could not send the email. Try again.' }, 500);
+    return json({ error: 'Could not send the email, try again' }, 500);
   }
 });

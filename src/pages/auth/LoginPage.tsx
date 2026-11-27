@@ -27,9 +27,9 @@ interface LoginPanelProps {
 const HOME_FOR_ROLE: Record<Role, string> = { admin: '/', developer: '/', student: '/portal', tutor: '/tutor' };
 
 const WRONG_DOOR: Record<Exclude<Role, 'developer'>, string> = {
-  admin: 'Not an admin account. Use the student or tutor login.',
-  student: 'Not a student account. Use the admin or tutor login.',
-  tutor: 'Not a tutor account. Use the admin or student login.',
+  admin: 'Not an admin account, use the student or tutor login',
+  student: 'Not a student account, use the admin or tutor login',
+  tutor: 'Not a tutor account, use the admin or student login',
 };
 
 /** Shared by the admin and student login routes, but each one only admits its own role. */
@@ -50,30 +50,34 @@ export function LoginPanel({ title, emailPlaceholder, expectedRole, hint }: Logi
     const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
 
     if (signInError) {
-      setError(signInError.message);
+      setError(signInError.message === 'Invalid login credentials' ? 'Wrong email or password' : signInError.message);
       setLoading(false);
       return;
     }
 
-    if (data.user) {
-      const profile = await profileFromUser(data.user);
+    try {
+      if (data.user) {
+        const profile = await profileFromUser(data.user);
 
-      // Credentials were right but for the other door. Drop the session — leaving
-      // it would let the next page load in as whatever they actually are.
-      if (profile.role !== expectedRole && !(expectedRole === 'admin' && profile.role === 'developer')) {
-        await supabase.auth.signOut();
-        setUser(null);
-        setError(WRONG_DOOR[expectedRole]);
-        setLoading(false);
-        return;
+        // Credentials were right but for the other door. Drop the session — leaving
+        // it would let the next page load in as whatever they actually are.
+        if (profile.role !== expectedRole && !(expectedRole === 'admin' && profile.role === 'developer')) {
+          await supabase.auth.signOut();
+          setUser(null);
+          setError(WRONG_DOOR[expectedRole]);
+          return;
+        }
+
+        setUser(profile);
+        // Every shell plays its opening greeting once, on this arrival only.
+        markIntroPending();
+        navigate(HOME_FOR_ROLE[profile.role]);
       }
-
-      setUser(profile);
-      // Every shell plays its opening greeting once, on this arrival only.
-      markIntroPending();
-      navigate(HOME_FOR_ROLE[profile.role]);
+    } catch {
+      setError('Could not sign in, try again');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (

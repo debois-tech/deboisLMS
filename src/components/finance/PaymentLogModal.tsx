@@ -3,7 +3,7 @@ import { Check, PenLine, Plus, Receipt, Trash2 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { ClaimActions } from '@/components/finance/ClaimActions';
-import { downloadFeeReceipt, getPendingClaims, updateFeePaymentLog } from '@/lib/supabase';
+import { downloadFeeReceipt, editFeePayment, getPendingClaims } from '@/lib/supabase';
 import { useToast } from '@/lib/context/ToastContext';
 import { errorMessage } from '@/lib/utils/errors';
 import { fromDateValue } from '@/lib/utils/date';
@@ -43,8 +43,8 @@ interface PaymentLogModalProps {
   deletingId?: string | null;
   /** A pending claim was verified: the new log and updated fee, for the parent to fold in. */
   onClaimApproved: (result: { log: FeePaymentLog; fee: StudentFee }) => void;
-  /** An edited log, for the parent to swap into its list. */
-  onLogUpdated: (log: FeePaymentLog) => void;
+  /** An edited log and the fee it re-totalled, for the parent to fold in. */
+  onLogUpdated: (result: { log: FeePaymentLog; fee: StudentFee }) => void;
 }
 
 const blankForm = (): PaymentLogFormState => ({ amount: '', payment_date: new Date().toISOString().slice(0, 10), payment_method: 'upi', notes: '' });
@@ -60,7 +60,6 @@ export function PaymentLogModal({
 
   // The top form doubles as the editor: a pen fills it, Save writes the changes back.
   const editing = paymentLogs.find((log) => log.id === editingId);
-  const locked = editing?.notes === REGISTRATION_NOTE;
 
   const startEdit = (log: FeePaymentLog) => {
     setEditingId(log.id);
@@ -79,7 +78,7 @@ export function PaymentLogModal({
     if (!editing) return;
     setSaving(true);
     try {
-      onLogUpdated(await updateFeePaymentLog(editing.id, { payment_date: form.payment_date, payment_method: form.payment_method, notes: form.notes.trim() }));
+      onLogUpdated(await editFeePayment(editing.id, { amount: Number(form.amount), payment_date: form.payment_date, payment_method: form.payment_method, notes: form.notes }));
       stopEdit();
       showToast('Payment updated');
     } catch (err) {
@@ -151,7 +150,9 @@ export function PaymentLogModal({
   // Instalments themselves are flexible — 6k then 4k settles the same 10k — so the
   // ceiling is the balance, never one instalment. Nobody pays past what they owe:
   // for a student who left that is the void, not the fee they never reached.
-  const overpaying = !editing && Number(form.amount) > remaining;
+  // An edited row's own amount is free to change again.
+  const room = remaining + Number(editing?.amount ?? 0);
+  const overpaying = Number(form.amount) > room;
 
   return (
     <Modal open={!!fee} onClose={close} title="Payment Log" size="xl">
@@ -177,12 +178,11 @@ export function PaymentLogModal({
                 <input
                   type="number"
                   min="1"
-                  max={remaining}
+                  max={room}
                   value={form.amount}
-                  disabled={Boolean(editing)}
                   onChange={(event) => onFormChange({ ...form, amount: event.target.value })}
                 />
-                {overpaying && <InlineAlert>Max {formatCurrency(remaining)}</InlineAlert>}
+                {overpaying && <InlineAlert>Max {formatCurrency(room)}</InlineAlert>}
               </FormField>
               <FormField label="Payment Date" required>
                 <DatePicker
@@ -210,13 +210,13 @@ export function PaymentLogModal({
               />
             </FormField>
             <FormField label="Notes" required>
-              <textarea value={form.notes} readOnly={locked} onChange={(event) => onFormChange({ ...form, notes: event.target.value })} />
+              <textarea value={form.notes} onChange={(event) => onFormChange({ ...form, notes: event.target.value })} />
             </FormField>
             <div className="flex justify-end gap-2">
               {editing ? (
                 <>
                   <Button variant="ghost" onClick={stopEdit} disabled={saving}>Cancel</Button>
-                  <Button className="action-button-compact" onClick={() => void saveEdit()} loading={saving} disabled={!form.notes.trim()}>
+                  <Button className="action-button-compact" onClick={() => void saveEdit()} loading={saving} disabled={!form.amount || Number(form.amount) <= 0 || overpaying || !form.notes.trim()}>
                     <Check size={14} /> Save changes
                   </Button>
                 </>
@@ -295,18 +295,18 @@ export function PaymentLogModal({
                           >
                             <PenLine size={14} />
                           </Button>
-                          {/* Old registration rows were system-written, so left undeletable. */}
-                          {log.notes !== REGISTRATION_NOTE && (
-                            <Button
-                              variant="ghost"
-                              className="action-button-compact action-button-danger"
-                              onClick={() => onDelete(log)}
-                              loading={deletingId === log.id}
-                              aria-label={`Delete the ${formatCurrency(Number(log.amount))} payment from ${log.payment_date}`}
-                            >
-                              <Trash2 size={14} />
-                            </Button>
-                          )}
+                          <Button
+                            variant="ghost"
+                            className="action-button-compact action-button-danger"
+                            onClick={() => {
+                              if (log.id === editingId) stopEdit();
+                              onDelete(log);
+                            }}
+                            loading={deletingId === log.id}
+                            aria-label={`Delete the ${formatCurrency(Number(log.amount))} payment from ${log.payment_date}`}
+                          >
+                            <Trash2 size={14} />
+                          </Button>
                         </div>
                       </TD>
                     </TR>

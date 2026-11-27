@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
       const retryAfter = response.headers.get('retry-after');
       return json(
         req,
-        { error: `AI name matching is unavailable (${response.status}).` },
+        { error: `AI name matching is unavailable (${response.status})` },
         response.status,
         retryAfter ? { 'retry-after': retryAfter } : {},
       );
@@ -114,6 +114,6 @@ Deno.serve(async (req) => {
     return json(req, { matched: false });
   } catch (err) {
     console.error('[match-name]', err);
-    return json(req, { error: 'AI name matching failed. Match this name by hand.' }, 500);
+    return json(req, { error: 'AI name matching failed, match by hand' }, 500);
   }
 });

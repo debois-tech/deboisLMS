@@ -68,7 +68,7 @@ async function createNewStudent(input: Omit<Student, 'id' | 'created_at'>): Prom
       'Could not check the existing student',
     );
     const live = matches.find((s) => s.auth_user_id || running.some((r) => r.student_id === s.id));
-    if (live) throw new Error(`${live.name} (${live.student_code}) already has an account. Add them to a batch with Add existing.`);
+    if (live) throw new Error(`${live.name} (${live.student_code}) already has an account, use Add existing`);
   }
   return { student: await createStudent(input), earlier: matches[0] };
 }
@@ -173,7 +173,7 @@ export async function sendCredentialsEmail(
         .then((body: { error?: string } | null) => body?.error)
         .catch(() => undefined);
     }
-    throw new Error(detail ?? error.message ?? 'Could not send the emails');
+    throw detail ? new Error(detail) : techError('Could not send the emails', error.message);
   }
   if (data?.error) throw new Error(data.error);
 
@@ -205,7 +205,7 @@ export async function createStudentLoginsBulk(
         result.failed.push({
           studentId: student.id,
           name: student.name,
-          reason: errorMessage(err, 'Failed'),
+          reason: errorMessage(err, 'Could not create the login'),
         });
       } finally {
         done += 1;
@@ -332,7 +332,7 @@ export async function getStudentDeletionCounts(studentId: string): Promise<Stude
       .from(table)
       .select('*', { count: 'exact', head: true })
       .eq('student_id', studentId);
-    if (error) throw techError(`Could not count ${table}`, error.message);
+    if (error) throw techError('Could not count this student’s records', `${table}: ${error.message}`);
     return total ?? 0;
   };
 

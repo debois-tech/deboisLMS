@@ -25,7 +25,7 @@ interface AssignmentModalProps {
 /** Accepts any recognisable GitHub repo, stores only the canonical form. The DB rejects the rest. */
 function validateRepoUrl(value: string): { url?: string; error?: string } {
   const trimmed = value.trim();
-  if (!trimmed) return { error: 'Enter your GitHub repository link.' };
+  if (!trimmed) return { error: 'Enter your GitHub repository link' };
 
   let url: URL;
   try {
@@ -44,7 +44,7 @@ function validateRepoUrl(value: string): { url?: string; error?: string } {
   // Query strings, trailing slashes and www. are dropped: one repo, one stored form.
   const canonical = `https://github.com/${owner}/${repo.replace(/\.git$/i, '')}`;
   if (!/^https:\/\/github\.com\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(canonical)) {
-    return { error: 'That does not look like a repository link.' };
+    return { error: 'That does not look like a repository link' };
   }
   return { url: canonical };
 }
@@ -69,7 +69,7 @@ function AssignmentModalBody({ assignment, repoUrl, now, closed, onClose, onSubm
   const handleSubmit = async () => {
     const { url, error: problem } = validateRepoUrl(draftRepo);
     if (problem || !url) {
-      setError(problem ?? 'Enter your GitHub repository link.');
+      setError(problem ?? 'Enter your GitHub repository link');
       return;
     }
     setSubmitting(true);
@@ -78,7 +78,7 @@ function AssignmentModalBody({ assignment, repoUrl, now, closed, onClose, onSubm
       await onSubmit(url);
     } catch (err) {
       console.error(err);
-      setError('Could not submit. Try again.');
+      setError('Could not submit, try again');
       setSubmitting(false);
     }
   };

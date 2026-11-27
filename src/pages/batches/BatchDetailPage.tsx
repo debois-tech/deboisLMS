@@ -407,7 +407,7 @@ function StudentsTab({ batch }: { batch: Batch }) {
     showToast(
       failures.length === 0
         ? `${done} terminated${voided > 0 ? ` — ${formatCurrency(voided)} void` : ''}`
-        : `Terminated ${done} of ${leavers.length}. ${failures[0]}`,
+        : `Terminated ${done} of ${leavers.length} · ${failures[0]}`,
       failures.length === 0 ? 'success' : 'error',
     );
   };
@@ -416,12 +416,12 @@ function StudentsTab({ batch }: { batch: Batch }) {
     if (!selectedStudents.length || payable === null) return;
     try {
       const outcomes = await Promise.allSettled(selectedStudents.map((studentId) => addStudentToBatch(studentId, batchId, payable, undefined, countEarlier)));
-      const failed = outcomes.flatMap((outcome) => (outcome.status === 'rejected' ? [errorMessage(outcome.reason, 'failed')] : []));
+      const failed = outcomes.flatMap((outcome) => (outcome.status === 'rejected' ? [errorMessage(outcome.reason, 'Could not add the student')] : []));
       void reloadStudents();
       if (failed.length > 0) {
         // Whoever went in is in; only the refused stay ticked.
         setSelectedStudents(selectedStudents.filter((_, index) => outcomes[index].status === 'rejected'));
-        showToast(`Added ${outcomes.length - failed.length} of ${outcomes.length}. ${failed[0]}`, 'error');
+        showToast(`Added ${outcomes.length - failed.length} of ${outcomes.length} · ${failed[0]}`, 'error');
         return;
       }
       setSelectedStudents([]);
@@ -456,7 +456,7 @@ function StudentsTab({ batch }: { batch: Batch }) {
   // Same routine as the students page, so a sheet imported from either place
   // lands identically. The batch is this one; the CSV's own column only validates.
   const handleImport = async (rows: Record<string, string>[], createLogins: boolean) => {
-    if (baseFee == null) throw new Error('This batch has no base fee. Set one on the batch, then import.');
+    if (baseFee == null) throw new Error('This batch has no base fee, set one first');
 
     const { imported, failed } = await importStudentsIntoBatch(rows, batchId, baseFee);
     void reloadStudents();
@@ -581,8 +581,7 @@ function StudentsTab({ batch }: { batch: Batch }) {
 
           {baseFee === null && (
             <InlineAlert>
-              This batch has no base fee, so a discount has nothing to come off. Set one on
-              the batch, then add students.
+              This batch has no base fee, set one first
             </InlineAlert>
           )}
 
@@ -1235,7 +1234,11 @@ function FinanceTab({ batchId, batchName }: { batchId: string; batchName: string
         submitting={logging}
         onDelete={handleDeletePaymentLog}
         deletingId={deletingLogId}
-        onLogUpdated={(log) => setPaymentLogs((prev) => prev.map((entry) => (entry.id === log.id ? log : entry)))}
+        onLogUpdated={({ log, fee }) => {
+          setLoggingFee(fee);
+          setPaymentLogs((prev) => prev.map((entry) => (entry.id === log.id ? log : entry)));
+          setFees((prev) => prev.map((f) => (f.id === fee.id ? fee : f)));
+        }}
         onClaimApproved={({ log, fee }) => {
           setLoggingFee(fee);
           setPaymentLogs((prev) => [log, ...prev]);

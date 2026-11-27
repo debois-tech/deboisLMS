@@ -150,7 +150,7 @@ export function parseStudentCsv(text: string): ParsedStudentCsv {
     skipped: table.rows.length - rows.length,
     error:
       !table.headers.length || !rows.length
-        ? 'CSV needs Name, Email and Date of Birth columns, and one usable row.'
+        ? 'CSV needs Name, Email and Date of Birth columns and one usable row'
         : '',
   };
 }

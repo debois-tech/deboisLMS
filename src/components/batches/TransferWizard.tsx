@@ -116,7 +116,7 @@ export function TransferWizard({ open, onClose, source, students, targets, onDon
     setRunning(false);
     const moved = students.length - failures.length;
     showToast(
-      failures.length === 0 ? `${moved} moved to ${target.name}` : `Moved ${moved} of ${students.length}. ${failures[0]}`,
+      failures.length === 0 ? `${moved} moved to ${target.name}` : `Moved ${moved} of ${students.length} · ${failures[0]}`,
       failures.length === 0 ? 'success' : 'error',
     );
     onDone();

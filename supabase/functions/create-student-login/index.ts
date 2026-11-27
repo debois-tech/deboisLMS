@@ -134,7 +134,7 @@ Deno.serve(async (req) => {
     // Logged in full, returned as a generic line: the raw text names internal
     // tables and auth internals the caller has no business seeing.
     console.error('[create-student-login]', err);
-    return new Response(JSON.stringify({ error: 'Could not create the login. Try again.' }), {
+    return new Response(JSON.stringify({ error: 'Could not create the login, try again' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

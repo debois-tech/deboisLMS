@@ -555,7 +555,7 @@ declare
   ceiling     numeric;
 begin
   if p_amount is null or p_amount <= 0 then
-    raise exception 'Payment amount must be greater than zero';
+    raise exception 'Amount must be above zero';
   end if;
 
   -- Lock the fee row. Concurrent payments serialize on this student/batch.
@@ -567,7 +567,7 @@ begin
 
   ceiling := case when fee_row.status = 'terminated' then fee_row.expected_on_exit else fee_row.total_fee end;
   if fee_row.paid_amount + p_amount > ceiling then
-    raise exception 'That is more than is owed. At most % can be logged.',
+    raise exception 'Above what is owed. At most % allowed',
       greatest(ceiling - fee_row.paid_amount, 0);
   end if;
 
@@ -1926,10 +1926,6 @@ begin
     raise exception 'Payment not found';
   end if;
 
-  if log_row.notes = 'Registration fee' then
-    raise exception 'The registration fee cannot be deleted';
-  end if;
-
   -- Locked before the delete, so a concurrent payment cannot read a stale total.
   select * into fee_row from student_fees where id = log_row.student_fee_id for update;
   if not found then
@@ -1940,6 +1936,8 @@ begin
 
   update student_fees
   set paid_amount = greatest(coalesce(fee_row.paid_amount, 0) - log_row.amount, 0),
+      -- A deleted registration row takes the Rs 1,000 rule with it: two plain halves from here.
+      registration_included = registration_included and log_row.notes is distinct from 'Registration fee',
       updated_at = now()
   where id = fee_row.id
   returning * into fee_row;
@@ -4897,3 +4895,69 @@ end $$;
 
 -- Only the log triggers call it; it reads names past RLS, so nobody else should.
 revoke all on function describe_change(text, text, text, jsonb, jsonb) from public, anon, authenticated;
+
+
+-- 29. EDIT ANY PAYMENT, DELETE ANY PAYMENT
+create or replace function edit_fee_payment(
+  p_log_id uuid,
+  p_amount numeric,
+  p_payment_date date,
+  p_payment_method payment_method,
+  p_notes text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  log_row    fee_payment_logs%rowtype;
+  fee_row    student_fees%rowtype;
+  old_amount numeric;
+  ceiling    numeric;
+begin
+  if not is_admin() then
+    raise exception 'Admin only';
+  end if;
+  if p_amount is null or p_amount <= 0 then
+    raise exception 'Amount must be above zero';
+  end if;
+
+  select * into log_row from fee_payment_logs where id = p_log_id;
+  if not found then
+    raise exception 'Payment not found';
+  end if;
+  old_amount := log_row.amount;
+
+  -- Locked before the maths, so a concurrent payment cannot read a stale total.
+  select * into fee_row from student_fees where id = log_row.student_fee_id for update;
+  if not found then
+    raise exception 'Could not find the fee record';
+  end if;
+
+  -- A fee moved to another batch holds no paid total, so its old rows are counted over there.
+  if fee_row.paid_amount < old_amount then
+    raise exception 'Counted in another batch';
+  end if;
+
+  ceiling := case when fee_row.status = 'terminated' then fee_row.expected_on_exit else fee_row.total_fee end;
+  if fee_row.paid_amount - old_amount + p_amount > ceiling then
+    raise exception 'Above what is owed. At most % allowed', greatest(ceiling - fee_row.paid_amount + old_amount, 0);
+  end if;
+
+  update fee_payment_logs
+  set amount = p_amount, payment_date = p_payment_date, payment_method = p_payment_method, notes = p_notes
+  where id = p_log_id
+  returning * into log_row;
+
+  -- paid_amount is the one stored total; status, dues, summaries and exit void all read from it.
+  update student_fees
+  set paid_amount = paid_amount - old_amount + p_amount
+  where id = fee_row.id
+  returning * into fee_row;
+
+  return jsonb_build_object('log', to_jsonb(log_row), 'fee', to_jsonb(fee_row));
+end $$;
+
+revoke all on function edit_fee_payment(uuid, numeric, date, payment_method, text) from public;
+grant execute on function edit_fee_payment(uuid, numeric, date, payment_method, text) to authenticated;

@@ -50,7 +50,7 @@ export function AssignmentFiles({ assignmentId, batchId, readOnly }: AssignmentF
 
     const tooBig = chosen.find((file) => file.size > MATERIAL_MAX_BYTES);
     if (tooBig) {
-      showToast(`${tooBig.name} is ${formatFileSize(tooBig.size)}. The limit is 50 MB.`, 'error');
+      showToast(`${tooBig.name} is ${formatFileSize(tooBig.size)}, over the 50 MB limit`, 'error');
       return;
     }
 

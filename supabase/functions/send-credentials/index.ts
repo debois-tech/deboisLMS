@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
     ].filter(Boolean);
     if (missing.length > 0) {
       console.error('[send-credentials] missing secrets:', missing.join(', '));
-      return json({ error: `Email is not configured yet (${missing.join(', ')}).` }, 500);
+      return json({ error: 'Email is not set up' }, 500);
     }
 
     const body = await req.json().catch(() => null);
@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
       return json({ error: 'No recipients given' }, 400);
     }
     if (recipients.length > MAX_RECIPIENTS) {
-      return json({ error: `Too many recipients — ${MAX_RECIPIENTS} at a time.` }, 400);
+      return json({ error: `Too many recipients, ${MAX_RECIPIENTS} at a time` }, 400);
     }
 
     const authHeader = req.headers.get('Authorization') ?? '';
@@ -208,6 +208,6 @@ Deno.serve(async (req) => {
     return json({ sent, failed });
   } catch (err) {
     console.error('[send-credentials]', err);
-    return json({ error: 'Could not send the emails. Try again.' }, 500);
+    return json({ error: 'Could not send the emails, try again' }, 500);
   }
 });

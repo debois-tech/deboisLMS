@@ -645,13 +645,13 @@ export function CurriculumCanvas({ batchId, batchName, role, height = 'calc(100v
 
   const save = async () => {
     if (draft.some((node) => !node.title.trim())) {
-      showToast('Give every card a name, or remove it.', 'error');
+      showToast('Name every card or remove it', 'error');
       return;
     }
     const next = toDraft(draft).map((node) => ({ ...node, title: node.title.trim() }));
     const summary = summarize(diffSummary(toDraft(live), next));
     if (!summary) {
-      showToast('No changes to save.', 'info');
+      showToast('No changes to save', 'info');
       setView('view');
       return;
     }
@@ -670,7 +670,7 @@ export function CurriculumCanvas({ batchId, batchName, role, height = 'calc(100v
       await (isAdmin ? saveCurriculum(batchId, next) : proposeCurriculum(batchId, next));
       await refresh();
       setView('view');
-      showToast(isAdmin ? 'Curriculum published.' : 'Sent to an admin for approval.', 'success');
+      showToast(isAdmin ? 'Curriculum published' : 'Sent to an admin for approval', 'success');
     }, 'Could not save the curriculum');
   };
 
@@ -688,7 +688,7 @@ export function CurriculumCanvas({ batchId, batchName, role, height = 'calc(100v
       await reviewCurriculum(pending.id, approve);
       await refresh();
       setView('view');
-      showToast(approve ? 'Curriculum approved.' : 'Submission denied.', 'success');
+      showToast(approve ? 'Curriculum approved' : 'Submission denied', 'success');
     }, 'Could not record the decision');
   };
 

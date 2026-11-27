@@ -83,7 +83,7 @@ export function RemoveWizard({ open, onClose, batch, students, onDone }: Props) 
     setBusy(false);
     const done = students.length - failures.length;
     showToast(
-      failures.length === 0 ? `${done} removed` : `Removed ${done} of ${students.length}. ${failures[0]}`,
+      failures.length === 0 ? `${done} removed` : `Removed ${done} of ${students.length} · ${failures[0]}`,
       failures.length === 0 ? 'success' : 'error',
     );
     onDone();

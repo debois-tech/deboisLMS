@@ -16,7 +16,7 @@ export async function stampBadgeImage(image: Blob, code: string): Promise<Blob> 
   canvas.width = bitmap.width;
   canvas.height = bitmap.height;
   const context = canvas.getContext('2d');
-  if (!context) throw new Error('Could not prepare the badge image.');
+  if (!context) throw new Error('Could not prepare the badge image');
   context.drawImage(bitmap, 0, 0);
   bitmap.close();
 
@@ -26,7 +26,7 @@ export async function stampBadgeImage(image: Blob, code: string): Promise<Blob> 
   context.fillText(`ID: ${code}`, canvas.width * (1 - BADGE_STAMP.right), canvas.height * BADGE_STAMP.baseline);
 
   return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('Could not stamp the badge image.'))), 'image/png');
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('Could not stamp the badge image'))), 'image/png');
   });
 }
 

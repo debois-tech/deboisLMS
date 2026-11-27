@@ -1,6 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { techError } from '@/lib/utils/errors';
 
 interface Props {
   children: ReactNode;
@@ -27,7 +28,7 @@ class ErrorBoundaryInner extends Component<Props, State> {
       return (
         <ErrorState
           centered
-          message={this.state.error.message || 'Something went wrong rendering this page.'}
+          message={techError('Something went wrong on this page', this.state.error.message).message}
           onRetry={() => window.location.reload()}
         />
       );
